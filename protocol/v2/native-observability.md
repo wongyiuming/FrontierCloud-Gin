@@ -33,7 +33,7 @@ public dependency contract.
 
 Master Nginx access logs use JSON escaping and include the supplied `user_agent`,
 HTTP/TLS protocol, total request duration and upstream connect/header/response
-durations. Upstream durations are strings: `-` means no upstream measurement,
+durations. Upstream durations are strings: an empty string or `-` means no upstream measurement,
 and multi-hop/retry values retain Nginx's sequence instead of becoming invalid
 JSON numbers. A large total duration with small upstream timings can indicate
 client transfer delay; a large upstream header duration can indicate time spent

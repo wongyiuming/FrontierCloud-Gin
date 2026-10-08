@@ -70,7 +70,9 @@ class NginxAccessLogRuntime(unittest.TestCase):
         static = next(entry for entry in entries if entry.get("path") == "/fixture-ready")
         for field in ("upstream_connect_seconds", "upstream_header_seconds",
                       "upstream_response_seconds"):
-            self.assertEqual(static[field], "-")
+            # JSON escaping can emit an empty variable; classic log escaping
+            # uses a dash. Both mean no upstream, never a numeric measurement.
+            self.assertIn(static[field], ("", "-"))
 
 
 if __name__ == "__main__":
