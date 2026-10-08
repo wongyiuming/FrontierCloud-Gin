@@ -16,8 +16,8 @@ const dependencyTimeout = 2 * time.Second
 // Check performs one bounded readiness operation.
 type Check func(context.Context) error
 
-// New returns the initial Gin runtime surface. Public and Admin routes will be
-// added only with matching contract tests against the Python implementation.
+// New returns the Gin runtime surface. Public and Admin routes must be covered
+// by native behavior tests; Python is an external test driver, not an oracle.
 func New(database, redis Check) *gin.Engine {
 	resolver, _ := network.New([]string{"172.16.0.0/12"})
 	return NewWithResolver(database, redis, resolver)

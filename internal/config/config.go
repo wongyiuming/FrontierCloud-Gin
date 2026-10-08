@@ -26,6 +26,7 @@ type Config struct {
 	MySQLUser              string
 	MySQLPasswordFile      string
 	RedisURL               string
+	MediaCatalogCacheTTL   int
 	HTTPAddress            string
 	DataRoot               string
 	StaticRoot             string
@@ -109,6 +110,10 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	}
 	if !(value.ReleaseBranch == "main" && value.ReleaseSourceBranch == "dev" || value.ReleaseBranch == "gin_main" && value.ReleaseSourceBranch == "gin_dev") {
 		return Config{}, errors.New("release policy must select main/dev or gin_main/gin_dev")
+	}
+	value.MediaCatalogCacheTTL, err = integer(getenv("MEDIA_CATALOG_CACHE_TTL"), 300)
+	if err != nil || value.MediaCatalogCacheTTL < 0 || value.MediaCatalogCacheTTL > 86400 {
+		return Config{}, errors.New("MEDIA_CATALOG_CACHE_TTL must be between 0 and 86400")
 	}
 	value.SecurityInvalidLimit, err = integer(getenv("SECURITY_INVALID_API_LIMIT"), 5)
 	if err != nil || value.SecurityInvalidLimit < 1 || value.SecurityInvalidLimit > 100000 {

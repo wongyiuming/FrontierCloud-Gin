@@ -170,6 +170,7 @@ func serve() error {
 		return err
 	}
 	defer mediaService.Close()
+	mediaService.ConfigureCatalogCache(time.Duration(settings.MediaCatalogCacheTTL) * time.Second)
 
 	redisOptions, err := redis.ParseURL(settings.RedisURL)
 	if err != nil {

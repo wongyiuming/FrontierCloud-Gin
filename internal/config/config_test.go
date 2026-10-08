@@ -2,6 +2,19 @@ package config
 
 import "testing"
 
+func TestCatalogCacheTTLBounds(t *testing.T) {
+	for _, value := range []string{"-1", "86401", "invalid"} {
+		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err == nil {
+			t.Fatal("invalid cache TTL accepted", value)
+		}
+	}
+	for _, value := range []string{"0", "300", "86400"} {
+		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err != nil {
+			t.Fatal(value, err)
+		}
+	}
+}
+
 func environment(values map[string]string) func(string) string {
 	return func(name string) string { return values[name] }
 }

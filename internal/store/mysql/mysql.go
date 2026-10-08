@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	driver "github.com/go-sql-driver/mysql"
@@ -27,7 +28,9 @@ type Config struct {
 
 // Store owns the MySQL connection pool.
 type Store struct {
-	database *sql.DB
+	database       *sql.DB
+	repositoryOnce sync.Once
+	repository     *business.Repository
 }
 
 func Open(value Config) (*Store, error) {
@@ -89,22 +92,26 @@ func (store *Store) Close() error {
 	return store.database.Close()
 }
 
-func (s *Store) Media() store.MediaRepository          { return business.New(s.database, s.Backend()) }
-func (s *Store) Nodes() store.NodeRepository           { return business.New(s.database, s.Backend()) }
-func (s *Store) Pool() store.PoolRepository            { return business.New(s.database, s.Backend()) }
-func (s *Store) Karaoke() store.KaraokeRepository      { return business.New(s.database, s.Backend()) }
-func (s *Store) Recordings() store.RecordingRepository { return business.New(s.database, s.Backend()) }
-func (s *Store) Backups() store.BackupRepository       { return business.New(s.database, s.Backend()) }
-func (s *Store) Maintenance() store.MaintenanceRepository {
-	return business.New(s.database, s.Backend())
+func (s *Store) repo() *business.Repository {
+	s.repositoryOnce.Do(func() { s.repository = business.New(s.database, s.Backend()) })
+	return s.repository
 }
-func (s *Store) Admin() store.AdminRepository { return business.New(s.database, s.Backend()) }
+func (s *Store) Media() store.MediaRepository          { return s.repo() }
+func (s *Store) Nodes() store.NodeRepository           { return s.repo() }
+func (s *Store) Pool() store.PoolRepository            { return s.repo() }
+func (s *Store) Karaoke() store.KaraokeRepository      { return s.repo() }
+func (s *Store) Recordings() store.RecordingRepository { return s.repo() }
+func (s *Store) Backups() store.BackupRepository       { return s.repo() }
+func (s *Store) Maintenance() store.MaintenanceRepository {
+	return s.repo()
+}
+func (s *Store) Admin() store.AdminRepository { return s.repo() }
 
 func (s *Store) Observations() store.ObservationRepository {
-	return business.New(s.database, s.Backend())
+	return s.repo()
 }
 
-func (s *Store) Security() store.SecurityRepository { return business.New(s.database, s.Backend()) }
+func (s *Store) Security() store.SecurityRepository { return s.repo() }
 
 // Infrastructure/test access only; deliberately absent from the Store contract
 // supplied to services and handlers.

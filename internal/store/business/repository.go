@@ -13,17 +13,40 @@ import (
 	driver "github.com/go-sql-driver/mysql"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud/internal/store"
 )
 
 type Repository struct {
-	db      *sql.DB
-	backend string
+	db         *sql.DB
+	backend    string
+	generation atomic.Uint64
 }
 
-func New(db *sql.DB, backend string) *Repository { return &Repository{db, backend} }
+func New(db *sql.DB, backend string) *Repository { return &Repository{db: db, backend: backend} }
+
+// CatalogGeneration is process-local invalidation, not a second business store.
+// All repositories supplied by one Store share this counter. Restart clears the
+// cache; independent/offline writers must first close the native runtime fence.
+func (r *Repository) CatalogGeneration() uint64 { return r.generation.Load() }
+
+type catalogWrite struct {
+	queryer
+	changed bool
+}
+
+func (q *catalogWrite) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	result, err := q.queryer.ExecContext(ctx, query, args...)
+	if err == nil {
+		n, countErr := result.RowsAffected()
+		if countErr != nil || n != 0 {
+			q.changed = true
+		}
+	}
+	return result, err
+}
 
 type queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -45,10 +68,15 @@ func (r *Repository) write(ctx context.Context, fn func(queryer) error) error {
 					return err
 				}
 				defer tx.Rollback()
-				if err := fn(tx); err != nil {
+				writes := &catalogWrite{queryer: tx}
+				if err := fn(writes); err != nil {
 					return err
 				}
-				return tx.Commit()
+				err = tx.Commit()
+				if err == nil && writes.changed {
+					r.generation.Add(1)
+				}
+				return err
 			}()
 			var mysqlError *driver.MySQLError
 			if err == nil || attempt >= 5 || !errors.As(err, &mysqlError) || (mysqlError.Number != 1213 && mysqlError.Number != 1205) {
@@ -80,10 +108,14 @@ func (r *Repository) write(ctx context.Context, fn func(queryer) error) error {
 		defer cancel()
 		_, _ = conn.ExecContext(rollback, "ROLLBACK")
 	}()
-	if err = fn(conn); err != nil {
+	writes := &catalogWrite{queryer: conn}
+	if err = fn(writes); err != nil {
 		return err
 	}
 	_, err = conn.ExecContext(ctx, "COMMIT")
+	if err == nil && writes.changed {
+		r.generation.Add(1)
+	}
 	return err
 }
 

@@ -165,10 +165,21 @@ class GinHTTPTests(unittest.TestCase):
         self.assertEqual((self.work / "secrets/admin_key").read_text().strip(), self.key)
 
     def test_visibility_round_trip_and_reserved_lyric_protection(self):
+        route = ("/api/v1/media/catalog/media?media_type=music&path=music%2Ffixture"
+                 "&playback_session_id=20512c3b-5340-4185-b76d-20402279482a")
+        for _ in range(2):
+            status, _, body = self.request("GET", route)
+            self.assertEqual(status, 200, body)
+            self.assertEqual([row["media_path"] for row in json.loads(body)["entries"]],
+                             ["music/fixture/song.mp3"])
         for hidden in (True, False):
             status, _, body = self.request("POST", "/api/v1/media/admin/hide",
                                           {"paths": ["music/fixture"], "hidden": hidden}, csrf=True)
             self.assertEqual(status, 200, body)
+            status, _, body = self.request("GET", route)
+            self.assertEqual(status, 200, body)
+            self.assertEqual([row["media_path"] for row in json.loads(body)["entries"]],
+                             [] if hidden else ["music/fixture/song.mp3"])
         status, _, body = self.request("POST", "/api/v1/media/admin/delete",
                                       {"paths": ["lyrics/default.lrc"]}, csrf=True)
         self.assertEqual(status, 400, body)

@@ -68,7 +68,13 @@ func (s *Service) acquire(ctx context.Context, write bool) (func(), error) {
 		localRelease()
 		return nil, err
 	}
-	return func() { release(); localRelease() }, nil
+	return func() {
+		if write {
+			s.invalidateCatalog()
+		}
+		release()
+		localRelease()
+	}, nil
 }
 func (s *Service) markRecovery() {
 	s.recoveryRequired = true
