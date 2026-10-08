@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 )
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)

@@ -3,13 +3,13 @@ package media
 import (
 	"context"
 	"errors"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type lostGlobalRenameCommit struct {
@@ -205,6 +205,74 @@ func TestGlobalRenameNeverAdoptsUnownedDestination(t *testing.T) {
 		t.Fatal("unowned destination altered", err)
 	}
 	masterFunds(t, db, 0, 0)
+}
+
+func TestGlobalRenameExistingEmptyDestinationDoesNotFenceCatalog(t *testing.T) {
+	root, db, svc := masterFixture(t)
+	ctx := context.Background()
+	if err := os.MkdirAll(filepath.Join(root, "music/ExistingEmpty/album"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Rename(ctx, "music/artist", "ExistingEmpty", store.AdminAudit{}); !errors.Is(err, os.ErrExist) {
+		t.Fatal("physical empty destination was not rejected before SQL intent", err)
+	}
+	rows, err := db.Pool().Resources(ctx, "music/artist", false)
+	if err != nil || len(rows) != 1 || rows[0].State != "active" {
+		t.Fatal("rejected rename hid source", rows, err)
+	}
+	pending, err := db.Pool().PendingGlobalRenames(ctx, 100)
+	if err != nil || len(pending) != 0 {
+		t.Fatal("rejected rename published intent", pending, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "music/artist/song.mp3")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGlobalRenamePendingRemainsManagedAndSameIntentCanRecover(t *testing.T) {
+	root, db, svc := masterFixture(t)
+	ctx := context.Background()
+	op, err := db.Pool().PrepareGlobalRename(ctx, "music/artist", "music/BlockedArtist", store.AdminAudit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, op.New), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.retryGlobalRename(ctx, op); !errors.Is(err, os.ErrExist) {
+		t.Fatal("target overwrite guard failed", err)
+	}
+	tree, err := svc.Tree(ctx, "music")
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed := false
+	for _, item := range tree.Items {
+		if item.Path == op.Old {
+			managed = item.MutationState == "rename_pending" && item.MutationID == op.ID && item.RenameTarget == op.New && !item.Hideable
+		}
+	}
+	if !managed {
+		t.Fatal("pending source escaped management tree", tree)
+	}
+	rows, err := db.Pool().Resources(ctx, op.Old, false)
+	if err != nil || len(rows) != 0 {
+		t.Fatal("unsafe pending paths entered public playback", rows, err)
+	}
+	if err := os.Remove(filepath.Join(root, op.New)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RenameGlobal(ctx, op.Old, op.New, store.AdminAudit{}); err != nil {
+		t.Fatal("same operation failed to resume", err)
+	}
+	current, err := db.Pool().GlobalRename(ctx, op.ID)
+	if err != nil || current == nil || current.State != "rename_done" {
+		t.Fatal(current, err)
+	}
+	rows, err = db.Pool().Resources(ctx, op.New, false)
+	if err != nil || len(rows) != 1 || rows[0].ID != op.Media[0].ID {
+		t.Fatal("recovery changed identity", rows, err)
+	}
 }
 
 func TestGlobalRenameRepairsOnlyInterruptedOwnedSourceMarker(t *testing.T) {

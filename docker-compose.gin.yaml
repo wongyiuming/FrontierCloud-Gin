@@ -23,10 +23,11 @@ x-app-environment: &app-environment
   MYSQL_USER: ${MYSQL_USER:-media_admin}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   SERVER_NAME: ${SERVER_NAME:-localhost}
-  RELEASE_BRANCH: ${RELEASE_BRANCH:-gin_main}
-  RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-gin_dev}
+  RELEASE_BRANCH: ${RELEASE_BRANCH:-main}
+  RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}
   RELEASE_MANIFEST_PATH: ${RELEASE_MANIFEST_PATH:-}
   TLS_ENABLED: ${TLS_ENABLED:-false}
+  STAGING_CD: ${STAGING_CD:-false}
 
 x-logging: &service-logging
   driver: json-file
@@ -79,7 +80,8 @@ services:
     environment:
       UPDATER_PROJECT: ${COMPOSE_PROJECT_NAME:-frontiercloud-gin}
       UPDATER_DATA_DIRECTORY: /data
-      RELEASE_BRANCH: ${RELEASE_BRANCH:-gin_main}
+      RELEASE_BRANCH: ${RELEASE_BRANCH:-main}
+      STAGING_CD: ${STAGING_CD:-false}
       GITHUB_API_TOKEN: ${GITHUB_API_TOKEN:-}
     volumes:
       - .:/workspace
@@ -126,7 +128,8 @@ services:
   redis:
     image: redis:7.4.11-alpine
     restart: always
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    mem_limit: 256m
     volumes: [redis_data:/data]
     healthcheck:
       test: [CMD, redis-cli, ping]

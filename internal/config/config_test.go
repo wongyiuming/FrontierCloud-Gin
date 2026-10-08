@@ -2,6 +2,19 @@ package config
 
 import "testing"
 
+func TestCatalogCacheTTLBounds(t *testing.T) {
+	for _, value := range []string{"-1", "86401", "invalid"} {
+		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err == nil {
+			t.Fatal("invalid cache TTL accepted", value)
+		}
+	}
+	for _, value := range []string{"0", "300", "86400"} {
+		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err != nil {
+			t.Fatal(value, err)
+		}
+	}
+}
+
 func environment(values map[string]string) func(string) string {
 	return func(name string) string { return values[name] }
 }
@@ -40,11 +53,11 @@ func TestRejectsUnknownDatabase(t *testing.T) {
 
 func TestReleasePolicyAndTokenValidation(t *testing.T) {
 	defaults, err := LoadFrom(environment(nil))
-	if err != nil || defaults.ReleaseBranch != "gin_main" || defaults.ReleaseSourceBranch != "gin_dev" {
+	if err != nil || defaults.ReleaseBranch != "main" || defaults.ReleaseSourceBranch != "dev" {
 		t.Fatal("native default release policy", defaults.ReleaseBranch, err)
 	}
-	value, err := LoadFrom(environment(map[string]string{"RELEASE_BRANCH": "gin_main", "GITHUB_API_TOKEN": " scoped-token "}))
-	if err != nil || value.ReleaseSourceBranch != "gin_dev" || value.GitHubAPIToken != "scoped-token" {
+	value, err := LoadFrom(environment(map[string]string{"RELEASE_BRANCH": "main", "GITHUB_API_TOKEN": " scoped-token "}))
+	if err != nil || value.ReleaseSourceBranch != "dev" || value.GitHubAPIToken != "scoped-token" {
 		t.Fatal("explicit Gin release policy", err)
 	}
 	for _, values := range []map[string]string{{"RELEASE_BRANCH": "dev"}, {"RELEASE_BRANCH": "gin_main", "RELEASE_SOURCE_BRANCH": "dev"}, {"GITHUB_API_TOKEN": "secret\r\nInjected: value"}} {

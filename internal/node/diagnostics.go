@@ -2,7 +2,7 @@ package node
 
 import (
 	"context"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // DiagnosticUpstream uses current SQL state, never the startup role or a cached

@@ -10,12 +10,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 // Source never checks out/reset a commit. Images are built from immutable git
 // archives, excluding working-tree secrets, data, untracked files and .git.
-type Source struct{ Directory, Branch string }
+type Source struct {
+	Directory, Branch string
+	Staging           bool
+}
 type boundedOutput struct {
 	raw     []byte
 	maximum int
@@ -42,7 +45,8 @@ func (s Source) git(parent context.Context, timeout time.Duration, args ...strin
 	return strings.TrimSpace(string(output.raw)), nil
 }
 func (s Source) Validate(ctx context.Context, target, mode string) error {
-	if !release.ValidSHA(target) || (s.Branch != "main" && s.Branch != "gin_main") || (mode != "upgrade" && mode != "rollback") || s.Directory == "" {
+	allowed := !s.Staging && (s.Branch == "main" || s.Branch == "gin_main") || s.Staging && s.Branch == "dev"
+	if !release.ValidSHA(target) || !allowed || (mode != "upgrade" && mode != "rollback") || s.Directory == "" {
 		return ErrState
 	}
 	status, err := s.git(ctx, 20*time.Second, "status", "--porcelain", "--untracked-files=no")

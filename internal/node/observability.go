@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func observedInteger(value map[string]any, key string) int64 {

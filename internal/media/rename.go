@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type RenameResult struct {

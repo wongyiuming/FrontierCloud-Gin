@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // A private filesystem publication journal survives a terminated request. The

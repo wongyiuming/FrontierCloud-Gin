@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func staged(t *testing.T, svc *Service, payload string) *Stage {

@@ -1,8 +1,9 @@
 """Provision persistent isolated Docker hosts for the five-node native development cluster.
 
-This is operator tooling, never a business-service runtime component. Each node
-owns a Docker daemon so native Updaters retain their normal container
-names and cannot replace another node's services. All commands run as root.
+This is operator tooling, never a business-service runtime component. The Master
+owns an updater; the four SQLite storage appliances have one resident Go service
+and no business GUI or updater. Isolated daemons bound fixture resources. Never
+point this provisioning script at production. All commands run as root.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from pathlib import Path
 
 
 NAMES = ["master", *[f"direct-{i}" for i in range(1, 3)], *[f"relay-{i}" for i in range(1, 3)]]
-REPOSITORY = "https://github.com/wongyiuming/FrontierCloud.git"
+REPOSITORY = "https://github.com/wongyiuming/FrontierCloud-Gin.git"
 DIND_IMAGE = "docker:29.1.3-dind"
 
 
@@ -31,9 +32,13 @@ def inner(name, *args):
     return run("docker", "exec", "fc-dev-host-" + name, "docker", *args)
 
 
-def compose(name, *args):
+def compose(name, *args, database="sqlite"):
+    recipe = "docker-compose.yaml" if name == "master" else "docker-compose.storage.yaml"
+    files = ["-f", "/node/repo/" + recipe]
+    if name == "master" and database == "mysql":
+        files += ["-f", "/node/repo/docker-compose.gin-mysql.yaml"]
     return inner(name, "compose", "--project-directory", "/node/repo", "-p", "frontiercloud",
-                 "-f", "/node/repo/docker-compose.yaml", "-f", "/node/override.json", *args)
+                 *files, "-f", "/node/override.json", *args)
 
 
 def main():
@@ -85,28 +90,39 @@ def main():
         run("openssl", "x509", "-req", "-in", str(certs / "request.pem"), "-CA", str(ca / "root.crt"),
             "-CAkey", str(ca / "root.key"), "-CAcreateserial", "-days", "365", "-out", str(certs / "fullchain.pem"),
             "-extfile", str(certs / "extensions.conf"))
-        (repo / ".env").write_text(
+        storage = index != 0
+        (certs / "privkey.pem").chmod(0o600)
+        os.chown(certs / "privkey.pem", 10001, 10001)
+        common_env = (
             f"TLS_ENABLED=true\nSERVER_NAME={args.address}\nINSTANCE_NAME=dev-{name}\n"
-            f"HTTP_PORT=80\nHTTPS_PORT=443\nWEBRTC_STUN_PORT={3478 + index}\n"
-            f"FRONTIERCLOUD_REVISION={args.initial_sha}\nDB_TYPE={args.database}\n"
-            f"RELEASE_BRANCH=gin_main\nRELEASE_SOURCE_BRANCH=gin_dev\n"
-            + ("COMPOSE_FILE=docker-compose.yaml:docker-compose.gin-mysql.yaml\n" if args.database == "mysql" else ""))
+            f"FRONTIERCLOUD_REVISION={args.initial_sha}\nRELEASE_BRANCH=main\nRELEASE_SOURCE_BRANCH=dev\n")
+        if storage:
+            common_env += (f"DEPLOYMENT_MODE=only_stroge\nDB_TYPE=sqlite\n"
+                           f"STORAGE_PORT={14443 + index}\nSTORAGE_ENDPOINT=https://{args.address}:{14443 + index}\n"
+                           "SSL_CERT_PATH=./certs/fullchain.pem\nSSL_KEY_PATH=./certs/privkey.pem\n"
+                           "DATA_DIRECTORY=./storage-data\n")
+        else:
+            common_env += (f"HTTP_PORT=80\nHTTPS_PORT=443\nWEBRTC_STUN_PORT=3478\nDB_TYPE={args.database}\n"
+                           + ("COMPOSE_FILE=docker-compose.yaml:docker-compose.gin-mysql.yaml\n" if args.database == "mysql" else ""))
+        (repo / ".env").write_text(common_env)
         override = {"services": {service: {"volumes": [
             {"type": "bind", "source": "/dev-ca/bundle.crt", "target": "/etc/ssl/certs/ca-certificates.crt", "read_only": True}]
-        } for service in ("web", "nginx", "updater")}}
+        } for service in (("web",) if storage else ("web", "nginx", "updater"))}}
         override["services"]["web"]["cpus"] = 1
         override["services"]["web"]["environment"] = {"SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"}
         (node / "override.json").write_text(json.dumps(override))
         daemon = "fc-dev-host-" + name
         exists = run("docker", "ps", "-a", "--filter", "name=^/" + daemon + "$", "--format", "{{.Names}}")
         if not exists:
+            ports = (["-p", f"{args.address}:{14443 + index}:{14443 + index}"] if storage else
+                     ["-p", f"{args.address}:14443:443", "-p", f"{args.address}:18080:80",
+                      "-p", f"{args.address}:3478:3478/udp", "-p", f"{args.address}:3478:3478/tcp"])
             run("docker", "run", "-d", "--privileged", "--restart", "unless-stopped", "--name", daemon,
+                "--cpus", "1", "--memory", "768m" if storage else "2g", "--memory-swap", "768m" if storage else "2g",
                 "--network", network,
                 "-v", f"{node}:/node", "-v", f"{node / 'docker'}:/var/lib/docker",
                 "-v", f"{ca}:/dev-ca:ro", "-v", f"{args.images.resolve()}:/seed-images.tar:ro",
-                "-p", f"{args.address}:{14443 + index}:443", "-p", f"{args.address}:{18080 + index}:80",
-                "-p", f"{args.address}:{3478 + index}:{3478 + index}/udp",
-                "-p", f"{args.address}:{3478 + index}:{3478 + index}/tcp",
+                *ports,
                 DIND_IMAGE, "dockerd", "--host=unix:///var/run/docker.sock", "--storage-driver=overlay2")
         for attempt in range(60):
             try:
@@ -121,8 +137,12 @@ def main():
                       "--format", '{{index .Config.Labels "frontiercloud.runtime"}}')
         if proof != "go":
             raise RuntimeError("Refusing a non-native image seed")
-        compose(name, "up", "-d", "--no-build", "--wait", "--wait-timeout", "240")
-        compose(name, "exec", "-T", "nginx", "nginx", "-t")
+        compose(name, "up", "-d", "--no-build", "--wait", "--wait-timeout", "240", database=args.database)
+        if storage:
+            if compose(name, "ps", "--status", "running", "--services") != "web":
+                raise RuntimeError("Storage appliance must have exactly one resident service")
+        else:
+            compose(name, "exec", "-T", "nginx", "nginx", "-t", database=args.database)
         inventory["nodes"].append({"name": name, "mode": "Master" if index == 0 else "Direct" if index < 3 else "Relay",
                                     "endpoint": f"https://{args.address}:{14443 + index}", "daemon": daemon})
         (root / "provision-progress.json").write_text(json.dumps(inventory, indent=2))

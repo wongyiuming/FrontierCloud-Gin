@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var ErrUnavailable = errors.New("录音存储节点暂不可用")

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 )
 
 const dependencyTimeout = 2 * time.Second
@@ -16,8 +16,8 @@ const dependencyTimeout = 2 * time.Second
 // Check performs one bounded readiness operation.
 type Check func(context.Context) error
 
-// New returns the initial Gin runtime surface. Public and Admin routes will be
-// added only with matching contract tests against the Python implementation.
+// New returns the Gin runtime surface. Public and Admin routes must be covered
+// by native behavior tests; Python is an external test driver, not an oracle.
 func New(database, redis Check) *gin.Engine {
 	resolver, _ := network.New([]string{"172.16.0.0/12"})
 	return NewWithResolver(database, redis, resolver)
@@ -55,10 +55,15 @@ func readiness(database, redis Check) gin.HandlerFunc {
 		defer cancel()
 		results := make(chan result, 2)
 		go func() { results <- result{name: "database", err: database(requestContext)} }()
-		go func() { results <- result{name: "redis", err: redis(requestContext)} }()
-		checks := map[string]string{"database": "unavailable", "redis": "unavailable"}
+		checks := map[string]string{"database": "unavailable"}
+		count := 1
+		if redis != nil {
+			count++
+			checks["redis"] = "unavailable"
+			go func() { results <- result{name: "redis", err: redis(requestContext)} }()
+		}
 	collect:
-		for range 2 {
+		for range count {
 			var value result
 			select {
 			case value = <-results:
@@ -72,7 +77,7 @@ func readiness(database, redis Check) gin.HandlerFunc {
 			}
 		}
 		status, code := "ready", http.StatusOK
-		if checks["database"] != "ready" || checks["redis"] != "ready" {
+		if checks["database"] != "ready" || redis != nil && checks["redis"] != "ready" {
 			status, code = "unavailable", http.StatusServiceUnavailable
 		}
 		if value, ok := ctx.Get(metricsContextKey); ok {

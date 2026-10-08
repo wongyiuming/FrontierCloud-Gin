@@ -8,9 +8,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/karaoke"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type KaraokeAccounts struct {
@@ -49,6 +49,9 @@ func RegisterKaraokeAccounts(router *gin.Engine, service *karaoke.Service, publi
 func karaokeError(c *gin.Context, err error) {
 	var rejected *karaoke.Error
 	if errors.As(err, &rejected) {
+		if rejected.Status == 429 {
+			c.Header("Retry-After", strconv.Itoa(max(1, rejected.RetryAfter)))
+		}
 		if rejected.Captcha {
 			c.Header("X-Captcha-Required", "1")
 		} else if rejected.Status == 401 {
@@ -104,7 +107,7 @@ func (a *KaraokeAccounts) current(c *gin.Context, mutation, optional bool) (*sto
 	return user, true
 }
 func (a *KaraokeAccounts) captcha(c *gin.Context) {
-	id, err := a.service.Captcha(c.Request.Context())
+	id, err := a.service.Captcha(c.Request.Context(), a.resolver.Resolve(c.Request).IP)
 	if err != nil {
 		karaokeError(c, err)
 		return

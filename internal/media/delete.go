@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var ErrRecovery = errors.New("media transaction requires recovery")

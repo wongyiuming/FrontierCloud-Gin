@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 )
 
 const Binding = ".native-store"

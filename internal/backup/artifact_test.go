@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type fixtureRepository struct {

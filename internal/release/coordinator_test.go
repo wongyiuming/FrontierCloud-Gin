@@ -4,172 +4,153 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
-type fixtureNodes struct {
+// Embedding makes every unintended repository call panic. Release permission
+// must use fresh local identity, not enumerate/probe storage appliances.
+type localReleaseNodes struct {
 	store.NodeRepository
-	mu        sync.Mutex
-	identity  store.NodeIdentity
-	relations []store.Relationship
+	identity store.NodeIdentity
+	reads    int
+	change   bool
 }
 
-func (n *fixtureNodes) ReadIdentity(ctx context.Context) (store.NodeIdentity, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.identity, ctx.Err()
-}
-func (n *fixtureNodes) Relationships(ctx context.Context, _ bool) ([]store.Relationship, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return append([]store.Relationship(nil), n.relations...), ctx.Err()
-}
-func (n *fixtureNodes) Relationship(ctx context.Context, id string) (store.Relationship, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	for _, r := range n.relations {
-		if r.ID == id {
-			return r, ctx.Err()
-		}
+func (n *localReleaseNodes) ReadIdentity(context.Context) (store.NodeIdentity, error) {
+	n.reads++
+	out := n.identity
+	if n.change && n.reads > 1 {
+		out.ID = "replacement"
 	}
-	return store.Relationship{}, store.ErrNodeState
+	return out, nil
 }
 
-type fixtureAgent struct {
-	local   map[string]any
-	started []map[string]any
+type localReleaseAgent struct {
+	value   map[string]any
+	starts  int
+	request map[string]any
 }
 
-func (a *fixtureAgent) Request(_ context.Context, value map[string]any) (map[string]any, error) {
-	if value["action"] == "status" {
-		return map[string]any{"ok": true, "status": copyValue(a.local)}, nil
+func (a *localReleaseAgent) Request(_ context.Context, request map[string]any) (map[string]any, error) {
+	if request["action"] == "status" {
+		return map[string]any{"ok": true, "status": a.value}, nil
 	}
-	a.started = append(a.started, copyValue(value))
-	return map[string]any{"ok": true, "accepted": true}, nil
+	a.starts++
+	a.request = request
+	return map[string]any{"ok": true}, nil
 }
 
-type fixtureEvidence struct {
-	value map[string]any
-	calls int
+type localReleaseEvidence struct {
+	head, proof                 map[string]any
+	versions                    []Version
+	historyCalls, artifactCalls int
+	err                         error
 }
 
-func (e *fixtureEvidence) Status(_ context.Context, _ bool) (map[string]any, error) {
-	e.calls++
-	return copyValue(e.value), nil
+func (e *localReleaseEvidence) Status(context.Context, bool) (map[string]any, error) {
+	return e.head, e.err
 }
-
-type fixtureCaller struct {
-	status  map[string]any
-	offline bool
-	before  func()
-	calls   int
+func (e *localReleaseEvidence) History(context.Context) ([]Version, error) {
+	e.historyCalls++
+	return e.versions, e.err
 }
-
-func (c *fixtureCaller) Call(ctx context.Context, r store.Relationship, route string, value any) (map[string]any, error) {
-	c.calls++
-	if c.before != nil {
-		c.before()
+func (e *localReleaseEvidence) Artifact(context.Context, string) (map[string]any, error) {
+	e.artifactCalls++
+	return e.proof, e.err
+}
+func localReleaseFixture() (*Coordinator, *localReleaseNodes, *localReleaseAgent, *localReleaseEvidence) {
+	nodes := &localReleaseNodes{identity: store.NodeIdentity{ID: "master", Role: "Master"}}
+	agent := &localReleaseAgent{value: map[string]any{"state": "success", "release_branch": "main", "current_sha": strings.Repeat("a", 40), "previous_sha": strings.Repeat("b", 40)}}
+	target := strings.Repeat("c", 40)
+	evidence := &localReleaseEvidence{head: map[string]any{"publishable": true, "sha": target}, versions: []Version{{SHA: target}}, proof: map[string]any{"publishable": true, "sha": target, "branch": "main", "source_branch": "dev"}}
+	return &Coordinator{Nodes: nodes, Agent: agent, Verifier: evidence, Policy: DefaultPolicy()}, nodes, agent, evidence
+}
+func TestMasterSelfReleaseNeverEnumeratesOrCommandsStorage(t *testing.T) {
+	service, _, agent, _ := localReleaseFixture()
+	ctx := context.Background()
+	status, err := service.Status(ctx, false)
+	if err != nil || status["can_upgrade"] != true || status["followers"] != nil {
+		t.Fatal(status, err)
 	}
-	if c.offline {
-		return nil, errors.New("private connection detail must not leak")
+	if _, err = service.Start(ctx, "upgrade"); err != nil {
+		t.Fatal(err)
 	}
-	if route != "/internal/v1/cluster-update/status" || r.State != "active" {
-		return nil, errors.New("invalid follower probe")
+	if agent.starts != 1 || agent.request["hold_maintenance"] != false || agent.request["target_sha"] != strings.Repeat("c", 40) {
+		t.Fatal(agent.request)
 	}
-	return map[string]any{"status": copyValue(c.status)}, ctx.Err()
 }
-
-func TestReleaseCoordinatorAuthorizationPolicyCIConvergenceAndRollback(t *testing.T) {
-	target, current, previous := strings.Repeat("b", 40), strings.Repeat("a", 40), strings.Repeat("c", 40)
-	for _, kind := range []string{"upgrade", "rollback", "pending-ci", "offline", "policy-mismatch", "converged", "retry-convergence", "busy", "Follower", "Standalone", "no-previous"} {
+func TestMasterSelfReleaseGuardsIdentityPolicyBusyAndEvidence(t *testing.T) {
+	for _, kind := range []string{"storage", "changed-identity", "busy", "bad-policy", "bad-ci", "same-sha", "invalid-sha", "network", "override", "invalid-mode"} {
 		t.Run(kind, func(t *testing.T) {
-			nodes := &fixtureNodes{identity: store.NodeIdentity{ID: strings.Repeat("a", 32), Role: "Master"}, relations: []store.Relationship{{ID: strings.Repeat("d", 32), PeerID: strings.Repeat("e", 32), Direction: "downstream", State: "active", Endpoint: "https://peer.test", PublicKey: "pin"}}}
-			agent := &fixtureAgent{local: map[string]any{"release_branch": "main", "current_sha": current, "previous_sha": previous, "state": "success"}}
-			evidence := &fixtureEvidence{value: map[string]any{"sha": target, "publishable": true}}
-			caller := &fixtureCaller{status: map[string]any{"release_branch": "main", "current_sha": target, "state": "success"}}
-			mode, want := "upgrade", true
+			service, nodes, agent, evidence := localReleaseFixture()
+			mode, target := "upgrade", ""
 			switch kind {
-			case "rollback":
-				mode = "rollback"
-			case "pending-ci":
-				evidence.value["publishable"] = false
-				want = false
-			case "offline":
-				caller.offline = true
-				want = false
-			case "policy-mismatch":
-				caller.status["release_branch"] = "gin_main"
-				want = false
-			case "converged":
-				agent.local["current_sha"] = target
-				want = false
-			case "retry-convergence":
-				agent.local["current_sha"] = target
-				caller.status["current_sha"] = current
+			case "storage":
+				nodes.identity.Role = "Follower"
+			case "changed-identity":
+				nodes.change = true
 			case "busy":
-				agent.local["state"] = "running"
-				want = false
-			case "Follower", "Standalone":
-				nodes.identity.Role = kind
-				want = false
-			case "no-previous":
-				agent.local["previous_sha"] = ""
-				mode = "rollback"
-				want = false
+				agent.value["state"] = "running"
+			case "bad-policy":
+				agent.value["release_branch"] = "other"
+			case "bad-ci":
+				evidence.head["publishable"] = false
+			case "same-sha":
+				evidence.head["sha"] = agent.value["current_sha"]
+			case "invalid-sha":
+				evidence.head["sha"] = "short"
+			case "network":
+				evidence.err = errors.New("offline")
+			case "override":
+				target = strings.Repeat("d", 40)
+			case "invalid-mode":
+				mode = "remote"
 			}
-			service := &Coordinator{Agent: agent, Verifier: evidence, Nodes: nodes, Control: caller, Policy: DefaultPolicy()}
-			out, err := service.Start(context.Background(), mode)
-			if (err == nil) != want || want && out["accepted"] != true || len(agent.started) != map[bool]int{false: 0, true: 1}[want] {
-				t.Fatal(kind, out, err, agent.started)
-			}
-			if mode == "rollback" && evidence.calls != 0 {
-				t.Fatal("rollback spent CI quota")
-			}
-			if want {
-				request := agent.started[0]
-				selected := target
-				if mode == "rollback" {
-					selected = previous
-				}
-				if request["target_sha"] != selected || request["hold_maintenance"] != true {
-					t.Fatal("invalid cluster release intent", request)
-				}
-			}
-			if err != nil && strings.Contains(err.Error(), "private connection") {
-				t.Fatal("private transport detail exposed")
+			if _, err := service.StartVersion(context.Background(), mode, target); err == nil || agent.starts != 0 {
+				t.Fatal("unsafe local start", err, agent.starts)
 			}
 		})
 	}
 }
-
-func TestReleaseCoordinatorResetDuringProbeCannotQueueOrAdvertiseRelease(t *testing.T) {
-	for _, operation := range []string{"start", "status"} {
-		t.Run(operation, func(t *testing.T) {
-			n := &fixtureNodes{identity: store.NodeIdentity{ID: strings.Repeat("a", 32), Role: "Master"}, relations: []store.Relationship{{ID: strings.Repeat("d", 32), PeerID: strings.Repeat("e", 32), State: "active", Direction: "downstream"}}}
-			a := &fixtureAgent{local: map[string]any{"release_branch": "main", "current_sha": strings.Repeat("a", 40), "state": "success"}}
-			c := &fixtureCaller{status: map[string]any{"release_branch": "main", "current_sha": strings.Repeat("b", 40), "state": "success"}, before: func() {
-				n.mu.Lock()
-				n.identity.Role = "Standalone"
-				n.identity.ID = strings.Repeat("f", 32)
-				n.mu.Unlock()
-			}}
-			s := &Coordinator{Agent: a, Nodes: n, Control: c, Verifier: &fixtureEvidence{value: map[string]any{"sha": strings.Repeat("b", 40), "publishable": true}}, Policy: DefaultPolicy()}
-			if operation == "start" {
-				if _, err := s.Start(context.Background(), "upgrade"); !errors.Is(err, store.ErrNodeState) {
-					t.Fatal("reset release accepted", err)
-				}
-			} else {
-				value, err := s.Status(context.Background(), false)
-				if err != nil || value["can_upgrade"] != false || value["role"] != "Standalone" {
-					t.Fatal("stale authority advertised", value, err)
-				}
+func TestHistoricalRollbackRequiresListedExactReviewedArtifact(t *testing.T) {
+	for _, kind := range []string{"valid", "unknown", "failed-ci", "foreign-branch", "foreign-source", "wrong-sha", "invalid-sha", "changed-identity", "network"} {
+		t.Run(kind, func(t *testing.T) {
+			service, nodes, agent, evidence := localReleaseFixture()
+			target := strings.Repeat("c", 40)
+			switch kind {
+			case "unknown":
+				evidence.versions = nil
+			case "failed-ci":
+				evidence.proof["publishable"] = false
+			case "foreign-branch":
+				evidence.proof["branch"] = "other"
+			case "foreign-source":
+				evidence.proof["source_branch"] = "other"
+			case "wrong-sha":
+				evidence.proof["sha"] = strings.Repeat("d", 40)
+			case "invalid-sha":
+				target = "short"
+			case "changed-identity":
+				nodes.change = true
+			case "network":
+				evidence.err = errors.New("offline")
 			}
-			if len(a.started) != 0 {
-				t.Fatal("reset node queued release")
+			_, err := service.StartVersion(context.Background(), "rollback", target)
+			if (err == nil) != (kind == "valid") || (agent.starts == 1) != (kind == "valid") {
+				t.Fatal(kind, err, agent.starts)
 			}
 		})
+	}
+}
+func TestLocalPreviousRollbackDoesNotRequireGithubAvailability(t *testing.T) {
+	service, _, agent, evidence := localReleaseFixture()
+	evidence.err = errors.New("github unavailable")
+	if _, err := service.Start(context.Background(), "rollback"); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.historyCalls != 0 || evidence.artifactCalls != 0 || agent.request["target_sha"] != strings.Repeat("b", 40) {
+		t.Fatal(agent.request)
 	}
 }

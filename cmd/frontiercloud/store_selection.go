@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/deployment"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/deployment"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func bindStore(ctx context.Context, c config.Config) error {

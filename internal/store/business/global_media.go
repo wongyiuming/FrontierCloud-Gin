@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const globalColumns = "g.media_id,g.storage_member_id,g.object_id,g.media_path,g.object_kind,g.size_bytes,g.etag,g.state,g.created_at,g.updated_at,s.relationship_id,s.health,s.transport,COALESCE(p.play_score,0),COALESCE(p.preference,0),EXISTS(SELECT 1 FROM media_lyric_links l WHERE l.media_id=g.media_id)"
@@ -21,6 +21,16 @@ func scanGlobal(row rowScanner) (v store.GlobalMedia, err error) {
 	return
 }
 func (r *Repository) Resources(ctx context.Context, scope string, exact bool) ([]store.GlobalMedia, error) {
+	return r.resources(ctx, scope, exact, false)
+}
+
+// Only the authenticated management tree may include fenced rename records.
+// Public playback/placement queries continue to select active records only.
+func (r *Repository) ManagementResources(ctx context.Context, scope string, exact bool) ([]store.GlobalMedia, error) {
+	return r.resources(ctx, scope, exact, true)
+}
+
+func (r *Repository) resources(ctx context.Context, scope string, exact, management bool) ([]store.GlobalMedia, error) {
 	node, err := r.ReadIdentity(ctx)
 	if err != nil {
 		return nil, err
@@ -29,6 +39,9 @@ func (r *Repository) Resources(ctx context.Context, scope string, exact bool) ([
 		return nil, nodeConflict("only Master owns the global catalog")
 	}
 	query := "SELECT " + globalColumns + globalTables + " WHERE g.state='active'"
+	if management {
+		query = "SELECT " + globalColumns + globalTables + " WHERE g.state IN ('active','renaming')"
+	}
 	args := []any{}
 	if scope != "" {
 		if exact {

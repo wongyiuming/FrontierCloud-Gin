@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/admin"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 )
 
 type Admin struct {

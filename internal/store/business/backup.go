@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const backupColumns = "master_id,generation,checksum,size_bytes,chunk_count,state,created_at,updated_at"
@@ -47,7 +47,12 @@ func (r *Repository) BeginBackup(ctx context.Context, relationship string, gener
 	if generation <= 0 {
 		return store.ErrBackupState
 	}
-	return r.write(ctx, func(q queryer) error {
+	release, err := r.backupFileLease(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer release()
+	err = r.write(ctx, func(q queryer) error {
 		node, rel, err := r.backupUpstream(ctx, q, relationship)
 		if err != nil {
 			return err
@@ -75,6 +80,10 @@ func (r *Repository) BeginBackup(ctx context.Context, relationship string, gener
 		}
 		return r.nodeAudit(ctx, q, "backup-begin", relationship, map[string]any{"generation": generation, "master_id": rel.PeerID}, a)
 	})
+	if err == nil {
+		err = r.sweepBackupFiles(ctx)
+	}
+	return err
 }
 
 func (r *Repository) AppendBackup(ctx context.Context, relationship string, generation int64, index int, chunk []byte) error {
@@ -84,6 +93,11 @@ func (r *Repository) AppendBackup(ctx context.Context, relationship string, gene
 	if chunk == nil {
 		chunk = []byte{}
 	} // Empty protocol chunks are BLOBs, not SQL NULL.
+	release, err := r.backupFileLease(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer release()
 	return r.write(ctx, func(q queryer) error {
 		_, rel, err := r.backupUpstream(ctx, q, relationship)
 		if err != nil {
@@ -104,6 +118,10 @@ func (r *Repository) AppendBackup(ctx context.Context, relationship string, gene
 		if err == nil {
 			// Lost HTTP acknowledgements may replay identical bytes, but never
 			// replace a received chunk with different content.
+			old, err = r.readFileChunk(rel.PeerID, generation, index, old)
+			if err != nil {
+				return err
+			}
 			if bytes.Equal(old, chunk) {
 				return nil
 			}
@@ -112,7 +130,11 @@ func (r *Repository) AppendBackup(ctx context.Context, relationship string, gene
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		_, err = q.ExecContext(ctx, "INSERT INTO cluster_business_backup_chunks(master_id,generation,chunk_index,payload,created_at) VALUES (?,?,?,?,?)", rel.PeerID, generation, index, chunk, time.Now().Unix())
+		stored, err := r.fileChunk(rel.PeerID, generation, index, chunk)
+		if err != nil {
+			return err
+		}
+		_, err = q.ExecContext(ctx, "INSERT INTO cluster_business_backup_chunks(master_id,generation,chunk_index,payload,created_at) VALUES (?,?,?,?,?)", rel.PeerID, generation, index, stored, time.Now().Unix())
 		return err
 	})
 }
@@ -121,6 +143,11 @@ func (r *Repository) CommitBackup(ctx context.Context, relationship string, gene
 	if generation <= 0 || !nodeHashPattern.MatchString(checksum) {
 		return result, store.ErrBackupState
 	}
+	release, err := r.backupFileLease(ctx, true)
+	if err != nil {
+		return result, err
+	}
+	defer release()
 	err = r.write(ctx, func(q queryer) error {
 		node, rel, err := r.backupUpstream(ctx, q, relationship)
 		if err != nil {
@@ -154,6 +181,11 @@ func (r *Repository) CommitBackup(ctx context.Context, relationship string, gene
 				rows.Close()
 				return err
 			}
+			chunk, err = r.readFileChunk(rel.PeerID, generation, index, chunk)
+			if err != nil {
+				rows.Close()
+				return err
+			}
 			if index != count || index > store.MaxBackupChunkIndex || len(chunk) > store.MaxBackupChunk {
 				rows.Close()
 				return store.ErrBackupState
@@ -171,6 +203,15 @@ func (r *Repository) CommitBackup(ctx context.Context, relationship string, gene
 			return store.ErrBackupState
 		}
 		now := time.Now().Unix()
+		manifest.Checksum, manifest.Bytes, manifest.Chunks, manifest.State, manifest.UpdatedAt = checksum, size, count, "ready", now
+		if err := r.materializeBackup(ctx, q, manifest); err != nil {
+			return err
+		}
+		if r.backupFiles != nil {
+			if _, err := q.ExecContext(ctx, "DELETE FROM cluster_business_backup_chunks WHERE master_id=? AND generation=?", rel.PeerID, generation); err != nil {
+				return err
+			}
+		}
 		if _, err = q.ExecContext(ctx, "UPDATE cluster_business_backups SET checksum=?,size_bytes=?,chunk_count=?,state='ready',updated_at=? WHERE master_id=? AND generation=?", checksum, size, count, now, rel.PeerID, generation); err != nil {
 			return err
 		}
@@ -201,6 +242,9 @@ func (r *Repository) CommitBackup(ctx context.Context, relationship string, gene
 		result = manifest
 		return nil
 	})
+	if err == nil {
+		err = r.sweepBackupFiles(ctx)
+	}
 	return
 }
 
@@ -208,6 +252,11 @@ func (r *Repository) AbortBackups(ctx context.Context, relationship string, gene
 	if generation <= 0 {
 		return result, store.ErrBackupState
 	}
+	release, err := r.backupFileLease(ctx, true)
+	if err != nil {
+		return result, err
+	}
+	defer release()
 	err = r.write(ctx, func(q queryer) error {
 		node, rel, err := r.backupUpstream(ctx, q, relationship)
 		if err != nil {
@@ -234,5 +283,8 @@ func (r *Repository) AbortBackups(ctx context.Context, relationship string, gene
 		result.Status = "failed"
 		return r.nodeAudit(ctx, q, "backup-aborted", relationship, map[string]any{"generation": generation, "aborted_generations": receiving}, a)
 	})
+	if err == nil {
+		err = r.sweepBackupFiles(ctx)
+	}
 	return
 }

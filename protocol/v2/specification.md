@@ -221,7 +221,7 @@ The current v2 compatibility surface includes:
 - `/internal/v1/media/*` for Direct and Relay media access
 - `/internal/v1/recordings/*` for upload, stream, stat, and delete
 - `/internal/v1/media-control/*` for directory mutation
-- `/internal/v1/cluster-update/*` for update control and status
+- Cross-node update control/status RPCs are retired. Only the Master exposes its local Admin release manager.
 - `/internal/v1/playback-continuity-diagnostics` (temporary, retires 2026-10-15)
 
 Endpoint-specific authorization always includes relationship direction, role,

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type capabilityControl struct {

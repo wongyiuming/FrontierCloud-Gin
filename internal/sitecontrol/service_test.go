@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 )
 
 type testAgent struct {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func deleteFixture(t *testing.T) (string, *sqlitestore.Store, *Service) {

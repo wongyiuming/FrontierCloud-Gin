@@ -3,8 +3,8 @@ package httpapi
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/recording"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"strings"
 	"unicode/utf8"
 )

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/deployment"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/deployment"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func TestRuntimeSelectionCannotCreateEmptyDatabaseBesideLegacyIdentity(t *testing.T) {

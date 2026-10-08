@@ -10,17 +10,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	"github.com/wongyiuming/FrontierCloud/internal/store/business"
-	"github.com/wongyiuming/FrontierCloud/internal/store/schema"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema"
 
 	_ "modernc.org/sqlite"
 )
 
 // Store owns a SQLite connection pool configured for multiple runtime workers.
 type Store struct {
-	database *sql.DB
+	database       *sql.DB
+	repositoryOnce sync.Once
+	repository     *business.Repository
 }
 
 // Open creates or opens a SQLite database with the FrontierCloud durability and
@@ -143,25 +146,41 @@ func (store *Store) Ping(ctx context.Context) error {
 }
 
 func (store *Store) Close() error {
-	return store.database.Close()
+	var fileErr error
+	if store.repository != nil {
+		fileErr = store.repository.CloseFileBackups()
+	}
+	return errors.Join(fileErr, store.database.Close())
 }
 
-func (s *Store) Media() store.MediaRepository          { return business.New(s.database, s.Backend()) }
-func (s *Store) Nodes() store.NodeRepository           { return business.New(s.database, s.Backend()) }
-func (s *Store) Pool() store.PoolRepository            { return business.New(s.database, s.Backend()) }
-func (s *Store) Karaoke() store.KaraokeRepository      { return business.New(s.database, s.Backend()) }
-func (s *Store) Recordings() store.RecordingRepository { return business.New(s.database, s.Backend()) }
-func (s *Store) Backups() store.BackupRepository       { return business.New(s.database, s.Backend()) }
-func (s *Store) Maintenance() store.MaintenanceRepository {
-	return business.New(s.database, s.Backend())
+func (s *Store) ConfigureFileBackups(directory string) error {
+	return s.repo().ConfigureFileBackups(directory)
 }
-func (s *Store) Admin() store.AdminRepository { return business.New(s.database, s.Backend()) }
+
+func (s *Store) OpenFileBackupsReadOnly(directory string) error {
+	return s.repo().OpenFileBackupsReadOnly(directory)
+}
+
+func (s *Store) repo() *business.Repository {
+	s.repositoryOnce.Do(func() { s.repository = business.New(s.database, s.Backend()) })
+	return s.repository
+}
+func (s *Store) Media() store.MediaRepository          { return s.repo() }
+func (s *Store) Nodes() store.NodeRepository           { return s.repo() }
+func (s *Store) Pool() store.PoolRepository            { return s.repo() }
+func (s *Store) Karaoke() store.KaraokeRepository      { return s.repo() }
+func (s *Store) Recordings() store.RecordingRepository { return s.repo() }
+func (s *Store) Backups() store.BackupRepository       { return s.repo() }
+func (s *Store) Maintenance() store.MaintenanceRepository {
+	return s.repo()
+}
+func (s *Store) Admin() store.AdminRepository { return s.repo() }
 
 func (s *Store) Observations() store.ObservationRepository {
-	return business.New(s.database, s.Backend())
+	return s.repo()
 }
 
-func (s *Store) Security() store.SecurityRepository { return business.New(s.database, s.Backend()) }
+func (s *Store) Security() store.SecurityRepository { return s.repo() }
 
 // Database is intentionally package-local infrastructure access. Handlers must
 // depend on domain store interfaces rather than this connection pool.

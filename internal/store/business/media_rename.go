@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) checkRename(ctx context.Context, q queryer, target string) error {

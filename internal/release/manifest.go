@@ -9,8 +9,8 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 const MaxManifestBytes = 8192
@@ -145,4 +145,14 @@ func CloneManifest(value *Manifest) *Manifest {
 		return nil
 	}
 	return &copy
+}
+
+// Retained only to decode historical local updater recovery journals. There is
+// no whole-fleet publication, forwarding or convergence entry point.
+func ManifestFromValue(value any) (Manifest, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return Manifest{}, ErrManifest
+	}
+	return ParseManifest(raw)
 }

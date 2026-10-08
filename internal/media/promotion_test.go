@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestPromotionManifestCountsUnmanagedFilesAndRejectsFollowerBusiness(t *testing.T) {

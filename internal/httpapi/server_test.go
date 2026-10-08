@@ -23,6 +23,7 @@ func TestReadinessContract(t *testing.T) {
 		body     string
 	}{
 		{name: "ready", database: pass, redis: pass, status: http.StatusOK, body: `"status":"ready"`},
+		{name: "storage without Redis", database: pass, status: http.StatusOK, body: `"checks":{"database":"ready"}`},
 		{name: "database unavailable", database: fail, redis: pass, status: http.StatusServiceUnavailable, body: `"database":"unavailable"`},
 		{name: "redis unavailable", database: pass, redis: fail, status: http.StatusServiceUnavailable, body: `"redis":"unavailable"`},
 	} {

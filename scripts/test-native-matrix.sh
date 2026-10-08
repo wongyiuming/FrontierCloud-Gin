@@ -14,10 +14,10 @@ edge="frontiercloud-edge-test:$image_prefix"
 driver="frontiercloud-native-driver-test:$image_prefix"
 # Private images are retained on failure for diagnosis; no global pruning.
 if [[ -z "${FRONTIERCLOUD_TEST_NATIVE_MATRIX_IMAGE_PREFIX:-}" ]]; then
-  docker build -f Dockerfile.gin --target build -t "$driver" .
-  docker build -f Dockerfile.gin --build-arg "REVISION=$revision" -t "$native" .
-  docker build -f updater/Dockerfile.gin --build-arg "REVISION=$revision" -t "$agent" .
-  docker build -f nginx/Dockerfile --build-arg "REVISION=$revision" -t "$edge" .
+  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --target build -t "$driver" .
+  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --build-arg "REVISION=$revision" -t "$native" .
+  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f updater/Dockerfile.gin --build-arg "REVISION=$revision" -t "$agent" .
+  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f nginx/Dockerfile --build-arg "REVISION=$revision" -t "$edge" .
 else
   # Only for test-only edits against explicitly selected prior private images.
   docker image inspect "$driver" >/dev/null
@@ -29,7 +29,7 @@ fi
 # so a fresh runner behaves like a development engine with cached images.
 docker pull mysql:8.4.11
 docker pull redis:7.4.11-alpine
-docker run --rm --memory=2g -e GOMAXPROCS=2 --name "$prefix-driver" --label "frontiercloud.acceptance=$prefix" \
+docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 -e GOFLAGS=-p=1 --name "$prefix-driver" --label "frontiercloud.acceptance=$prefix" \
   -v "$PWD:/src:ro" -v "$work:$work" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e FRONTIERCLOUD_TEST_DOCKER_SOCKET=/var/run/docker.sock \

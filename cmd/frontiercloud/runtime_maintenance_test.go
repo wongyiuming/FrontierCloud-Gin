@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 )
 
 func TestNativeServerMaintenanceProcess(t *testing.T) {

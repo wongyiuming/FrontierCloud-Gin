@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // A SQL intent fences both directory names before any owner is contacted. We
@@ -28,7 +28,7 @@ func (s *Service) RenameGlobal(ctx context.Context, old, target string, a store.
 	if err := s.Ready(ctx); err != nil {
 		return RenameResult{}, err
 	}
-	op, err := s.pool.PrepareGlobalRename(ctx, old, target, a)
+	op, err := s.prepareGlobalRename(ctx, old, target, a)
 	if err != nil {
 		return RenameResult{}, err
 	}
@@ -37,6 +37,35 @@ func (s *Service) RenameGlobal(ctx context.Context, old, target string, a store.
 		return RenameResult{}, errors.Join(ErrUnavailable, err)
 	}
 	return RenameResult{Status: "renamed", Old: old, New: target}, nil
+}
+
+// Check the physical local destination while holding the same process/file
+// lease as uploads. SQL alone cannot see an empty, previously created folder.
+// Existing intents must still be replayable after their physical move.
+func (s *Service) prepareGlobalRename(ctx context.Context, old, target string, a store.AdminAudit) (store.GlobalRenameOperation, error) {
+	release, err := s.acquire(ctx, true)
+	if err != nil {
+		return store.GlobalRenameOperation{}, err
+	}
+	defer release()
+	if err := s.ready(); err != nil {
+		return store.GlobalRenameOperation{}, err
+	}
+	pending, err := s.pool.PendingGlobalRenames(ctx, 100)
+	if err != nil {
+		return store.GlobalRenameOperation{}, err
+	}
+	for _, op := range pending {
+		if op.Old == old && op.New == target {
+			return s.pool.PrepareGlobalRename(ctx, old, target, a)
+		}
+	}
+	if _, err := s.safeInfo(target); err == nil {
+		return store.GlobalRenameOperation{}, os.ErrExist
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return store.GlobalRenameOperation{}, err
+	}
+	return s.pool.PrepareGlobalRename(ctx, old, target, a)
 }
 
 func globalRenameMarker(id string) string { return ".global-rename-" + id + ".marker" }

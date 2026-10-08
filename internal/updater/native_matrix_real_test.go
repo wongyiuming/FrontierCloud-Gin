@@ -182,6 +182,11 @@ func fleetCertificates(t *testing.T, directory string, extraDNS ...string) *x509
 		if err := os.WriteFile(filepath.Join(directory, name), raw, mode); err != nil {
 			t.Fatal(err)
 		}
+		if name == "privkey.pem" {
+			if err := os.Chown(filepath.Join(directory, name), 10001, 10001); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	roots := x509.NewCertPool()
 	roots.AppendCertsFromPEM(caPEM)
@@ -190,7 +195,7 @@ func fleetCertificates(t *testing.T, directory string, extraDNS ...string) *x509
 
 // This fleet exercises real private-CA processes, control, media, recordings and
 // logical backup transfer, outage recovery and durable role/database/cache
-// restart. Whole release execution and physical restore remain separate gates;
+// restart. Master self-release and physical restore remain separate gates;
 // no existing deployment is reused.
 func TestRealNativeMatrixFleetControl(t *testing.T) {
 	base, prefix := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_WORKSPACE"), os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_PREFIX")
@@ -201,16 +206,9 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !filepath.IsAbs(base) || !strings.HasPrefix(filepath.Base(base), "fc-native-matrix-") || !dockerName.MatchString(prefix) || !strings.HasPrefix(prefix, "fc-matrix-") {
 		t.Fatal("explicit newly created native matrix workspace required")
 	}
-	whole := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_RELEASE") == "1"
 	duration := 45 * time.Minute
 	kinds := []string{"go-sqlite", "go-mysql"}
-	if whole {
-		duration = 90 * time.Minute
-		kinds = []string{"go-sqlite", "go-mysql"}
-		if selected := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER"); selected != "" && selected != "go-sqlite" && selected != "go-mysql" {
-			t.Fatal("whole release selects native SQLite/MySQL Master directions")
-		}
-	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 	e, err := NewEngine(ctx, os.Getenv("FRONTIERCLOUD_TEST_DOCKER_SOCKET"))
@@ -230,11 +228,11 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 		if selected != "" && selected != kind {
 			continue
 		}
-		t.Run(kind, func(t *testing.T) { testFleetControl(t, ctx, e, base, prefix, driver.ID, kind, whole) })
+		t.Run(kind, func(t *testing.T) { testFleetControl(t, ctx, e, base, prefix, driver.ID, kind) })
 	}
 }
 
-func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix, driver, kind string, whole bool) {
+func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix, driver, kind string) {
 	t.Helper()
 	project := prefix + "-" + kind
 	root := filepath.Join(base, kind)
@@ -246,23 +244,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		t.Fatal(err)
 	}
 	var extraDNS []string
-	if whole {
-		extraDNS = []string{"api.github.com"}
-	}
+
 	roots := fleetCertificates(t, certs, extraDNS...)
-	owned := map[string]bool{project: true}
-	for i := 0; i < fleetNodeCount && whole; i++ {
-		owned[project+"-site"+big.NewInt(int64(i)).String()] = true
-	}
+
 	var containers, networks []string
 	defer func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer stop()
-		if whole {
-			// Releases replace IDs and create helpers. Retire only the exact
-			// newly owned projects, stopping agents before their service/helpers.
-			retireFleetProjects(t, cleanup, e, owned)
-		}
+
 		for i := len(containers) - 1; i >= 0; i-- {
 			if c, err := e.Inspect(cleanup, containers[i]); err == nil && c.label("com.docker.compose.project") == project {
 				e.Stop(cleanup, c.ID)
@@ -306,21 +295,15 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	sharedName := project + "-plane"
 	shared := newNetwork(sharedName)
-	var joint *fleetJointRelease
-	if whole {
-		joint = prepareFleetJointRelease(t, ctx, e, base, root, project, shared, certs)
-		defer joint.publication.close()
-	} else {
-		if err := e.call(ctx, "POST", "/networks/"+shared+"/connect", map[string]any{"Container": driver}, nil); err != nil {
-			t.Fatal(err)
-		}
+
+	if err := e.call(ctx, "POST", "/networks/"+shared+"/connect", map[string]any{"Container": driver}, nil); err != nil {
+		t.Fatal(err)
 	}
+
 	create := func(service, image string, cmd, env, binds []string, user string, endpoints map[string]any, health []string) Container {
 		name := project + "-" + service
 		owner, canonical := project, service
-		if whole {
-			owner, canonical = fleetReleaseService(project, service)
-		}
+
 		host := map[string]any{"Binds": binds, "NetworkMode": sharedName, "Tmpfs": map[string]string{"/tmp": "size=64m,mode=1777"}, "RestartPolicy": map[string]string{"Name": "no"}}
 		// Bounds apply only to disposable fixture services, never deployed nodes.
 		host["Memory"] = int64(256 << 20)
@@ -333,9 +316,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if strings.HasSuffix(service, "-web") {
 			host["NanoCpus"] = int64(1_000_000_000)
 		}
-		if whole && canonical == "updater" {
-			host["RestartPolicy"] = map[string]string{"Name": "always"}
-		}
+
 		body := map[string]any{"Image": image, "Cmd": cmd, "User": user, "Env": env, "HostConfig": host, "Labels": map[string]string{"com.docker.compose.project": owner, "com.docker.compose.service": canonical}, "NetworkingConfig": map[string]any{"EndpointsConfig": endpoints}}
 		if health != nil {
 			body["Healthcheck"] = map[string]any{"Test": health, "Interval": int64(time.Second), "Timeout": int64(5 * time.Second), "Retries": 90, "StartPeriod": int64(30 * time.Second)}
@@ -360,9 +341,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	native := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE")
 	agent := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_AGENT_IMAGE")
 	edge := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_EDGE_IMAGE")
-	if whole {
-		native, agent, edge = joint.native, joint.agent, joint.edge
-	}
+
 	commonSecrets := filepath.Join(root, "mysql-secrets")
 	if err := os.Mkdir(commonSecrets, 0755); err != nil {
 		t.Fatal(err)
@@ -371,16 +350,12 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	if err := e.Wait(ctx, initializer.ID); err != nil {
 		t.Fatal(err)
 	}
-	mysql := create("mysql", "mysql:8.4.11", nil, []string{"MYSQL_DATABASE=fc_fleet_0", "MYSQL_USER=media_admin", "MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password", "MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password"}, []string{commonSecrets + ":/run/frontiercloud-secrets:ro"}, "", sharedEndpoint("mysql"), []string{"CMD-SHELL", "MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_password) mysql -h 127.0.0.1 -u media_admin -e 'SELECT 1' fc_fleet_0"})
-	if err := e.Healthy(ctx, mysql.ID); err != nil {
-		t.Fatal("private MySQL initialization", err)
-	}
-	var ddl strings.Builder
-	for i := 1; i < fleetNodeCount; i++ {
-		ddl.WriteString("CREATE DATABASE fc_fleet_" + big.NewInt(int64(i)).String() + "; GRANT ALL ON fc_fleet_" + big.NewInt(int64(i)).String() + ".* TO 'media_admin'@'%';")
-	}
-	if err := e.Exec(ctx, mysql.ID, []string{"sh", "-c", "MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) mysql -h 127.0.0.1 -uroot -e \"" + ddl.String() + "\""}); err != nil {
-		t.Fatal("private schemas", err)
+	var mysql Container
+	if kind == "go-mysql" {
+		mysql = create("mysql", "mysql:8.4.11", nil, []string{"MYSQL_DATABASE=fc_fleet_0", "MYSQL_USER=media_admin", "MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password", "MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password"}, []string{commonSecrets + ":/run/frontiercloud-secrets:ro"}, "", sharedEndpoint("mysql"), []string{"CMD-SHELL", "MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_password) mysql -h 127.0.0.1 -u media_admin -e 'SELECT 1' fc_fleet_0"})
+		if err := e.Healthy(ctx, mysql.ID); err != nil {
+			t.Fatal("private MySQL initialization", err)
+		}
 	}
 	redisContainer := create("redis", "redis:7.4.11-alpine", []string{"redis-server", "--appendonly", "yes"}, nil, nil, "", sharedEndpoint("redis"), nil)
 	password, err := os.ReadFile(filepath.Join(commonSecrets, "mysql_password"))
@@ -392,9 +367,6 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		runtime, database := "go", "sqlite"
 		if i == 0 {
 			runtime, database, _ = strings.Cut(kind, "-")
-		} else {
-			choices := []string{"go-mysql", "go-sqlite"}
-			runtime, database, _ = strings.Cut(choices[(i-1)%len(choices)], "-")
 		}
 		label := "site" + big.NewInt(int64(i)).String()
 		folder := filepath.Join(root, label)
@@ -415,21 +387,15 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		// private network or client-supplied forwarding header.
 		env = append(env, "TRUSTED_PROXY_NETWORKS="+strings.Join(networkCIDRs[privateName], ","))
 		binds := []string{filepath.Join(folder, "data") + ":/app/data", filepath.Join(folder, "secrets") + ":/run/frontiercloud-secrets", certs + ":/certs:ro"}
-		if whole {
-			branch, source := "gin_main", "gin_dev"
-			env = append(env, "RELEASE_BRANCH="+branch, "RELEASE_SOURCE_BRANCH="+source, "RELEASE_MANIFEST_PATH=/release/current.json")
-			binds = append(binds, joint.metadata+":/release:ro")
-			checkout := filepath.Join(folder, "source")
-			joint.source.clone(t, checkout, branch)
+
+		if i == 0 {
 			control := filepath.Join(folder, "updater-control")
-			updaterImage, command := agent, []string{"serve"}
-			create(label+"-updater", updaterImage, command, []string{"UPDATER_PROJECT=" + privateName, "RELEASE_BRANCH=" + branch, "UPDATER_DATA_DIRECTORY=/data", "SSL_CERT_FILE=/certs/ca.pem"}, []string{checkout + ":/workspace:rw", joint.source.origin + ":" + joint.source.origin + ":ro", "/var/run/docker.sock:/var/run/docker.sock", certs + ":/certs:ro", control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
+			create(label+"-updater", agent, []string{"serve"}, []string{"UPDATER_PROJECT=" + project, "RELEASE_BRANCH=main", "UPDATER_DATA_DIRECTORY=/data"}, []string{control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
 			binds = append(binds, control+":/run/frontiercloud-updater:ro")
 		} else {
-			control := filepath.Join(folder, "updater-control")
-			create(label+"-updater", agent, []string{"serve"}, []string{"UPDATER_PROJECT=" + project, "RELEASE_BRANCH=gin_main", "UPDATER_DATA_DIRECTORY=/data"}, []string{control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
-			binds = append(binds, control+":/run/frontiercloud-updater:ro")
+			env = append(env, "DEPLOYMENT_MODE=only_stroge", "STORAGE_PORT=8443", "HTTP_ADDR=:8443", "STORAGE_ENDPOINT=https://"+domain+":8443", "STORAGE_TLS_CERT=/certs/fullchain.pem", "STORAGE_TLS_KEY=/certs/privkey.pem", "NGINX_MEDIA_ACCEL=false")
 		}
+
 		for _, command := range []string{"init-secrets", "init-media"} {
 			initImage, initCommand := native, []string{command}
 			init := create(label+"-"+command, initImage, initCommand, env, binds, "0:0", sharedEndpoint(label+"-"+command), nil)
@@ -441,7 +407,11 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal(err)
 		}
 		image, command, health := native, []string{"serve"}, []string{"CMD", "/app/frontiercloud", "healthcheck"}
-		webEndpoints := sharedEndpoint(label + "-web")
+		webAlias := label + "-web"
+		if i > 0 {
+			webAlias = domain
+		}
+		webEndpoints := sharedEndpoint(webAlias)
 		webEndpoints[privateName] = map[string]any{"Aliases": []string{"web"}}
 		web := create(label+"-web", image, command, env, binds, "10001:10001", webEndpoints, health)
 		if err := e.Healthy(ctx, web.ID); err != nil {
@@ -459,14 +429,25 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			}
 			t.Fatal(label, runtime, database, "Web startup", err)
 		}
-		edgeEndpoints := sharedEndpoint(domain)
-		edgeImage := edge
-		edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge"}}
-		create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", certs + ":/etc/nginx/certs:ro", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
+		if i == 0 {
+			edgeEndpoints := sharedEndpoint(domain)
+			edgeImage := edge
+			edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge"}}
+			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", certs + ":/etc/nginx/certs:ro", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
+		}
+
 		jar, _ := cookiejar.New(nil)
 		client := &http.Client{Jar: jar, Timeout: 15 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		sites[i] = &fleetSite{root: folder, project: privateName, origin: "https://" + domain, runtime: runtime, database: database, client: client, environment: env, binds: binds, web: web.ID}
+		sites[i] = &fleetSite{root: folder, project: privateName, origin: "https://" + domain + func() string {
+			if i > 0 {
+				return ":8443"
+			}
+			return ""
+		}(), runtime: runtime, database: database, client: client, environment: env, binds: binds, web: web.ID}
 		t.Cleanup(func() { client.CloseIdleConnections() })
+		if i > 0 {
+			continue
+		}
 		key, err := os.ReadFile(filepath.Join(folder, "secrets", "admin_key"))
 		if err != nil {
 			t.Fatal(err)
@@ -485,6 +466,28 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	perform := func(site *fleetSite, method, path string, value any) map[string]any {
 		t.Helper()
+		if site != sites[0] {
+			command := "storage-status"
+			if method == "POST" && path == "/nodes/pair-package" {
+				command = "storage-pair"
+			} else if method != "GET" || path != "/nodes" {
+				t.Fatal("business API requested on storage", method, path)
+			}
+			if err := e.Exec(ctx, site.web, []string{"sh", "-c", "/app/frontiercloud " + command + " > /app/data/.private-fleet-observation.json"}); err != nil {
+				t.Fatal("local storage CLI", command, err)
+			}
+			data, err := os.ReadFile(filepath.Join(site.root, "data", ".private-fleet-observation.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out map[string]any
+			decoder := json.NewDecoder(bytes.NewReader(data))
+			decoder.UseNumber()
+			if err := decoder.Decode(&out); err != nil {
+				t.Fatal(err)
+			}
+			return out
+		}
 		code, out, err := site.request(ctx, method, "/api/v1/media/admin"+path, value)
 		if err != nil || code != 200 {
 			// Only the bounded public error detail, never pair packages/status rows.
@@ -501,7 +504,6 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	relations := make([]string, fleetNodeCount-1)
 	for i, follower := range sites[1:] {
 		t.Log("pairing private follower", i+1, follower.runtime, follower.database)
-		perform(follower, "POST", "/nodes/promote", map[string]any{"role": "Follower", "endpoint": follower.origin})
 		pkg := perform(follower, "POST", "/nodes/pair-package", map[string]any{})
 		relation := perform(master, "POST", "/nodes/pair", map[string]any{"package": pkg})["relationship_id"].(string)
 		relations[i] = relation
@@ -570,9 +572,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	// This is business/control acceptance, not fleet release execution. Native
 	// sites use actual compiled idle agents on their private control sockets.
 	// The normal audited action must not defeat unknown agents or offline fences.
-	for _, site := range sites {
-		perform(site, "POST", "/site/maintenance", map[string]any{"enabled": false})
-	}
+	perform(master, "POST", "/site/maintenance", map[string]any{"enabled": false})
 	deadline = time.Now().Add(60 * time.Second)
 	for {
 		rows := perform(master, "GET", "/nodes", nil)["relationships"].([]any)
@@ -773,14 +773,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 	}
 	t.Log("real native matrix cold backups passed transfer and independent logical preflight", kind, "Go/MySQL and Go/SQLite followers")
-	if whole {
-		joint.execute(t, ctx, e, sites, perform)
-		// Prove actual business bytes/session survived both entire releases.
-		if retained, _ := account("GET", "/recordings", nil)["items"].([]any); len(retained) != fleetNodeCount {
-			t.Fatal("whole release lost recording/session state")
-		}
-		fleetRange(t, ctx, sites, "/api/v1/karaoke/account/recordings/"+recordings[0]+"/stream", "", []byte("disposable native matrix recording payload"))
-	}
+
 	// A follower outage must become visible while the Master remains live; an
 	// all-services restart alone would not prove offline admission/recovery.
 	followerID, _ := perform(sites[2], "GET", "/nodes", nil)["node_id"].(string)
@@ -845,7 +838,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 4096))
 	response.Body.Close()
-	if err != nil || !bytes.Contains(raw, []byte("fixed Master/Follower identity requires HTTPS")) {
+	if err != nil || !(bytes.Contains(raw, []byte("fixed Master/Follower identity requires HTTPS")) || bytes.Contains(raw, []byte("only_stroge requires certificate-verified HTTPS")) || bytes.Contains(raw, []byte("only_stroge requires embedded SQLite"))) {
 		t.Fatal("native TLS-loss rejection did not match fixed-role contract")
 	}
 	after, err := os.ReadFile(filepath.Join(sites[2].root, "data", ".native-runtime"))
@@ -887,7 +880,11 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal("private Web stop failed", i, err)
 		}
 	}
-	for _, service := range []Container{redisContainer, mysql} {
+	stateServices := []Container{redisContainer}
+	if mysql.ID != "" {
+		stateServices = append(stateServices, mysql)
+	}
+	for _, service := range stateServices {
 		if err := e.Stop(ctx, service.ID); err != nil {
 			t.Fatal("private state-service stop failed", err)
 		}
@@ -895,8 +892,10 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal("private state-service restart failed", err)
 		}
 	}
-	if err := e.Healthy(ctx, mysql.ID); err != nil {
-		t.Fatal("private MySQL restart not healthy", err)
+	if mysql.ID != "" {
+		if err := e.Healthy(ctx, mysql.ID); err != nil {
+			t.Fatal("private MySQL restart not healthy", err)
+		}
 	}
 	for i, site := range sites {
 		if err := e.Start(ctx, site.web); err != nil {

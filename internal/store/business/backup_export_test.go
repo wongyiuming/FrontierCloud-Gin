@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/backup"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion(t *testing.T) {

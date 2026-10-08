@@ -7,7 +7,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory(t *testing.T) {

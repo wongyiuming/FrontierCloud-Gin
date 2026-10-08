@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 )
 
 // Native RWMutex establishes Go's memory-order boundary; the OS lease protects
@@ -68,7 +68,13 @@ func (s *Service) acquire(ctx context.Context, write bool) (func(), error) {
 		localRelease()
 		return nil, err
 	}
-	return func() { release(); localRelease() }, nil
+	return func() {
+		if write {
+			s.invalidateCatalog()
+		}
+		release()
+		localRelease()
+	}, nil
 }
 func (s *Service) markRecovery() {
 	s.recoveryRequired = true

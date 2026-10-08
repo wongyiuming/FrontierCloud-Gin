@@ -74,3 +74,6 @@ certs/*.pem
 
 # Wiki belongs to the separate GitHub Wiki repository.
 /docs/wiki/
+
+# Storage appliance state is never a build/source artifact.
+/storage-data/

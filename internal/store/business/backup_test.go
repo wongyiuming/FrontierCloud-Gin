@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func backupFixture(t *testing.T) (store.Store, *sql.DB, store.Relationship) {

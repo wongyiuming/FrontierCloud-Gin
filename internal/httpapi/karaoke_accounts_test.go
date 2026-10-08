@@ -15,11 +15,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/admin"
-	"github.com/wongyiuming/FrontierCloud/internal/karaoke"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func karaokeSessionHash(value string) string {
@@ -110,6 +110,9 @@ func TestKaraokeAccountHTTPRealRedisCaptchaSessionCSRFRevocationAndAdmin(t *test
 		answer, err := cache.Get(ctx, "karaoke:captcha:"+result.Challenge+":image").Result()
 		if err != nil {
 			t.Fatal(err)
+		}
+		if strings.Contains(image.Body.String(), answer) || strings.Contains(image.Body.String(), "<text") {
+			t.Fatal("captcha response disclosed answer")
 		}
 		return result.Challenge, answer
 	}
@@ -236,6 +239,21 @@ func TestKaraokeAccountHTTPRealRedisCaptchaSessionCSRFRevocationAndAdmin(t *test
 	w = perform("POST", "/api/v1/karaoke/account/register", credential("Native账号", "Huawei@123", id, answer), "application/json", false)
 	if w.Code != 200 {
 		t.Fatal("deleted username not reusable", w.Code, w.Body.String())
+	}
+	// A correct captcha cannot bypass the hard per-account attempt budget.
+	for range 3 {
+		w = perform("POST", "/api/v1/karaoke/account/login", credential("native账号", "wrong", "", ""), "application/json", false)
+		if w.Code != 401 {
+			t.Fatal("bounded login fixture", w.Code, w.Body.String())
+		}
+	}
+	id, answer = challenge()
+	w = perform("POST", "/api/v1/karaoke/account/login", credential("ＮＡＴＩＶＥ账号", "Huawei@123", id, answer), "application/json", false)
+	if w.Code != 429 || w.Header().Get("Retry-After") != "60" {
+		t.Fatal("captcha bypassed hard budget", w.Code, w.Body.String())
+	}
+	if _, err := cache.Get(ctx, "karaoke:captcha:"+id+":image").Result(); err != nil {
+		t.Fatal("denied login consumed captcha before admission", err)
 	}
 	for range 20 {
 		w = perform("POST", "/api/v1/karaoke/account/register", credential("Failure账号", "Huawei@123", "", ""), "application/json", false)

@@ -12,8 +12,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // ParseInventory requires the exact signed shape, unambiguous bounded JSON and

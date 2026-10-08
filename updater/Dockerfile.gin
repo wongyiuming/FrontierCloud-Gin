@@ -1,4 +1,4 @@
-FROM golang:1.26.0-bookworm AS build
+FROM golang:1.26.8-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN /usr/local/go/bin/go mod download
@@ -8,7 +8,7 @@ COPY protocol ./protocol
 COPY migrations ./migrations
 ARG REVISION
 RUN test -n "$REVISION" && \
-    GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath \
+    GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath \
     -ldflags="-s -w -X main.Revision=$REVISION" \
     -o /out/frontiercloud-updater ./cmd/frontiercloud-updater
 

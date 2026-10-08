@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	storeSQLite "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 // The in-process transport uses exactly the canonical control wire body and

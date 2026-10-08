@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func TestVerifyBackupCommandOnlyEmitsLogicalReportForVerifiedInput(t *testing.T) {

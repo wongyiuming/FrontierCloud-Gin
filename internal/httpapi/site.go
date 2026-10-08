@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/sitecontrol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 )
 
 func RegisterSiteAdmin(router *gin.Engine, a *Admin, service *sitecontrol.Service) {

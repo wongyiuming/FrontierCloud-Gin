@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestDurableIPSecurityConcurrentAccountingPoliciesAndSummary(t *testing.T) {

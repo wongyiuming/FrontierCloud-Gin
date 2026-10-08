@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // Download owns a shared mutation lease. Archive bytes are emitted directly to

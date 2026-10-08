@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/search"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestMediaAdminBusinessTreeVisibilityPriorities(t *testing.T) {

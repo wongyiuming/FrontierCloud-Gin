@@ -17,12 +17,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	storeSQLite "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 // HTTP routing, raw body HMAC and UseNumber decoding are real. The node
@@ -170,7 +171,7 @@ func TestClusterHTTPPairCatalogDirectRelayCapabilitiesAndGlobalStats(t *testing.
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	masterRouter, masterDB, _, masterPublic, master := clusterFixture(t, "https://master.test", transport, false)
-	followerRouter, followerDB, _, _, follower := clusterFixture(t, "https://follower.test", transport, true)
+	followerRouter, followerDB, _, followerPublic, follower := clusterFixture(t, "https://follower.test", transport, true)
 	for _, v := range []struct {
 		service      *node.Service
 		role, origin string
@@ -260,6 +261,28 @@ func TestClusterHTTPPairCatalogDirectRelayCapabilitiesAndGlobalStats(t *testing.
 	location := w.Header().Get("Location")
 	parsed, _ := url.Parse(location)
 	token := parsed.Query().Get("token")
+	storageRouter := gin.New()
+	storageRouter.Use(func(c *gin.Context) { c.Header("X-Audit-Trace-ID", "request-middleware-trace"); c.Next() })
+	storageSettings := followerPublic.settings
+	storageSettings.DeploymentMode = config.DeploymentStorage
+	storageResolver, _ := network.New(nil)
+	RegisterNodeMedia(storageRouter, storageSettings, storageResolver, follower, followerPublic.media)
+	publicRead := request(storageRouter, "GET", location, "")
+	if publicRead.Code != 200 || publicRead.Body.String() != "ID33456789" {
+		t.Fatal("storage public read failed", publicRead.Code)
+	}
+	for _, header := range []string{"X-Media-Resource-ID", "X-Media-Owner-ID", "X-Media-Object-ID", "X-Media-Parent-Request-ID", "X-Audit-Trace-ID"} {
+		if publicRead.Header().Get(header) != "" {
+			t.Fatal("storage public identity header leaked", header)
+		}
+	}
+	serverRequest := httptest.NewRequest("GET", "https://follower.test"+parsed.Path, nil)
+	serverRequest.Header.Set("X-Media-Capability", token)
+	serverRead := httptest.NewRecorder()
+	storageRouter.ServeHTTP(serverRead, serverRequest)
+	if serverRead.Code != 200 || serverRead.Header().Get("X-Media-Resource-ID") != upload.MediaID || serverRead.Header().Get("X-Media-Object-ID") != upload.MediaID || serverRead.Header().Get("X-Media-Owner-ID") != upload.MemberID {
+		t.Fatal("server download placement proof lost", serverRead.Code)
+	}
 	for _, v := range []struct {
 		method, origin, rangeValue string
 		want                       int

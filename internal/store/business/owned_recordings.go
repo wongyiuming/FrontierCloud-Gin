@@ -2,7 +2,7 @@ package business
 
 import (
 	"context"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"time"
 )
 

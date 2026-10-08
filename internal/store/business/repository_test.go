@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	mysqlstore "github.com/wongyiuming/FrontierCloud/internal/store/mysql"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func database(t *testing.T) store.Store {

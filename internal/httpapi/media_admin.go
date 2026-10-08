@@ -9,9 +9,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/search"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (a *Admin) mutationAudit(c *gin.Context, action string, paths []string) store.AdminAudit {

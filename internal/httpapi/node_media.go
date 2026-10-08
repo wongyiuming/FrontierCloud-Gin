@@ -8,10 +8,10 @@ import (
 	"path"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 )
 
 func capabilityInput(c *gin.Context, header string) (string, bool) {
@@ -78,11 +78,18 @@ func RegisterNodeMedia(router *gin.Engine, settings config.Config, resolver *net
 			return
 		}
 		defer stream.File.Close()
-		for header, key := range map[string]string{"X-Media-Resource-ID": "g", "X-Media-Owner-ID": "o", "X-Media-Parent-Request-ID": "request_id", "X-Audit-Trace-ID": "trace_id"} {
-			v, _ := payload[key].(string)
-			c.Header(header, v)
+		// The standalone HTTPS listener is also the public edge. Browser query
+		// capabilities must not expose the metadata formerly hidden by Nginx.
+		// Header-based server downloads retain placement proof for MediaRead.
+		if settings.DeploymentMode != config.DeploymentStorage || c.GetHeader("X-Media-Capability") != "" {
+			for header, key := range map[string]string{"X-Media-Resource-ID": "g", "X-Media-Owner-ID": "o", "X-Media-Parent-Request-ID": "request_id", "X-Audit-Trace-ID": "trace_id"} {
+				v, _ := payload[key].(string)
+				c.Header(header, v)
+			}
+			c.Header("X-Media-Object-ID", stream.ObjectID)
+		} else {
+			c.Header("X-Audit-Trace-ID", "")
 		}
-		c.Header("X-Media-Object-ID", stream.ObjectID)
 		contentType := mime.TypeByExtension(path.Ext(stream.Path))
 		if contentType == "" {
 			contentType = "application/octet-stream"

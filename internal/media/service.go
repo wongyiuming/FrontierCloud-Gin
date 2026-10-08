@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/search"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 )
 
@@ -38,6 +38,7 @@ type Service struct {
 	pool             store.PoolRepository
 	control          *node.Service
 	owned            store.OwnedStorageRepository
+	catalog          *catalogCache
 }
 
 type Category struct {
@@ -326,9 +327,9 @@ func (s *Service) Categories(ctx context.Context, kind string, include bool) ([]
 		return []Category{}, nil
 	}
 	if role == "Master" {
-		return s.globalCategories(ctx, kind, mediaRoot(kind), include)
+		return s.cachedCategories(ctx, role, kind, mediaRoot(kind), include, func() ([]Category, error) { return s.globalCategories(ctx, kind, mediaRoot(kind), include) })
 	}
-	return s.categories(ctx, kind, mediaRoot(kind), include)
+	return s.cachedCategories(ctx, role, kind, mediaRoot(kind), include, func() ([]Category, error) { return s.categories(ctx, kind, mediaRoot(kind), include) })
 }
 func (s *Service) Subcategories(ctx context.Context, kind, name string, include bool) ([]Category, error) {
 	release, leaseErr := s.acquire(ctx, false)
@@ -347,13 +348,15 @@ func (s *Service) Subcategories(ctx context.Context, kind, name string, include 
 		return nil, ErrCategory
 	}
 	if role == "Master" {
-		if err := s.globalCategory(ctx, name, kind); err != nil {
-			return nil, err
-		}
-		if len(strings.Split(name, "/")) != 2 {
-			return []Category{}, nil
-		}
-		return s.globalCategories(ctx, kind, name, include)
+		return s.cachedCategories(ctx, role, kind, name, include, func() ([]Category, error) {
+			if err := s.globalCategory(ctx, name, kind); err != nil {
+				return nil, err
+			}
+			if len(strings.Split(name, "/")) != 2 {
+				return []Category{}, nil
+			}
+			return s.globalCategories(ctx, kind, name, include)
+		})
 	}
 	if err := s.ValidateCategory(name, kind); err != nil {
 		return nil, err
@@ -361,7 +364,7 @@ func (s *Service) Subcategories(ctx context.Context, kind, name string, include 
 	if len(strings.Split(name, "/")) != 2 {
 		return []Category{}, nil
 	}
-	return s.categories(ctx, kind, name, include)
+	return s.cachedCategories(ctx, role, kind, name, include, func() ([]Category, error) { return s.categories(ctx, kind, name, include) })
 }
 
 func (s *Service) Catalog(ctx context.Context, kind, name, session string, include bool) ([]Track, error) {
@@ -381,8 +384,12 @@ func (s *Service) Catalog(ctx context.Context, kind, name, session string, inclu
 		return nil, ErrCategory
 	}
 	if role == "Master" {
-		return s.globalCatalog(ctx, kind, name, session, include)
+		return s.cachedTracks(ctx, role, kind, name, session, include, func() ([]Track, error) { return s.globalCatalog(ctx, kind, name, "", include) })
 	}
+	return s.cachedTracks(ctx, role, kind, name, session, include, func() ([]Track, error) { return s.localCatalog(ctx, kind, name, "", include) })
+}
+
+func (s *Service) localCatalog(ctx context.Context, kind, name, session string, include bool) ([]Track, error) {
 	if err := s.ValidateCategory(name, kind); err != nil {
 		return nil, err
 	}

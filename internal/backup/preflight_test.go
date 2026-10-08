@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const testGeneration int64 = 1790000000000000123

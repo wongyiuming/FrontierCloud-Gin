@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 )
 

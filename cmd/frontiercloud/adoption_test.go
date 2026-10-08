@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 )
 
 func TestAdoptionCommandRequiresClosedFenceAndNeverCreatesStore(t *testing.T) {

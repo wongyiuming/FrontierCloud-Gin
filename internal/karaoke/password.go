@@ -9,13 +9,13 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"golang.org/x/crypto/scrypt"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
 
-var passwordSlots = make(chan struct{}, 4)
+var passwordSlots = make(chan struct{}, 1)
 
 func pythonStrip(v string) string {
 	return strings.TrimFunc(v, func(r rune) bool { return unicode.IsSpace(r) || r >= 28 && r <= 31 })
@@ -57,6 +57,8 @@ func passwordKey(ctx context.Context, password string, salt []byte) ([]byte, err
 	case passwordSlots <- struct{}{}:
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	default:
+		return nil, &Error{Status: 429, Detail: "账号服务繁忙，请稍后重试", RetryAfter: 1}
 	}
 	defer func() { <-passwordSlots }()
 	if err := ctx.Err(); err != nil {

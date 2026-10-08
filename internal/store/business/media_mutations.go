@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) SetPreference(ctx context.Context, o store.MediaObject, value int, audit store.AdminAudit) (result store.PlaybackResult, err error) {

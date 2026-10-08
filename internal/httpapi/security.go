@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func SecurityMiddleware(service *security.Service, resolver *network.Resolver) gin.HandlerFunc {

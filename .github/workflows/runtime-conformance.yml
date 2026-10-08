@@ -2,7 +2,7 @@ name: Runtime and Store Conformance
 
 on:
   push:
-    branches: [gin_dev, gin_main, dev, main]
+    branches: [dev, main]
     paths:
       - 'cmd/**'
       - 'internal/**'
@@ -28,7 +28,7 @@ on:
       - '.env.example'
       - '.github/workflows/runtime-conformance.yml'
   pull_request:
-    branches: [gin_dev, gin_main, dev, main]
+    branches: [dev, main]
   workflow_dispatch:
 
 permissions:

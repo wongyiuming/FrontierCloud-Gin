@@ -16,12 +16,12 @@ import (
 	"time"
 
 	driver "github.com/go-sql-driver/mysql"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/migrationproof"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/vault"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
 )
 
 // This is deliberately NOT a general restore or an automatic release path.

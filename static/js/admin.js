@@ -223,10 +223,13 @@ function updateToolbar() {
     $('download').disabled = !count;
     $('delete').disabled = !count;
     const selectedRows = [...document.querySelectorAll('.tree-row.selected')];
+    const mutationPending = selectedRows.some(row => row.dataset.mutationState);
+    $('download').disabled = !count || mutationPending;
+    $('delete').disabled = !count || mutationPending;
     const canHide = count && selectionKind === 'directory'
         && selectedRows.length === count
         && selectedRows.every(row => row.dataset.hideable === 'true');
-    $('hide').disabled = !canHide;
+    $('hide').disabled = !canHide || mutationPending;
     if (count && selectionKind === 'directory') {
         const rows = [...document.querySelectorAll('.tree-row.selected')];
         $('hide').textContent = rows.every(row => row.dataset.hidden === 'true') ? '恢复' : '隐藏';
@@ -331,12 +334,13 @@ async function renderTree() {
         row.dataset.path = item.path;
         row.dataset.hidden = String(item.hidden);
         row.dataset.hideable = String(item.hideable === true);
+        row.dataset.mutationState = item.mutation_state || '';
         const pathDetail = scopedSearch
             ? `<small class="tree-path">媒体路径 ${expandableFilename(`/${item.path.split('/').slice(1).join('/')}`, 72)}</small>`
             : '';
         row.innerHTML = `<span class="kind">${item.kind === 'directory' ? '📁' : '📄'}</span>`
             + `<span class="tree-label"><span class="name" title="${escapeHtml(item.name)}">${expandableFilename(item.name, 52)}</span>${pathDetail}</span>`
-            + `<small>${item.kind === 'file' ? formatSize(item.size) : ''}</small>`;
+            + `<small>${item.mutation_state ? `改名恢复中 → ${escapeHtml(item.rename_target || '')}` : item.kind === 'file' ? formatSize(item.size) : ''}</small>`;
         bindExpandableFilenames(row);
         row.onclick = event => {
             event.stopPropagation();

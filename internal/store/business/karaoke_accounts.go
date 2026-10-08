@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const userColumns = "user_id,username,username_key,password_hash,status,quota_bytes,used_bytes,created_at,updated_at"

@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"io/fs"
 	"os"

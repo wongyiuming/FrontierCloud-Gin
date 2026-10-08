@@ -3,8 +3,8 @@ package httpapi
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"unicode/utf8"
 )
 
@@ -56,7 +56,7 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 		if !decodeNodeAdmin(c, &body) {
 			return
 		}
-		if (body.Role != "Master" && body.Role != "Follower") || body.Endpoint == "" || utf8.RuneCountInString(body.Endpoint) > 512 || body.Capacity != nil && (*body.Capacity < 1 || *body.Capacity > 10240) {
+		if body.Role != "Master" || body.Endpoint == "" || utf8.RuneCountInString(body.Endpoint) > 512 || body.Capacity != nil && (*body.Capacity < 1 || *body.Capacity > 10240) {
 			invalid(c, "body", "promotion")
 			return
 		}
@@ -89,14 +89,6 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 			return
 		}
 		c.JSON(200, gin.H{"role": row.Role, "node_id": row.ID})
-	})
-	writes.POST("/pair-package", func(c *gin.Context) {
-		value, err := service.CreatePair(c.Request.Context(), audit(c))
-		if err != nil {
-			nodeAdminError(c, err)
-			return
-		}
-		c.JSON(200, value)
 	})
 	writes.POST("/pair", func(c *gin.Context) {
 		var body struct {

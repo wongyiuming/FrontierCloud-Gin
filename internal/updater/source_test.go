@@ -134,3 +134,24 @@ func TestSourceValidatesHeadAndArchivesWithoutTouchingWorktree(t *testing.T) {
 		t.Fatal("dirty source overwritten")
 	}
 }
+
+func TestDevelopmentSourceRequiresExplicitStagingProfile(t *testing.T) {
+	s, _, target := gitFixture(t)
+	cmd := exec.Command("git", "push", "origin", "HEAD:refs/heads/dev")
+	cmd.Dir = s.Directory
+	if raw, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(err, string(raw))
+	}
+	s.Branch = "dev"
+	if err := s.Validate(context.Background(), target, "upgrade"); err == nil {
+		t.Fatal("production accepted dev source")
+	}
+	s.Staging = true
+	if err := s.Validate(context.Background(), target, "upgrade"); err != nil {
+		t.Fatal(err)
+	}
+	s.Branch = "main"
+	if err := s.Validate(context.Background(), target, "upgrade"); err == nil {
+		t.Fatal("staging accepted production branch")
+	}
+}

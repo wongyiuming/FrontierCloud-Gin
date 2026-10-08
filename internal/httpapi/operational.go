@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"github.com/gin-gonic/gin"
-	contracts "github.com/wongyiuming/FrontierCloud/protocol"
+	contracts "github.com/wongyiuming/FrontierCloud-Gin/protocol"
 )
 
 // RegisterOperational exposes real metrics and the embedded, reviewed protocol

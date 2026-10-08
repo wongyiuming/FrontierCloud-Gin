@@ -10,10 +10,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 const Manual = ".frontiercloud-maintenance"

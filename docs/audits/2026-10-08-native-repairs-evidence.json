@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-08",
+  "base_release": "3345782bc318f718b665ba6f61b1551fc5135de3",
+  "native_code_commit": "f2ba44451120f6ea39c18d6af99e76ec053f3eac",
+  "wiki_commit": "81e37384deef108a10d0e6dac781df6065da7c36",
+  "production_changed": false,
+  "hosted_ci_claimed": false,
+  "complete_release_acceptance": false,
+  "native_inventory": {"test_files": 147, "top_level_test_functions": 317},
+  "python": {"discovered": 95, "lightweight_passed": 89, "class_skipped_cases": 6,
+             "real_gin_sqlite_passed": 6, "real_gin_mysql_passed": 6},
+  "go_unit": {"passed_packages": 28, "passed_events_including_subtests": 605, "test_skips": 14,
+              "sha256": "ff58ee404d07d0073e9dfd79cbad5a5ba573bdb718ba1537d8f942ffe276a504"},
+  "go_race_real_redis_compose": {"passed_packages": 28, "passed_events_including_subtests": 614, "test_skips": 5,
+              "sha256": "6d2e482f0f7664b3fb9747bc8755881dbcaa6fa323cd4c8323c28b2481702601"},
+  "mysql_business": {"passed_events": 31, "sqlite_specific_skips": 5,
+              "sha256": "f60d35d08aab9d40358ec3bc2738c3378f723fc4df6a183a553d063b94f29ae0"},
+  "redis_http_process": {"passed_events": 77, "test_skips": 0,
+              "sha256": "a471fa4de4169166377e3b0a69a053ae71c2843a617af7e068e9df257e0abd90"},
+  "gin_http_log_sha256": {
+    "sqlite": "3cd856948d08efdd67764eb92e3aff933376ea9a7eff4373d6546f8ad645609a",
+    "mysql": "8971e5f2e84df16b8497bf27eb878e9b82465ef49bd620514fd8098253d594f3"
+  },
+  "govulncheck": {"tool_version": "v1.8.0", "binary_go_version": "go1.26.8",
+                 "reachable_findings": 0, "vulnerable_imported_packages": 0,
+                 "unused_module_findings": ["GO-2026-5932"],
+                 "source_sha256": "0157843817cfc69db15f421c1533212712b89a09646165f137040ae2f94d356a"},
+  "legacy_ledger": {"identifiers": 552, "reviewed": 9, "pending_assertion_review": 543},
+  "unrun_release_gates": ["five-node business matrix", "whole-fleet release and rollback",
+                         "real Updater Engine replacement/handoff", "default bootstrap", "real Chromium"],
+  "note": "Overlapping runs must not be summed; test events include subtests. Full raw evidence is retained privately on the development host and operator workspace. Hashes are receipts, not public CI certification."
+}

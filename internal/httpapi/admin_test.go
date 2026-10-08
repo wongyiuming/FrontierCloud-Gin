@@ -15,11 +15,11 @@ import (
 	"testing"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/admin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/observation"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 )
 
 func TestAdminHTTPRedisContract(t *testing.T) {

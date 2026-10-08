@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestNodeOwnedRenameAuthenticatesUpstreamPreservesIDsAndRefundsRenamedUpload(t *testing.T) {

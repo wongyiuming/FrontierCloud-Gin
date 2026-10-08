@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 )
 
 func fixture(t *testing.T) config.Config {

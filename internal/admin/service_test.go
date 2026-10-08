@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type memoryCache struct {

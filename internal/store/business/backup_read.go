@@ -10,13 +10,19 @@ import (
 	"hash"
 	"io"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // A repeatable cold snapshot survives concurrent retention. It deliberately
 // does not require a still-active relationship: historical recovery artifacts
 // are inspected by local maintenance, never used to authorize network access.
 func (r *Repository) ReadReadyBackup(ctx context.Context, master string, generation int64, consume func(store.BackupManifest, io.Reader) error) (store.BackupManifest, error) {
+	if r.backupFiles != nil {
+		return r.readReadyFileBackup(ctx, master, generation, consume)
+	}
+	return r.readReadySQLBackup(ctx, master, generation, consume)
+}
+func (r *Repository) readReadySQLBackup(ctx context.Context, master string, generation int64, consume func(store.BackupManifest, io.Reader) error) (store.BackupManifest, error) {
 	var empty store.BackupManifest
 	if !nodeIDPattern.MatchString(master) || generation <= 0 || consume == nil {
 		return empty, store.ErrBackupState
@@ -69,6 +75,7 @@ func (r *Repository) ReadReadyBackup(ctx context.Context, master string, generat
 }
 
 type coldBackupReader struct {
+	files    *Repository
 	ctx      context.Context
 	rows     *sql.Rows
 	manifest store.BackupManifest
@@ -111,7 +118,17 @@ func (r *coldBackupReader) Read(p []byte) (n int, err error) {
 		}
 		var index int
 		var length int64
-		if err := r.rows.Scan(&index, &length, &r.chunk); err != nil {
+		if r.files != nil {
+			if err := r.rows.Scan(&index, &r.chunk); err != nil {
+				return 0, err
+			}
+			var err error
+			r.chunk, err = r.files.readFileChunk(r.manifest.MasterID, r.manifest.Generation, index, r.chunk)
+			if err != nil {
+				return 0, err
+			}
+			length = int64(len(r.chunk))
+		} else if err := r.rows.Scan(&index, &length, &r.chunk); err != nil {
 			return 0, err
 		}
 		if index != r.count || r.count >= r.manifest.Chunks || length != int64(len(r.chunk)) || len(r.chunk) > store.MaxBackupChunk || int64(len(r.chunk)) > r.manifest.Bytes-r.size {

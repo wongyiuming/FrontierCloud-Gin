@@ -7,8 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // Offline-only history compaction, never recovery of a pending operation. The

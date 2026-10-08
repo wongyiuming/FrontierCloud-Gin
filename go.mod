@@ -1,6 +1,6 @@
-module github.com/wongyiuming/FrontierCloud
+module github.com/wongyiuming/FrontierCloud-Gin
 
-go 1.26.0
+go 1.26.8
 
 require (
 	github.com/gin-gonic/gin v1.12.0
@@ -8,10 +8,10 @@ require (
 	github.com/longbridgeapp/opencc v0.3.13
 	github.com/prometheus/client_golang v1.24.1
 	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.48.0
-	golang.org/x/text v0.40.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -47,7 +47,7 @@ require (
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.59.0 // indirect
+	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect

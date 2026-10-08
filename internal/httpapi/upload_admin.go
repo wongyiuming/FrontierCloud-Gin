@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 )
 
 type uploadReader struct {

@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 // Only the exact opt-in acceptance driver receives this private DNS alias. No
@@ -121,11 +121,11 @@ func (f *nativePublicationFixture) manifest(t *testing.T, version, target string
 }
 
 func (f *nativePublicationFixture) reply(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" || r.Host != "api.github.com" || !strings.HasPrefix(r.URL.Path, "/repos/wongyiuming/FrontierCloud/") {
+	if r.Method != "GET" || r.Host != "api.github.com" || !strings.HasPrefix(r.URL.Path, "/repos/wongyiuming/FrontierCloud-Gin/") {
 		http.Error(w, "private fixture scope", 404)
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, "/repos/wongyiuming/FrontierCloud")
+	path := strings.TrimPrefix(r.URL.Path, "/repos/wongyiuming/FrontierCloud-Gin")
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
@@ -142,7 +142,7 @@ func (f *nativePublicationFixture) reply(w http.ResponseWriter, r *http.Request)
 			sha := strings.TrimPrefix(path, "/commits/")
 			reply = map[string]any{"sha": sha, "commit": map[string]any{"tree": map[string]any{"sha": artifact.TreeSHA}}}
 		case path == "/commits/"+target+"/pulls" && r.URL.Query().Get("per_page") == "100":
-			reply = []any{map[string]any{"merged_at": "2026-10-04T00:00:00Z", "merge_commit_sha": target, "base": map[string]any{"ref": policy.Branch}, "head": map[string]any{"ref": policy.Source, "sha": artifact.SourceSHA, "repo": map[string]any{"full_name": "wongyiuming/FrontierCloud"}}}}
+			reply = []any{map[string]any{"merged_at": "2026-10-04T00:00:00Z", "merge_commit_sha": target, "base": map[string]any{"ref": policy.Branch}, "head": map[string]any{"ref": policy.Source, "sha": artifact.SourceSHA, "repo": map[string]any{"full_name": "wongyiuming/FrontierCloud-Gin"}}}}
 		case path == "/actions/workflows/docker.yml/runs" && r.URL.Query().Get("event") == "push" && r.URL.Query().Get("head_sha") == artifact.SourceSHA && r.URL.Query().Get("per_page") == "20":
 			reply = map[string]any{"workflow_runs": []any{map[string]any{"head_branch": policy.Source, "head_sha": artifact.SourceSHA, "event": "push", "run_number": 1, "status": "completed", "conclusion": "success"}}}
 		}
@@ -198,17 +198,17 @@ func TestPrivatePublicationFixtureScopesExactArtifactRequests(t *testing.T) {
 		method, host, path string
 		want               int
 	}{
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + target, 200},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + source, 200},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + target + "/pulls?per_page=100", 200},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/actions/workflows/docker.yml/runs?event=push&head_sha=" + source + "&per_page=20", 200},
-		{"POST", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + target, 404},
-		{"GET", "foreign.invalid", "/repos/wongyiuming/FrontierCloud/commits/" + target, 404},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + target, 200},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + source, 200},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + target + "/pulls?per_page=100", 200},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/actions/workflows/docker.yml/runs?event=push&head_sha=" + source + "&per_page=20", 200},
+		{"POST", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + target, 404},
+		{"GET", "foreign.invalid", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + target, 404},
 		{"GET", "api.github.com", "/repos/foreign/FrontierCloud/commits/" + target, 404},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + tree, 404},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/commits/" + target + "/pulls?per_page=1", 404},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/actions/workflows/docker.yml/runs?event=push&head_sha=" + target + "&per_page=20", 404},
-		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud/actions/workflows/docker.yml/runs?event=push&head_sha=" + source + "&per_page=100", 404},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + tree, 404},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/commits/" + target + "/pulls?per_page=1", 404},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/actions/workflows/docker.yml/runs?event=push&head_sha=" + target + "&per_page=20", 404},
+		{"GET", "api.github.com", "/repos/wongyiuming/FrontierCloud-Gin/actions/workflows/docker.yml/runs?event=push&head_sha=" + source + "&per_page=100", 404},
 	} {
 		r := httptest.NewRequest(check.method, "https://"+check.host+check.path, nil)
 		w := httptest.NewRecorder()
@@ -229,7 +229,7 @@ func TestPrivatePublicationFixtureSeparatesJointProfilesAndCurrentHeads(t *testi
 	for target, artifact := range f.proofs {
 		policy := f.policies[target]
 		for _, path := range []string{"/branches/" + policy.Branch, "/commits/" + target + "/pulls?per_page=100", "/actions/workflows/docker.yml/runs?event=push&head_sha=" + artifact.SourceSHA + "&per_page=20"} {
-			r := httptest.NewRequest("GET", "https://api.github.com/repos/wongyiuming/FrontierCloud"+path, nil)
+			r := httptest.NewRequest("GET", "https://api.github.com/repos/wongyiuming/FrontierCloud-Gin"+path, nil)
 			w := httptest.NewRecorder()
 			f.reply(w, r)
 			if w.Code != 200 {

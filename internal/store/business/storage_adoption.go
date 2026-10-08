@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"strings"
 	"time"
 )

@@ -178,11 +178,11 @@
             </div>
         </section>
         <section id="nodesPanel" class="admin-module nodes-panel" data-admin-module="nodes">
-            <button class="module-heading" type="button" aria-expanded="false"><span><strong>节点管理</strong><small>角色、配对关系及联合状态</small></span><b>＋</b></button>
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>存储节点管理</strong><small>主节点控制存储配对、类型与额度</small></span><b>＋</b></button>
             <div class="module-content nodes-content">
                 <div class="nodes-toolbar"><strong id="nodeIdentity">尚未加载</strong><button id="nodesRefresh" type="button">刷新</button></div>
-                <form id="nodePromotion" class="nodes-toolbar hidden"><select id="nodeRole" aria-label="节点角色"><option>Master</option><option>Follower</option></select><input id="nodeEndpoint" type="url" required placeholder="当前节点 HTTPS 根地址"><input id="masterLocalCapacity" type="number" min="1" max="10240" value="1" aria-label="Master 本地存储池额度 GiB" placeholder="Master Local GiB"><button type="submit">固定角色</button></form>
-                <div id="nodePairing" class="hidden"><div class="nodes-toolbar"><button id="nodeIssuePair" type="button">生成一次性配对包</button><button id="nodeImportPair" type="button">导入 Follower 配对包</button></div><textarea id="nodePairPackage" rows="4" aria-label="一次性配对包" placeholder="配对包只用于建立当前关系，五分钟后过期"></textarea></div>
+                <form id="nodePromotion" class="nodes-toolbar hidden"><select id="nodeRole" aria-label="节点角色"><option>Master</option></select><input id="nodeEndpoint" type="url" required placeholder="当前节点 HTTPS 根地址"><input id="masterLocalCapacity" type="number" min="1" max="10240" value="1" aria-label="Master 本地存储池额度 GiB" placeholder="Master Local GiB"><button type="submit">固定角色</button></form>
+                <div id="nodePairing" class="hidden"><div class="nodes-toolbar"><button id="nodeImportPair" type="button">导入存储节点密钥包</button></div><textarea id="nodePairPackage" rows="4" aria-label="一次性配对包" placeholder="配对包只用于建立当前关系，五分钟后过期"></textarea></div>
                 <div id="storagePoolSummary" class="nodes-pool-summary">Standalone 本地存储</div>
                 <div class="nodes-table-scroll"><table class="nodes-table"><thead><tr><th>节点 / HTTPS 地址</th><th>状态 / RTT / 心跳</th><th>Storage</th><th>Backup / Transport</th></tr></thead><tbody id="nodeRelationships"></tbody></table></div>
                 <form id="nodeReinitialize" class="nodes-toolbar hidden"><input id="nodeResetConfirmation" autocomplete="off" placeholder="输入当前节点 ID 确认重置"><button type="submit">重新初始化节点</button><span>撤销旧关系，保留媒体文件</span></form>
