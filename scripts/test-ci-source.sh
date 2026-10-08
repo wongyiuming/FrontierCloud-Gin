@@ -11,6 +11,7 @@ python3 scripts/check_ci_assets.py
 git diff --check
 for file in static/js/*.js; do node --check "$file"; done
 node tests/admin_ui_smoke.mjs
+node tests/catalog_startup_smoke.mjs
 node tests/player_cache_smoke.mjs
 node tests/network_observation_smoke.mjs
 node tests/audio_continuous_stream_smoke.mjs
