@@ -21,6 +21,16 @@ func scanGlobal(row rowScanner) (v store.GlobalMedia, err error) {
 	return
 }
 func (r *Repository) Resources(ctx context.Context, scope string, exact bool) ([]store.GlobalMedia, error) {
+	return r.resources(ctx, scope, exact, false)
+}
+
+// Only the authenticated management tree may include fenced rename records.
+// Public playback/placement queries continue to select active records only.
+func (r *Repository) ManagementResources(ctx context.Context, scope string, exact bool) ([]store.GlobalMedia, error) {
+	return r.resources(ctx, scope, exact, true)
+}
+
+func (r *Repository) resources(ctx context.Context, scope string, exact, management bool) ([]store.GlobalMedia, error) {
 	node, err := r.ReadIdentity(ctx)
 	if err != nil {
 		return nil, err
@@ -29,6 +39,9 @@ func (r *Repository) Resources(ctx context.Context, scope string, exact bool) ([
 		return nil, nodeConflict("only Master owns the global catalog")
 	}
 	query := "SELECT " + globalColumns + globalTables + " WHERE g.state='active'"
+	if management {
+		query = "SELECT " + globalColumns + globalTables + " WHERE g.state IN ('active','renaming')"
+	}
 	args := []any{}
 	if scope != "" {
 		if exact {

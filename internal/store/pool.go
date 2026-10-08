@@ -66,6 +66,7 @@ type PoolRepository interface {
 	FollowerSummary(context.Context, int64, int64) (map[string]any, error)
 	AdoptMasterLocal(context.Context, int64, int64, []LocalMedia) error
 	Resources(context.Context, string, bool) ([]GlobalMedia, error)
+	ManagementResources(context.Context, string, bool) ([]GlobalMedia, error)
 	Resource(context.Context, string) (GlobalMedia, error)
 	ReserveUpload(context.Context, string, string, int64, int64, AdminAudit) (UploadReservation, error)
 	Upload(context.Context, string) (UploadReservation, error)
