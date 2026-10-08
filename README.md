@@ -4,11 +4,18 @@ FrontierCloud is a self-hosted media browsing, continuous-audio playback, karaok
 
 The core product model is deliberately small: one business Master owns business truth, Followers provide Storage and/or Backup resources, and every managed media object has one complete physical owner.
 
+Release scope: use the reviewed `gin_main` native line. GitHub's default `main`
+and its paired `dev` still contain the historical Python release until separately
+authorized consolidation. Their old README/Compose instructions are not a
+supported deployment path. This branch's Go-only policy must not be mistaken for
+proof that every historical ref has already been converted.
+
 ## Current capabilities
 
 - Music and video catalogs backed by managed media storage.
 - MP3 continuous playback through one browser `MediaSource` / `SourceBuffer` session.
 - Bounded playback-clock buffering, silent interrupted-read recovery, and HTTP Range repositioning for seeks beyond the current buffer.
+- Bounded catalog caching with SQL-commit and managed-file mutation invalidation.
 - Synchronized/fullscreen lyrics, explicit lyric relations, and non-destructive same-name auto-link.
 - Karaoke entry from media playback, guest preview, account recordings, and storage quota.
 - Master/Follower storage placement using Local, Direct, or Relay transport.
@@ -76,3 +83,8 @@ be same-repository, reviewed and backed by exact source CI; synchronize its
 implementation branch after merge. Database selection never changes release profile.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before changing cross-cutting behavior.
+
+See [validation scopes and promotion](docs/validation-and-promotion.md) for the
+distinction between source CI, executable regression and production deployment.
+The [2026-10-08 repair audit](docs/audits/2026-10-08-native-repairs.md) records
+security/cache fixes, actual verification and remaining release gates.

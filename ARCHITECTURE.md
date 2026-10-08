@@ -40,7 +40,7 @@ The only supported site types are:
 - `direct` — Follower placements whose current transport is `Direct`;
 - `relay` — Follower placements whose current transport is `Relay`.
 
-For Direct and Relay uploads, the user must not name a specific member. FrontierCloud selects among all members of the requested type that are storage-enabled, online, writable, and have enough writable capacity for the object. Placement prefers the lowest current `(used + reserved) / allocated` pressure and then more available bytes, so sequential/concurrent reservations spread naturally across ready members instead of sticking to one node. Member selection plus durable upload reservation is serialized by the storage write lock so concurrent Admin sessions see current `reserved_bytes`.
+For Direct and Relay uploads, the user must not name a specific member. The first live object/reservation in an immediate parent folder selects an eligible member by lowest `(used + reserved) / allocated` pressure, then more available bytes. Subsequent direct children bind to that same owner; a child folder is a separate affinity unit. An offline, non-writable or full bound owner causes refusal, never silent spill to another member. Historical split-owner folders fail closed. Member selection plus durable reservation is serialized by the storage write lock so concurrent Admin sessions see current `reserved_bytes`.
 
 Historical media requires **no migration** for this feature. Existing `storage_member_id`, `member_kind`, and `transport` remain the source of truth; Admin derives the visible site type from those fields. A missing transport in a local/Standalone media tree is treated as primary/local. Changing this presentation must not rewrite historical ownership.
 
@@ -123,9 +123,11 @@ An accepted lyric upload is successful only after the file and its managed-objec
 
 ## 8. Catalog and cache consistency
 
-Redis catalog generations cache expensive scans/sorts. Browser/API cache headers must not make mutable directory structure remain stale after a successful Admin mutation.
+Bounded process-local catalog generations cache expensive scans/catalog queries. Browser/API cache headers must not make mutable directory structure remain stale after a successful Admin mutation.
 
-For mutable catalog APIs, the HTTP client revalidates while the server-side Redis generation remains the expensive-work cache. Mutations that change paths, visibility, priority, or catalog membership invalidate the generation. Cache invalidation is fail-soft after a durable business commit: a Redis failure is logged and TTL recovery remains available; it must not turn a committed mutation into a false client-visible failure.
+For mutable catalog APIs, the HTTP client revalidates while a single-process cache avoids repeated catalog work. All domain handles from one selected Store share a SQL commit generation; successful writes conservatively invalidate it, rolled-back writes do not. Managed filesystem mutation fences also clear the cache, including ambiguous/failing mutations. A fill racing a commit is not published. Scope keys separate role, media type, path and hidden visibility; caller-specific ordering is applied to copied results rather than creating per-session entries. Cache hits never bypass readiness, role checks or stream authorization.
+
+`MEDIA_CATALOG_CACHE_TTL` defaults to 300 seconds, accepts 0 to disable, and is bounded by 86400. Admission is capped at 64 entries / 8 MiB accounted payload; entries above 1 MiB bypass caching. Errors are not cached, waiting readers honor cancellation, and restart drops all cache state. Stores without an invalidation contract bypass caching. This is not cross-process cache coherence: maintenance/offline writers must close the native runtime fence first; live direct SQL or filesystem edits remain prohibited.
 
 ## 9. Playback continuity
 
@@ -183,6 +185,14 @@ GitHub-side ref creation cannot be fully prevented by a unit test. The repositor
 Only Gin/Go may serve business APIs or run the updater. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
 Python application sources remain explicitly non-executable examples for comparing syntax. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.
+
+Karaoke password work has one non-queuing slot. Atomic Redis admission budgets
+apply before captcha/password validation and cannot be bypassed by correct
+captcha answers. Rejections return 429 with Retry-After; unavailable admission
+fails closed. Captcha SVG outlines must not contain answer-bearing text/metadata;
+OCR resistance is not assumed. Redis noeviction protects security counters and
+sessions under a bounded memory limit. See docs/validation-and-promotion.md for
+the exact budgets and release-scoped security evidence.
 
 Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct, two Relay), repeated for Gin + SQLite and Gin + MySQL. No mixed Python/Go fleet or Python application acceptance remains. Hosted CI has an explicit three-minute hard limit per parallel job, no serial job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit.
 

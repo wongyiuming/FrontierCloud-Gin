@@ -23,6 +23,14 @@ not Python application interoperability acceptance.
 Retired Python/FastAPI component tests and mixed-runtime drivers are replaced
 by native Go package coverage, Python-driven Gin HTTP and the five-node matrix:
 
+The table is family-level navigation, not proof that every retired assertion has
+an equivalent native test. The frozen baseline has 552 Python definitions; the
+[case ledger](legacy-test-ledger.csv) distinguishes nine reviewed replacements
+from 543 cases pending assertion review. Some native gates skip unless explicitly
+configured, and five formerly module-level audio-profile tests were not selected
+by unittest until the 2026-10-08 repair. See [execution scopes and promotion](validation-and-promotion.md)
+and the [dated repair audit](audits/2026-10-08-native-repairs.md).
+
 | Retired target area | Native behavior coverage |
 | --- | --- |
 | Database/schema/transactions/audit | internal/store/business, internal/store/sqlite, migrations |

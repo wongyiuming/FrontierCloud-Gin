@@ -11,6 +11,7 @@ FrontierCloud uses two authorized two-branch provenance pairs and one deployable
 - Do not force-push or rewrite canonical branches.
 - Do not commit implementation work directly to `main` or `gin_main`.
 - After a release PR is merged, fast-forward its development branch to the resulting release merge commit before further implementation.
+- Until separately authorized consolidation, historical main/dev and the GitHub default branch are not supported native deployment targets. Do not describe their old Python recipes as deployable merely because this branch is Go-only.
 - Historical non-canonical branches may exist until the repository owner deletes them. They are not implementation targets and must not be reused.
 
 The repository can fail an invalid PR topology, but repository-local code cannot reliably prevent somebody with GitHub ref permission from creating a branch. The **no-new-branch rule therefore remains an explicit human/automation invariant** and should also be mirrored in the GitHub Wiki and repository ruleset/branch-protection settings.
@@ -74,6 +75,12 @@ The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/t
 
 ## Release evidence
 
+Report discovered, executed, passed and skipped tests separately. A class-level
+skip can hide several HTTP cases; a successful Go unit run may omit external
+Redis/Engine/fleet gates. Preserve legacy-case replacement ledgers and never
+claim assertion-equivalence from matching total counts. See
+[validation scopes and promotion](docs/validation-and-promotion.md).
+
 A release is valid only when the exact development commit has successful CI and the production tree is identical to the reviewed source tree. Both `dev -> main` and `gin_dev -> gin_main` use this rule. Post-merge proof is an additional guard, not a replacement for review. A local tested commit is not an already-published production release.
 
-The complete local baseline and CI composition are maintained in [`docs/wiki/Engineering-and-CI.md`](https://github.com/wongyiuming/FrontierCloud/wiki/Engineering-and-CI). Deployment, rollback, and migration procedures are maintained in [`docs/wiki/Release-and-Database-Migrations.md`](https://github.com/wongyiuming/FrontierCloud/wiki/Release-and-Database-Migrations).
+The complete local baseline and CI composition are maintained in the separate [Engineering and CI Wiki](https://github.com/wongyiuming/FrontierCloud/wiki/Engineering-and-CI). Deployment, rollback, and migration procedures are maintained in the [Release and Database Migrations Wiki](https://github.com/wongyiuming/FrontierCloud/wiki/Release-and-Database-Migrations).
