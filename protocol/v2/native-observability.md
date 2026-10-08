@@ -31,6 +31,25 @@ process facts. Route templates and bounded method labels prevent arbitrary path,
 query, identity or method cardinality. No database backend label changes the
 public dependency contract.
 
+Master Nginx access logs use JSON escaping and include the supplied `user_agent`,
+HTTP/TLS protocol, total request duration and upstream connect/header/response
+durations. Upstream durations are strings: `-` means no upstream measurement,
+and multi-hop/retry values retain Nginx's sequence instead of becoming invalid
+JSON numbers. A large total duration with small upstream timings can indicate
+client transfer delay; a large upstream header duration can indicate time spent
+waiting for the application. These measurements do not include requests that
+never reach HTTP (DNS, TCP/TLS failure), and an access entry appears at request
+completion, not initial connection. UA is client-supplied, not proof of a Tesla
+device or mobile carrier; do not infer either without corroborating evidence.
+
+Access paths still exclude query strings and mask internal relay capability
+paths. Authorization, cookies, Referer and forwarded client-supplied addresses
+are not logged. UA remains an untrusted escaped string; do not render it as HTML
+or execute it. Successful health/metrics checks remain quiet. Source contracts
+run in lightweight CI; `scripts/test-nginx-access-log.sh` verifies real Nginx
+JSON escaping, upstream timings and query-token exclusion on the development
+host, without host port bindings or deployment mutations.
+
 `/docs`, `/redoc` and `/openapi.json` require the existing Admin session. The schema
 is a reviewed language-neutral JSON artifact embedded in the binary; a development
 oracle compares it to the effective reference schema. Runtime startup, request
