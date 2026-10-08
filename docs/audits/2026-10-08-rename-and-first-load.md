@@ -35,8 +35,26 @@ visibility versus public exclusion, and identity-preserving roll-forward.
 
 Only 2026-10-08 16:29–17:30 Asia/Shanghai was inspected for the reported car
 browser visit. Nginx and Web logs did not retain User-Agent; the audit tables
-with UA did not identify Tesla/QtCar in that interval. Consequently there is no
-reliable historical car IP/carrier identification or proved incident root cause.
+with UA did not identify Tesla/QtCar in that interval. The subsequent IP-based
+correlation found one sustained business visitor, consistent with the user's
+report that only their car was browsing continuously. This is a candidate
+identification, not a recovered UA or a proved incident root cause.
+
+The candidate made 228 requests: 147 HTTP 200, 44 HTTP 204, 25 HTTP 307,
+eight HTTP 429, three HTTP 303 and one HTTP 499. Official
+[APNIC ASN registration](https://rdap.apnic.net/autnum/56041) identifies its
+exit network as China Mobile Zhejiang (`CMNET-Zhejiang-AP`, AS56041).
+This establishes the network registration, not the physical vehicle location
+or absence of an intermediate proxy. Other visitors' addresses are omitted.
+
+The first home request was 16:32:09, followed by directory fetch at 16:32:14
+and observation POST at 16:32:15. The 429 responses were observation requests,
+not playback or directory throttling. The 303 responses were explicit cache
+refreshes; 307 responses were root/icon-version redirects, not a media loop.
+The 17:26:08 category request was cancelled by the client (499), followed by a
+successful retry at 17:26:10 and key scripts at 17:26:11. There was no 504 or
+minute-long HTTP processing evidence. Large icons remain a cold-load cost,
+but the existing log does not prove that they caused the reported delay.
 
 A separate confirmed startup dependency has been fixed: the category page no
 longer waits for a synchronously downloaded network-observation script before
@@ -47,5 +65,6 @@ mainland-carrier testing and must not be represented as a Tesla reproduction.
 Nginx now records escaped UA and upstream timing segments, but still omits
 credential-bearing query strings. UA can be spoofed, and HTTP access logs
 cannot diagnose requests that fail before HTTP during DNS/TLS setup. A trusted
-car source IP/carrier or a user-provided probe on that carrier is still required
-for the requested mainland network acceptance.
+mainland probe on the identified carrier and a client performance timeline are
+still required for the requested network reproduction. No such probe was
+available during this inspection.
