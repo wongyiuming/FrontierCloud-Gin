@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 // The native release fixture needs separate writable clones. Sharing one mounted

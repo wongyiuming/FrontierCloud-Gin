@@ -12,14 +12,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/recording"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	contracts "github.com/wongyiuming/FrontierCloud/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	contracts "github.com/wongyiuming/FrontierCloud-Gin/protocol"
 )
 
 func nativeHTTPFixture(t *testing.T) *gin.Engine {

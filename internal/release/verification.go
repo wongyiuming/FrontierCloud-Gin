@@ -44,6 +44,8 @@ type Verifier struct {
 	now              func() time.Time
 	cache, last      map[string]any
 	checked, backoff time.Time
+	history          []Version
+	historyChecked   time.Time
 }
 
 func NewVerifier(policy Policy, token string) (*Verifier, error) {
@@ -54,7 +56,7 @@ func NewVerifier(policy Policy, token string) (*Verifier, error) {
 	transport.Proxy = nil
 	transport.MaxConnsPerHost = 2
 	transport.ResponseHeaderTimeout = 5 * time.Second
-	return &Verifier{policy: policy, token: strings.TrimSpace(token), base: "https://api.github.com/repos/wongyiuming/FrontierCloud", client: &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, lock: make(chan struct{}, 1), now: time.Now}, nil
+	return &Verifier{policy: policy, token: strings.TrimSpace(token), base: "https://api.github.com/repos/wongyiuming/FrontierCloud-Gin", client: &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, lock: make(chan struct{}, 1), now: time.Now}, nil
 }
 func copyValue(value map[string]any) map[string]any {
 	if value == nil {
@@ -140,6 +142,9 @@ type commit struct {
 	} `json:"commit"`
 }
 type pull struct {
+	Number   int     `json:"number"`
+	Title    string  `json:"title"`
+	Body     string  `json:"body"`
 	Merged   *string `json:"merged_at"`
 	MergeSHA string  `json:"merge_commit_sha"`
 	Base     struct {
@@ -227,7 +232,7 @@ func (v *Verifier) verifyTarget(ctx context.Context, now time.Time, target strin
 	}
 	sources := map[string]bool{}
 	for _, p := range pulls {
-		if p.Merged != nil && *p.Merged != "" && p.MergeSHA == sha && p.Base.Ref == v.policy.Branch && p.Head.Ref == v.policy.Source && p.Head.Repo.FullName == "wongyiuming/FrontierCloud" && ValidSHA(p.Head.SHA) {
+		if p.Merged != nil && *p.Merged != "" && p.MergeSHA == sha && p.Base.Ref == v.policy.Branch && p.Head.Ref == v.policy.Source && p.Head.Repo.FullName == "wongyiuming/FrontierCloud-Gin" && ValidSHA(p.Head.SHA) {
 			sources[p.Head.SHA] = true
 		}
 	}

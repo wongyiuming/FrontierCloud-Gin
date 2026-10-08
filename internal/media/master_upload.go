@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type UploadTicket struct {

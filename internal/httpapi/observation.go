@@ -6,9 +6,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/observation"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func RegisterObservations(router *gin.Engine, a *Admin, service *observation.Service, resolver *network.Resolver) {

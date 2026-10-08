@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	"github.com/wongyiuming/FrontierCloud/internal/store/business"
-	"github.com/wongyiuming/FrontierCloud/internal/store/schema"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema"
 
 	_ "modernc.org/sqlite"
 )
@@ -146,7 +146,19 @@ func (store *Store) Ping(ctx context.Context) error {
 }
 
 func (store *Store) Close() error {
-	return store.database.Close()
+	var fileErr error
+	if store.repository != nil {
+		fileErr = store.repository.CloseFileBackups()
+	}
+	return errors.Join(fileErr, store.database.Close())
+}
+
+func (s *Store) ConfigureFileBackups(directory string) error {
+	return s.repo().ConfigureFileBackups(directory)
+}
+
+func (s *Store) OpenFileBackupsReadOnly(directory string) error {
+	return s.repo().OpenFileBackupsReadOnly(directory)
 }
 
 func (s *Store) repo() *business.Repository {

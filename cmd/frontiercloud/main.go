@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,18 +14,18 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/backup"
-	"github.com/wongyiuming/FrontierCloud/internal/bootstrap"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/recording"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	storecontract "github.com/wongyiuming/FrontierCloud/internal/store"
-	mysqlstore "github.com/wongyiuming/FrontierCloud/internal/store/mysql"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	storecontract "github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"path/filepath"
 )
 
@@ -72,6 +73,27 @@ func command(arguments []string) error {
 		return guardedCommand(settings, func(ctx context.Context) error { return bootstrap.InitializeMediaContext(ctx, settings.DataRoot) })
 	case "healthcheck":
 		return healthcheck()
+	case "storage-pair":
+		if len(arguments) != 1 {
+			return errors.New("storage-pair accepts no arguments")
+		}
+		return storagePairCommand(os.Stdout)
+	case "storage-status":
+		if len(arguments) != 1 {
+			return errors.New("storage-status accepts no arguments")
+		}
+		return storageStatusCommand(os.Stdout)
+	case "storage-endpoint", "storage-rebind":
+		return storageEndpointCommand(name, arguments[1:], os.Stdout)
+	case "delete-storage-recording":
+		return deleteStorageRecordingCommand(arguments[1:], os.Stdout)
+	case "delete-owned-recording":
+		return deleteOwnedRecordingCommand(arguments[1:], os.Stdout)
+	case "staging-release":
+		if len(arguments) != 1 {
+			return errors.New("staging-release accepts no arguments")
+		}
+		return stagingReleaseCommand(os.Stdout)
 	case "verify-backup":
 		return verifyBackupCommand(arguments[1:], os.Stdout)
 	case "cleanup-backup-cache":
@@ -96,10 +118,6 @@ func command(arguments []string) error {
 		return drainRenameCommand(arguments[1:], os.Stdout)
 	case "prepare-release":
 		return prepareReleaseCommand(arguments[1:])
-	case "cluster-release":
-		return clusterReleaseCommand(arguments[1:])
-	case "cluster-release-manifest":
-		return clusterManifestCommand(arguments[1:])
 	case "updater-status":
 		if len(arguments) != 1 {
 			return errors.New("updater-status accepts no arguments")
@@ -172,17 +190,20 @@ func serve() error {
 	defer mediaService.Close()
 	mediaService.ConfigureCatalogCache(time.Duration(settings.MediaCatalogCacheTTL) * time.Second)
 
-	redisOptions, err := redis.ParseURL(settings.RedisURL)
-	if err != nil {
-		return err
+	var redisClient *redis.Client
+	if settings.DeploymentMode != config.DeploymentStorage {
+		redisOptions, err := redis.ParseURL(settings.RedisURL)
+		if err != nil {
+			return err
+		}
+		redisOptions.ContextTimeoutEnabled = true
+		redisOptions.MaxRetries = 1
+		redisOptions.DialTimeout = 2 * time.Second
+		redisOptions.ReadTimeout = 2 * time.Second
+		redisOptions.WriteTimeout = 2 * time.Second
+		redisClient = redis.NewClient(redisOptions)
+		defer redisClient.Close()
 	}
-	redisOptions.ContextTimeoutEnabled = true
-	redisOptions.MaxRetries = 1
-	redisOptions.DialTimeout = 2 * time.Second
-	redisOptions.ReadTimeout = 2 * time.Second
-	redisOptions.WriteTimeout = 2 * time.Second
-	redisClient := redis.NewClient(redisOptions)
-	defer redisClient.Close()
 
 	resolver, err := network.New(settings.TrustedProxyNetworks)
 	if err != nil {
@@ -198,27 +219,35 @@ func serve() error {
 	}
 	defer recordingsRoot.Close()
 	controlService.ConfigureVolumes(database.Pool(), mediaService, recordingsRoot)
-	backupBuilder, err := backup.New(database.Backups(), mediaService, filepath.Join(settings.DataRoot, ".business-backups"))
-	if err != nil {
-		return err
+	if settings.DeploymentMode != config.DeploymentStorage {
+		backupBuilder, err := backup.New(database.Backups(), mediaService, filepath.Join(settings.DataRoot, ".business-backups"))
+		if err != nil {
+			return err
+		}
+		defer backupBuilder.Close()
+		controlService.ConfigureBackups(database.Backups(), backupBuilder)
 	}
-	defer backupBuilder.Close()
-	controlService.ConfigureBackups(database.Backups(), backupBuilder)
 	recordingStorage, err := recording.NewContext(shutdown, recordingsRoot, database.Recordings(), database.Nodes())
 	if err != nil {
 		return err
 	}
-	recordingManager := recording.NewManager(database.Recordings(), database.Karaoke(), database.Nodes(), database.Pool(), controlService, recordingStorage)
-	securityService, err := security.New(settings, database.Security())
-	if err != nil {
-		return err
+	var recordingManager *recording.Manager
+	if settings.DeploymentMode != config.DeploymentStorage {
+		recordingManager = recording.NewManager(database.Recordings(), database.Karaoke(), database.Nodes(), database.Pool(), controlService, recordingStorage)
 	}
-	defer securityService.Close()
-	edgeInit, edgeCancel := context.WithTimeout(shutdown, 15*time.Second)
-	err = securityService.Publish(edgeInit, true)
-	edgeCancel()
-	if err != nil {
-		return err
+	var securityService *security.Service
+	if settings.DeploymentMode != config.DeploymentStorage {
+		securityService, err = security.New(settings, database.Security())
+		if err != nil {
+			return err
+		}
+		defer securityService.Close()
+		edgeInit, edgeCancel := context.WithTimeout(shutdown, 15*time.Second)
+		err = securityService.Publish(edgeInit, true)
+		edgeCancel()
+		if err != nil {
+			return err
+		}
 	}
 	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
 	if err != nil {
@@ -227,6 +256,9 @@ func serve() error {
 	defer closeHTTP()
 	admission, cancelAdmission := context.WithTimeout(shutdown, 15*time.Second)
 	err = identity.RecordNativeRuntime(admission, settings.DataRoot)
+	if err == nil && settings.DeploymentMode == config.DeploymentStorage {
+		err = controlService.InitializeStorage(admission, settings.StorageEndpoint)
+	}
 	cancelAdmission()
 	if err != nil {
 		return err
@@ -240,11 +272,21 @@ func serve() error {
 	}
 
 	publisherDone := make(chan struct{})
-	go func() { defer close(publisherDone); securityService.Run(shutdown) }()
+	go func() {
+		defer close(publisherDone)
+		if securityService != nil {
+			securityService.Run(shutdown)
+		}
+	}()
 	deletionDone := make(chan struct{})
 	go func() { defer close(deletionDone); mediaService.RunGlobalDeletes(shutdown) }()
 	recordingDone := make(chan struct{})
-	go func() { defer close(recordingDone); recordingManager.Run(shutdown) }()
+	go func() {
+		defer close(recordingDone)
+		if settings.DeploymentMode != config.DeploymentStorage {
+			recordingManager.Run(shutdown)
+		}
+	}()
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); controlService.RunBackups(shutdown) }()
 	controlDone := make(chan struct{})
@@ -264,7 +306,24 @@ func serve() error {
 		return err
 	}
 	errorsChannel := make(chan error, 1)
-	go func() { errorsChannel <- server.ListenAndServe() }()
+	listener, err := net.Listen("tcp", settings.HTTPAddress)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	if settings.DeploymentMode == config.DeploymentStorage {
+		if _, err := tls.LoadX509KeyPair(settings.StorageTLSCert, settings.StorageTLSKey); err != nil {
+			return err
+		}
+		go func() { errorsChannel <- server.ServeTLS(listener, settings.StorageTLSCert, settings.StorageTLSKey) }()
+		// Valid certificate material is checked by ServeTLS. No private signing
+		// key/Admin Key is printed, only the five-minute one-use signed package.
+		if err := printStoragePair(initialization, controlService, database.Nodes(), os.Stdout); err != nil {
+			return err
+		}
+	} else {
+		go func() { errorsChannel <- server.Serve(listener) }()
+	}
 	slog.Info("FrontierCloud Go runtime started", "address", settings.HTTPAddress, "database", database.Backend())
 	select {
 	case err := <-errorsChannel:
@@ -290,6 +349,9 @@ func runtimeIdentityTransport(settings config.Config, identity *node.Identity) e
 		if !settings.TLSEnabled {
 			return errors.New("fixed Master/Follower identity requires HTTPS; restore TLS_ENABLED, role is never reset automatically")
 		}
+		if identity.Role == "Follower" && settings.DeploymentMode != config.DeploymentStorage {
+			return errors.New("storage identities require only_stroge; business Follower deployment is retired")
+		}
 		if _, err := node.Endpoint(identity.Endpoint); err != nil {
 			return err
 		}
@@ -309,7 +371,15 @@ func healthcheck() error {
 		return err
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
-	response, err := client.Get("http://" + address + "/health/ready")
+	scheme := "http"
+	if settings.DeploymentMode == config.DeploymentStorage {
+		client, err = storageHealthClient(settings)
+		if err != nil {
+			return err
+		}
+		scheme = "https"
+	}
+	response, err := client.Get(scheme + "://" + address + "/health/ready")
 	if err != nil {
 		return err
 	}
@@ -336,7 +406,17 @@ func healthAddress(address string) (string, error) {
 
 func openStore(settings config.Config) (storecontract.Store, error) {
 	if settings.DatabaseType == config.DatabaseSQLite {
-		return sqlitestore.Open(settings.SQLitePath)
+		db, err := sqlitestore.Open(settings.SQLitePath)
+		if err != nil {
+			return nil, err
+		}
+		if settings.DeploymentMode == config.DeploymentStorage {
+			if err := db.ConfigureFileBackups(filepath.Join(settings.DataRoot, ".cold-backups")); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
+		return db, nil
 	}
 	return mysqlstore.Open(mysqlstore.Config{
 		Host:         settings.MySQLHost,

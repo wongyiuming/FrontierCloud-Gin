@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/backup"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 )
 
 // No initialization, role changes, restore or background workers. Successful

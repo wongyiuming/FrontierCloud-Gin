@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/release"
-	"github.com/wongyiuming/FrontierCloud/internal/updater"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/updater"
 )
 
 // Revision is compiled into the immutable updater image, never inferred from
@@ -41,11 +42,20 @@ func command(arguments []string) error {
 		return errors.New("compiled release revision required")
 	}
 	workspace := setting("UPDATER_WORKSPACE", "/workspace")
-	branch := setting("RELEASE_BRANCH", "gin_main")
-	if branch != "main" && branch != "gin_main" {
+	branch := setting("RELEASE_BRANCH", "main")
+	if branch != "main" {
 		return errors.New("unsupported updater production branch")
 	}
-	x := &updater.DockerExecutor{Source: updater.Source{Directory: workspace, Branch: branch}, Socket: setting("UPDATER_DOCKER_SOCKET", "/var/run/docker.sock"), Project: os.Getenv("UPDATER_PROJECT"), ControlDirectory: setting("UPDATER_CONTROL_DIRECTORY", "/run/frontiercloud-updater"), Runtime: Revision, DataDirectory: setting("UPDATER_DATA_DIRECTORY", "/workspace/data")}
+	staging := setting("STAGING_CD", "false")
+	project := os.Getenv("UPDATER_PROJECT")
+	if staging != "true" && staging != "false" || staging == "true" && project != "frontiercloud-staging" && !strings.HasPrefix(project, "fc-staging-test-") {
+		return errors.New("staging CD requires its dedicated project")
+	}
+	source := updater.Source{Directory: workspace, Branch: branch}
+	if staging == "true" {
+		source.Branch, source.Staging = "dev", true
+	}
+	x := &updater.DockerExecutor{Source: source, Socket: setting("UPDATER_DOCKER_SOCKET", "/var/run/docker.sock"), Project: os.Getenv("UPDATER_PROJECT"), ControlDirectory: setting("UPDATER_CONTROL_DIRECTORY", "/run/frontiercloud-updater"), Runtime: Revision, DataDirectory: setting("UPDATER_DATA_DIRECTORY", "/workspace/data")}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if action == "handoff" {

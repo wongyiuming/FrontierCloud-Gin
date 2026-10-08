@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func TestPrepareReleaseRequiresExistingStoreClosedFenceAndCompatibleGeneration(t *testing.T) {

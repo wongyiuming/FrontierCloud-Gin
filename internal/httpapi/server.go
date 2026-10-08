@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 )
 
 const dependencyTimeout = 2 * time.Second
@@ -55,10 +55,15 @@ func readiness(database, redis Check) gin.HandlerFunc {
 		defer cancel()
 		results := make(chan result, 2)
 		go func() { results <- result{name: "database", err: database(requestContext)} }()
-		go func() { results <- result{name: "redis", err: redis(requestContext)} }()
-		checks := map[string]string{"database": "unavailable", "redis": "unavailable"}
+		checks := map[string]string{"database": "unavailable"}
+		count := 1
+		if redis != nil {
+			count++
+			checks["redis"] = "unavailable"
+			go func() { results <- result{name: "redis", err: redis(requestContext)} }()
+		}
 	collect:
-		for range 2 {
+		for range count {
 			var value result
 			select {
 			case value = <-results:
@@ -72,7 +77,7 @@ func readiness(database, redis Check) gin.HandlerFunc {
 			}
 		}
 		status, code := "ready", http.StatusOK
-		if checks["database"] != "ready" || checks["redis"] != "ready" {
+		if checks["database"] != "ready" || redis != nil && checks["redis"] != "ready" {
 			status, code = "unavailable", http.StatusServiceUnavailable
 		}
 		if value, ok := ctx.Get(metricsContextKey); ok {

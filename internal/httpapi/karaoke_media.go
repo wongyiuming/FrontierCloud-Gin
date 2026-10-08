@@ -3,8 +3,8 @@ package httpapi
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"net/url"
 	"os"
 	"path"

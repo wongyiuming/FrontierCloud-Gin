@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 )
 

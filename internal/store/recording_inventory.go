@@ -2,7 +2,7 @@ package store
 
 import (
 	"encoding/json"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 )
 
 const MaxRecordingInventoryBytes = 4 * 1024 * 1024

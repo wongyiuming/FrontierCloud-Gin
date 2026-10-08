@@ -19,9 +19,9 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var ErrUploadSize = errors.New("上传失败，文件过大")

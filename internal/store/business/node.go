@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var nodeIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)

@@ -12,7 +12,7 @@ cleanup() {
   # Keep the private evidence directory and image; no global prune.
 }
 trap cleanup EXIT
-docker build -f Dockerfile.gin -t "$image" .
+DOCKER_BUILDKIT=0 docker build --memory=3g --cpu-period=100000 --cpu-quota=200000 -f Dockerfile.gin -t "$image" .
 docker create --name "$prefix-copy" "$image" >/dev/null
 docker cp "$prefix-copy:/app/frontiercloud" "$work/frontiercloud"
 docker rm "$prefix-copy" >/dev/null

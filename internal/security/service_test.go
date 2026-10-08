@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	storeSQLite "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func TestPolicyPublishesNginxSnapshotAndPreservesDurableEnforcement(t *testing.T) {

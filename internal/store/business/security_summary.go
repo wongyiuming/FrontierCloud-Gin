@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) SecuritySummary(ctx context.Context, f store.SecurityFilter) (store.SecuritySummary, error) {

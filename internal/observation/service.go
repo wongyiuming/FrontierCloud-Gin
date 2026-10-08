@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var ErrRateLimit = errors.New("WebRTC observation rate limited")

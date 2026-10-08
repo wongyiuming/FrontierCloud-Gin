@@ -3,7 +3,7 @@ package media
 import (
 	"context"
 	"errors"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"os"
 	"path/filepath"
 	"strings"

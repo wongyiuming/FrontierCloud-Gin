@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const globalColumns = "g.media_id,g.storage_member_id,g.object_id,g.media_path,g.object_kind,g.size_bytes,g.etag,g.state,g.created_at,g.updated_at,s.relationship_id,s.health,s.transport,COALESCE(p.play_score,0),COALESCE(p.preference,0),EXISTS(SELECT 1 FROM media_lyric_links l WHERE l.media_id=g.media_id)"

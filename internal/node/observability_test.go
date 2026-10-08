@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestObservedResourceSyncRequiresActualMatchingFacts(t *testing.T) {

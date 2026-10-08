@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (s *Service) OwnedDelete(ctx context.Context, relationship, id, name string, expected int64, a store.NodeAudit) error {

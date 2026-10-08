@@ -3,8 +3,8 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // The caller holds the closed native lifecycle fence. No new key or account is

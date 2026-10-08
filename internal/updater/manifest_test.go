@@ -10,8 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 type socketManifestExecutor struct{ requests chan Request }
@@ -110,8 +109,8 @@ func nativeManifest(version, target string) *release.Manifest {
 	}}
 }
 
-func TestConcreteManifestDistributionAndImageCompatibilityBoundaries(t *testing.T) {
-	for _, fault := range []string{"", "distribution", "manifest-incompatible"} {
+func TestHistoricalManifestLocalImageCompatibilityWithoutDistribution(t *testing.T) {
+	for _, fault := range []string{"", "manifest-incompatible"} {
 		t.Run(fault, func(t *testing.T) {
 			x, f, status, target := executorFixture(t, fault)
 			manifest := nativeManifest("2.0.0", target)
@@ -137,30 +136,10 @@ func TestConcreteManifestDistributionAndImageCompatibilityBoundaries(t *testing.
 			if f.images[web.Image].Config.Labels["frontiercloud.revision"] != want || committed != (fault != "manifest-incompatible") {
 				t.Fatal("wrong local publication boundary", committed, err)
 			}
-			found := false
 			for _, command := range f.commands {
-				if len(command) > 1 && command[1] == "cluster-release" {
-					t.Fatal("manifest reduced to one runtime's SHA")
+				if len(command) > 1 && (command[1] == "cluster-release" || command[1] == "cluster-release-manifest") {
+					t.Fatal("retired cross-node release executed", command)
 				}
-				if len(command) > 1 && command[1] == "cluster-release-manifest" {
-					if len(command) != 4 || command[3] != "upgrade" {
-						t.Fatal(command)
-					}
-					wire, decodeErr := protocol.Decode(command[2])
-					parsed, parseErr := release.ParseManifest(wire)
-					if decodeErr != nil || parseErr != nil {
-						t.Fatal(decodeErr, parseErr)
-					}
-					id, _ := parsed.ID()
-					expected, _ := manifest.ID()
-					if id != expected {
-						t.Fatal("distribution altered whole manifest")
-					}
-					found = true
-				}
-			}
-			if found != (fault != "manifest-incompatible") {
-				t.Fatal("distribution ran before compatibility validation")
 			}
 		})
 	}
@@ -187,8 +166,8 @@ func TestManifestRecoveryRejectsDownlevelWebOrUpdaterImage(t *testing.T) {
 	}
 }
 
-func TestJointReleaseUnchangedNativeArtifactCommitsWholeHistoryBeforeRemoteFailure(t *testing.T) {
-	x, f, status, _ := executorFixture(t, "distribution")
+func TestHistoricalManifestUnchangedArtifactCommitsLocallyWithoutRemoteCalls(t *testing.T) {
+	x, f, status, _ := executorFixture(t, "")
 	// The local stack is already on the fixture's reviewed production HEAD.
 	status.CurrentSHA, status.RuntimeSHA, x.Runtime = status.TargetSHA, status.TargetSHA, status.TargetSHA
 	f.mu.Lock()
@@ -209,8 +188,8 @@ func TestJointReleaseUnchangedNativeArtifactCommitsWholeHistoryBeforeRemoteFailu
 		}
 		return nil
 	})
-	if err == nil || !committed {
-		t.Fatal("joint local commit lost after remote failure", err, committed)
+	if err != nil || !committed {
+		t.Fatal("historical local commit failed", err, committed)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

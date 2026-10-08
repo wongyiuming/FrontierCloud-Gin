@@ -19,7 +19,7 @@ for (const document of [continuityDesign]) {
 }
 assert.match(continuityDesign, /no T-200 ms timer/i);
 assert.match(continuityDesign, /no second standby media element/i);
-assert.match(readme, /https:\/\/github.com\/wongyiuming\/FrontierCloud\/wiki\/Playback-Continuity/);
+assert.match(readme, /https:\/\/github.com\/wongyiuming\/FrontierCloud-Gin\/wiki\/Playback-Continuity/);
 
 for (const embedded of [true, false]) {
     const configurations = [];

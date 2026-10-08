@@ -12,10 +12,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 var ErrState = errors.New("unsafe updater persistent state")
@@ -29,6 +29,7 @@ type Status struct {
 	PreviousSHA      string            `json:"previous_sha"`
 	RuntimeSHA       string            `json:"updater_runtime_sha"`
 	ReleaseBranch    string            `json:"release_branch"`
+	StagingCD        bool              `json:"staging_cd,omitempty"`
 	HoldMaintenance  bool              `json:"hold_maintenance"`
 	Detail           string            `json:"detail"`
 	UpdatedAt        int64             `json:"updated_at"`

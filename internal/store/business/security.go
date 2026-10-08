@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) lockIP(ctx context.Context, q queryer, ip string) error {

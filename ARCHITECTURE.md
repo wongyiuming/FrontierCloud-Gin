@@ -8,21 +8,21 @@ FrontierCloud runs as one of three roles:
 
 - **Standalone** — one node owns business state and local media.
 - **Master** — the only business authority in a cluster. Public pages and business APIs are served by the Master.
-- **Follower** — a resource node paired to a Master. A Follower provides authenticated health, storage/data-plane, backup, and node-control capabilities; it is not a second business authority.
+- **storage node** — a resource node paired to a Master. A storage node provides authenticated health, storage/data-plane, backup, and node-control capabilities; it is not a second business authority.
 
 A cluster has exactly one business Master. Do not introduce multi-Master, implicit leader election, automatic Master failover, or peer-to-peer business writes under an unrelated feature change.
 
-Fixed Master/Follower roles require certificate-verified HTTPS. Loss of the TLS requirement must fail closed rather than silently downgrading a fixed role.
+Fixed Master/storage node roles require certificate-verified HTTPS. Loss of the TLS requirement must fail closed rather than silently downgrading a fixed role.
 
 ## 2. Business state versus resource state
 
 The Master owns business truth, including lyrics and lyric relations, playback/business facts, karaoke users/recording business state, Admin audit facts, and the global media catalog.
 
-Followers own only the resource state required to serve their assigned data and maintain the authenticated relationship with the Master. A Follower must not become an alternate source of truth for Master business records.
+storage nodes own only the resource state required to serve their assigned data and maintain the authenticated relationship with the Master. A storage node must not become an alternate source of truth for Master business records.
 
 ## 3. Storage model
 
-The Master exposes one logical storage pool containing Master Local plus enabled Followers.
+The Master exposes one logical storage pool containing Master Local plus enabled storage nodes.
 
 - One logical media path identifies one complete media object.
 - One complete object belongs to exactly one storage member at a time.
@@ -37,8 +37,8 @@ Admin media upload chooses a **site type**, never a concrete storage member. The
 The only supported site types are:
 
 - `primary` — the Master Local placement (`member_kind=MasterLocal`, transport `Local`);
-- `direct` — Follower placements whose current transport is `Direct`;
-- `relay` — Follower placements whose current transport is `Relay`.
+- `direct` — storage node placements whose current transport is `Direct`;
+- `relay` — storage node placements whose current transport is `Relay`.
 
 For Direct and Relay uploads, the user must not name a specific member. The first live object/reservation in an immediate parent folder selects an eligible member by lowest `(used + reserved) / allocated` pressure, then more available bytes. Subsequent direct children bind to that same owner; a child folder is a separate affinity unit. An offline, non-writable or full bound owner causes refusal, never silent spill to another member. Historical split-owner folders fail closed. Member selection plus durable reservation is serialized by the storage write lock so concurrent Admin sessions see current `reserved_bytes`.
 
@@ -75,7 +75,7 @@ Folder rename is deliberately narrower than a general move API:
 - active uploads and pending deletion state block rename;
 - a Master coordinates all storage members containing that logical folder;
 - if a later member or Master metadata commit fails, already moved members are rolled back in reverse order;
-- offline Followers block a rename that cannot be completed safely.
+- offline storage nodes block a rename that cannot be completed safely.
 
 All Master path mutations participate in one process-local reader/writer fence. Cross-member folder rename owns the exclusive fence from preflight through commit/rollback. Upload-session reservation, global delete, hide/unhide, and priority mutations enter through a shared fence; upload reservations and `pending_delete` then remain durable database fences after that short shared section ends. A new path-mutation entry point must join this protocol instead of creating an independent race window.
 
@@ -97,7 +97,7 @@ Catalog ordering is cached server-side. A cache hit must not cause a new MySQL s
 
 ## 7. Lyrics
 
-Lyrics are Master-owned business content even when media bytes are stored on Followers.
+Lyrics are Master-owned business content even when media bytes are stored on storage nodes.
 
 The supported hierarchy is intentionally bounded:
 
@@ -141,7 +141,7 @@ The player exposes stable track-local duration and time over the global MSE time
 
 The initial continuous profile is MP3-only. Other accepted audio formats remain manually playable through the single-track fallback and are visibly skipped by automatic continuation. Video remains outside this architecture.
 
-The complete browser and release contract is documented in [`docs/audio-continuous-stream.md`](docs/audio-continuous-stream.md) and [`docs/wiki/Playback-Continuity.md`](https://github.com/wongyiuming/FrontierCloud/wiki/Playback-Continuity).
+The complete browser and release contract is documented in [`docs/audio-continuous-stream.md`](docs/audio-continuous-stream.md) and [`docs/wiki/Playback-Continuity.md`](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Playback-Continuity).
 
 ## 10. Admin GUI contract
 
@@ -163,20 +163,22 @@ Dynamic modules must join this same final DOM/visual order. Reordering code must
 
 ## 11. Release topology
 
-The owner-authorized reconstruction adds one independent native release profile:
-
-- `dev` / `main` — historical canonical source / reviewed release history, eligible only for native Go artifacts;
-- `gin_dev` / `gin_main` — current native Go reconstruction / reviewed release history.
-
-These are branch provenance pairs, not language selections. Consolidating gin_main into main or gin_dev into dev requires a separate owner decision; this change performs no merge.
+The independent `wongyiuming/FrontierCloud-Gin` repository inherits the old
+`gin_dev` development and `gin_main` release history as `dev` and `main`.
+The old repository is not renamed or rewritten. Only Gin artifacts deploy.
 
 Absolute repository policy:
 
-- **Do not create any new branch** outside these four authorized refs. Additional feature/fix/release/temporary branches remain prohibited.
-- changes go to the appropriate development branch, never directly to a release branch;
-- only same-repository `dev -> main` and `gin_dev -> gin_main` promotion PRs are valid;
-- after promotion, fast-forward that profile's development branch to its release merge commit;
-- never force-rewrite any canonical branch. Database selection does not change release profile.
+- **Do not create any new branch** outside `dev` and `main`.
+- implementation goes to `dev`, never directly to `main`;
+- only same-repository `dev -> main` promotion PRs are valid;
+- after promotion, fast-forward `dev` to the release merge commit;
+- never force-rewrite a canonical branch. Database selection does not change the release profile.
+
+Release management upgrades only the Master itself. Storage has no updater,
+release synchronization, cluster convergence or remote upgrade API. Historical
+local manifest parsing exists solely for durable updater recovery. See
+[Master-only version management](docs/master-self-release.md).
 
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
 
@@ -194,12 +196,38 @@ OCR resistance is not assumed. Redis noeviction protects security counters and
 sessions under a bounded memory limit. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
-Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct, two Relay), repeated for Gin + SQLite and Gin + MySQL. No mixed Python/Go fleet or Python application acceptance remains. Hosted CI has an explicit three-minute hard limit per parallel job, no serial job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit.
+Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted CI has an explicit three-minute hard limit per parallel job, no serial job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit.
 
 Wiki operations guidance is maintained in the separate GitHub Wiki repository. Do not track docs/wiki in this repository.
+
+The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
+identity, secrets and updater control from any production storage appliance on
+the same host. Its local CD follows the newest successful exact `dev` push,
+never substitutes that evidence for reviewed production `main` publication.
+Native immutable image builds are bounded to one CPU and 1 GiB with no extra
+swap allowance. Production migration artifacts are built on the development
+host before the cutover. See `docs/staging-cd.md`.
 
 ## 13. Regression rule
 
 When an invariant can be encoded as a test, encode it. When it cannot be reliably observed from repository code (for example, who is allowed to create a Git ref), document it explicitly and enforce it with GitHub repository settings where available.
 
 A regression may not be weakened merely to accommodate a new feature. Architectural changes require an explicit architecture update and corresponding test changes in the same development cycle.
+
+## 14. Storage appliance deployment
+
+`DEPLOYMENT_MODE=only_stroge` runs a single resident Go HTTPS/file/control
+container. Initializers exit; no Nginx, Redis, MySQL, updater, coturn, Admin GUI
+or player is deployed on storage. SQL payload backups are files, not online
+replicas or SQL BLOB copies. Master controls transport and allocations.
+Ports 80/443 are prohibited; the default explicit HTTPS port is 8443.
+
+The persisted role discriminator `Follower` remains in protocol-v2/SQL to
+preserve node IDs, references and transactional recovery. It is not a supported
+independent business deployment or another business authority. Do not globally
+rewrite persisted roles or reinitialize an owned disk to rename the product.
+See [storage appliance operations](docs/storage-appliance.md).
+
+EVOXT's production storage and preproduction Master (`ml.520mall.cc`) are
+separate security/data/Compose projects. Only the staging Master uses 80/443.
+No production operation is automated in this change.

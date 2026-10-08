@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	storeSQLite "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 func TestSecurityMiddlewarePersistsUnknownOperationsNotBusiness404s(t *testing.T) {

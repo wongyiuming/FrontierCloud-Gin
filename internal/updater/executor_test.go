@@ -191,7 +191,7 @@ func (f *engineContract) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.next++
 			id := fmt.Sprintf("%064x", f.next)
 			code := 0
-			if (f.fault == "nginx" && len(v.Cmd) > 2 && strings.Contains(v.Cmd[2], "nginx -t") && f.images[c.Image].Config.Labels["frontiercloud.revision"] == f.target) || (f.fault == "distribution" && len(v.Cmd) > 1 && (v.Cmd[1] == "cluster-release" || v.Cmd[1] == "cluster-release-manifest")) {
+			if f.fault == "nginx" && len(v.Cmd) > 2 && strings.Contains(v.Cmd[2], "nginx -t") && f.images[c.Image].Config.Labels["frontiercloud.revision"] == f.target {
 				code = 7
 				if f.fault == "nginx" {
 					c.State.Status = "exited"
@@ -286,8 +286,8 @@ func executorFixture(t *testing.T, kind string) (*DockerExecutor, *engineContrac
 	status := Status{State: "running", Phase: "validating", TargetSHA: target, CurrentSHA: old, RuntimeSHA: old, ReleaseBranch: "gin_main", Mode: "upgrade"}
 	return x, f, status, target
 }
-func TestConcreteExecutorLocalFailureRestoresButDistributionRetainsGeneration(t *testing.T) {
-	for _, kind := range []string{"health", "nginx", "distribution"} {
+func TestConcreteExecutorLocalFailureRestoresGeneration(t *testing.T) {
+	for _, kind := range []string{"health", "nginx"} {
 		t.Run(kind, func(t *testing.T) {
 			x, f, status, target := executorFixture(t, kind)
 			s, err := x.private()
@@ -318,9 +318,6 @@ func TestConcreteExecutorLocalFailureRestoresButDistributionRetainsGeneration(t 
 			revision := f.images[web.Image].Config.Labels["frontiercloud.revision"]
 			f.mu.Unlock()
 			want := f.old
-			if kind == "distribution" {
-				want = target
-			}
 			if revision != want || status.CurrentSHA != want {
 				t.Fatalf("wrong commit boundary: image=%s status=%s want=%s", revision, status.CurrentSHA, want)
 			}

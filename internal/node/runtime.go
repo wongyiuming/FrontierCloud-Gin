@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func heartbeatWindow(previous map[string]any, rtt int, now int64) map[string]any {

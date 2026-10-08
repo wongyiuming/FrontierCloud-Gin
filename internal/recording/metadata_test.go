@@ -3,7 +3,7 @@ package recording
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"strings"
 	"testing"
 )

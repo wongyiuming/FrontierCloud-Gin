@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	"github.com/wongyiuming/FrontierCloud/internal/vault"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
 )
 
 func TestIdentityRestartAndMissingSecretFailClosed(t *testing.T) {

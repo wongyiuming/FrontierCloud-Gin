@@ -23,10 +23,11 @@ x-app-environment: &app-environment
   MYSQL_USER: ${MYSQL_USER:-media_admin}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   SERVER_NAME: ${SERVER_NAME:-localhost}
-  RELEASE_BRANCH: ${RELEASE_BRANCH:-gin_main}
-  RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-gin_dev}
+  RELEASE_BRANCH: ${RELEASE_BRANCH:-main}
+  RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}
   RELEASE_MANIFEST_PATH: ${RELEASE_MANIFEST_PATH:-}
   TLS_ENABLED: ${TLS_ENABLED:-false}
+  STAGING_CD: ${STAGING_CD:-false}
 
 x-logging: &service-logging
   driver: json-file
@@ -79,7 +80,8 @@ services:
     environment:
       UPDATER_PROJECT: ${COMPOSE_PROJECT_NAME:-frontiercloud-gin}
       UPDATER_DATA_DIRECTORY: /data
-      RELEASE_BRANCH: ${RELEASE_BRANCH:-gin_main}
+      RELEASE_BRANCH: ${RELEASE_BRANCH:-main}
+      STAGING_CD: ${STAGING_CD:-false}
       GITHUB_API_TOKEN: ${GITHUB_API_TOKEN:-}
     volumes:
       - .:/workspace

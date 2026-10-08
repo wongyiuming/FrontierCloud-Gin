@@ -4,6 +4,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,13 +13,19 @@ import (
 )
 
 const (
-	DatabaseSQLite = "sqlite"
-	DatabaseMySQL  = "mysql"
+	DatabaseSQLite     = "sqlite"
+	DatabaseMySQL      = "mysql"
+	DeploymentBusiness = "business"
+	DeploymentStorage  = "only_stroge"
 )
 
 // Config is the Go deployment contract. Defaults preserve frontend behavior
 // while selecting SQLite unless DB_TYPE explicitly requests MySQL.
 type Config struct {
+	DeploymentMode         string
+	StorageEndpoint        string
+	StorageTLSCert         string
+	StorageTLSKey          string
 	DatabaseType           string
 	SQLitePath             string
 	MySQLHost              string
@@ -55,7 +63,7 @@ type Config struct {
 	GitHubAPIToken         string
 	ReleaseBranch          string
 	ReleaseSourceBranch    string
-	ReleaseManifestPath    string
+	StagingCD              bool
 }
 
 // Load reads configuration from the process environment.
@@ -79,6 +87,10 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("MYSQL_PORT must be an integer from 1 to 65535")
 	}
 	value := Config{
+		DeploymentMode:    normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
+		StorageEndpoint:   strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
+		StorageTLSCert:    fallback(getenv("STORAGE_TLS_CERT"), "/run/frontiercloud-tls/fullchain.pem"),
+		StorageTLSKey:     fallback(getenv("STORAGE_TLS_KEY"), "/run/frontiercloud-tls/privkey.pem"),
 		DatabaseType:      normalized(getenv("DB_TYPE"), DatabaseSQLite),
 		SQLitePath:        fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
 		MySQLHost:         fallback(getenv("MYSQL_HOST"), "mysql"),
@@ -98,18 +110,13 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if len(value.GitHubAPIToken) > 4096 || strings.ContainsAny(value.GitHubAPIToken, "\r\n") {
 		return Config{}, errors.New("invalid GITHUB_API_TOKEN")
 	}
-	value.ReleaseBranch = fallback(getenv("RELEASE_BRANCH"), "gin_main")
-	source := "dev"
-	if value.ReleaseBranch == "gin_main" {
-		source = "gin_dev"
+	value.ReleaseBranch = fallback(getenv("RELEASE_BRANCH"), "main")
+	value.ReleaseSourceBranch = fallback(getenv("RELEASE_SOURCE_BRANCH"), "dev")
+	if strings.TrimSpace(getenv("RELEASE_MANIFEST_PATH")) != "" {
+		return Config{}, errors.New("whole-cluster release manifests are retired")
 	}
-	value.ReleaseSourceBranch = fallback(getenv("RELEASE_SOURCE_BRANCH"), source)
-	value.ReleaseManifestPath = strings.TrimSpace(getenv("RELEASE_MANIFEST_PATH"))
-	if value.ReleaseManifestPath != "" && (!filepath.IsAbs(value.ReleaseManifestPath) || len(value.ReleaseManifestPath) > 4096 || strings.ContainsAny(value.ReleaseManifestPath, "\r\n")) {
-		return Config{}, fmt.Errorf("RELEASE_MANIFEST_PATH must be an absolute bounded path")
-	}
-	if !(value.ReleaseBranch == "main" && value.ReleaseSourceBranch == "dev" || value.ReleaseBranch == "gin_main" && value.ReleaseSourceBranch == "gin_dev") {
-		return Config{}, errors.New("release policy must select main/dev or gin_main/gin_dev")
+	if value.ReleaseBranch != "main" || value.ReleaseSourceBranch != "dev" {
+		return Config{}, errors.New("FrontierCloud-Gin release policy must select main/dev")
 	}
 	value.MediaCatalogCacheTTL, err = integer(getenv("MEDIA_CATALOG_CACHE_TTL"), 300)
 	if err != nil || value.MediaCatalogCacheTTL < 0 || value.MediaCatalogCacheTTL > 86400 {
@@ -136,6 +143,10 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	value.TLSEnabled, err = boolean(getenv("TLS_ENABLED"), false)
 	if err != nil {
 		return Config{}, fmt.Errorf("TLS_ENABLED: %w", err)
+	}
+	value.StagingCD, err = boolean(getenv("STAGING_CD"), false)
+	if err != nil || value.StagingCD && (value.DeploymentMode != DeploymentBusiness || !value.TLSEnabled || value.ServerName != "ml.520mall.cc") {
+		return Config{}, errors.New("STAGING_CD requires the isolated TLS business site ml.520mall.cc")
 	}
 	value.NginxMedia, err = boolean(getenv("NGINX_MEDIA_ACCEL"), true)
 	if err != nil {
@@ -211,6 +222,31 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	}
 	if value.DatabaseType == DatabaseSQLite && strings.TrimSpace(value.SQLitePath) == "" {
 		return Config{}, errors.New("SQLITE_PATH is required when DB_TYPE=sqlite")
+	}
+	if value.DeploymentMode != DeploymentBusiness && value.DeploymentMode != DeploymentStorage {
+		return Config{}, errors.New("DEPLOYMENT_MODE must be business or only_stroge")
+	}
+	if value.DeploymentMode == DeploymentStorage {
+		if value.DatabaseType != DatabaseSQLite || !value.TLSEnabled || value.NginxMedia {
+			return Config{}, errors.New("only_stroge requires embedded SQLite, TLS_ENABLED=true and NGINX_MEDIA_ACCEL=false")
+		}
+		endpoint, err := url.Parse(value.StorageEndpoint)
+		if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" || endpoint.Opaque != "" {
+			return Config{}, errors.New("STORAGE_ENDPOINT must be an HTTPS root URL with an explicit high port")
+		}
+		publicPort, err := strconv.Atoi(endpoint.Port())
+		if err != nil || publicPort < 1024 || publicPort > 65535 {
+			return Config{}, errors.New("only_stroge public port must be from 1024 through 65535; 80/443 are reserved")
+		}
+		published, err := integer(getenv("STORAGE_PORT"), 8443)
+		if err != nil || published < 1024 || published > 65535 || published != publicPort || !strings.EqualFold(endpoint.Hostname(), value.ServerName) {
+			return Config{}, errors.New("STORAGE_PORT must match STORAGE_ENDPOINT's high port and SERVER_NAME must match its hostname")
+		}
+		_, listenPort, err := net.SplitHostPort(value.HTTPAddress)
+		port, portErr := strconv.Atoi(listenPort)
+		if err != nil || portErr != nil || port < 1024 || port > 65535 {
+			return Config{}, errors.New("only_stroge HTTP_ADDR must bind a high port")
+		}
 	}
 	return value, nil
 }

@@ -1,0 +1,93 @@
+# Standalone storage appliance. Do NOT combine with the business Compose file.
+name: ${COMPOSE_PROJECT_NAME:-frontiercloud-storage}
+
+x-storage-image: &storage-image
+  image: frontiercloud-go-web:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
+  build:
+    context: .
+    dockerfile: Dockerfile.gin
+    args: {REVISION: "${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}"}
+  env_file:
+    - path: .env
+      required: false
+
+x-storage-env: &storage-env
+  DEPLOYMENT_MODE: only_stroge
+  DB_TYPE: sqlite
+  SQLITE_PATH: /app/data/frontiercloud.db
+  DATA_ROOT: /app/data
+  SECRETS_DIR: /run/frontiercloud-secrets
+  TLS_ENABLED: "true"
+  NGINX_MEDIA_ACCEL: "false"
+  HTTP_ADDR: :8443
+  STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:?Set a certificate-verified HTTPS root URL including the high port}
+  STORAGE_PORT: ${STORAGE_PORT:-8443}
+  SERVER_NAME: ${SERVER_NAME:?Set the storage certificate hostname}
+  STORAGE_TLS_CERT: /run/frontiercloud-tls/fullchain.pem
+  STORAGE_TLS_KEY: /run/frontiercloud-tls/privkey.pem
+  RELEASE_BRANCH: main
+  RELEASE_SOURCE_BRANCH: dev
+
+services:
+  secrets-init:
+    <<: *storage-image
+    user: "0:0"
+    command: [init-secrets]
+    environment: *storage-env
+    restart: "no"
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes:
+      - ${DATA_DIRECTORY:-./storage-data}:/app/data:z
+      - storage_secrets:/run/frontiercloud-secrets
+
+  media-init:
+    <<: *storage-image
+    user: "0:0"
+    command: [init-media]
+    environment: *storage-env
+    restart: "no"
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes:
+      - ${DATA_DIRECTORY:-./storage-data}:/app/data:z
+
+  web:
+    <<: *storage-image
+    command: [serve]
+    user: "10001:10001"
+    environment: *storage-env
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    ports:
+      - "${PUBLIC_BIND_ADDRESS:-0.0.0.0}:${STORAGE_PORT:-8443}:8443"
+    depends_on:
+      secrets-init: {condition: service_completed_successfully}
+      media-init: {condition: service_completed_successfully}
+    volumes:
+      - ${DATA_DIRECTORY:-./storage-data}:/app/data:z
+      - storage_secrets:/run/frontiercloud-secrets
+      - ${SSL_CERT_PATH:?Set readable storage certificate path}:/run/frontiercloud-tls/fullchain.pem:ro
+      - ${SSL_KEY_PATH:?Set readable storage private key path}:/run/frontiercloud-tls/privkey.pem:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: [CMD, /app/frontiercloud, healthcheck]
+      interval: 30s
+      start_interval: 2s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+volumes:
+  storage_secrets:

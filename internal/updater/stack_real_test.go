@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"io"
 	"os"
 	"os/exec"
@@ -11,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/wongyiuming/FrontierCloud/internal/release"
 )
 
 // Opt-in, full native stack. The caller supplies a newly created host directory
@@ -22,17 +21,11 @@ func TestRealNativeUpdaterUpgradeHandoffRollback(t *testing.T) {
 	testRealNativeUpdaterStack(t, false)
 }
 
-// This adds whole-manifest execution through the unchanged compiled agent and
-// fixed HTTPS publication verifier. Publication replies are private fixtures,
-// not evidence of a reviewed/published production release or mixed convergence.
-func TestRealNativeUpdaterWholeManifestHandoffRollback(t *testing.T) {
-	if os.Getenv("FRONTIERCLOUD_TEST_UPDATER_MANIFEST") != "1" {
-		t.Skip("isolated native whole-manifest stack not selected")
-	}
+func TestRealNativeStagingUpdaterUpgradeHandoffRollback(t *testing.T) {
 	testRealNativeUpdaterStack(t, true)
 }
 
-func testRealNativeUpdaterStack(t *testing.T, whole bool) {
+func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 	base := os.Getenv("FRONTIERCLOUD_TEST_UPDATER_WORKSPACE")
 	socket := os.Getenv("FRONTIERCLOUD_TEST_DOCKER_SOCKET")
 	if base == "" || socket == "" {
@@ -59,6 +52,9 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 	var nonce [12]byte
 	rand.Read(nonce[:])
 	prefix := "fc-native-stack-" + hex.EncodeToString(nonce[:])
+	if staging {
+		prefix = "fc-staging-test-" + hex.EncodeToString(nonce[:])
+	}
 	e.Project = prefix
 	diagnose := func() {
 		probe, stop := context.WithTimeout(context.Background(), 10*time.Second)
@@ -143,7 +139,11 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		}
 		return strings.TrimSpace(string(raw))
 	}
-	git("init", "-b", "gin_main")
+	sourceBranch := "main"
+	if staging {
+		sourceBranch = "dev"
+	}
+	git("init", "-b", sourceBranch)
 	git("config", "user.name", "Native Stack Test")
 	git("config", "user.email", "native-stack@example.invalid")
 	git("add", ".")
@@ -151,8 +151,8 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 	old := git("rev-parse", "HEAD")
 	git("init", "--bare", ".fixture-origin")
 	git("remote", "add", "origin", "./.fixture-origin")
-	git("push", "origin", "gin_main")
-	source := Source{Directory: sourceDir, Branch: "gin_main"}
+	git("push", "origin", sourceBranch)
+	source := Source{Directory: sourceDir, Branch: sourceBranch, Staging: staging}
 	var images []string
 	var names []string
 	var networkID string
@@ -210,11 +210,7 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		t.Fatal(err)
 	}
 	networkID = network.ID
-	var publication *nativePublicationFixture
-	if whole {
-		publication = startNativePublicationFixture(t, ctx, e, base, root, networkID)
-		defer publication.close()
-	}
+
 	for _, dir := range []string{"data", "secrets", "control", "maintenance", "redis", "mysql"} {
 		if err = os.Mkdir(filepath.Join(root, dir), 0755); err != nil {
 			t.Fatal(err)
@@ -228,7 +224,7 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		return filepath.Join(root, dir) + ":" + mount + mode
 	}
 	appBinds := []string{bind("data", "/app/data", false), bind("secrets", "/run/frontiercloud-secrets", false), bind("control", "/run/frontiercloud-updater", true)}
-	appEnv := []string{"DB_TYPE=" + database, "SQLITE_PATH=/app/data/frontiercloud.db", "DATA_ROOT=/app/data", "REDIS_URL=redis://redis:6379/0", "RELEASE_BRANCH=gin_main", "RELEASE_SOURCE_BRANCH=gin_dev", "TLS_ENABLED=false", "MYSQL_HOST=mysql", "MYSQL_DATABASE=fc_native", "MYSQL_USER=media_admin"}
+	appEnv := []string{"DB_TYPE=" + database, "SQLITE_PATH=/app/data/frontiercloud.db", "DATA_ROOT=/app/data", "REDIS_URL=redis://redis:6379/0", "RELEASE_BRANCH=main", "RELEASE_SOURCE_BRANCH=dev", "TLS_ENABLED=false", "MYSQL_HOST=mysql", "MYSQL_DATABASE=fc_native", "MYSQL_USER=media_admin"}
 	create := func(service, image string, cmd []string, env, binds []string, user string, health bool, readonly bool, rootCaps bool) Container {
 		t.Helper()
 		name := prefix + "-" + service
@@ -290,13 +286,13 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		diagnose()
 		t.Fatal(err)
 	}
-	updaterEnv := []string{"UPDATER_PROJECT=" + prefix, "UPDATER_DATA_DIRECTORY=/data", "RELEASE_BRANCH=gin_main"}
-	updaterBinds := []string{sourceDir + ":/workspace:rw", socket + ":/var/run/docker.sock:rw", bind("data", "/data", false), bind("control", "/run/frontiercloud-updater", false), bind("maintenance", "/run/frontiercloud-maintenance", false)}
-	if whole {
-		updaterEnv = append(updaterEnv, "SSL_CERT_FILE=/private-publication/ca.pem", "SSL_CERT_DIR=/private-publication/empty")
-		updaterBinds = append(updaterBinds, filepath.Join(root, "publication")+":/private-publication:ro")
+	updaterEnv := []string{"UPDATER_PROJECT=" + prefix, "UPDATER_DATA_DIRECTORY=/data", "RELEASE_BRANCH=main"}
+	if staging {
+		updaterEnv = append(updaterEnv, "STAGING_CD=true")
 	}
-	updater := create("updater", updaterImage, []string{"serve"}, updaterEnv, updaterBinds, "0:0", false, true, true)
+	updaterBinds := []string{sourceDir + ":/workspace:rw", socket + ":/var/run/docker.sock:rw", bind("data", "/data", false), bind("control", "/run/frontiercloud-updater", false), bind("maintenance", "/run/frontiercloud-maintenance", false)}
+
+	create("updater", updaterImage, []string{"serve"}, updaterEnv, updaterBinds, "0:0", false, true, true)
 	agent := release.SocketAgent{Path: filepath.Join(root, "control", "control.sock")}
 	wait := func(target, state string) map[string]any {
 		t.Helper()
@@ -323,90 +319,19 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		diagnose()
 		t.Fatal("unprivileged Web cannot reach control socket", err)
 	}
-	var initial, next *release.Manifest
-	if whole {
-		initial = publication.manifest(t, "1.0.0", old, git)
-		out, err := agent.Request(ctx, nativeManifestStart(initial, "upgrade"))
-		if err != nil || out["ok"] != true {
-			t.Fatal("initial native manifest queue failed", err)
-		}
-		nativeManifestStatus(t, wait(old, "success"), initial, nil)
-		// The other private profile can change while the native artifact stays
-		// identical. Whole history still advances, and rollback must not invent
-		// a new native SHA or unnecessarily replace the already healthy stack.
-		joint := release.CloneManifest(initial)
-		joint.ReleaseVersion = "1.1.0"
-		reference := joint.Artifacts["main"]
-		reference.CommitSHA = git("commit-tree", reference.TreeSHA, "-m", "private reference-only target "+prefix)
-		joint.Artifacts["main"] = reference
-		for _, check := range []struct {
-			manifest, previous *release.Manifest
-			mode               string
-		}{{joint, initial, "upgrade"}, {initial, nil, "rollback"}} {
-			out, err := agent.Request(ctx, nativeManifestStart(check.manifest, check.mode))
-			if err != nil || out["ok"] != true {
-				t.Fatal("unchanged native artifact manifest queue failed", err)
-			}
-			status := wait(old, "success")
-			nativeManifestStatus(t, status, check.manifest, check.previous)
-			if status["updater_runtime_sha"] != old || status["previous_sha"] != "" {
-				t.Fatal("whole history confused with native SHA history")
-			}
-			for service, original := range map[string]Container{"web": web, "nginx": nginx, "updater": updater} {
-				current, err := e.Service(ctx, prefix, service)
-				if err != nil || current.ID != original.ID || current.Image != original.Image {
-					t.Fatal("unchanged native artifact replaced a service", service, err)
-				}
-			}
-		}
-	}
+
 	if err = os.WriteFile(filepath.Join(sourceDir, "static", "native-updater-fixture.txt"), []byte(prefix+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	git("add", "static/native-updater-fixture.txt")
 	git("commit", "-m", "native target "+prefix)
 	target := git("rev-parse", "HEAD")
-	git("push", "origin", "gin_main")
+	git("push", "origin", sourceBranch)
 	for _, component := range []string{"web", "nginx", "updater"} {
 		images = append(images, releaseImageTag(prefix, target, component))
 	}
 	request := map[string]any{"action": "start", "target_sha": target, "mode": "upgrade", "hold_maintenance": false}
-	if whole {
-		next = publication.manifest(t, "2.0.0", target, git)
-		// A validly encoded manifest cannot invent a reviewed tree. Exercise the
-		// real verifier before replacement, then retry the independently proven
-		// fixture. Neither service/image nor whole history may change on rejection.
-		bad := release.CloneManifest(next)
-		artifact := bad.Artifacts["gin_main"]
-		artifact.TreeSHA = strings.Repeat("0", 40)
-		bad.Artifacts["gin_main"] = artifact
-		out, err := agent.Request(ctx, nativeManifestStart(bad, "upgrade"))
-		if err != nil || out["ok"] != true {
-			t.Fatal("bounded invalid-proof request not queued", err)
-		}
-		for {
-			out, err := agent.Request(ctx, map[string]any{"action": "status"})
-			status, _ := out["status"].(map[string]any)
-			if err == nil && status["state"] == "failed" {
-				if status["current_sha"] != old {
-					t.Fatal("invalid proof committed a new generation")
-				}
-				nativeManifestStatus(t, status, initial, nil)
-				break
-			}
-			if ctx.Err() != nil {
-				t.Fatal("invalid publication proof deadline")
-			}
-			time.Sleep(time.Second)
-		}
-		for service, original := range map[string]Container{"web": web, "nginx": nginx} {
-			current, err := e.Service(ctx, prefix, service)
-			if err != nil || current.ID != original.ID || current.Image != original.Image {
-				t.Fatal("invalid publication proof replaced a service", service, err)
-			}
-		}
-		request = nativeManifestStart(next, "upgrade")
-	}
+
 	out, err := agent.Request(ctx, request)
 	if err != nil || out["ok"] != true {
 		t.Fatal(out, err)
@@ -415,9 +340,7 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 	if status["previous_sha"] != old || status["updater_runtime_sha"] != target {
 		t.Fatal("handoff runtime proof missing", status)
 	}
-	if whole {
-		nativeManifestStatus(t, status, next, initial)
-	}
+
 	if _, err = os.Stat(filepath.Join(root, "maintenance", "enabled")); !os.IsNotExist(err) {
 		t.Fatal("successful release left public fence", err)
 	}
@@ -436,9 +359,7 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 		}
 	}
 	request = map[string]any{"action": "start", "target_sha": old, "mode": "rollback", "hold_maintenance": false}
-	if whole {
-		request = nativeManifestStart(initial, "rollback")
-	}
+
 	out, err = agent.Request(ctx, request)
 	if err != nil || out["ok"] != true {
 		t.Fatal(out, err)
@@ -447,10 +368,7 @@ func testRealNativeUpdaterStack(t *testing.T, whole bool) {
 	if status["previous_sha"] != "" || status["updater_runtime_sha"] != old {
 		t.Fatal("rollback runtime proof missing", status)
 	}
-	if whole {
-		nativeManifestStatus(t, status, initial, nil)
-		publication.assertProofs(t, old, target)
-	}
+
 	if _, err = os.Stat(filepath.Join(root, "data", ".frontiercloud-native-maintenance")); !os.IsNotExist(err) {
 		t.Fatal("native fence not resumed", err)
 	}

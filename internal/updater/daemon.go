@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 type Request struct {
@@ -146,6 +146,9 @@ func (d *Daemon) Status() Status {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	copy := d.status
+	if executor, ok := d.executor.(*DockerExecutor); ok {
+		copy.StagingCD = executor.Source.Staging
+	}
 	copy.TargetManifest = release.CloneManifest(copy.TargetManifest)
 	copy.CurrentManifest = release.CloneManifest(copy.CurrentManifest)
 	copy.PreviousManifest = release.CloneManifest(copy.PreviousManifest)

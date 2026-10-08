@@ -9,12 +9,13 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/backup"
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Service struct {
@@ -136,6 +137,15 @@ func (s *Service) emptyRecordings(ctx context.Context, apply func() error) error
 		}
 		if name == ".recordings-mutation.lock" {
 			return nil
+		}
+		// Completed deletions retain zero-byte inode leases. They are not
+		// recordings and must not prevent an otherwise empty volume retiring.
+		if !entry.IsDir() && !strings.Contains(name, "/") && strings.HasPrefix(name, ".recording-") && strings.HasSuffix(name, ".lease") {
+			id := strings.TrimSuffix(strings.TrimPrefix(name, ".recording-"), ".lease")
+			info, err := entry.Info()
+			if err == nil && ValidIdentifier(id) && info.Mode().IsRegular() && info.Size() == 0 {
+				return nil
+			}
 		}
 		if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() {
 			return errors.New("Follower still has recording files")

@@ -32,7 +32,7 @@ Required scopes are:
 | scripts/test-native-default.sh | Fresh default bootstrap/restart, native processes, persistent identities and upstream address changes |
 | scripts/test-go-updater.sh | Actual native upgrade/self-handoff/rollback, both stores |
 | scripts/test-native-matrix.sh | Five Go nodes: one Master, two Direct, two Relay; both store combinations |
-| scripts/test-native-release.sh | Whole-fleet release, rollback and persistent business/identity proof |
+| scripts/test-native-release.sh | Master-only release/handoff/rollback; storage unchanged |
 | tests/browser_ui_regression.py and tests/*browser.mjs | Real Chromium UI, cache, continuous playback and disconnect recovery |
 
 An unconfigured `go test ./...` can skip Redis/Engine/fleet acceptance. Its green
@@ -93,7 +93,7 @@ Navigation for reviewing remaining historical assertions (not equivalence proof)
 | IP/security and transactions | internal/security/service_test.go; internal/store/business/security_test.go; internal/httpapi/security_test.go |
 | Nodes, Direct/Relay transport and relationship control | internal/httpapi/node_cluster_test.go, nodes_admin_test.go; internal/node/*_test.go |
 | Backup recovery and schema/data integrity | internal/backup/*_test.go; internal/store/business/*_test.go |
-| Release provenance, convergence and rollback | internal/release/verification_test.go, manifest_converge_test.go; internal/updater/*_real_test.go |
+| Master release provenance and rollback | internal/release/verification_test.go, coordinator_test.go, history_test.go; internal/updater/stack_real_test.go |
 
 The new catalog rollback fault test runs on both stores. Disposable MySQL
 business fixtures disable binary logging so a database-scoped test user can
@@ -102,28 +102,29 @@ configuration only; production users/configuration are never weakened for tests.
 
 ## Promotion and deployment are separate
 
-1. Work on the existing gin_dev branch. After a prior promotion, fast-forward it
-   to the actual gin_main merge commit before implementation. Never force-push.
+1. Work on `dev` in `wongyiuming/FrontierCloud-Gin`. After a prior promotion,
+   fast-forward it to the actual `main` merge commit. Never force-push.
 2. Validate the fixed source/tree on the development host. Commit coherent fixes
    separately and preserve complete gate evidence, including skips and limits.
-3. When authorized, push gin_dev. Hosted source CI is lightweight and capped at
+3. When authorized, push `dev`. Hosted source CI is lightweight and capped at
    three minutes; use the newest successful push for that exact source SHA.
-4. When authorized, open same-repository gin_dev -> gin_main PR, review and
+4. When authorized, open same-repository dev -> main PR, review and
    merge. The resulting production tree must equal the reviewed source tree;
    exact PR/CI provenance is rechecked after merge. A local commit is not a
    published release, and CI success alone is not full business acceptance.
 5. Production deployment requires its own authorization. The native Admin
-   upgrade/distribution flow verifies published provenance, current identities,
-   maintenance and persistent release journals. Normal upgrades build immutable
-   allowlisted Git archives on each node; centralized precompiled distribution
-   is not the current normal path. Rebuild binaries to apply Go security fixes.
+   Master self-upgrade flow verifies published provenance, current identity,
+   maintenance and persistent release journals. It builds immutable allowlisted
+   Git archives locally; it never upgrades storage appliances. Storage rebuilds
+   are operator-controlled exact-revision deployments. Rebuild binaries to apply
+   Go security fixes.
 6. Confirm readiness, business transport and actual component runtime SHAs,
-   retain recovery evidence, then synchronize gin_dev to the release merge.
+   retain recovery evidence, then synchronize `dev` to the release merge.
 
-dev -> main is a separate historical profile pending owner-approved
-consolidation. GitHub still defaults to historical main; do not deploy its Python
-recipe. Changing the default branch, merging into main/dev and production
-rollout are not implicitly authorized by a request to fix source or docs.
+The new repository has only `main` and `dev`; the old repository's `gin_*`
+branches are bootstrap history, not active release profiles. Initial imported
+commits are not PR-certified releases. Production rollout is performed by the
+operator and is separate from the authorized implementation/PR/merge workflow.
 
 ## Security and runtime bounds
 

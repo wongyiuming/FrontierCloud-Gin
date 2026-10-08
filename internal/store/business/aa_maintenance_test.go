@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials(t *testing.T) {

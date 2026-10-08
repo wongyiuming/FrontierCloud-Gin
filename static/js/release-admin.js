@@ -7,24 +7,25 @@
         validating: 12,
         building: 38,
         replacing: 66,
-        distributing: 82,
+        restarting: 88,
         complete: 100,
         failed: 100,
         unavailable: 0,
     };
     const PHASE_LABEL = {
         idle: '待机', queued: '已排队', validating: '校验版本', building: '构建镜像',
-        replacing: '替换服务', distributing: '集群分发', complete: '完成', failed: '失败',
+        replacing: '替换服务', restarting: '主节点自检', complete: '完成', failed: '失败',
         unavailable: '不可用',
     };
-    const STEP_PHASES = ['validating', 'building', 'replacing', 'distributing', 'complete'];
-    const STEP_LABELS = ['校验', '构建', '替换', '分发', '完成'];
+    const STEP_PHASES = ['validating', 'building', 'replacing', 'restarting', 'complete'];
+    const STEP_LABELS = ['校验', '构建', '替换', '自检', '完成'];
     let timer = null;
     let lastValue = null;
+    let versions = [];
 
     const element = id => document.getElementById(id);
     const shortSha = value => value ? String(value).slice(0, 12) : '-';
-    const busy = local => ['queued', 'running', 'distributing'].includes(local?.state);
+    const busy = local => ['queued', 'running', 'restarting'].includes(local?.state);
     const phaseProgress = release => {
         if (!release) return 0;
         if (release.state === 'success' && release.phase === 'complete') return 100;
@@ -86,30 +87,6 @@
         return `${releaseBranch} ${shortSha(ci.sha)} · ${sourceBranch} CI #${ci.run_number || '-'} ${state} · ${shortSha(ci.ci_sha)}${auth}`;
     }
 
-    function convergence(value) {
-        const target = displayTarget(value);
-        const nodes = [{reachable: true, status: value.local || {}, master: true}, ...(value.followers || [])];
-        const total = nodes.length;
-        const done = nodes.filter(item => {
-            if (item.reachable === false) return false;
-            const status = item.status || {};
-            return target && status.current_sha === target && status.state === 'success';
-        }).length;
-        return {done, total};
-    }
-
-    function overallProgress(value) {
-        const local = value.local || {};
-        const target = displayTarget(value);
-        const cluster = convergence(value);
-        if (target && cluster.total && cluster.done === cluster.total) return 100;
-        const base = phaseProgress(local);
-        if (local.phase === 'distributing' || (local.current_sha === target && value.cluster_convergence_needed)) {
-            return Math.max(base, 72 + Math.round(28 * (cluster.done / Math.max(1, cluster.total))));
-        }
-        return base;
-    }
-
     function renderSteps(local) {
         const host = element('systemReleaseSteps');
         const current = STEP_PHASES.indexOf(local.phase);
@@ -164,8 +141,7 @@
         lastValue = value;
         const ci = value.ci || {};
         const local = value.local || {};
-        const cluster = convergence(value);
-        const percent = overallProgress(value);
+        const percent = phaseProgress(local);
         const target = displayTarget(value);
 
         element('systemReleaseCi').textContent = ciText(value);
@@ -180,18 +156,13 @@
         targetHost.textContent = target ? shortSha(target) : '-';
         targetHost.title = ci.sha ? '当前 GitHub 验证目标' : ci.last_verified?.sha ? '上次可信 GitHub 验证目标' : '';
         element('systemReleaseCurrent').textContent = shortSha(local.current_sha);
-        element('systemReleaseConvergence').textContent = `${cluster.done} / ${cluster.total}`;
         element('systemReleaseProgressBar').style.width = `${percent}%`;
         element('systemReleaseProgressBar').classList.toggle('failed', local.state === 'failed');
         element('systemReleaseProgressCaption').textContent =
-            `${percent}% · Master ${local.state || 'unknown'} / ${PHASE_LABEL[local.phase] || local.phase || '-'}${value.cluster_convergence_needed ? ' · 等待集群收敛' : ''}`;
+            `${percent}% · Master ${local.state || 'unknown'} / ${PHASE_LABEL[local.phase] || local.phase || '-'}`;
         renderSteps(local);
 
-        const nodes = [nodeCard('Master', local, true, target)];
-        for (const item of value.followers || []) {
-            nodes.push(nodeCard(item.peer_endpoint || item.peer_id || 'Follower', item.status || {}, item.reachable !== false, target));
-        }
-        element('systemReleaseNodes').replaceChildren(...nodes);
+        element('systemReleaseNodes').replaceChildren(nodeCard('Master', local, true, target));
 
         const details = [];
         if (ci.detail && ci.error_kind !== 'rate_limited') details.push(ci.detail);
@@ -201,24 +172,18 @@
             details.push(`GitHub API 已限流；当前不会继续重试。预计恢复：${resetText}。新升级保持禁用。`);
         }
         if (local.detail) details.push(local.detail);
-        for (const item of value.followers || []) {
-            if (item.detail) details.push(`${item.peer_endpoint || item.peer_id}: ${item.detail}`);
-            if (item.status?.detail) details.push(`${item.peer_endpoint || item.peer_id}: ${item.status.detail}`);
-        }
         const error = element('systemReleaseError');
         error.textContent = details.join('\n');
         error.classList.toggle('hidden', !details.length);
 
         element('systemReleaseUpgrade').disabled = !value.can_upgrade;
-        element('systemReleaseRollback').disabled = !value.can_rollback;
+        updateRollback();
         const masterBusy = busy(local);
         element('systemReleaseState').textContent = masterBusy
             ? `执行中 · ${PHASE_LABEL[local.phase] || local.phase || local.state}`
             : local.state === 'failed'
                 ? '上次发布失败'
-                : value.cluster_convergence_needed
-                    ? '集群需要继续收敛'
-                    : '发布系统空闲';
+                : '主节点发布系统空闲';
         schedule(masterBusy ? 1500 : 5000);
     }
 
@@ -226,6 +191,34 @@
         const value = await api(`${RELEASE_BASE}${force ? '?refresh_ci=true' : ''}`);
         render(value);
         return value;
+    }
+
+    function updateRollback() {
+        const target = element('systemReleaseVersion')?.value || '';
+        const version = versions.find(item => item.sha === target);
+        element('systemReleaseNotes').textContent = version
+            ? `${version.title}\n${version.merged_at}\n${version.description || '详细变更见关联 PR。'}\n${version.url}\n选择历史版本后，服务端仍须校验该版本的精确代码树与 CI。`
+            : '上次本机成功运行的版本；回退代码不会逆向恢复数据库。';
+        const historical = version && lastValue?.role === 'Master' && lastValue?.release_policy_ready
+            && !busy(lastValue?.local) && target !== lastValue?.local?.current_sha;
+        element('systemReleaseRollback').disabled = target ? !historical : !lastValue?.can_rollback;
+    }
+
+    async function refreshHistory() {
+        const response = await api(`${RELEASE_BASE}/history`);
+        const select = element('systemReleaseVersion');
+        const previous = select.value;
+        versions = (response.versions || []).slice(0, 10);
+        const fallback = document.createElement('option');
+        fallback.value = ''; fallback.textContent = '上次本机版本';
+        select.replaceChildren(fallback, ...versions.map(version => {
+            const option = document.createElement('option');
+            option.value = version.sha;
+            option.textContent = `${shortSha(version.sha)} · ${version.title}`;
+            return option;
+        }));
+        if (versions.some(version => version.sha === previous)) select.value = previous;
+        updateRollback();
     }
 
     function schedule(delay) {
@@ -248,11 +241,12 @@
     }
 
     async function runAction(path, label) {
-        const target = lastValue?.ci?.sha ? shortSha(lastValue.ci.sha) : 'main';
-        if (path.endsWith('/rollback') && !confirm(`确认将整个集群回滚到上一 Web 管理版本？\n当前 main 目标：${target}`)) return;
+        const rollback = path.endsWith('/rollback');
+        const target = rollback ? element('systemReleaseVersion').value : '';
+        if (rollback && !confirm(`确认只回退主节点到 ${shortSha(target || lastValue?.local?.previous_sha)}？\n存储节点不变；数据库不自动逆向恢复。`)) return;
         element('systemReleaseState').textContent = label;
         try {
-            await api(path, {method: 'POST', headers: requestHeaders(), body: '{}'});
+            await api(path, {method: 'POST', headers: requestHeaders(), body: JSON.stringify(target ? {target_sha: target} : {})});
             await refresh(false);
             schedule(1000);
         } catch (error) {
@@ -268,14 +262,14 @@
         panel.dataset.adminModule = 'release';
         panel.innerHTML = `
             <button class="module-heading" type="button" aria-expanded="false">
-                <span><strong>系统版本管理</strong><small id="systemReleaseState">main 发布、集群分发、实时进度与一键回滚</small></span><b>＋</b>
+                <span><strong>系统版本管理</strong><small id="systemReleaseState">主节点自身发布、历史说明与版本回退</small></span><b>＋</b>
             </button>
             <div class="system-module-content">
                 <div class="system-toolbar">
                     <button id="systemReleaseRefresh" type="button">刷新发布验证</button>
                     <span class="spacer"></span>
-                    <button id="systemReleaseUpgrade" type="button" disabled>升级并分发</button>
-                    <button id="systemReleaseRollback" type="button" disabled>一键回滚</button>
+                    <button id="systemReleaseUpgrade" type="button" disabled>升级主节点</button>
+                    <button id="systemReleaseRollback" type="button" disabled>回退主节点</button>
                 </div>
                 <div class="release-overview">
                     <div class="release-stat"><small>发布验证</small><strong id="systemReleaseCi">尚未加载</strong></div>
@@ -283,12 +277,15 @@
                     <div class="release-stat"><small>版本</small><strong><span id="systemReleaseCurrent">-</span> → <span id="systemReleaseTarget">-</span></strong></div>
                 </div>
                 <div class="release-stat">
-                    <small>集群实时进度 · 已收敛 <span id="systemReleaseConvergence">0 / 0</span></small>
+                    <small>主节点版本进度</small>
                     <div class="release-progress-shell"><div id="systemReleaseProgressBar" class="release-progress-bar"></div></div>
                     <div id="systemReleaseProgressCaption" class="release-progress-caption">尚未开始</div>
                 </div>
                 <div id="systemReleaseSteps" class="release-steps"></div>
                 <div id="systemReleaseNodes" class="release-node-list"></div>
+                <label for="systemReleaseVersion">回退目标（最多 10 个已合并版本）</label>
+                <select id="systemReleaseVersion"><option value="">上次本机版本</option></select>
+                <pre id="systemReleaseNotes">尚未加载版本说明</pre>
                 <pre id="systemReleaseError" class="release-error hidden"></pre>
             </div>
         `;
@@ -296,10 +293,11 @@
         (nodes?.parentElement || document.querySelector('.admin-console'))?.insertBefore(panel, nodes || null);
         panel.querySelector('.module-heading').onclick = () => {
             const open = setExpanded(panel);
-            if (open) refresh(true).catch(showError);
+            if (open) { refresh(true).catch(showError); refreshHistory().catch(showError); }
             else if (!busy(lastValue?.local || {})) schedule(0);
         };
-        element('systemReleaseRefresh').onclick = () => refresh(true).catch(showError);
+        element('systemReleaseRefresh').onclick = () => { refresh(true).catch(showError); refreshHistory().catch(showError); };
+        element('systemReleaseVersion').onchange = updateRollback;
         element('systemReleaseUpgrade').onclick = () => runAction(`${RELEASE_BASE}/upgrade`, '正在提交升级任务…');
         element('systemReleaseRollback').onclick = () => runAction(`${RELEASE_BASE}/rollback`, '正在提交回滚任务…');
     }

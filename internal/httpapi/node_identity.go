@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 )
 
 // Even a Standalone node answers signed challenges so its HTTPS endpoint can be

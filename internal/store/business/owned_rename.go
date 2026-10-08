@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) checkOwnedRename(ctx context.Context, q queryer, relationship, old, target string) error {

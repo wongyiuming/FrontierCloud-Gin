@@ -44,7 +44,7 @@ func TestVerificationRequiresUniqueReviewedTreeAndNewestExactPush(t *testing.T) 
 					}
 					fmt.Fprintf(w, `{"commit":{"sha":%q,"commit":{"tree":{"sha":%q}}}}`, head, tree)
 				case "/commits/" + target + "/pulls":
-					repo, merge := "wongyiuming/FrontierCloud", target
+					repo, merge := "wongyiuming/FrontierCloud-Gin", target
 					if kind == "foreign-repo" {
 						repo = "foreign/repo"
 					}
@@ -109,7 +109,7 @@ func TestExactHistoricalArtifactDoesNotReuseHeadCacheOrOlderSuccess(t *testing.T
 		case "/commits/" + source:
 			fmt.Fprintf(w, `{"sha":%q,"commit":{"tree":{"sha":%q}}}`, source, tree)
 		case "/commits/" + target + "/pulls":
-			fmt.Fprintf(w, `[{"merged_at":"2026-10-03","merge_commit_sha":%q,"base":{"ref":"main"},"head":{"ref":"dev","sha":%q,"repo":{"full_name":"wongyiuming/FrontierCloud"}}}]`, target, source)
+			fmt.Fprintf(w, `[{"merged_at":"2026-10-03","merge_commit_sha":%q,"base":{"ref":"main"},"head":{"ref":"dev","sha":%q,"repo":{"full_name":"wongyiuming/FrontierCloud-Gin"}}}]`, target, source)
 		case "/actions/workflows/docker.yml/runs":
 			newest := "success"
 			if failed.Load() {

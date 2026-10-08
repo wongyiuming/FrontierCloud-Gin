@@ -1,18 +1,15 @@
 # Contributing to FrontierCloud
 
-FrontierCloud uses two authorized two-branch provenance pairs and one deployable runtime (Gin/Go). These rules are architectural constraints, not suggestions.
+FrontierCloud uses one authorized two-branch provenance pair and one deployable runtime (Gin/Go). These rules are architectural constraints, not suggestions.
 
 ## Repository topology — MUST NOT violate
 
-- `gin_dev` is the **only development branch** for the current reconstruction; `dev` remains the canonical development branch pending separately authorized consolidation. Neither pair permits Python deployment.
-- `main` and `gin_main` are their respective release branches. Only same-repository `dev -> main` and `gin_dev -> gin_main` promotions are valid.
-- **Do not create any new branch** outside these owner-authorized refs. This includes `feature/*`, `fix/*`, temporary conflict-resolution branches, experiment branches, or automation-created branches.
-- Do not open a feature/fix branch directly against `main`.
-- Do not force-push or rewrite canonical branches.
-- Do not commit implementation work directly to `main` or `gin_main`.
-- After a release PR is merged, fast-forward its development branch to the resulting release merge commit before further implementation.
-- Until separately authorized consolidation, historical main/dev and the GitHub default branch are not supported native deployment targets. Do not describe their old Python recipes as deployable merely because this branch is Go-only.
-- Historical non-canonical branches may exist until the repository owner deletes them. They are not implementation targets and must not be reused.
+- `dev` is the **only development branch**; `main` is the release branch in FrontierCloud-Gin.
+- **Do not create any new branch** outside these two refs.
+- Only same-repository `dev -> main` PRs promote code; never force-push or rewrite canonical branches.
+- Do not commit implementation directly to `main`.
+- After merge, fast-forward `dev` to the release merge commit.
+- Old `gin_dev`/`gin_main` refs belong to the original repository, not this repository's release topology. Python is never deployable.
 
 The repository can fail an invalid PR topology, but repository-local code cannot reliably prevent somebody with GitHub ref permission from creating a branch. The **no-new-branch rule therefore remains an explicit human/automation invariant** and should also be mirrored in the GitHub Wiki and repository ruleset/branch-protection settings.
 
@@ -23,7 +20,7 @@ The repository can fail an invalid PR topology, but repository-local code cannot
 3. Change the smallest coherent surface. Do not revive retired compatibility/product features to make a test pass.
 4. Add or strengthen regression coverage for every bug fix and every new invariant.
 5. Run the bounded source CI checks and native acceptance on the development host. A narrow unit test is not release evidence; heavyweight acceptance must never be added to hosted CI.
-6. Open a release PR only when authorized, using the profile's fixed promotion pair. The repository owner performs the merge.
+6. Open a release PR only when authorized, using the profile's fixed promotion pair. Merge requires owner authorization and successful exact-source validation.
 
 ## Documentation ownership
 
@@ -32,7 +29,7 @@ Keep top-level documentation intentionally separated:
 - `README.md` is the concise product entry point, shortest startup path, and documentation map.
 - `ARCHITECTURE.md` owns cross-cutting invariants and prohibited design drift.
 - `CONTRIBUTING.md` owns repository, testing, review, and release procedure.
-- The separate [GitHub Wiki](https://github.com/wongyiuming/FrontierCloud/wiki) owns operator/subsystem guidance; docs/wiki must not be Git-tracked. docs/ holds focused engineering contracts and audit evidence.
+- The separate [GitHub Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki) owns operator/subsystem guidance; docs/wiki must not be Git-tracked. docs/ holds focused engineering contracts and audit evidence.
 
 Do not copy a full architecture or operations manual back into the README. When behavior changes, update the narrowest authoritative document and link to it from the entry point only when discovery would otherwise suffer.
 
@@ -42,7 +39,7 @@ Prefer executable protection over prose:
 
 - Business invariants belong in unit/runtime tests.
 - Browser behavior and Admin layout belong in Chromium acceptance tests when practical.
-- Master/Follower behavior belongs in federation tests when it crosses node boundaries.
+- Master/storage behavior belongs in federation tests when it crosses node boundaries.
 - Nginx/Compose/release assumptions belong in source/deployment contract tests.
 - A rule that cannot be reliably asserted from the repository (for example, **never create a new Git branch**) must be documented here and in the Wiki instead of being implied by convention.
 
@@ -50,8 +47,8 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 ## Non-negotiable architecture boundaries
 
-- A cluster has one business Master. Followers are resource nodes, not independent business authorities.
-- Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to Followers.
+- A cluster has one business Master. storage nodes are resource nodes, not independent business authorities.
+- Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to storage nodes.
 - One managed media object is complete and belongs to exactly one storage member. Do not split one logical object across storage members.
 - Compute Worker is retired. Do not add worker slots, compute scheduling, worker UI, or worker product configuration back without an explicit architecture decision.
 - Product runtime changes that add burst or sustained high-load computation are rejected. Do not add transcoding, compression, inference, bulk transformation, process execution, executor offload, or compute-heavy runtime dependencies. This is a one-core service boundary, not a tunable CPU budget.
@@ -71,7 +68,7 @@ Hosted CI is restricted to lightweight source/policy/JavaScript smoke checks and
 
 Run native unit/race, actual SQLite/MySQL business/API, deployment and updater tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Reference app/ and updater/server.py are illustrative only and must not be deployed. Keep syntax examples aligned when relevant; runnable Python compatibility is not a product requirement.
 
-The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers both database combinations; scripts/test-native-release.sh exercises the same native fleet's upgrade/rollback. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
+The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers both database combinations; Master-only upgrade/rollback must leave storage versions and identities unchanged; whole-fleet release synchronization is retired. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
 
 ## Release evidence
 
@@ -81,6 +78,6 @@ Redis/Engine/fleet gates. Preserve legacy-case replacement ledgers and never
 claim assertion-equivalence from matching total counts. See
 [validation scopes and promotion](docs/validation-and-promotion.md).
 
-A release is valid only when the exact development commit has successful CI and the production tree is identical to the reviewed source tree. Both `dev -> main` and `gin_dev -> gin_main` use this rule. Post-merge proof is an additional guard, not a replacement for review. A local tested commit is not an already-published production release.
+A release is valid only when the exact development commit has successful CI and the production tree is identical to the reviewed source tree. The new repository uses only `dev -> main`. Post-merge proof is an additional guard, not a replacement for review. A local tested commit is not an already-published production release.
 
-The complete local baseline and CI composition are maintained in the separate [Engineering and CI Wiki](https://github.com/wongyiuming/FrontierCloud/wiki/Engineering-and-CI). Deployment, rollback, and migration procedures are maintained in the [Release and Database Migrations Wiki](https://github.com/wongyiuming/FrontierCloud/wiki/Release-and-Database-Migrations).
+The complete local baseline and CI composition are maintained in the separate [Engineering and CI Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Engineering-and-CI). Deployment, rollback, and migration procedures are maintained in the [Release and Database Migrations Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Release-and-Database-Migrations).

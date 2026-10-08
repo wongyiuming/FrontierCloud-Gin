@@ -6,14 +6,14 @@ permissions:
 
 on:
   push:
-    branches: ["dev", "main", "gin_dev", "gin_main"]
+    branches: ["dev", "main"]
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
 
 jobs:
-  promote-gin-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/gin_main'
+  promote-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -30,12 +30,12 @@ jobs:
             const pulls = Array.isArray(associated.data) ? associated.data : [];
             const sources = [...new Set(pulls.filter(pr =>
               pr?.merged_at && pr?.merge_commit_sha === target &&
-              pr?.base?.ref === 'gin_main' && pr?.head?.ref === 'gin_dev' &&
+              pr?.base?.ref === 'main' && pr?.head?.ref === 'dev' &&
               pr?.head?.repo?.full_name === `${owner}/${repo}` &&
               /^[0-9a-f]{40}$/.test(pr?.head?.sha || '')
             ).map(pr => pr.head.sha))];
             if (pulls.length >= 100 || sources.length !== 1) {
-              core.setFailed('Native HEAD has no unique exact merged same-repository gin_dev -> gin_main PR');
+              core.setFailed('Native HEAD has no unique exact merged same-repository dev -> main PR');
               return;
             }
             const source = sources[0];
@@ -48,18 +48,18 @@ jobs:
               owner, repo, workflow_id: 'docker.yml', event: 'push', head_sha: source, per_page: 20,
             });
             const runs = Array.isArray(result.data?.workflow_runs) ? result.data.workflow_runs : [];
-            const matching = runs.filter(run => run?.head_sha === source && run?.head_branch === 'gin_dev' && run?.event === 'push');
+            const matching = runs.filter(run => run?.head_sha === source && run?.head_branch === 'dev' && run?.event === 'push');
             matching.sort((a, b) => b.run_number - a.run_number);
             const newest = matching[0];
             if (!newest || newest.status !== 'completed' || newest.conclusion !== 'success') {
               core.setFailed('Newest exact native source push CI has not succeeded');
               return;
             }
-            core.notice(`gin_main ${target} promotes gin_dev ${source}, CI #${newest.run_number}`);
+            core.notice(`main ${target} promotes dev ${source}, CI #${newest.run_number}`);
 
   test-native:
     if: >-
-      (github.event_name == 'push' && (github.ref == 'refs/heads/gin_dev' || github.ref == 'refs/heads/dev')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/dev') ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'merge_group'
     runs-on: ubuntu-latest
@@ -71,76 +71,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Bounded source, policy and frontend checks only
         run: timeout --signal=TERM --kill-after=5s 150s bash scripts/test-ci-source.sh
-
-  promote-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
-      - name: Promote already-tested dev commit
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const mainCommit = await github.rest.repos.getCommit({
-              owner,
-              repo,
-              ref: context.sha,
-            });
-            const mainTree = mainCommit.data.commit.tree.sha;
-            const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner,
-              repo,
-              commit_sha: context.sha,
-              per_page: 100,
-            });
-            const promotionPulls = (Array.isArray(associated.data) ? associated.data : []).filter(pr =>
-              pr?.merged_at &&
-              pr?.base?.ref === 'main' &&
-              pr?.head?.ref === 'dev' &&
-              pr?.head?.repo?.full_name === `${owner}/${repo}` &&
-              /^[0-9a-f]{40}$/.test(pr?.head?.sha || '')
-            );
-            const sourceShas = [...new Set(promotionPulls.map(pr => pr.head.sha))];
-            if (sourceShas.length !== 1) {
-              core.setFailed(`main ${context.sha} has no unique merged dev->main PR association`);
-              return;
-            }
-            const sourceSha = sourceShas[0];
-            const sourceCommit = await github.rest.repos.getCommit({ owner, repo, ref: sourceSha });
-            const sourceTree = sourceCommit.data.commit.tree.sha;
-            if (sourceTree !== mainTree) {
-              core.setFailed(`main tree ${mainTree} differs from reviewed dev PR tree ${sourceTree}`);
-              return;
-            }
-            const response = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id: 'docker.yml',
-              event: 'push',
-              head_sha: sourceSha,
-              per_page: 20,
-            });
-            const runs = Array.isArray(response.data?.workflow_runs)
-              ? response.data.workflow_runs
-              : [];
-            const run = runs.find(item =>
-              item?.head_sha === sourceSha &&
-              item?.head_branch === 'dev' &&
-              item?.event === 'push'
-            ) || null;
-            if (!run) {
-              core.setFailed(`reviewed dev PR head ${sourceSha} has no dev push CI run`);
-              return;
-            }
-            if (run.status !== 'completed' || run.conclusion !== 'success') {
-              core.setFailed(`dev CI #${run.run_number} for ${sourceSha} is ${run.status}/${run.conclusion || 'unknown'}`);
-              return;
-            }
-            core.notice(`main ${context.sha} promotes dev ${sourceSha} from CI #${run.run_number}; tree ${mainTree}`);
-            core.setOutput('source_sha', sourceSha);
-            core.setOutput('run_number', String(run.run_number));
-            core.setOutput('tree_sha', mainTree);
 
   verify-promotion-query:
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'

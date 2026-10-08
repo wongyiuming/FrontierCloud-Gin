@@ -17,7 +17,7 @@ class AdminSystemModulesContractTests(unittest.TestCase):
         css = self.read("static/css/admin-system-modules.css")
         self.assertIn("systemVersionPanel", release)
         self.assertIn("系统版本管理", release)
-        self.assertIn("集群实时进度", release)
+        self.assertIn("主节点版本进度", release)
         self.assertIn("release-node-list", release)
         self.assertIn("schedule(masterBusy ? 1500 : 5000)", release)
         self.assertIn('"js/release-admin.js"', page)

@@ -45,6 +45,30 @@ func engineFixture(t *testing.T, handler http.HandlerFunc) *Engine {
 	return &Engine{client: client, version: "/v1.52"}
 }
 
+func TestNativeImageBuildHasCPUAndNoAdditionalSwapBudget(t *testing.T) {
+	source, _, target := gitFixture(t)
+	called := false
+	e := engineFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/build") {
+			called = true
+			for key, want := range map[string]string{"memory": "1073741824", "memswap": "1073741824", "cpuperiod": "100000", "cpuquota": "100000", "version": "1"} {
+				if r.URL.Query().Get(key) != want {
+					t.Error("unbounded native build", key)
+				}
+			}
+			io.Copy(io.Discard, r.Body)
+			io.WriteString(w, "{\"error\":\"fixture stops after budget validation\"}\n")
+			return
+		}
+		t.Error("unexpected Docker operation", r.URL.Path)
+		w.WriteHeader(500)
+	})
+	e.Project = "bounded-native-test"
+	if _, err := e.Build(context.Background(), source, target, "web", "Dockerfile.gin"); err == nil || !called {
+		t.Fatal("build did not validate budget", err, called)
+	}
+}
+
 func TestDockerFailureContainsOnlyFixedOperationAndStatus(t *testing.T) {
 	e := engineFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "private credential and arbitrary daemon body", 500)

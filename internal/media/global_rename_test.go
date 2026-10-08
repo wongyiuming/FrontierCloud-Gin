@@ -3,13 +3,13 @@ package media
 import (
 	"context"
 	"errors"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type lostGlobalRenameCommit struct {

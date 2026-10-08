@@ -9,10 +9,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/deployment"
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/deployment"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 )
 
 const runtimeReceipt = ".native-runtime"

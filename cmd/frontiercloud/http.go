@@ -5,20 +5,20 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/admin"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/diagnostics"
-	"github.com/wongyiuming/FrontierCloud/internal/httpapi"
-	"github.com/wongyiuming/FrontierCloud/internal/karaoke"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/observation"
-	"github.com/wongyiuming/FrontierCloud/internal/recording"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
-	"github.com/wongyiuming/FrontierCloud/internal/security"
-	"github.com/wongyiuming/FrontierCloud/internal/sitecontrol"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // runtimeHTTP is the single production registration path, also exercised by
@@ -37,6 +37,9 @@ type runtimeHTTP struct {
 }
 
 func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, func() error, error) {
+	if settings.DeploymentMode == config.DeploymentStorage {
+		return newStorageHTTP(settings, services)
+	}
 	database, identity := services.Database, services.Identity
 	mediaService, controlService := services.Media, services.Control
 	recordingStorage, recordingManager := services.Recordings, services.Manager
@@ -105,21 +108,8 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	}
 	closers = append(closers, siteService.Close)
 	httpapi.RegisterSiteAdmin(handler, adminHTTP, siteService)
-	releases := &release.Coordinator{Agent: agent, Verifier: verifier, Nodes: database.Nodes(), Control: controlService, Policy: policy}
-	if settings.ReleaseManifestPath != "" {
-		releases.ManifestSource = release.FileManifestSource{Path: settings.ReleaseManifestPath}
-		releases.ManifestEvidence = map[string]release.ArtifactEvidence{}
-		for _, branch := range []string{"main", "gin_main"} {
-			profile, _ := release.PolicyForBranch(branch)
-			proof, e := release.NewVerifier(profile, settings.GitHubAPIToken)
-			if e != nil {
-				return nil, nil, e
-			}
-			releases.ManifestEvidence[branch] = proof
-		}
-	}
+	releases := &release.Coordinator{Agent: agent, Verifier: verifier, Nodes: database.Nodes(), Policy: policy, CDManaged: settings.StagingCD}
 	httpapi.RegisterReleaseAdmin(handler, adminHTTP, releases)
-	httpapi.RegisterNodeRelease(handler, settings, resolver, controlService, agent)
 	httpapi.RegisterSecurityAdmin(handler, adminHTTP, securityService)
 	accountsHTTP := httpapi.RegisterKaraokeAccounts(handler, karaoke.New(database.Karaoke(), database.Nodes(), karaoke.NewRedisCache(redisClient)), public, adminHTTP, resolver)
 	httpapi.RegisterKaraokeRecordings(handler, accountsHTTP, recordingManager, recordingStorage)

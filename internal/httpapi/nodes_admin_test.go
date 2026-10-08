@@ -1,19 +1,19 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/wongyiuming/FrontierCloud/internal/admin"
-	"github.com/wongyiuming/FrontierCloud/internal/diagnostics"
-	"github.com/wongyiuming/FrontierCloud/internal/network"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
-	"github.com/wongyiuming/FrontierCloud/internal/sitecontrol"
-	storeSQLite "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -76,10 +76,8 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		}
 		t.Cleanup(func() { siteService.Close() })
 		RegisterSiteAdmin(router, a, siteService)
-		coordinator := &release.Coordinator{Agent: agent, Verifier: &testReleaseEvidence{sha: strings.Repeat("c", 40), publishable: true}, Nodes: db.Nodes(), Control: control, Policy: release.DefaultPolicy()}
+		coordinator := &release.Coordinator{Agent: agent, Verifier: &testReleaseEvidence{sha: strings.Repeat("c", 40), publishable: true}, Nodes: db.Nodes(), Policy: release.DefaultPolicy()}
 		RegisterReleaseAdmin(router, a, coordinator)
-		resolver, _ := network.New(cfg.TrustedProxyNetworks)
-		RegisterNodeRelease(router, cfg, resolver, control, agent)
 		cookies := map[string]*http.Cookie{}
 		perform := func(method, path, body string, csrf, secure bool) *httptest.ResponseRecorder {
 			r := httptest.NewRequest(method, origin+"/api/v1/media/admin"+path, strings.NewReader(body))
@@ -224,16 +222,22 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	if value := check(m.perform("GET", "/status", "", false, true), 200); value["node_role"] != "Master" {
 		t.Fatal("stale startup role", value)
 	}
-	check(f.perform("POST", "/nodes/promote", `{"role":"Follower","endpoint":"https://admin-follower.test"}`, true, true), 200)
+	check(f.perform("POST", "/nodes/promote", `{"role":"Follower","endpoint":"https://admin-follower.test"}`, true, true), 422)
+	if err := f.control.InitializeStorage(ctx, "https://admin-follower.test"); err != nil {
+		t.Fatal(err)
+	}
 	check(m.perform("POST", "/nodes/promote", masterBody, true, true), 409)
-	pack := check(f.perform("POST", "/nodes/pair-package", "", true, true), 200)
+	pack, err := f.control.CreatePair(ctx, store.NodeAudit{Actor: "local-storage-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, _ := json.Marshal(map[string]any{"package": pack})
 	relation := check(m.perform("POST", "/nodes/pair", string(body), true, true), 200)["relationship_id"].(string)
 	if status := check(f.perform("GET", "/status", "", false, true), 200); status["master_url"] != "https://admin-master.test" {
 		t.Fatal("Follower Admin lost Master navigation", status)
 	}
-	if status := check(m.perform("GET", "/nodes/release", "", false, true), 200); status["can_upgrade"] != true || len(status["followers"].([]any)) != 1 {
-		t.Fatal("release control cannot inspect signed Follower status", status)
+	if status := check(m.perform("GET", "/nodes/release", "", false, true), 200); status["can_upgrade"] != true || status["followers"] != nil {
+		t.Fatal("release control must manage only this Master", status)
 	}
 	check(m.perform("POST", "/nodes/release/upgrade", "", false, true), 403)
 	check(m.perform("POST", "/nodes/release/upgrade", "", true, false), 403)
@@ -264,73 +268,21 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.agent.mu.Lock()
-	f.agent.unavailable = true
-	f.agent.mu.Unlock()
-	if value, probeErr := m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/status", map[string]any{}); probeErr == nil || !strings.HasPrefix(probeErr.Error(), "control status 503:") || len(value) != 0 {
-		t.Fatal("agent socket gap was reported as successful capability/profile observation", value, probeErr)
+	// Retired signed update RPCs must stay absent in both directions. A valid
+	// storage relationship grants file operations, never updater authority.
+	for _, path := range []string{"/internal/v1/cluster-update/status", "/internal/v1/cluster-update/start"} {
+		for _, direction := range []struct {
+			control  *node.Service
+			relation store.Relationship
+		}{{m.control, masterRelation}, {f.control, followerRelation}} {
+			if _, callErr := direction.control.Call(ctx, direction.relation, path, map[string]any{"target_sha": strings.Repeat("c", 40), "mode": "upgrade"}); callErr == nil || !strings.HasPrefix(callErr.Error(), "control status 404:") {
+				t.Fatal("retired updater RPC reachable", path, callErr)
+			}
+		}
 	}
-	f.agent.mu.Lock()
-	f.agent.unavailable = false
-	f.agent.mu.Unlock()
-	if _, probeErr := m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/status", map[string]any{}); probeErr != nil {
-		t.Fatal("recovered agent status unavailable", probeErr)
+	if f.agent.starts != 0 || m.agent.starts != 1 {
+		t.Fatal("storage update was queued", f.agent.starts, m.agent.starts)
 	}
-	if _, err = f.control.Call(ctx, followerRelation, "/internal/v1/cluster-update/start", map[string]any{"target_sha": strings.Repeat("c", 40), "mode": "upgrade"}); err == nil {
-		t.Fatal("Follower controlled Master's updater")
-	}
-	if _, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", map[string]any{"target_sha": "short", "mode": "upgrade"}); err == nil {
-		t.Fatal("invalid signed release accepted")
-	}
-	if _, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", map[string]any{"target_sha": strings.Repeat("c", 40), "mode": "upgrade"}); err != nil {
-		t.Fatal("signed release start", err)
-	}
-	f.agent.busy = true
-	if _, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", map[string]any{"target_sha": strings.Repeat("c", 40), "mode": "upgrade"}); err != nil {
-		t.Fatal("lost start reply is not idempotent", err)
-	}
-	if f.agent.starts != 1 {
-		t.Fatal("Follower release replay duplicated", f.agent.starts)
-	}
-	// Exercise the real authenticated RPC boundary with different Python/Go
-	// artifacts. The Master must forward the complete manifest without a SHA.
-	manifest := &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: "2.0.0", Protocol: 2, SchemaGeneration: 2, Artifacts: map[string]release.Artifact{
-		"main":     {Kind: "git-archive", CommitSHA: strings.Repeat("c", 40), SourceSHA: strings.Repeat("e", 40), TreeSHA: strings.Repeat("f", 40)},
-		"gin_main": {Kind: "git-archive", CommitSHA: strings.Repeat("d", 40), SourceSHA: strings.Repeat("a", 40), TreeSHA: strings.Repeat("b", 40)},
-	}}
-	encodedManifest, _ := manifest.Wire()
-	var whole map[string]any
-	manifestDecoder := json.NewDecoder(bytes.NewReader(encodedManifest))
-	manifestDecoder.UseNumber()
-	if err = manifestDecoder.Decode(&whole); err != nil {
-		t.Fatal(err)
-	}
-	f.agent.busy = false
-	f.agent.capabilities = []string{release.ManifestCapability}
-	manifestID, _ := manifest.ID()
-	manifestRequest := map[string]any{"release_manifest": whole, "mode": "upgrade"}
-	if _, err = f.control.Call(ctx, followerRelation, "/internal/v1/cluster-update/start", manifestRequest); err == nil {
-		t.Fatal("Follower controlled Master's manifest release")
-	}
-	ack, err := m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", manifestRequest)
-	if err != nil || ack["release_id"] != manifestID || f.agent.lastManifest == nil {
-		t.Fatal("whole manifest forwarding", ack, err)
-	}
-	f.agent.busy = true
-	ack, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", manifestRequest)
-	if err != nil || ack["release_id"] != manifestID || f.agent.starts != 2 {
-		t.Fatal("manifest replay not idempotent", ack, err, f.agent.starts)
-	}
-	manifestRequest["target_sha"] = strings.Repeat("c", 40)
-	if _, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", manifestRequest); err == nil {
-		t.Fatal("Master selected artifact alongside manifest")
-	}
-	delete(manifestRequest, "target_sha")
-	whole["protocol"] = 3
-	if _, err = m.control.Call(ctx, masterRelation, "/internal/v1/cluster-update/start", manifestRequest); err == nil {
-		t.Fatal("unsupported manifest protocol accepted")
-	}
-	whole["protocol"] = 2
 	check(m.perform("POST", "/nodes/"+relation+"/mode", `{"mode":"Direct"}`, true, true), 200)
 	check(m.perform("POST", "/nodes/"+relation+"/resources", `{"storage_enabled":true,"storage_capacity_gib":2,"backup_enabled":true}`, true, true), 200)
 	row, err := m.control.IdentityState(ctx)
@@ -390,7 +342,10 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	}
 	check(m.perform("POST", "/nodes/reinitialize", `{"confirmation":"wrong"}`, true, true), 409)
 	check(m.perform("POST", "/nodes/"+relation+"/revoke", "", true, true), 200)
-	pack = check(f.perform("POST", "/nodes/pair-package", "", true, true), 200)
+	pack, err = f.control.CreatePair(ctx, store.NodeAudit{Actor: "local-storage-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, _ = json.Marshal(map[string]any{"package": pack})
 	check(m.perform("POST", "/nodes/pair", string(body), true, true), 200)
 	reset := check(m.perform("POST", "/nodes/reinitialize", `{"confirmation":"`+m.id+`"}`, true, true), 200)

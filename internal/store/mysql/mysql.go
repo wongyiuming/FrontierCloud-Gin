@@ -12,9 +12,9 @@ import (
 	"time"
 
 	driver "github.com/go-sql-driver/mysql"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	"github.com/wongyiuming/FrontierCloud/internal/store/business"
-	"github.com/wongyiuming/FrontierCloud/internal/store/schema"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema"
 )
 
 // Config contains MySQL connection details without exposing them to protocol code.

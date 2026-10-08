@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"golang.org/x/crypto/scrypt"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"

@@ -22,13 +22,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/migrationproof"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 type sqliteTransferTable struct {

@@ -20,9 +20,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 const MaxRecordBytes = 16 * 1024 * 1024

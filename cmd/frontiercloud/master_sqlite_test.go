@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func TestOfflineMySQLLockReadsLiveStatisticsBeforeFence(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/brand"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/brand"
 )
 
 func (p *Public) brandLogo(c *gin.Context) {

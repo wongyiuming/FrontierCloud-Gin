@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 var offlineLeaseName = regexp.MustCompile(`^\.(session|global-rename)-[a-f0-9]{32}\.lease$`)

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 type testReleaseAgent struct {

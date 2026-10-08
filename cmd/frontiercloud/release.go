@@ -8,14 +8,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/bootstrap"
-	"github.com/wongyiuming/FrontierCloud/internal/config"
-	"github.com/wongyiuming/FrontierCloud/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud/internal/node"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	sqlitestore "github.com/wongyiuming/FrontierCloud/internal/store/sqlite"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 // Deliberately admits only the already supported generation. Updater rollback
@@ -67,35 +66,6 @@ func prepareReleaseCommand(arguments []string) error {
 		return bootstrap.InitializeMediaContext(ctx, settings.DataRoot)
 	})
 }
-func clusterReleaseCommand(arguments []string) error {
-	if len(arguments) != 2 || !release.ValidSHA(arguments[0]) || (arguments[1] != "upgrade" && arguments[1] != "rollback") {
-		return errors.New("cluster-release requires full target SHA and upgrade or rollback")
-	}
-	settings, err := config.Load()
-	if err != nil {
-		return err
-	}
-	return guardedCommand(settings, func(ctx context.Context) error {
-		db, err := openExistingStore(ctx, settings)
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		if _, err = db.Maintenance().InspectMaintenance(ctx); err != nil {
-			return err
-		}
-		identity, err := node.OpenExisting(ctx, db.Nodes(), settings.SecretsDirectory)
-		if err != nil {
-			return err
-		}
-		transport := node.NewTransport()
-		defer transport.Close()
-		control := node.NewService(db.Nodes(), identity, transport)
-		coordinator := release.Coordinator{Nodes: db.Nodes(), Control: control, Policy: release.Policy{Branch: settings.ReleaseBranch, Source: settings.ReleaseSourceBranch}}
-		return coordinator.Converge(ctx, arguments[0], arguments[1])
-	})
-}
-
 func updaterStatusCommand(output io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

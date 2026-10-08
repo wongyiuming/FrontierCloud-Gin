@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) PrepareGlobalDelete(ctx context.Context, scopes []store.DeleteItem, a store.AdminAudit) (result []store.GlobalMedia, err error) {

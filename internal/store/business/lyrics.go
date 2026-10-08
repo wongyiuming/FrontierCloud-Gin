@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) upsertLyric(ctx context.Context, q queryer, trackID, trackPath, lyricID, lyricPath string) error {

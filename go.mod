@@ -1,4 +1,4 @@
-module github.com/wongyiuming/FrontierCloud
+module github.com/wongyiuming/FrontierCloud-Gin
 
 go 1.26.8
 

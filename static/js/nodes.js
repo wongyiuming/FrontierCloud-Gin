@@ -154,7 +154,7 @@
         const backupHealthy = followers.filter(item => item.backup?.health === 'healthy').length;
         const poolFacts = storageFacts(pool);
         overview.append(
-            overviewCard('Follower', `${online} / ${followers.length}`, online === followers.length ? '全部在线' : '存在离线或降级节点', 'good'),
+            overviewCard('存储节点', `${online} / ${followers.length}`, online === followers.length ? '全部在线' : '存在离线或降级节点', 'good'),
             overviewCard('Storage', `${gib(poolFacts.physicalUsed)} / ${gib(poolFacts.total)}`, `物理 used / all · 已使用 / 已分配 ${gib(poolFacts.used)} / ${gib(poolFacts.allocated)}`, 'storage'),
             overviewCard('Backup', `${backupHealthy} / ${backupEnabled}`, backupEnabled ? '健康 / 已启用备份节点' : '尚未启用备份节点', 'backup'),
         );
@@ -211,7 +211,7 @@
             ['下次计划', backup.next_due ? `${localTime(backup.next_due)} · ${relativeTime(backup.next_due)}` : '-'],
             ['最近校验', backup.checksum ? `SHA256 ${shortId(backup.checksum)}…` : '-'],
         ]), syncLine(observed?.sync?.backup || (member.member_kind === 'MasterLocal' ? 'effective' : 'awaiting')),
-        make('div', 'node-note', 'Master 每 24 小时向启用 Backup 的 Follower 写入业务恢复点；失败约 5 分钟后重试。'));
+        make('div', 'node-note', 'Master 每 24 小时向启用 Backup 的存储节点 写入业务恢复点；失败约 5 分钟后重试。'));
         return section;
     }
 
@@ -245,10 +245,10 @@
             const data = await api('/api/v1/media/admin/nodes/observability');
             const member = (data.members || []).find(item => item.member_id === memberId);
             if (!member) continue;
-            if (member.sync?.storage === 'effective' && member.sync?.backup === 'effective') return `配置已在 Follower 生效 · ${new Date().toLocaleTimeString()}`;
-            if (member.connection?.status === 'offline') return 'Master 已保存配置，但 Follower 当前离线，尚未生效';
+            if (member.sync?.storage === 'effective' && member.sync?.backup === 'effective') return `配置已在 存储节点生效 · ${new Date().toLocaleTimeString()}`;
+            if (member.connection?.status === 'offline') return 'Master 已保存配置，但 存储节点当前离线，尚未生效';
         }
-        return 'Master 已保存配置；Follower 尚未在心跳中确认，请检查连接状态';
+        return 'Master 已保存配置；存储节点尚未在心跳中确认，请检查连接状态';
     }
 
     function controls(member, relation) {
@@ -268,7 +268,7 @@
         const actions = make('div', 'node-card-actions');
         const mode = document.createElement('select');
         mode.setAttribute('aria-label', `${member.member_id} 数据传输模式`);
-        mode.title = 'Relay 由 Master 中转业务数据；Direct 允许数据面直接访问 Follower。';
+        mode.title = 'Relay 由 Master 中转业务数据；Direct 允许数据面直接访问 存储节点。';
         for (const value of ['Relay', 'Direct']) { const option = document.createElement('option'); option.value = value; option.textContent = value; mode.append(option); }
         mode.value = relation.mode;
         mode.onchange = () => action(() => post(`/${relation.relationship_id}/mode`, {mode: mode.value}));
@@ -279,9 +279,9 @@
                 backup_enabled: config.backupEnabled.checked,
             });
             return await waitForEffective(member.member_id);
-        }, 'apply', '只有 Follower 回报的 Observed 配置与 Desired 一致才显示已生效。'),
+        }, 'apply', '只有 存储节点回报的 Observed 配置与 Desired 一致才显示已生效。'),
         button('撤销关系', () => post(`/${relation.relationship_id}/revoke`), 'danger',
-            'Follower 仍持有有效 Storage Pool 文件时后端会拒绝撤销。'));
+            '存储节点仍持有有效 Storage Pool 文件时后端会拒绝撤销。'));
         shell.append(config.grid, actions);
         return shell;
     }
@@ -302,37 +302,13 @@
         return row;
     }
 
-    function followerRelationCard(relation, observed) {
-        const row = document.createElement('tr'); row.className = 'node-card-row';
-        const cell = document.createElement('td'); cell.colSpan = 4;
-        const card = make('article', 'node-card');
-        const header = make('header', 'node-card-header');
-        const title = make('div', 'node-card-title');
-        title.append(make('strong', '', relation.peer_id), make('small', '', relation.peer_endpoint || ''));
-        const badges = make('div', 'node-card-badges');
-        badges.append(pill(String(relation.status || 'UNKNOWN').toUpperCase(), relation.status === 'online' ? 'good' : 'bad'), pill(relation.mode || '-', 'muted'));
-        header.append(title, badges);
-        const managed = make('section', 'node-resource-panel storage');
-        managed.append(make('div', 'node-resource-heading', ''), make('div', 'node-metric-primary', 'Master Managed'), make('div', 'node-note', 'Storage / Backup 的 Desired 配置由 Master 下发，本节点只回报 Observed 状态。'));
-        const grid = make('div', 'node-card-grid'); grid.append(connectionPanel(relation, observed), managed);
-        const controlsBox = make('div', 'node-card-controls');
-        controlsBox.append(make('div', 'node-note', 'Follower 不能自行修改资源策略。'));
-        const actions = make('div', 'node-card-actions');
-        actions.append(button('撤销关系', () => post(`/${relation.relationship_id}/revoke`), 'danger'));
-        controlsBox.append(actions);
-        card.append(header, grid, controlsBox); cell.append(card); row.append(cell);
-        return row;
-    }
-
     function renderRows(node, observed) {
         const body = $('nodeRelationships'); body.replaceChildren();
         const relations = new Map((node.relationships || []).map(item => [item.peer_id, item]));
         const observedMembers = new Map((observed.members || []).map(item => [item.member_id, item]));
         if (node.storage_pool) {
             for (const member of node.storage_pool.members || []) body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id)));
-        } else {
-            const observedRelations = new Map((observed.relationships || []).map(item => [item.relationship_id, item]));
-            for (const relation of node.relationships || []) body.append(followerRelationCard(relation, observedRelations.get(relation.relationship_id)));
+
         }
     }
 
@@ -341,8 +317,8 @@
             const {node, observability} = await loadData();
             $('nodeIdentity').textContent = `${node.role} · ${node.node_id} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
             visible('nodePromotion', node.role === 'Standalone'); visible('nodePairing', node.role !== 'Standalone');
-            visible('nodeIssuePair', node.role === 'Follower'); visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
-            $('nodePairPackage').readOnly = node.role === 'Follower';
+            visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
+            $('nodePairPackage').readOnly = false;
             const role = $('nodeRole'), capacity = $('masterLocalCapacity'); capacity.disabled = role.value !== 'Master'; role.onchange = () => { capacity.disabled = role.value !== 'Master'; };
             renderOverview(node, observability);
             const pool = node.storage_pool;
@@ -361,7 +337,6 @@
     $('nodesRefresh').onclick = () => action(async () => {}, '已刷新');
     panel.querySelector('.module-heading').addEventListener('click', () => { if (panel.classList.contains('expanded')) { refresh().catch(error => setStatus(error.message)); startAutoRefresh(); } else stopAutoRefresh(); });
     $('nodePromotion').onsubmit = event => { event.preventDefault(); const role = $('nodeRole').value; action(() => post('/promote', {role, endpoint: $('nodeEndpoint').value, local_capacity_gib: role === 'Master' ? Number($('masterLocalCapacity').value) : null})); };
-    $('nodeIssuePair').onclick = () => action(async () => { $('nodePairPackage').value = JSON.stringify(await post('/pair-package'), null, 2); });
     $('nodeImportPair').onclick = () => action(() => post('/pair', {package: JSON.parse($('nodePairPackage').value)}));
     $('nodeReinitialize').onsubmit = event => { event.preventDefault(); action(() => post('/reinitialize', {confirmation: $('nodeResetConfirmation').value})); };
 })();

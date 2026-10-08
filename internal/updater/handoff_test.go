@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 )
 
 func preparedHandoff(t *testing.T) (*DockerExecutor, *engineContract, *privateStore, Status, string) {

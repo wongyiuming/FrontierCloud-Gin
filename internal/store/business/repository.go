@@ -11,18 +11,21 @@ import (
 	"errors"
 	"fmt"
 	driver "github.com/go-sql-driver/mysql"
+	"os"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Repository struct {
-	db         *sql.DB
-	backend    string
-	generation atomic.Uint64
+	db                  *sql.DB
+	backend             string
+	generation          atomic.Uint64
+	backupFiles         *os.Root
+	backupFilesReadOnly bool
 }
 
 func New(db *sql.DB, backend string) *Repository { return &Repository{db: db, backend: backend} }

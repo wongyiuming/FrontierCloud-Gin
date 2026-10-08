@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 // The v2 compatibility artifact excludes identity/private keys, relationship

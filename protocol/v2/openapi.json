@@ -157,8 +157,8 @@
             "type": "string"
           },
           "value": {
-            "maximum": 500.0,
-            "minimum": -7.0,
+            "maximum": 500,
+            "minimum": -7,
             "title": "Value",
             "type": "integer"
           }
@@ -300,8 +300,8 @@
             "title": "Resource Id"
           },
           "value": {
-            "maximum": 500.0,
-            "minimum": -7.0,
+            "maximum": 500,
+            "minimum": -7,
             "title": "Value",
             "type": "integer"
           }
@@ -392,8 +392,8 @@
       "PlaybackReport": {
         "properties": {
           "duration": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 86400.0,
+            "exclusiveMinimum": 0,
+            "maximum": 86400,
             "title": "Duration",
             "type": "number"
           },
@@ -410,8 +410,8 @@
             "type": "string"
           },
           "played_seconds": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 86400.0,
+            "exclusiveMinimum": 0,
+            "maximum": 86400,
             "title": "Played Seconds",
             "type": "number"
           },
@@ -447,8 +447,8 @@
           "local_capacity_gib": {
             "anyOf": [
               {
-                "maximum": 10240.0,
-                "minimum": 1.0,
+                "maximum": 10240,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -460,7 +460,10 @@
           "role": {
             "pattern": "^(Master|Follower)$",
             "title": "Role",
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "Master"
+            ]
           }
         },
         "required": [
@@ -492,8 +495,8 @@
             "type": "boolean"
           },
           "storage_capacity_gib": {
-            "maximum": 10240.0,
-            "minimum": 0.0,
+            "maximum": 10240,
+            "minimum": 0,
             "title": "Storage Capacity Gib",
             "type": "integer"
           },
@@ -539,8 +542,8 @@
             "type": "string"
           },
           "size_bytes": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 10737418240.0,
+            "exclusiveMinimum": 0,
+            "maximum": 10737418240,
             "title": "Size Bytes",
             "type": "integer"
           },
@@ -581,8 +584,8 @@
             "title": "Media"
           },
           "size_bytes": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 1073741824.0,
+            "exclusiveMinimum": 0,
+            "maximum": 1073741824,
             "title": "Size Bytes",
             "type": "integer"
           },
@@ -616,8 +619,8 @@
           "quota_mib": {
             "anyOf": [
               {
-                "maximum": 10485760.0,
-                "minimum": 1.0,
+                "maximum": 10485760,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -2157,25 +2160,6 @@
           }
         },
         "summary": "Import Package",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/pair-package": {
-      "post": {
-        "operationId": "pairing_package_api_v1_media_admin_nodes_pair_package_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Pairing Package",
         "tags": [
           "MediaAdmin"
         ]
@@ -4059,6 +4043,20 @@
         "tags": [
           "MediaCenter"
         ]
+      }
+    },
+    "/api/v1/media/admin/nodes/release/history": {
+      "get": {
+        "operationId": "master_release_history",
+        "summary": "Master-only reviewed release discovery",
+        "tags": [
+          "MediaAdmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to ten reviewed PR descriptions; listing is not rollback authorization"
+          }
+        }
       }
     }
   }

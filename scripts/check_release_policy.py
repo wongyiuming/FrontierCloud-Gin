@@ -26,7 +26,7 @@ agent = read("updater/Dockerfile")
 require('Policy{"main", "dev"}' in release and 'Policy{"gin_main", "gin_dev"}' in release,
         "Release policy must retain both authorized provenance pairs")
 for token in ('p.MergeSHA == sha', 'p.Base.Ref == v.policy.Branch',
-              'p.Head.Ref == v.policy.Source', 'p.Head.Repo.FullName == "wongyiuming/FrontierCloud"',
+              'p.Head.Ref == v.policy.Source', 'p.Head.Repo.FullName == "wongyiuming/FrontierCloud-Gin"',
               'reviewed.Commit.Tree.SHA != tree', 'head_sha="+source',
               'r.Branch != v.policy.Source', 'r.Event != "push"', 'r.SHA != source'):
     require(token in release, f"Exact reviewed source provenance missing: {token}")
@@ -35,12 +35,12 @@ require('refs/remotes/origin/' in updater and '"+refs/heads/"' in updater,
 require('target != head' in updater and '"merge-base", "--is-ancestor"' in updater,
         "Upgrade HEAD and rollback ancestry must fail closed")
 require('clearForceOpen' in executor, "Release maintenance must remove stale open override")
-require('cluster_convergence_needed' in read("internal/release/coordinator.go"),
-        "Partial convergence must remain observable/retryable")
-for token in ('promote-main:', 'promote-gin-main:', 'sourceTree !== mainTree',
-              'head_sha: sourceSha', 'head_sha: context.sha', "pr?.base?.ref === 'main'",
-              "pr?.head?.ref === 'dev'", "pr?.base?.ref === 'gin_main'",
-              "pr?.head?.ref === 'gin_dev'", 'listPullRequestsAssociatedWithCommit'):
+require('cluster_convergence_needed' not in read("internal/release/coordinator.go")
+        and 'hold_maintenance":false' in read("internal/release/coordinator.go").replace(" ", ""),
+        "Master upgrades must never distribute to storage")
+for token in ('promote-main:', 'reviewed.data.commit.tree.sha !== commit.data.commit.tree.sha',
+              'head_sha: source', 'head_sha: context.sha', "pr?.base?.ref === 'main'",
+              "pr?.head?.ref === 'dev'", 'listPullRequestsAssociatedWithCommit'):
     require(token in workflow, f"Reviewed CI promotion guard missing: {token}")
 require('github.paginate' not in workflow, "Promotion lookup must remain bounded")
 
@@ -66,9 +66,9 @@ require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
         and 'dockerfile: updater/Dockerfile.gin' in compose, "Initializers/updater must be native")
-require('RELEASE_BRANCH: ${RELEASE_BRANCH:-gin_main}' in compose
-        and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-gin_dev}' in compose,
-        "Default release profile must remain fixed pending separate consolidation")
+require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
+        and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}' in compose,
+        "Default release profile must be native main/dev in FrontierCloud-Gin")
 for token in ("app/", "main.py", "tests/", "scripts/"):
     require(token in read(".dockerignore").splitlines(), f"Build context exclusion missing: {token}")
 

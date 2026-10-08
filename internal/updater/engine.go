@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 var ErrNotFound = errors.New("Docker object not found")
@@ -425,7 +425,8 @@ func (e *Engine) Build(ctx context.Context, source Source, target, component, do
 	tag := releaseImageTag(e.Project, target, component)
 	labels, _ := json.Marshal(map[string]string{"frontiercloud.revision": target, "frontiercloud.component": component, "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.project": e.Project})
 	args, _ := json.Marshal(map[string]string{"REVISION": target, "FRONTIERCLOUD_RUNTIME": "go"})
-	query := url.Values{"dockerfile": {dockerfile}, "t": {tag}, "rm": {"true"}, "forcerm": {"true"}, "labels": {string(labels)}, "buildargs": {string(args)}, "version": {"1"}}
+	query := url.Values{"dockerfile": {dockerfile}, "t": {tag}, "rm": {"true"}, "forcerm": {"true"}, "labels": {string(labels)}, "buildargs": {string(args)}, "version": {"1"},
+		"memory": {"1073741824"}, "memswap": {"1073741824"}, "cpuperiod": {"100000"}, "cpuquota": {"100000"}}
 	r, err := e.request(ctx, "POST", "/build?"+query.Encode(), archive, "application/x-tar")
 	if err != nil {
 		return "", err

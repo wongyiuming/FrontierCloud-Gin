@@ -130,20 +130,6 @@
     "handler": "app.api.internal_storage_integrity.storage_stat"
   },
   {
-    "path": "/internal/v1/cluster-update/start",
-    "methods": [
-      "POST"
-    ],
-    "handler": "app.api.internal_cluster_update.start"
-  },
-  {
-    "path": "/internal/v1/cluster-update/status",
-    "methods": [
-      "POST"
-    ],
-    "handler": "app.api.internal_cluster_update.status"
-  },
-  {
     "path": "/internal/v1/backup/abort",
     "methods": [
       "POST"
@@ -752,13 +738,6 @@
       "POST"
     ],
     "handler": "app.api.v1.admin_nodes.reinitialize"
-  },
-  {
-    "path": "/api/v1/media/admin/nodes/pair-package",
-    "methods": [
-      "POST"
-    ],
-    "handler": "app.api.v1.admin_nodes.pairing_package"
   },
   {
     "path": "/api/v1/media/admin/nodes/pair",

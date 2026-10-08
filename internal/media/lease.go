@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/filelease"
-	"github.com/wongyiuming/FrontierCloud/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 )
 
 // Native RWMutex establishes Go's memory-order boundary; the OS lease protects

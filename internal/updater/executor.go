@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
-	"github.com/wongyiuming/FrontierCloud/internal/release"
-	"github.com/wongyiuming/FrontierCloud/internal/sitecontrol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 )
 
 type DockerExecutor struct {
@@ -225,22 +224,6 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		// A joint release can change only another profile. Publish local whole
 		// release history durably even when no native containers are replaced.
 		if err = progress(Checkpoint{Current: request.Target, Previous: previous, SetPrevious: true, Phase: "local-committed"}); err != nil {
-			return Outcome{}, err
-		}
-	}
-	if request.Hold {
-		if err = progress(Checkpoint{State: "distributing", Phase: "distributing"}); err != nil {
-			return Outcome{}, err
-		}
-		command := []string{"/app/frontiercloud", "cluster-release", request.Target, request.Mode}
-		if request.Manifest != nil {
-			wire, e := request.Manifest.Wire()
-			if e != nil {
-				return Outcome{}, e
-			}
-			command = []string{"/app/frontiercloud", "cluster-release-manifest", protocol.Encode(wire), request.Mode}
-		}
-		if err = engine.Exec(ctx, web.ID, command); err != nil {
 			return Outcome{}, err
 		}
 	}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
-	"github.com/wongyiuming/FrontierCloud/migrations"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceSnapshot, error) {

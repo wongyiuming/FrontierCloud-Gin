@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type GlobalDeleteResult struct {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 )
 
 func (a *Admin) download(c *gin.Context) {

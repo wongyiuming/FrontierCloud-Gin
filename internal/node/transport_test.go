@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wongyiuming/FrontierCloud/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 )
 
 func TestEndpointRejectsNonRootAndUnsafeAddresses(t *testing.T) {
