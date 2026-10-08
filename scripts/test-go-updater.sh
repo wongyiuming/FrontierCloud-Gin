@@ -16,7 +16,7 @@ for database in sqlite mysql; do
     frontiercloud-go:business-test \
     go test -p=1 -race -timeout 60m -count=1 -v ./internal/updater -run '^TestRealNativeUpdaterUpgradeHandoffRollback$'
 done
-work=$(mktemp -d /tmp/fc-staging-updater-XXXXXXXX)
+work=$(mktemp -d /tmp/fc-native-updater-staging-XXXXXXXX)
 printf 'Private staging updater fixture: %s\n' "$work"
 docker run --rm --cpus=2 --memory=2g -e GOMAXPROCS=2 --label "frontiercloud.updater-acceptance=$work" -v "$PWD:/src:ro" \
   -v /var/run/docker.sock:/var/run/docker.sock -v "$work:$work" \
