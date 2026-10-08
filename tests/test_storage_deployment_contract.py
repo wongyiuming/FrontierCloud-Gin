@@ -7,6 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StorageDeploymentContract(unittest.TestCase):
+    def test_native_http_fixture_uses_the_new_repository_release_pair(self):
+        text = (ROOT / "tests/test_gin_http.py").read_text(encoding="utf-8")
+        self.assertIn('RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev"', text)
+        self.assertNotIn('RELEASE_BRANCH="gin_main"', text)
+
     def test_appliance_has_only_one_resident_service_and_exiting_initializers(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         services = text.split("\nservices:\n", 1)[1].split("\nvolumes:\n", 1)[0]

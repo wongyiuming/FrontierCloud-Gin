@@ -50,11 +50,16 @@ class GinHTTPTests(unittest.TestCase):
                        MYSQL_USER="media_admin", MYSQL_DATABASE="fc_gin_http",
                        MYSQL_PASSWORD_FILE=str(OPTIONS.mysql_password_file or cls.work / "unused"),
                        TLS_ENABLED="false", SERVER_NAME="localhost",
-                       RELEASE_BRANCH="gin_main", RELEASE_SOURCE_BRANCH="gin_dev")
+                       RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev")
         cls.binary = str(Path(OPTIONS.binary).resolve(strict=True))
         for command in ("init-secrets", "init-media", "migrate"):
-            subprocess.run([cls.binary, command], env=cls.env, cwd=cls.work,
-                           stdout=cls.log, stderr=cls.log, timeout=90, check=True)
+            try:
+                subprocess.run([cls.binary, command], env=cls.env, cwd=cls.work,
+                               stdout=cls.log, stderr=cls.log, timeout=90, check=True)
+            except subprocess.CalledProcessError as error:
+                cls.log.flush()
+                cls.log.seek(0)
+                raise AssertionError(f"Gin fixture {command} failed: " + cls.log.read()[-4000:]) from error
         folder = cls.work / "data/media/music/fixture"
         folder.mkdir()
         cls.payload = b"ID3" + bytes(125)
