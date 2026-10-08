@@ -7,7 +7,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -28,9 +27,10 @@ var challengeID = regexp.MustCompile(`^[a-f0-9]{32}$`)
 var sessionToken = regexp.MustCompile(`^[a-zA-Z0-9_-]{43}$`)
 
 type Error struct {
-	Status  int
-	Detail  string
-	Captcha bool
+	Status     int
+	Detail     string
+	Captcha    bool
+	RetryAfter int
 }
 
 func (e *Error) Error() string { return e.Detail }
@@ -137,9 +137,26 @@ func registrationDay() string {
 	return time.Now().In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("20060102")
 }
 
-func (s *Service) Captcha(ctx context.Context) (string, error) {
+func (s *Service) admit(ctx context.Context, action, ip, account string) error {
+	if s.cache == nil {
+		return unavailable()
+	}
+	allowed, err := s.cache.ReserveRequest(ctx, action, ip, account)
+	if err != nil {
+		return unavailable()
+	}
+	if !allowed {
+		return &Error{Status: 429, Detail: "请求过于频繁，请稍后重试", RetryAfter: 60}
+	}
+	return nil
+}
+
+func (s *Service) Captcha(ctx context.Context, ip string) (string, error) {
 	if s.cache == nil {
 		return "", unavailable()
+	}
+	if err := s.admit(ctx, "captcha", ip, ""); err != nil {
+		return "", err
 	}
 	value := make([]byte, 16)
 	if _, err := rand.Read(value); err != nil {
@@ -176,11 +193,7 @@ func (s *Service) CaptchaSVG(ctx context.Context, id string) (string, error) {
 	if len(answer) != 5 || strings.ContainsAny(answer, "<>&\"'") {
 		return "", &Error{Status: 404, Detail: "验证码已过期"}
 	}
-	letters := ""
-	for i, r := range answer {
-		letters += fmt.Sprintf(`<text x="%d" y="40" transform="rotate(%d %d 40)">%c</text>`, 18+i*27, -8+i*4, 18+i*27, r)
-	}
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="56" viewBox="0 0 160 56"><rect width="160" height="56" rx="10" fill="#101827"/><path d="M4 43L156 13M8 16L151 47" stroke="#44617d" stroke-width="2"/><g fill="#8be3ff" font-family="monospace" font-size="28" font-weight="700">` + letters + `</g></svg>`, nil
+	return captchaSVG(answer), nil
 }
 func (s *Service) consumeCaptcha(ctx context.Context, id, answer string) (bool, error) {
 	if !challengeID.MatchString(id) || answer == "" {
@@ -197,6 +210,10 @@ func (s *Service) consumeCaptcha(ctx context.Context, id, answer string) (bool, 
 }
 func (s *Service) Register(ctx context.Context, username, password, challenge, captcha string, info RequestInfo) (store.KaraokeUser, Session, error) {
 	if err := s.RequireMaster(ctx); err != nil {
+		return store.KaraokeUser{}, Session{}, err
+	}
+	account := cases.Fold().String(norm.NFKC.String(pythonStrip(username)))
+	if err := s.admit(ctx, "register", info.IP, account); err != nil {
 		return store.KaraokeUser{}, Session{}, err
 	}
 	addresses, err := normalizeAddresses(info.Addresses)
@@ -273,6 +290,9 @@ func (s *Service) Login(ctx context.Context, username, password, challenge, capt
 		}
 	}
 	failureKey := "karaoke:login-fail:" + hash(info.IP+":"+key)
+	if err := s.admit(ctx, "login", info.IP, key); err != nil {
+		return store.KaraokeUser{}, Session{}, err
+	}
 	count, err := s.cache.Counter(ctx, failureKey)
 	if err != nil {
 		return store.KaraokeUser{}, Session{}, unavailable()
@@ -395,6 +415,9 @@ func (s *Service) Logout(ctx context.Context, user store.KaraokeUser, token stri
 	return s.repo.AccountAudit(ctx, a)
 }
 func (s *Service) Password(ctx context.Context, user store.KaraokeUser, current, next string, info RequestInfo) error {
+	if err := s.admit(ctx, "password", info.IP, user.ID); err != nil {
+		return err
+	}
 	valid, err := VerifyPassword(ctx, current, user.PasswordHash)
 	if err != nil {
 		return err

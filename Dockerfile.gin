@@ -1,5 +1,5 @@
 # Build a statically linked Go runtime without Python or CGO.
-FROM golang:1.26.0-bookworm AS build
+FROM golang:1.26.8-bookworm AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./

@@ -17,10 +17,11 @@ docker create --name "$prefix-copy" "$image" >/dev/null
 docker cp "$prefix-copy:/app/frontiercloud" "$work/frontiercloud"
 docker rm "$prefix-copy" >/dev/null
 chmod 0700 "$work/frontiercloud"
-docker run -d --name "$redis" -p 127.0.0.1::6379 redis:7.4.11-alpine >/dev/null
+docker run -d --memory=256m --cpus=1 --name "$redis" -p 127.0.0.1::6379 redis:7.4.11-alpine \
+  redis-server --maxmemory 128mb --maxmemory-policy noeviction >/dev/null
 redis_port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "6379/tcp") 0).HostPort}}' "$redis")
 DATA_ROOT="$work/data" SECRETS_DIR="$work/secrets" "$work/frontiercloud" init-secrets
-docker run -d --name "$mysql" -p 127.0.0.1::3306 \
+docker run -d --memory=512m --cpus=1 --name "$mysql" -p 127.0.0.1::3306 \
   -e MYSQL_DATABASE=fc_gin_http -e MYSQL_USER=media_admin \
   -e MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
   -e MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \

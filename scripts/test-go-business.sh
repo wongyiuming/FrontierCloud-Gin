@@ -26,7 +26,7 @@ docker run -d --memory=512m --cpus=1 --name "$mysql" --network "$network" --netw
     -e MYSQL_DATABASE=fc_business -e MYSQL_USER=media_admin \
     -e MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
     -e MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
-    -v "$secrets:/run/frontiercloud-secrets:ro" mysql:8.4.11 >/dev/null
+    -v "$secrets:/run/frontiercloud-secrets:ro" mysql:8.4.11 --skip-log-bin >/dev/null
 docker run -d --memory=128m --cpus=1 --name "$redis" --network "$network" --network-alias redis redis:7.4.11-alpine >/dev/null
 ready=false
 for _ in $(seq 1 90); do
@@ -48,6 +48,8 @@ docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRO
     "$build_image" go test -count=1 -v ./internal/httpapi
 docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/3 \
     "$build_image" go test -count=1 -v ./internal/observation
+docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/5 \
+    "$build_image" go test -p=1 -count=1 -v ./internal/karaoke
 docker run --rm --cpus=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/4 \
     -e GOMAXPROCS=2 --memory=2g "$build_image" go test -p=2 -race -count=1 -v ./cmd/frontiercloud
 docker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 "$build_image" go test -p=2 -race ./...

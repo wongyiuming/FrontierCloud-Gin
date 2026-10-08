@@ -126,7 +126,8 @@ services:
   redis:
     image: redis:7.4.11-alpine
     restart: always
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    mem_limit: 256m
     volumes: [redis_data:/data]
     healthcheck:
       test: [CMD, redis-cli, ping]

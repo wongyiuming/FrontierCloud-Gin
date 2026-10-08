@@ -37,6 +37,7 @@ type composeService struct {
 	Image       string            `json:"image"`
 	Command     []string          `json:"command"`
 	User        string            `json:"user"`
+	MemoryLimit json.Number       `json:"mem_limit"`
 	CapAdd      []string          `json:"cap_add"`
 	CapDrop     []string          `json:"cap_drop"`
 	Environment map[string]string `json:"environment"`
@@ -86,6 +87,11 @@ func TestActualComposeSQLiteAndMySQLSelection(t *testing.T) {
 			}
 			if spec.Name == "" {
 				t.Fatal("project identity missing")
+			}
+			cache := spec.Services["redis"]
+			memory, memoryErr := cache.MemoryLimit.Int64()
+			if memoryErr != nil || memory != 256*1024*1024 || !reflect.DeepEqual(cache.Command, []string{"redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"}) {
+				t.Fatal("Redis memory/security-counter eviction boundary changed", cache)
 			}
 			for _, name := range []string{"web", "secrets-init", "media-init", "updater"} {
 				s, ok := spec.Services[name]

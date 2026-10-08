@@ -54,7 +54,7 @@ for path in ("Dockerfile.python", "docker-compose.python.yaml",
 for path in ("main.py", "updater/server.py"):
     require('raise SystemExit("Python deployment is prohibited.' in read(path),
             f"Reference executable must reject deployment: {path}")
-require('FROM golang:1.26.0-bookworm' in web and 'FROM golang:1.26.0-bookworm' in agent,
+require('FROM golang:1.26.8-bookworm' in web and 'FROM golang:1.26.8-bookworm' in agent,
         "Native builder base must remain patch-pinned")
 for token, path in (('FROM nginx:1.30.4-alpine', "nginx/Dockerfile"),
                     ('image: redis:7.4.11-alpine', "docker-compose.yaml"),
