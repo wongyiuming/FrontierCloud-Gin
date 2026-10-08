@@ -8,7 +8,7 @@ COPY protocol ./protocol
 COPY migrations ./migrations
 ARG REVISION
 RUN test -n "$REVISION" && \
-    GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath \
+    GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath \
     -ldflags="-s -w -X main.Revision=$REVISION" \
     -o /out/frontiercloud-updater ./cmd/frontiercloud-updater
 

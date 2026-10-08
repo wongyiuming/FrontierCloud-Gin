@@ -24,6 +24,9 @@ func TestNativeCompilationBudgetDoesNotChangeRuntimeEnvironment(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(contents)
+		if !strings.Contains(text, "GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2") || strings.Contains(text, "ENV GOMEMLIMIT") {
+			t.Fatal("compiler GC budget missing or leaked into runtime", file)
+		}
 		if !strings.Contains(text, "GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1") || strings.Contains(text, "ENV GOMAXPROCS") {
 			t.Fatal("compile budget missing or incorrectly applied to runtime", file)
 		}
