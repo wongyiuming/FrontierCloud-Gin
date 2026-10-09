@@ -21,6 +21,8 @@ on the default `main` branch to receive `workflow_run` events. It does not check
 out triggering code or compile/deploy anything in GitHub; its timeout is one minute.
 
 Install `staging-cd.sh` as `/opt/frontiercloud-staging/staging-cd.sh` and
+`staging_updater_state.py` beside it (an operator script, not a Python backend).
+Install
 `frontiercloud-staging-cd.service`, `frontiercloud-staging-cd.path` and
 `frontiercloud-staging-trigger.service` into `/etc/systemd/system`.
 Build `./cmd/staging-trigger` on the development host and install its binary at
@@ -46,7 +48,10 @@ polling or scheduled fallback.** Valid HMAC-SHA256 events expire after five minu
 durable receipts suppress duplicates and older runs. The path unit consumes a
 queued event and starts the existing verified local controller. An event received
 during an earlier deployment waits for that local updater to finish (bounded to
-five minutes); this is not GitHub polling. Failed deployments require operator
+55 minutes, covering its 45-minute build and eight-minute recovery deadlines).
+The dedicated, label-verified control-volume journal remains available through
+web/updater self-handoff; waiting does not depend on a container that is being
+replaced. This is not GitHub polling. Failed deployments require operator
 attention, rather than repeatedly restarting the same failed update.
 
 Inspect `journalctl -u frontiercloud-staging-trigger -u frontiercloud-staging-cd`
