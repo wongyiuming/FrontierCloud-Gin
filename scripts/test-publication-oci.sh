@@ -8,6 +8,7 @@ revision=$(git rev-parse HEAD)
 test -z "$(git status --porcelain)"
 work=$(mktemp -d /var/tmp/fc-publication-oci.XXXXXXXX)
 builder="fc-oci-format-${work##*.}"
+builder=${builder,,}
 created=false
 cleanup() {
   result=$?
