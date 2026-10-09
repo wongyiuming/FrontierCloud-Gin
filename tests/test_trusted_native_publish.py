@@ -7,7 +7,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import urllib.error
 import zipfile
 
@@ -240,7 +240,7 @@ class TrustedNativePublishTests(unittest.TestCase):
             def __exit__(self, *_args): pass
             def read(self, _size): return b'{"token":"fixture-scoped-token"}'
         opener = Mock(); opener.open.return_value = Response()
-        writer = publisher.RegistryWriter('web', 'wongyiuming', 'fixture-only-test-pat-value', opener)
+        writer = publisher.RegistryWriter('web', 'wongyiuming', 'fixture-only-automatic-token', opener)
         request = opener.open.call_args.args[0]
         self.assertIn('repository%3Awongyiuming%2Ffrontiercloud-gin-web%3Apull%2Cpush', request.full_url)
         with self.assertRaises(publisher.PublicationRejected): writer.request('/v2/evil/manifests/old', 'PUT', b'data')
@@ -318,13 +318,56 @@ class TrustedNativePublishTests(unittest.TestCase):
         self.assertIn('workflow_run:', workflow)
         self.assertIn('workflows: ["Build and Test Docker Compose"]', workflow)
         self.assertNotIn('195000', workflow)
-        self.assertNotIn('packages: write', workflow)
+        self.assertEqual(workflow.count('packages: write'), 1)
+        self.assertNotIn('GHCR_PUBLISH_TOKEN', workflow)
         self.assertNotIn('secrets.', compile_part)
         self.assertNotIn('docker login', compile_part)
         self.assertNotIn('--push', compile_part)
         self.assertIn('--provenance=false --sbom=false', compile_part)
-        self.assertIn('environment: native-image-publish-main', publish_part)
+        self.assertNotIn('packages: write', compile_part)
+        self.assertNotIn('environment: native-image-publish-main', publish_part)
+        self.assertIn('packages: write', publish_part)
+        self.assertIn('GITHUB_TOKEN: ${{ github.token }}', publish_part)
         self.assertIn('ref: ${{ github.workflow_sha }}', publish_part)
         self.assertNotIn('ref: ${{ needs.plan.outputs.revision }}', publish_part)
         self.assertNotIn('docker ', publish_part)
         self.assertNotIn('go build', publish_part)
+
+    def test_cli_publishes_with_automatic_token_and_ignores_old_personal_pat(self):
+        fixture = Fixture()
+        automatic = 'fixture-only-automatic-token'
+        fixture.environ.update(GITHUB_TOKEN=automatic, GHCR_PUBLISH_TOKEN='fixture-only-unused-personal-token',
+                               PLAN_JSON=json.dumps(fixture.plan(True)))
+        entries, _digest = oci_payload()
+        with tempfile.TemporaryDirectory() as directory:
+            event_path = Path(directory) / 'event.json'
+            event_path.write_text(json.dumps(fixture.event), encoding='utf-8')
+            fixture.environ['GITHUB_EVENT_PATH'] = str(event_path)
+            archive = save_oci(directory, entries)
+            with patch.dict(publisher.os.environ, fixture.environ, clear=True), \
+                 patch('sys.argv', ['publisher', 'publish', '--component', 'web']), \
+                 patch.object(publisher.subprocess, 'check_output', return_value=TRUSTED + '\n'), \
+                 patch.object(publisher, 'github_reader', return_value=fixture.read), \
+                 patch.object(publisher, 'download_artifact', return_value=archive) as download, \
+                 patch.object(publisher, 'RegistryWriter') as writer, \
+                 patch.object(publisher, 'publish', return_value={'action': 'fixture-only'}) as publish, \
+                 patch('builtins.print'):
+                publisher.main()
+            writer.assert_called_once_with('web', 'wongyiuming', automatic)
+            self.assertEqual(download.call_args.args[1], automatic)
+            self.assertIs(publish.call_args.kwargs['writer'], writer.return_value)
+
+    def test_missing_automatic_token_cannot_fall_back_to_personal_pat(self):
+        fixture = Fixture()
+        fixture.environ['GHCR_PUBLISH_TOKEN'] = 'fixture-only-unused-personal-token'
+        with tempfile.TemporaryDirectory() as directory:
+            event_path = Path(directory) / 'event.json'
+            event_path.write_text(json.dumps(fixture.event), encoding='utf-8')
+            fixture.environ['GITHUB_EVENT_PATH'] = str(event_path)
+            with patch.dict(publisher.os.environ, fixture.environ, clear=True), \
+                 patch('sys.argv', ['publisher', 'publish', '--component', 'web']), \
+                 patch.object(publisher.subprocess, 'check_output', return_value=TRUSTED + '\n'), \
+                 patch.object(publisher.urllib.request, 'build_opener') as opener, \
+                 self.assertRaises(publisher.PublicationRejected):
+                publisher.main()
+            opener.assert_not_called()

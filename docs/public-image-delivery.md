@@ -10,17 +10,19 @@ longer test CI or a background test workaround.
 
 1. Push a development-host-accepted exact commit to `dev`.
 2. A **completed** `docker.yml` event starts `publish-images.yml` on default main.
-   Its credential-free trusted plan validates the real newest successful
+   Its read-only trusted plan validates the real newest successful
    same-repository push for the exact source SHA/branch and the current HEAD.
    No candidate checkout or compilation precedes that proof. There is no
    195-second polling race against a separately queued source workflow.
-3. Three credential-free parallel compilation jobs (Web, Updater, Nginx), each
+3. Three parallel compilation jobs without package-write credentials (Web,
+   Updater, Nginx), each
    with a ten-minute hard deadline, produce bounded OCI archives. Web/Updater compile
    on the GitHub runner (Go 1.26.8, CGO off, four compiler workers, 2 GiB Go memory
    limit). Runtime Dockerfiles copy those binaries, not source/compiler/tests.
    No `go test`, databases, fleet or browser acceptance runs in compilation CI.
-4. Separate publication jobs use immutable default-main code, a main-only
-   `native-image-publish-main` Environment and its `GHCR_PUBLISH_TOKEN`. The
+4. Separate publication jobs use immutable default-main code and the automatic
+   `GITHUB_TOKEN`, with `packages: write` granted only to these publisher jobs.
+   Plan, compilation and notification have no package-write permission. The
    trusted publisher reads OCI data without extraction, executing a Dockerfile,
    loading/running a container or invoking candidate scripts. It binds the
    archive, source CI, current workflow attempt, component, platform, labels and
@@ -42,20 +44,37 @@ longer test CI or a background test workaround.
 
 Both credential-bearing jobs use only immutable default-main code. Their
 dependency chain is an isolated delivery exception, not a relaxation of test CI.
-Repository/organization secret copies must not exist. All three packages must
-disable inherited source-repository access and remove repository Actions write
-grants; lowering the default `GITHUB_TOKEN` permissions alone does not prevent
-a dev author from adding a new explicit `packages: write` job. Source code cannot
-apply or certify these external settings. Keep public anonymous reads enabled.
-The package PAT should have `write:packages` only (plus implied read), a short
-expiration, and no `repo`, `workflow` or `delete:packages` scope. It is still an
-account-level package credential, not a per-package fine-grained token.
+No personal package PAT or publisher Environment is required. For each public
+Web/Updater/Nginx package, grant repository **`FrontierCloud-Gin` Write** under
+**Manage Actions access**; do not revoke that grant as a prerequisite. Public
+image reads remain anonymous and require no runtime registry credentials.
+Source code cannot apply or certify these external package settings.
+
+This is an explicitly accepted repository-writer trust model: a contributor
+able to change repository workflows can add another job requesting
+`packages: write`. Default read permissions are not a ceiling, and package
+write-once checks in our trusted publisher do not prevent a different authorized
+workflow or package administrator from changing old tags. Immutable-main code
+and job isolation keep candidate execution out of this publisher's credentials;
+they are not an ACL denying all dev-authored workflows package writes. Deployment
+still independently verifies exact-SHA provenance and pins content digests.
+See GitHub's [package Actions access](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+
+The separate **CD signing secret** still belongs only to `staging-cd-main` with
+its exact main Branch deployment rule; no repository/organization signing-key
+copy may remain available to dev. Any previously created package PAT secret or
+publisher Environment may remain unreferenced; this workflow does not consume
+them, their presence does not trigger deployment, and their cleanup is a
+separate administrator choice.
 
 Before this workflow exists on default main, the first candidate needs an
 explicitly authorized trusted operator bootstrap. It must validate real source
 CI and immutable artifacts; it must not spoof workflow environments, expose a
 writer/signing key to candidate execution, prematurely merge main, or re-enable
 the retired source-only notifier. CI success alone does not authorize bootstrap.
+That initial publication bootstrap is **not yet implemented or resolved**;
+removing the PAT requirement does not make a dev-only `workflow_run` file run.
+Do not claim automatic activation or relax stage-before-PR promotion.
 See [staging CD](staging-cd.md) for first activation and receiver gates.
 
 ## Public artifacts and deployment

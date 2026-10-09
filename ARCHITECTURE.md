@@ -211,15 +211,21 @@ Wiki operations guidance is maintained in the separate GitHub Wiki repository. D
 
 Publication is a default-main `workflow_run` consumer of completed successful
 source CI, not a dev-defined credentialed push workflow. Compile jobs are
-credential-free; a separate immutable-main publisher validates bounded OCI data
+free of package-write credentials; a separate immutable-main publisher validates bounded OCI data
 and writes only the verified source SHA tag. It must not run candidate scripts,
 Dockerfiles, containers or archive-extracted executables with write credentials.
-The package PAT and staging signing key live in separate main-only Environments.
-Repository Actions package write access and inherited package write permissions
-must be removed externally: lowering default `GITHUB_TOKEN` permissions alone
-does not prevent a dev workflow from explicitly requesting package write access.
-These administrator settings are prerequisites, not properties proved by source
-tests. Delivery job dependencies are allowed only inside the isolated compilation
+Only the publisher receives automatic `GITHUB_TOKEN` `packages: write`; plan,
+compile and notify jobs do not. The public packages must grant
+`FrontierCloud-Gin` Actions Write; public pulls remain anonymous. Repository
+workflow writers are explicitly trusted to request package writes in other
+workflows, so this is not an ACL preventing dev writers from replacing tags.
+No personal package PAT or publisher Environment is required; previously
+created unreferenced credentials/settings are not consumed or deployment triggers.
+The separate staging signing key still belongs only to `staging-cd-main` with
+an exact main Branch rule, never a dev-accessible repository/organization secret.
+These external settings are not properties proved by source tests. The first
+publication bootstrap before the workflow enters default main remains unresolved;
+it cannot bypass stage-before-PR promotion. Delivery job dependencies are allowed only inside the isolated compilation
 workflow; hosted test job chains and their three-minute limit remain unchanged.
 
 The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,

@@ -188,7 +188,7 @@ class RegistryImagesTests(unittest.TestCase):
         self.assertIn('cancel-in-progress: false', text)
         self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('actions/setup-go'))
         self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('docker/setup-buildx-action'))
-        self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('GHCR_PUBLISH_TOKEN:'))
+        self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('packages: write'))
         self.assertEqual(text.count("if: steps.selection.outputs.missing == 'true'"), 6)
         self.assertIn('scripts/trusted_native_publish.py publish', text)
         self.assertNotIn('docker login', text)

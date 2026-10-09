@@ -139,12 +139,12 @@ jobs:
     needs: [plan, compile]
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    # A main-only Branch Environment and package Actions ACL removal are both
-    # mandatory external configuration. No GITHUB_TOKEN package writer exists.
-    environment: native-image-publish-main
+    # Only this job receives the automatic, short-lived package-write token.
+    # Repository workflow writers are trusted; no personal PAT is required.
     permissions:
       contents: read
       actions: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -164,7 +164,6 @@ jobs:
       - name: Verify OCI data and publish only the exact source SHA or reuse its digest
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GHCR_PUBLISH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
           PLAN_JSON: ${{ needs.plan.outputs.plan }}
           COMPONENT: ${{ matrix.component }}
         run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_native_publish.py publish --component "$COMPONENT"

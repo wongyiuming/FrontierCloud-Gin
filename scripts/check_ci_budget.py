@@ -16,9 +16,13 @@ def inspect_workflow(text: str, name: str) -> list[str]:
     if len(jobs) != 2:
         return findings + [f"{name}: jobs block missing"]
     artifact = name == 'publish-images.yml'
-    if re.search(r'packages:\s*write', text):
-        findings.append(f"{name}: repository GITHUB_TOKEN package write is forbidden")
-    if any(secret in text for secret in ('secrets.STAGING_CD_SECRET', 'secrets.GHCR_PUBLISH_TOKEN')) and not artifact:
+    if re.search(r'permissions:\s*write-all', text):
+        findings.append(f"{name}: broad write-all permissions are forbidden")
+    if re.search(r'packages:\s*write', jobs[0]) or (not artifact and re.search(r'packages:\s*write', jobs[1])):
+        findings.append(f"{name}: package write belongs only to the isolated publication job")
+    if 'GHCR_PUBLISH_TOKEN' in text:
+        findings.append(f"{name}: retired personal package PAT must not be requested")
+    if 'secrets.STAGING_CD_SECRET' in text and not artifact:
         findings.append(f"{name}: privileged secrets belong only to default-main publication jobs")
     if name == 'staging-cd.yml':
         findings.append(f"{name}: retired source-only/third-level notifier must not be reintroduced")
@@ -41,7 +45,7 @@ def inspect_workflow(text: str, name: str) -> list[str]:
     for index in range(1, len(blocks), 2):
         job, block = blocks[index:index + 2]
         limits = re.findall(r"(?m)^    timeout-minutes:\s*(\d+)\s*$", block)
-        maximum = 10 if artifact and job in ('compile', 'publish') else 3
+        maximum = 10 if artifact and job == 'compile' else 3
         if len(limits) != 1 or not 1 <= int(limits[0]) <= maximum:
             findings.append(f"{name}/{job}: explicit timeout-minutes from 1 through {maximum} required")
         dependencies = re.findall(r"(?m)^    needs:\s*(.+)$", block)
@@ -49,12 +53,13 @@ def inspect_workflow(text: str, name: str) -> list[str]:
         if dependencies and not (artifact and dependencies == [allowed.get(job)]):
             findings.append(f"{name}/{job}: serial CI job chains can exceed the workflow budget")
         if artifact:
-            if 'secrets.GHCR_PUBLISH_TOKEN' in block and job != 'publish':
-                findings.append(f"{name}/{job}: package credential exposed outside trusted publisher")
+            package_permissions = re.findall(r'(?m)^      packages:\s*(\w+)\s*$', block)
+            if (job == 'publish' and package_permissions != ['write']) or (job != 'publish' and re.search(r'packages:\s*write', block)):
+                findings.append(f"{name}/{job}: automatic package write belongs only to trusted publisher")
             if 'secrets.STAGING_CD_SECRET' in block and job != 'notify-staging':
                 findings.append(f"{name}/{job}: signing secret exposed outside trusted notifier")
             if job == 'publish':
-                for contract in ('environment: native-image-publish-main', 'github.workflow_sha',
+                for contract in ('github.workflow_sha', 'GITHUB_TOKEN: ${{ github.token }}',
                                  'persist-credentials: false', 'scripts/trusted_native_publish.py'):
                     if contract not in block:
                         findings.append(f"{name}/{job}: isolated trusted publisher contract missing")

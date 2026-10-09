@@ -17,7 +17,7 @@ Promote this fresh instance to Master before enabling CD.
 CD is event-driven: a completed successful source `docker.yml` run starts the
 default-main `publish-images.yml` through **workflow_run**. Its trusted plan
 first proves the newest exact source push and current branch HEAD. Separate
-credential-free component jobs compile Go on GitHub, export OCI data and hand it
+component jobs without package-write credentials compile Go on GitHub, export OCI data and hand it
 to isolated immutable-main publication jobs. Only after every public image is
 verified does the independent `notify-staging` job in that same run sign a wakeup
 (three-minute hard limit, 150-second proof/delivery command). Test CI still has
@@ -54,22 +54,23 @@ name is available to this repository. Merely referencing an Environment or
 moving the script to main does not remove an existing repository-secret copy.
 A dev author could otherwise add another workflow to read that copy.
 
-Create a second Environment, **`native-image-publish-main`**, with the same exact
-main-only Branch restriction. Its **`GHCR_PUBLISH_TOKEN`** is a classic PAT with
-`write:packages` (and implied read), a short expiration, and no `repo`, `workflow`
-or `delete:packages` scope. Do not copy it to repository/organization secrets.
-This PAT is an account-level credential, not a per-package scoped token. Only
-the isolated main publisher gets it; compilation and CD notification do not.
-
+Image publication uses the automatic **`GITHUB_TOKEN`**, not a personal PAT.
+Only the isolated immutable-main **publish** job has `packages: write`;
+plan, compile and notify-staging do not. No publisher Environment is required.
 For each public `frontiercloud-gin-web`, `frontiercloud-gin-updater` and
-`frontiercloud-gin-nginx` package, disable **Inherit access from repository** and
-remove `FrontierCloud-Gin` under **Manage Actions access**. Keep the owner Admin
-grant and public visibility; do not delete package versions. Otherwise a new
-dev workflow can request its own `packages: write` GITHUB_TOKEN and bypass the
-protected PAT path. Merely setting default token permissions to read is not a
-permission ceiling. Public readers still pull anonymously without credentials.
+`frontiercloud-gin-nginx` package, grant **`FrontierCloud-Gin` Write** under
+**Manage Actions access**. Keep public visibility and existing versions.
+Public readers pull anonymously without credentials.
+
+The accepted trust model includes repository workflow writers: they can add a
+different workflow that explicitly requests package writes. Default token read
+permissions and our job isolation do not prevent that capability or make SHA
+tags intrinsically immutable. This choice does **not** grant those workflows
+the CD signing secret; its main-only Environment remains mandatory. An old
+publisher PAT secret/Environment may remain unreferenced, does not trigger a
+deployment and is not consumed by the new publisher.
 See GitHub's [package permission controls](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
-and [minimal classic PAT scope](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+and [container registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 These are external GitHub settings: source code/tests cannot create or certify
 the branch restriction or secret relocation. Do not treat this source change
@@ -82,10 +83,14 @@ checks the Environment deployment rule against the notifier's default-main
 First activation has an intentional bootstrap boundary: `workflow_run` uses
 the publication file on the default branch, and a new dev-only definition cannot
 run before it has been promoted. Both privileged jobs must remain main-only;
-do not add a dev credentialed dispatch/push workaround. The historical main
+do not add a dev credentialed dispatch/push workaround as this release's bootstrap.
+The historical main
 `staging-cd.yml` signs immediately after source CI without image readiness;
 keep that old workflow **disabled**, and remove its definition through normal
-promotion. Never re-enable it to obtain the first staging deployment.
+promotion. Never re-enable it to obtain the first staging deployment. The first
+publication bootstrap is **not yet implemented or resolved**: using automatic
+package tokens does not make a dev-only workflow file execute on default main.
+The sequence below defines the required gates, not evidence of an active path.
 
 1. Run bounded development acceptance, push dev, pass its three-minute source
    CI, and successfully publish/prove all three exact-SHA public images.
@@ -99,7 +104,8 @@ promotion. Never re-enable it to obtain the first staging deployment.
 3. Verify actual staging deployment/acceptance. Open and merge the normal
    **dev -> main PR**; do not direct-write or prematurely merge main to escape
    the bootstrap boundary.
-4. Verify both main-only Environments, secret relocation and package ACLs; install
+4. Verify the main-only signing Environment, signing-secret relocation and each
+   package's `FrontierCloud-Gin` Actions Write grant; install
    the trusted publication definition through that PR, leaving the removed old
    notifier disabled. A successful exact source CI rerun (or later accepted dev
    push) emits the publication event. Main-source publication does not notify
@@ -108,7 +114,7 @@ promotion. Never re-enable it to obtain the first staging deployment.
    an acceptable activation shortcut.
 
 See GitHub's [workflow_run semantics and untrusted-code warning](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
-No five-minute polling, direct main write or repository-wide secret is a
+No five-minute polling, direct main write or repository-wide CD signing secret is a
 bootstrap workaround.
 
 Install `scripts/ops/staging-cd.sh` as `/opt/frontiercloud-staging/staging-cd.sh` and

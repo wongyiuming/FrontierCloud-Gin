@@ -1,8 +1,9 @@
 """Default-main-only publication; OCI candidate data is verified, never executed.
 
-GHCR_PUBLISH_TOKEN belongs only to main-only native-image-publish-main. Package
-Actions/inherited repository write access must be removed externally as well:
-changing YAML cannot deny another dev workflow a packages:write GITHUB_TOKEN.
+The isolated publisher uses its automatic GITHUB_TOKEN with packages:write.
+Compilation has no package credential and no personal PAT is required. Package
+Actions access must allow this repository; repository workflow writers are
+trusted administrators of this publication path, not anonymous public readers.
 """
 import argparse
 import base64
@@ -49,7 +50,7 @@ def positive(value):
 
 def github_reader(token):
     require(isinstance(token, str) and token and len(token) <= 8192 and
-            not any(c in token for c in '\r\n'), 'Missing read-only GitHub proof token')
+            not any(c in token for c in '\r\n'), 'Missing GitHub proof token')
     opener = urllib.request.build_opener(registry_images.NoRedirect)
     def read(path):
         require(path.startswith('/') and not path.startswith('//'), 'Invalid GitHub proof path')
@@ -275,7 +276,7 @@ class RegistryWriter:
     """Scoped REST transfer, with no Docker load/run/build and no candidate code."""
     def __init__(self, component, username, password, opener=None):
         require(component in COMPONENTS and username == 'wongyiuming' and isinstance(password, str) and
-                20 <= len(password) <= 4096 and not any(c in password for c in '\r\n'), 'Missing trusted package PAT')
+                20 <= len(password) <= 4096 and not any(c in password for c in '\r\n'), 'Missing automatic package token')
         self.repository = 'wongyiuming/frontiercloud-gin-' + component
         self.opener = opener or urllib.request.build_opener(registry_images.NoRedirect)
         query = urllib.parse.urlencode({'service': 'ghcr.io', 'scope': 'repository:' + self.repository + ':pull,push'})
@@ -385,7 +386,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='fc-trusted-oci-') as directory:
             archive = download_artifact(record, environ['GITHUB_TOKEN'], directory, component)
             verify_oci(archive, plan['revision'], component)
-            writer = RegistryWriter(component, 'wongyiuming', environ.get('GHCR_PUBLISH_TOKEN', ''))
+            writer = RegistryWriter(component, 'wongyiuming', environ.get('GITHUB_TOKEN', ''))
             result = publish(plan, event, environ, component, read, archive, writer=writer)
     print(json.dumps(result, sort_keys=True))
 
