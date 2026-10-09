@@ -10,6 +10,11 @@ redis="$prefix-redis"
 build_image="frontiercloud-go:business-test"
 runtime_image="frontiercloud-gin:business-test"
 cleanup() {
+    test_status=$?
+    if [ "$test_status" -ne 0 ]; then
+        docker inspect --format 'MySQL fixture status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} memory={{.HostConfig.Memory}}' "$mysql" 2>/dev/null || true
+        docker logs --tail 30 "$mysql" 2>/dev/null || true
+    fi
     docker rm -fv "$mysql" "$redis" >/dev/null 2>&1 || true
     docker volume rm "$secrets" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
@@ -22,11 +27,13 @@ DOCKER_BUILDKIT=0 docker build --memory=3g --cpu-period=100000 --cpu-quota=20000
 docker network create "$network" >/dev/null
 docker volume create "$secrets" >/dev/null
 docker run --rm --user 0:0 -v "$secrets:/run/frontiercloud-secrets" "$runtime_image" init-secrets
-docker run -d --memory=512m --cpus=1 --name "$mysql" --network "$network" --network-alias mysql \
+# Bound MySQL itself; default instrumentation can exceed a 512 MiB cgroup.
+docker run -d --memory=768m --memory-swap=768m --cpus=1 --name "$mysql" --network "$network" --network-alias mysql \
     -e MYSQL_DATABASE=fc_business -e MYSQL_USER=media_admin \
     -e MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
     -e MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
-    -v "$secrets:/run/frontiercloud-secrets:ro" mysql:8.4.11 --skip-log-bin >/dev/null
+    -v "$secrets:/run/frontiercloud-secrets:ro" mysql:8.4.11 --skip-log-bin \
+    --innodb-buffer-pool-size=64M --performance-schema=OFF --max-connections=64 >/dev/null
 docker run -d --memory=128m --cpus=1 --name "$redis" --network "$network" --network-alias redis redis:7.4.11-alpine >/dev/null
 ready=false
 for _ in $(seq 1 90); do

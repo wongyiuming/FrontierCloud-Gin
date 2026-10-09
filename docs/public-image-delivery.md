@@ -43,6 +43,14 @@ image publication.
 
 ## Public artifacts and deployment
 
+Development MySQL fixtures use one CPU and an explicit 768 MiB no-swap cgroup,
+a 64 MiB InnoDB buffer pool, 64 connections and disabled Performance Schema.
+This bounds test-server instrumentation without changing transactions or
+production settings. A 2026-10-09 run proved a 512 MiB fixture was OOM-killed
+during business tests; that failed run is retained, not counted as acceptance.
+Fixture failures now print scoped exit/OOM diagnostics before cleanup. Hosted
+test CI still runs no database and keeps its three-minute deadline.
+
 The repository's Packages page links to:
 
 | Component | Public registry repository |
