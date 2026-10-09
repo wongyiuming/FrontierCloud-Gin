@@ -82,36 +82,51 @@ checks the Environment deployment rule against the notifier's default-main
 
 First activation has an intentional bootstrap boundary: `workflow_run` uses
 the publication file on the default branch, and a new dev-only definition cannot
-run before it has been promoted. Both privileged jobs must remain main-only;
-do not add a dev credentialed dispatch/push workaround as this release's bootstrap.
+run before it has been promoted. Normal publication and signed notification
+remain main-only; the explicit one-time image exception below does not change
+the signing boundary or add a generic dev dispatch/push release path.
 The historical main
 `staging-cd.yml` signs immediately after source CI without image readiness;
 keep that old workflow **disabled**, and remove its definition through normal
 promotion. Never re-enable it to obtain the first staging deployment. The first
-publication bootstrap is **not yet implemented or resolved**: using automatic
-package tokens does not make a dev-only workflow file execute on default main.
-The sequence below defines the required gates, not evidence of an active path.
+publication uses the owner's separately authorized `bootstrap-images.yml`
+entry for **PR #5 only**. The owner must apply `bootstrap:<full dev SHA>` after
+development acceptance and successful exact-source push CI. Its proof validates
+the immutable labeled PR snapshot, owner identity, current dev/base/merge refs
+and the newest source run/attempt. It has no Environment, signing key or CD job.
+It compiles with read-only tokens and publishes verified OCI data with automatic
+package write only in its isolated publisher. This expressly authorized PR
+snapshot is not claimed to be trusted-main code. The first matching run owns the
+authorization; only that run's latest owner retry can recover. New PRs or
+relabel-triggered duplicate runs are rejected. Closing PR #5 retires the entry.
+The sequence below defines required gates, not evidence of a completed release.
 
 1. Run bounded development acceptance, push dev, pass its three-minute source
-   CI, and successfully publish/prove all three exact-SHA public images.
+   CI, apply the exact-SHA owner label to PR #5, and await successful bootstrap
+   compilation/publication. Independently prove all three exact-SHA public
+   images; a successful plan or local OCI fixture is not image delivery.
 2. With **explicit separate operator authorization**, perform the first staging
    bootstrap from a trusted operator path. Independently query real GitHub run
    identities/current dev HEAD and anonymous image proofs; preserve receiver
    HMAC, certificate, replay and updater gates. Do not spoof `GITHUB_REF`,
    `GITHUB_WORKFLOW_SHA`, events or a main environment to run a candidate script
    holding the signing secret. This document does not implement or authorize
-   that one-time operator action by itself.
-3. Verify actual staging deployment/acceptance. Open and merge the normal
-   **dev -> main PR**; do not direct-write or prematurely merge main to escape
-   the bootstrap boundary.
+   that one-time operator action by itself. This manual first wakeup is separate
+   from the image-only CI authorization and needs actual bootstrap/source/image
+   proof; do not replay an old source-only trigger script without those gates.
+3. Verify actual staging deployment/acceptance, then merge the existing
+   **dev -> main PR #5**. This first PR must already exist for its label event;
+   its existence does not authorize merging before staging. Future releases
+   keep the normal staging-before-release-PR process. Never direct-write or
+   prematurely merge main to escape the bootstrap boundary.
 4. Verify the main-only signing Environment, signing-secret relocation and each
    package's `FrontierCloud-Gin` Actions Write grant; install
    the trusted publication definition through that PR, leaving the removed old
    notifier disabled. A successful exact source CI rerun (or later accepted dev
    push) emits the publication event. Main-source publication does not notify
    staging; accepted dev publication completes its own signed-notification job.
-   No polling timer, candidate credentialed workflow or premature main write is
-   an acceptable activation shortcut.
+   No polling timer, unapproved candidate credentialed workflow or premature
+   main write is an acceptable activation shortcut.
 
 See GitHub's [workflow_run semantics and untrusted-code warning](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
 No five-minute polling, direct main write or repository-wide CD signing secret is a

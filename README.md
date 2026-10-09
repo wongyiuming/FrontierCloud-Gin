@@ -71,11 +71,13 @@ Write access. Repository workflow writers are trusted to request package write
 permissions; this model does not isolate them from publishing package versions.
 The signing secret belongs only to the
 `staging-cd-main` Environment restricted to the `main` branch, not to repository
-secrets or dev compilation jobs. Initial activation needs the documented
-operator bootstrap and environment setup. The first publication workflow is
-not active until its file reaches default main, and that bootstrap remains
-unresolved; no polling timer or direct main
-write substitutes for `dev -> main` promotion. Production remains manual.
+secrets or dev compilation jobs. Initial activation uses an explicitly
+owner-authorized, exact-SHA label on PR #5 for image-only CI compilation and
+publication, followed by a separately verified operator staging wakeup. This
+one-time PR workflow reads no deployment secret and cannot deploy production.
+The normal workflow becomes active after promotion to default main; no polling
+timer or direct main write substitutes for `dev -> main` promotion. Production
+remains manual. See the first-activation gates in [staging CD](docs/staging-cd.md).
 
 The [public security baseline](docs/public-security-baseline.md) documents
 nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and

@@ -67,14 +67,30 @@ publisher Environment may remain unreferenced; this workflow does not consume
 them, their presence does not trigger deployment, and their cleanup is a
 separate administrator choice.
 
-Before this workflow exists on default main, the first candidate needs an
-explicitly authorized trusted operator bootstrap. It must validate real source
-CI and immutable artifacts; it must not spoof workflow environments, expose a
-writer/signing key to candidate execution, prematurely merge main, or re-enable
-the retired source-only notifier. CI success alone does not authorize bootstrap.
-That initial publication bootstrap is **not yet implemented or resolved**;
-removing the PAT requirement does not make a dev-only `workflow_run` file run.
-Do not claim automatic activation or relax stage-before-PR promotion.
+Before this workflow exists on default main, the owner has explicitly authorized
+one initial publication exception: `bootstrap-images.yml`, restricted to the
+existing same-repository **PR #5, dev -> main**. Only an owner-applied
+`bootstrap:<full 40-character dev SHA>` label starts its proof job. This is an
+authorized PR workflow snapshot, **not immutable-main code**. It independently
+checks owner actor/sender, current PR/head/base/merge snapshot and the newest
+successful exact-source push CI before compiling. The first matching run claims
+that label; only its newest owner-triggered attempt may recover. Removing and
+reapplying the label cannot grant a second run the same authorization.
+
+The exception retains three-minute plan/publication and ten-minute parallel
+compilation limits. Only its isolated REST publisher gets automatic package
+write; it verifies run/attempt-bound OCI data and never runs build/container code.
+It has **no signing secret, Environment, PAT or deployment job**. It must not
+spoof a default-main workflow identity, prematurely merge main, or re-enable the
+retired source-only notifier. PR source-head metadata and the workflow's PR
+merge snapshot are separate proof fields, not interchangeable SHAs.
+
+After actual public image verification, a separately authorized operator wakeup
+must preserve the EVOXT receiver's HMAC/replay/current-source/image gates and
+live acceptance before merging PR #5. The label does not deploy staging or
+production. Once PR #5 closes/merges, this entry cannot run for another PR.
+Source tests alone are not evidence that this first CI publication has succeeded;
+record the real run and all three public digests before claiming activation.
 See [staging CD](staging-cd.md) for first activation and receiver gates.
 
 ## Public artifacts and deployment

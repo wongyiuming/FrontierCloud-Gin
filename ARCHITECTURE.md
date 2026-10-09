@@ -223,10 +223,17 @@ No personal package PAT or publisher Environment is required; previously
 created unreferenced credentials/settings are not consumed or deployment triggers.
 The separate staging signing key still belongs only to `staging-cd-main` with
 an exact main Branch rule, never a dev-accessible repository/organization secret.
-These external settings are not properties proved by source tests. The first
-publication bootstrap before the workflow enters default main remains unresolved;
-it cannot bypass stage-before-PR promotion. Delivery job dependencies are allowed only inside the isolated compilation
-workflow; hosted test job chains and their three-minute limit remain unchanged.
+These external settings are not properties proved by source tests. The owner
+authorized one image-only bootstrap exception for same-repository PR #5: an
+owner-applied full-SHA label, fixed PR workflow snapshot, exact successful source
+CI and current refs gate bounded compilation and verified OCI publication.
+This explicitly authorized candidate snapshot is not immutable-main code. Its
+publisher is the only package writer; it reads no signing secret or Environment
+and cannot deploy. Only the first matching run/latest owner retry may claim
+that label. No future PR inherits this exception. Actual staging acceptance
+still precedes merging; the normal main-only signing boundary is unchanged.
+Delivery dependencies are allowed only in these isolated publication workflows;
+hosted test job chains and their three-minute limit remain unchanged.
 
 The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
 identity, secrets and updater control from any production storage appliance on
