@@ -32,7 +32,7 @@ def main():
             response = page.goto(base + '/api/v1/media', wait_until='load')
             assert response.status == 503
             before = page.locator('#countdown').inner_text()
-            page.wait_for_function("document.getElementById('countdown').textContent !== " + repr(before))
+            page.wait_for_function("(previous) => document.getElementById('countdown').textContent !== previous", arg=before)
             assert page.evaluate('window.cspViolations') == []
             assert errors == []
             assert 'sha256-' in response.headers['content-security-policy']
@@ -50,7 +50,7 @@ def main():
         page.locator('#mediaList .media-item').nth(1).wait_for(state='visible')
         assert page.evaluate('window.cspViolations') == []
         page.locator('#mediaList .media-item').nth(1).click()
-        page.wait_for_function('currentIndex === 1 && art && art.currentTime > 0.1')
+        page.wait_for_function('() => currentIndex === 1 && art && art.currentTime > 0.1')
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is False
         # Untrusted inline JS and inline event attributes must actually be
         # blocked by Chromium, not just absent from a configuration string.
@@ -59,7 +59,7 @@ def main():
           const marker=document.createElement('script');marker.setAttribute('nonce','{{FRONTIERCLOUD_CSP_NONCE}}');marker.textContent='window.injectedMarkerExecuted=true';document.body.append(marker);
           const button=document.createElement('button');button.setAttribute('onclick','window.injectedHandlerExecuted=true');document.body.append(button);button.click();
         }""")
-        page.wait_for_function('window.cspViolations.length >= 3')
+        page.wait_for_function('() => window.cspViolations.length >= 3')
         assert page.evaluate('!!window.injectedScriptExecuted || !!window.injectedHandlerExecuted || !!window.injectedMarkerExecuted') is False
         catalog = context.request.get(base + '/api/v1/media/catalog/media?media_type=music&path=music%2Fsecurity-fixture&playback_session_id=security-smoke').json()
         media_id = catalog['entries'][0]['karaoke_id']

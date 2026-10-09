@@ -47,6 +47,13 @@ class BrowserSecurityContractTests(unittest.TestCase):
             headers = (ROOT / 'nginx' / name).read_text(encoding='utf-8')
             self.assertIn('add_header Content-Security-Policy $frontiercloud_csp always;', headers)
 
+    def test_browser_waits_do_not_require_unsafe_eval(self):
+        driver = (ROOT / 'tests/browser_security_smoke.py').read_text(encoding='utf-8')
+        expressions = re.findall(r'wait_for_function\(([^\n]+)', driver)
+        self.assertEqual(len(expressions), 3)
+        for expression in expressions:
+            self.assertIn('=>', expression)
+
 
 if __name__ == '__main__':
     unittest.main()
