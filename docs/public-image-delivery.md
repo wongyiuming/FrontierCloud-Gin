@@ -51,6 +51,14 @@ during business tests; that failed run is retained, not counted as acceptance.
 Fixture failures now print scoped exit/OOM diagnostics before cleanup. Hosted
 test CI still runs no database and keeps its three-minute deadline.
 
+Business/race test containers also cap compilation explicitly: two package
+workers, `GOMAXPROCS=2`, a 512 MiB Go managed-heap target per process, `GOGC=25`
+and an aggregate 3 GiB no-swap cgroup. The heap target is not an RSS hard cap.
+A separate 2 GiB fixture OOM killed two compiler processes during HTTPAPI
+dependency compilation; those failed results are not acceptance. These limits
+retain parallel compilation without assuming that limiting CPU automatically
+limits aggregate compiler memory. They do not change production runtime limits.
+
 The repository's Packages page links to:
 
 | Component | Public registry repository |

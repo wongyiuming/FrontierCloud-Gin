@@ -9,11 +9,20 @@ mysql="$prefix-mysql"
 redis="$prefix-redis"
 build_image="frontiercloud-go:business-test"
 runtime_image="frontiercloud-gin:business-test"
+test_started_at=$(date -u +%FT%TZ)
+# Keep two compiler workers, but cap each compiler's managed heap and the
+# aggregate cgroup. Go package parallelism must not inherit all host cores.
+go_test_budget=(--cpus=2 --memory=3g --memory-swap=3g
+    -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -e GOGC=25
+    --label "frontiercloud.test.run=$prefix")
 cleanup() {
     test_status=$?
     if [ "$test_status" -ne 0 ]; then
         docker inspect --format 'MySQL fixture status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} memory={{.HostConfig.Memory}}' "$mysql" 2>/dev/null || true
         docker logs --tail 30 "$mysql" 2>/dev/null || true
+        docker events --since "$test_started_at" --until "$(date -u +%FT%TZ)" \
+            --filter type=container --filter event=oom --filter "label=frontiercloud.test.run=$prefix" \
+            --format 'Test compiler OOM: {{.Actor.ID}}' 2>/dev/null || true
     fi
     docker rm -fv "$mysql" "$redis" >/dev/null 2>&1 || true
     docker volume rm "$secrets" >/dev/null 2>&1 || true
@@ -44,22 +53,22 @@ for _ in $(seq 1 90); do
     sleep 1
 done
 if [ "$ready" != true ]; then docker logs --tail 40 "$mysql"; exit 1; fi
-docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -v "$secrets:/run/frontiercloud-secrets:ro" \
+docker run --rm "${go_test_budget[@]}" --network "$network" -v "$secrets:/run/frontiercloud-secrets:ro" \
     -e FRONTIERCLOUD_TEST_MYSQL_HOST=mysql -e FRONTIERCLOUD_TEST_MYSQL_DATABASE=fc_business \
     -e FRONTIERCLOUD_TEST_MYSQL_USER=media_admin \
     -e FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
-    "$build_image" go test -count=1 -v ./internal/store/business
-docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/1 \
-    "$build_image" go test -count=1 -v ./internal/admin
-docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/2 \
-    "$build_image" go test -count=1 -v ./internal/httpapi
-docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/3 \
-    "$build_image" go test -count=1 -v ./internal/observation
-docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/5 \
-    "$build_image" go test -p=1 -count=1 -v ./internal/karaoke
-docker run --rm --cpus=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/4 \
-    -e GOMAXPROCS=2 --memory=2g "$build_image" go test -p=2 -race -count=1 -v ./cmd/frontiercloud
-docker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 "$build_image" go test -p=2 -race ./...
+    "$build_image" go test -p=2 -count=1 -v ./internal/store/business
+docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/1 \
+    "$build_image" go test -p=2 -count=1 -v ./internal/admin
+docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/2 \
+    "$build_image" go test -p=2 -count=1 -v ./internal/httpapi
+docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/3 \
+    "$build_image" go test -p=2 -count=1 -v ./internal/observation
+docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/5 \
+    "$build_image" go test -p=2 -count=1 -v ./internal/karaoke
+docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/4 \
+    "$build_image" go test -p=2 -race -count=1 -v ./cmd/frontiercloud
+docker run --rm "${go_test_budget[@]}" "$build_image" go test -p=2 -race -count=1 ./...
 bash scripts/test-nginx-maintenance.sh
 bash scripts/test-nginx-response-headers.sh
 printf '%s\n' 'PASS: real MySQL, Redis, native process drain, Nginx maintenance and Go race checks'
