@@ -32,6 +32,15 @@ class DevelopmentMySQLBudgetTests(unittest.TestCase):
             self.assertIn('-count=1', command)
         self.assertEqual(source.count('docker run --rm "${go_test_budget[@]}"'), 7)
 
+    def test_sdk_build_stages_cannot_borrow_additional_host_swap(self):
+        for name in ('test-go-business.sh', 'test-native-api.sh'):
+            commands = re.findall(r'DOCKER_BUILDKIT=0 docker build ([^\n]+)',
+                                  (ROOT / 'scripts' / name).read_text())
+            self.assertTrue(commands)
+            for command in commands:
+                self.assertIn('--memory=3g --memory-swap=3g', command)
+                self.assertIn('--cpu-quota=200000', command)
+
 
 if __name__ == '__main__':
     unittest.main()

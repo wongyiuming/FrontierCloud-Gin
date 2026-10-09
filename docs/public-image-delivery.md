@@ -9,37 +9,54 @@ longer test CI or a background test workaround.
 ## Gates and budgets
 
 1. Push a development-host-accepted exact commit to `dev`.
-2. Compilation first waits for the newest successful same-repository **push**
-   `docker.yml` run for that exact SHA and branch. No checkout, compilation or
-   package publication happens before success. Failed/pending/wrong-source runs
-   cannot authorize compilation. The bounded wait does not extend test CI.
-3. Three parallel compilation/publication jobs (Web, Updater, Nginx), each with
-   a ten-minute hard deadline, publish `linux/amd64` images. Web/Updater compile
+2. A **completed** `docker.yml` event starts `publish-images.yml` on default main.
+   Its credential-free trusted plan validates the real newest successful
+   same-repository push for the exact source SHA/branch and the current HEAD.
+   No candidate checkout or compilation precedes that proof. There is no
+   195-second polling race against a separately queued source workflow.
+3. Three credential-free parallel compilation jobs (Web, Updater, Nginx), each
+   with a ten-minute hard deadline, produce bounded OCI archives. Web/Updater compile
    on the GitHub runner (Go 1.26.8, CGO off, four compiler workers, 2 GiB Go memory
    limit). Runtime Dockerfiles copy those binaries, not source/compiler/tests.
    No `go test`, databases, fleet or browser acceptance runs in compilation CI.
-4. All three packages must be anonymously readable with verified manifests and
-   image configurations. A separate default-`main` `workflow_run` workflow then
-   handles the CD wakeup with its own three-minute limit. It executes only the
-   trusted default-branch code, not candidate code; its secret is restricted to
-   the `staging-cd-main` Environment with a main-only Branch deployment rule and
-   is never exposed to compilation jobs. A repository/organization secret copy
-   must not remain available to dev workflows.
-5. The receiver keeps the **original test CI** run identity for replay ordering.
+4. Separate publication jobs use immutable default-main code, a main-only
+   `native-image-publish-main` Environment and its `GHCR_PUBLISH_TOKEN`. The
+   trusted publisher reads OCI data without extraction, executing a Dockerfile,
+   loading/running a container or invoking candidate scripts. It binds the
+   archive, source CI, current workflow attempt, component, platform, labels and
+   SHA256 bytes, then writes only that verified source SHA tag. Existing accepted
+   bytes are reused, never replaced. All three packages must remain public and
+   independently pass anonymous manifest/configuration verification.
+5. Only then a separate `notify-staging` job in the same trusted publication run
+   handles the signed CD wakeup (three-minute limit). It verifies the trusted plan,
+   the three completed publication jobs and anonymous image proofs, not an
+   attacker-supplied publication receipt. It does not read candidate artifacts
+   or execute candidate code. The signing key is restricted to `staging-cd-main`,
+   with its own main-only Branch rule, and is never shared with compilation.
+6. The receiver keeps the **original test CI** run identity for replay ordering.
    EVOXT independently verifies exact current dev HEAD/test CI, performs native
    deployment and must pass live acceptance before opening/merging dev -> main.
-6. A main merge verifies identical reviewed source tree/provenance, passes its
+7. A main merge verifies identical reviewed source tree/provenance, passes its
    source CI and publishes its own exact-merge-SHA images. Production remains a
    separate operator-controlled upgrade. Storage is never auto-upgraded.
 
-The compilation workflow is push-triggered with an explicit exact test-CI gate;
-the secret-bearing CD notification uses the default-branch trust boundary.
-Before the new notification workflow exists on default main, its first dev
-candidate requires an explicitly authorized one-time operator bootstrap rather
-than running candidate code with a CD secret. That bootstrap is not implied by
-CI success. See [staging CD](staging-cd.md) for the transition and receiver gates.
-The old source-success-only staging notification must remain retired, not race
-image publication.
+Both credential-bearing jobs use only immutable default-main code. Their
+dependency chain is an isolated delivery exception, not a relaxation of test CI.
+Repository/organization secret copies must not exist. All three packages must
+disable inherited source-repository access and remove repository Actions write
+grants; lowering the default `GITHUB_TOKEN` permissions alone does not prevent
+a dev author from adding a new explicit `packages: write` job. Source code cannot
+apply or certify these external settings. Keep public anonymous reads enabled.
+The package PAT should have `write:packages` only (plus implied read), a short
+expiration, and no `repo`, `workflow` or `delete:packages` scope. It is still an
+account-level package credential, not a per-package fine-grained token.
+
+Before this workflow exists on default main, the first candidate needs an
+explicitly authorized trusted operator bootstrap. It must validate real source
+CI and immutable artifacts; it must not spoof workflow environments, expose a
+writer/signing key to candidate execution, prematurely merge main, or re-enable
+the retired source-only notifier. CI success alone does not authorize bootstrap.
+See [staging CD](staging-cd.md) for first activation and receiver gates.
 
 ## Public artifacts and deployment
 
@@ -58,6 +75,14 @@ A separate 2 GiB fixture OOM killed two compiler processes during HTTPAPI
 dependency compilation; those failed results are not acceptance. These limits
 retain parallel compilation without assuming that limiting CPU automatically
 limits aggregate compiler memory. They do not change production runtime limits.
+
+`scripts/test-publication-oci.sh` runs only on the development host. It exports
+a tiny real Buildx OCI format fixture through a disposable 512 MiB/one-CPU
+no-swap builder, pins the pulled official BuildKit digest for that run, validates
+the tar through the trusted publisher and removes only its own builder. It does
+not compile a second application, authenticate to GHCR, publish a package,
+load/run the output or certify the credentialed publication path. Keep its
+archive/budget/digest evidence distinct from real application-image delivery.
 
 The repository's Packages page links to:
 

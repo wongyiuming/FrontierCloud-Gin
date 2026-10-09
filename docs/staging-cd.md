@@ -14,26 +14,30 @@ Link the checkout's ignored `.env` to the external environment so both Compose
 interpolation and the application's `env_file` use the same staging settings.
 Promote this fresh instance to Master before enabling CD.
 
-CD is event-driven: `publish-images.yml` first verifies the newest successful
-**dev push** `docker.yml` run for its exact SHA, then publishes all three public
-runtime images. Complete publication emits the event consumed by the separate
-default-`main` `staging-cd.yml` **workflow_run** notifier (three-minute hard limit,
-150-second proof/delivery command). Original test CI remains capped at three minutes; separate
-parallel compilation jobs are capped at ten minutes and run no acceptance tests.
-Failed/cancelled CI or publication, main pushes, PRs and foreign repositories
-cannot notify staging. The notifier checks out only the immutable
-`github.workflow_sha` of its trusted main definition, sparsely including its two
-proof scripts, with no persisted checkout credentials. It never checks out dev,
-downloads candidate artifacts/caches, imports candidate code, pulls/executes
-containers, or compiles/deploys anything. The candidate SHA is data only.
+CD is event-driven: a completed successful source `docker.yml` run starts the
+default-main `publish-images.yml` through **workflow_run**. Its trusted plan
+first proves the newest exact source push and current branch HEAD. Separate
+credential-free component jobs compile Go on GitHub, export OCI data and hand it
+to isolated immutable-main publication jobs. Only after every public image is
+verified does the independent `notify-staging` job in that same run sign a wakeup
+(three-minute hard limit, 150-second proof/delivery command). Test CI still has
+its three-minute limit; component compilation has its own ten-minute deadline
+and runs no acceptance tests. Completed-source triggering avoids guessing how
+long the independent test runner will spend queued.
+Failed/cancelled CI or publication, main source pushes, PRs and foreign
+repositories cannot notify staging. The notifier checks out only the immutable
+`github.workflow_sha`, with sparse proof-script paths and no persisted checkout
+credentials. It never checks out dev, downloads candidate artifacts/caches,
+imports candidate code or pulls/runs containers. The source SHA is data only.
 See [public image delivery](public-image-delivery.md).
 
-The trusted script re-fetches the publisher's workflow/run/attempt identity and
-all three successful component jobs, verifies the newest successful exact-SHA
-source CI, and checks current dev HEAD. It then anonymously verifies each public
+The trusted script re-fetches this active publication run/attempt identity and
+all three successful publisher jobs, independently revalidates the trusted
+plan's newest successful exact-SHA source CI, and checks current dev HEAD.
+It then anonymously verifies each public
 Web/Updater/Nginx manifest, configuration, digest and provenance through the
 same image resolver used by deployment. After network proofs it rechecks HEAD
-and both run identities. Pending/newer runs, private/missing packages, invalid
+and both run identities. Pending/newer source runs, private/missing packages, invalid
 digests, rate limits and network errors fail closed: **no notification and no
 local-build fallback**. The signed payload retains the original test CI run
 identity, not the publisher's run identity.
@@ -50,6 +54,23 @@ name is available to this repository. Merely referencing an Environment or
 moving the script to main does not remove an existing repository-secret copy.
 A dev author could otherwise add another workflow to read that copy.
 
+Create a second Environment, **`native-image-publish-main`**, with the same exact
+main-only Branch restriction. Its **`GHCR_PUBLISH_TOKEN`** is a classic PAT with
+`write:packages` (and implied read), a short expiration, and no `repo`, `workflow`
+or `delete:packages` scope. Do not copy it to repository/organization secrets.
+This PAT is an account-level credential, not a per-package scoped token. Only
+the isolated main publisher gets it; compilation and CD notification do not.
+
+For each public `frontiercloud-gin-web`, `frontiercloud-gin-updater` and
+`frontiercloud-gin-nginx` package, disable **Inherit access from repository** and
+remove `FrontierCloud-Gin` under **Manage Actions access**. Keep the owner Admin
+grant and public visibility; do not delete package versions. Otherwise a new
+dev workflow can request its own `packages: write` GITHUB_TOKEN and bypass the
+protected PAT path. Merely setting default token permissions to read is not a
+permission ceiling. Public readers still pull anonymously without credentials.
+See GitHub's [package permission controls](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
+and [minimal classic PAT scope](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
 These are external GitHub settings: source code/tests cannot create or certify
 the branch restriction or secret relocation. Do not treat this source change
 as activated until an administrator verifies them. Do not place the secret in
@@ -59,10 +80,12 @@ checks the Environment deployment rule against the notifier's default-main
 [environment deployment rules](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
 
 First activation has an intentional bootstrap boundary: `workflow_run` uses
-the workflow file on the default branch, and a new dev-only definition cannot
-run before it has been promoted. The historical main workflow listens only to
-source CI and is unsafe with image-first CD; keep it **disabled** until the new
-definition is merged. Never re-enable it to get the first staging deployment.
+the publication file on the default branch, and a new dev-only definition cannot
+run before it has been promoted. Both privileged jobs must remain main-only;
+do not add a dev credentialed dispatch/push workaround. The historical main
+`staging-cd.yml` signs immediately after source CI without image readiness;
+keep that old workflow **disabled**, and remove its definition through normal
+promotion. Never re-enable it to obtain the first staging deployment.
 
 1. Run bounded development acceptance, push dev, pass its three-minute source
    CI, and successfully publish/prove all three exact-SHA public images.
@@ -76,17 +99,19 @@ definition is merged. Never re-enable it to get the first staging deployment.
 3. Verify actual staging deployment/acceptance. Open and merge the normal
    **dev -> main PR**; do not direct-write or prematurely merge main to escape
    the bootstrap boundary.
-4. Verify the main-only Environment/secret settings, replace the old disabled
-   main definition via that PR, and only then enable the trusted workflow.
-   Rerun the newest exact-SHA publisher (or a later accepted dev publication)
-   to emit its completion event. The main merge's publication never triggers
-   staging CD. Subsequent accepted dev publications are fully event-driven.
+4. Verify both main-only Environments, secret relocation and package ACLs; install
+   the trusted publication definition through that PR, leaving the removed old
+   notifier disabled. A successful exact source CI rerun (or later accepted dev
+   push) emits the publication event. Main-source publication does not notify
+   staging; accepted dev publication completes its own signed-notification job.
+   No polling timer, candidate credentialed workflow or premature main write is
+   an acceptable activation shortcut.
 
 See GitHub's [workflow_run semantics and untrusted-code warning](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
 No five-minute polling, direct main write or repository-wide secret is a
 bootstrap workaround.
 
-Install `staging-cd.sh` as `/opt/frontiercloud-staging/staging-cd.sh` and
+Install `scripts/ops/staging-cd.sh` as `/opt/frontiercloud-staging/staging-cd.sh` and
 `staging_updater_state.py` beside it (an operator script, not a Python backend).
 Install
 `frontiercloud-staging-cd.service`, `frontiercloud-staging-cd.path` and
@@ -121,12 +146,13 @@ replaced. This is not GitHub polling. Failed deployments require operator
 attention, rather than repeatedly restarting the same failed update.
 
 Inspect `journalctl -u frontiercloud-staging-trigger -u frontiercloud-staging-cd`
-and GitHub's separate `Trigger preproduction CD` workflow. A 202 response acknowledges the
+and GitHub's `Publish native images` / `notify-staging` job. A 202 response acknowledges the
 durably queued wakeup, not a completed deployment. Check updater status and the
-live revision to confirm deployment completion. Rerun the notification workflow
-after a delivery failure; rerun source CI for a fresh delivery after resolving a
-deployment failure; after a successful source rerun, rerun the publisher to
-produce the image-ready event. No periodic job retries it silently.
+live revision to confirm deployment completion. After resolving a delivery or
+deployment failure, rerun source CI to emit a fresh completed event and rebuild
+the trusted plan. A single downstream-job rerun cannot reuse a plan from a
+different publication attempt. Existing accepted image digests are reused, not
+rebuilt or overwritten. No periodic job retries a failed deployment silently.
 
 `staging-release` is forbidden on production/storage. It verifies current
 Master identity, the dedicated domain, a healthy idle updater, exact `dev` HEAD

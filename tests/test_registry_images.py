@@ -104,11 +104,15 @@ class RegistryImagesTests(unittest.TestCase):
 
     def test_workflow_test_gate_precedes_checkout_and_compilation(self):
         workflow = (ROOT / '.github/workflows/publish-images.yml').read_text(encoding='utf-8')
-        self.assertLess(workflow.index("newest.conclusion !== 'success'"), workflow.index('actions/checkout'))
-        self.assertLess(workflow.index('actions/checkout'), workflow.index('go build'))
+        self.assertLess(workflow.index("github.event.workflow_run.conclusion == 'success'"), workflow.index('actions/checkout'))
+        self.assertLess(workflow.index('Prove newest completed source CI'), workflow.index('  compile:'))
+        compile_part = workflow.split('  compile:\n')[1].split('  publish:\n')[0]
+        self.assertIn('needs: [plan]', compile_part)
+        self.assertLess(compile_part.index('actions/checkout'), compile_part.index('go build'))
+        self.assertNotIn('secrets.', compile_part)
         self.assertNotIn('go test', workflow)
-        self.assertNotIn('STAGING_CD_SECRET', workflow)
-        self.assertIn('registry_images.py --resolve', workflow)
+        self.assertNotIn('STAGING_CD_SECRET', workflow.split('  notify-staging:\n')[0])
+        self.assertIn('scripts/trusted_native_publish.py publish', workflow)
         fallback = (ROOT / 'scripts/build-native-images.sh').read_text(encoding='utf-8')
         self.assertIn('if (( code != 3 )); then exit', fallback)
         self.assertIn('git archive --format=tar', fallback)
@@ -179,14 +183,15 @@ class RegistryImagesTests(unittest.TestCase):
     def test_workflow_sha_serialization_reuse_precedes_any_build_or_login(self):
         text = (ROOT / '.github/workflows/publish-images.yml').read_text()
         group = next(line for line in text.splitlines() if 'group: native-images' in line)
-        self.assertIn('github.sha', group)
+        self.assertIn('needs.plan.outputs.revision', group)
         self.assertNotIn('github.ref', group)
         self.assertIn('cancel-in-progress: false', text)
-        self.assertLess(text.index('registry_images.py --publication-plan'), text.index('actions/setup-go'))
-        self.assertLess(text.index('registry_images.py --publication-plan'), text.index('docker/setup-buildx-action'))
-        self.assertLess(text.index('registry_images.py --publication-plan'), text.index('Authenticate package publication'))
-        self.assertEqual(text.count("if: steps.publication.outputs.missing == 'true'"), 4)
-        self.assertIn('scripts/publish_native_image.py', text)
+        self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('actions/setup-go'))
+        self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('docker/setup-buildx-action'))
+        self.assertLess(text.index('scripts/trusted_native_publish.py plan'), text.index('GHCR_PUBLISH_TOKEN:'))
+        self.assertEqual(text.count("if: steps.selection.outputs.missing == 'true'"), 6)
+        self.assertIn('scripts/trusted_native_publish.py publish', text)
+        self.assertNotIn('docker login', text)
 
     def test_blob_only_fixed_https_github_redirect_without_forwarding_auth(self):
         def reply(status, headers, raw):

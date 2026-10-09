@@ -209,6 +209,19 @@ Heavy acceptance runs only on the prepared development host: five native nodes (
 
 Wiki operations guidance is maintained in the separate GitHub Wiki repository. Do not track docs/wiki in this repository.
 
+Publication is a default-main `workflow_run` consumer of completed successful
+source CI, not a dev-defined credentialed push workflow. Compile jobs are
+credential-free; a separate immutable-main publisher validates bounded OCI data
+and writes only the verified source SHA tag. It must not run candidate scripts,
+Dockerfiles, containers or archive-extracted executables with write credentials.
+The package PAT and staging signing key live in separate main-only Environments.
+Repository Actions package write access and inherited package write permissions
+must be removed externally: lowering default `GITHUB_TOKEN` permissions alone
+does not prevent a dev workflow from explicitly requesting package write access.
+These administrator settings are prerequisites, not properties proved by source
+tests. Delivery job dependencies are allowed only inside the isolated compilation
+workflow; hosted test job chains and their three-minute limit remain unchanged.
+
 The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
 identity, secrets and updater control from any production storage appliance on
 the same host. Its local CD follows the newest successful exact `dev` push,

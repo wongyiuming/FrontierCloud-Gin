@@ -62,7 +62,12 @@ Detailed configuration, generated-secret recovery, first Admin access, role init
 EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
 Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
 from a default-`main` trusted workflow after successful exact-`dev` test CI and
-all three public image proofs. The signing secret belongs only to the
+all three public image proofs. Publication itself also executes immutable main
+code: candidate compilation has no package-write credentials, and the isolated
+publisher consumes verified OCI data without running candidate code. The package
+PAT belongs only to the main-restricted `native-image-publish-main` Environment;
+the three packages must not grant repository Actions automatic write access.
+The signing secret belongs only to the
 `staging-cd-main` Environment restricted to the `main` branch, not to repository
 secrets or dev compilation jobs. Initial activation needs the documented
 operator bootstrap and environment setup; no polling timer or direct main

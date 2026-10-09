@@ -31,8 +31,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-DOCKER_BUILDKIT=0 docker build --memory=3g --cpu-period=100000 --cpu-quota=200000 -f Dockerfile.gin --target build -t "$build_image" .
-DOCKER_BUILDKIT=0 docker build --memory=3g --cpu-period=100000 --cpu-quota=200000 -f Dockerfile.gin -t "$runtime_image" .
+DOCKER_BUILDKIT=0 docker build --memory=3g --memory-swap=3g --cpu-period=100000 --cpu-quota=200000 -f Dockerfile.gin --target build -t "$build_image" .
+DOCKER_BUILDKIT=0 docker build --memory=3g --memory-swap=3g --cpu-period=100000 --cpu-quota=200000 -f Dockerfile.gin -t "$runtime_image" .
 docker network create "$network" >/dev/null
 docker volume create "$secrets" >/dev/null
 docker run --rm --user 0:0 -v "$secrets:/run/frontiercloud-secrets" "$runtime_image" init-secrets
