@@ -1,0 +1,9 @@
+[Unit]
+Description=Wake verified staging CD only for queued successful dev CI events
+
+[Path]
+PathExists=/var/lib/frontiercloud-staging-trigger/pending.json
+Unit=frontiercloud-staging-cd.service
+
+[Install]
+WantedBy=multi-user.target

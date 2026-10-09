@@ -1,0 +1,52 @@
+name: Trigger preproduction CD
+
+on:
+  workflow_run:
+    workflows: ["Build and Test Docker Compose"]
+    branches: [dev]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  notify-staging:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'dev' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.repository == 'wongyiuming/FrontierCloud-Gin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      # Never check out or execute the triggering revision in this privileged job.
+      - name: Send signed wakeup after completed successful dev CI
+        env:
+          STAGING_CD_SECRET: ${{ secrets.STAGING_CD_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, hmac, json, os, time, urllib.request
+          with open(os.environ['GITHUB_EVENT_PATH']) as source:
+              event = json.load(source)
+          run = event['workflow_run']
+          secret = os.environ['STAGING_CD_SECRET'].encode()
+          if len(secret) < 32:
+              raise SystemExit('STAGING_CD_SECRET is not configured')
+          body = json.dumps({
+              'repository': 'wongyiuming/FrontierCloud-Gin',
+              'branch': 'dev', 'event': 'push', 'conclusion': 'success',
+              'sha': run['head_sha'], 'run_id': run['id'],
+              'run_number': run['run_number'], 'run_attempt': run['run_attempt'],
+              'timestamp': int(time.time()),
+          }, separators=(',', ':')).encode()
+          signature = hmac.new(secret, body, hashlib.sha256).hexdigest()
+          request = urllib.request.Request(
+              'https://ml.520mall.cc:9443/staging-ci-success', body,
+              headers={'Content-Type': 'application/json',
+                       'X-FrontierCloud-Signature': 'sha256=' + signature},
+              method='POST')
+          with urllib.request.urlopen(request, timeout=20) as response:
+              if response.status != 202:
+                  raise SystemExit('Staging did not accept the CI event')
+          print('Successful dev CI wakeup accepted; deployment is verified on EVOXT.')
+          PY
