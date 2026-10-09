@@ -54,4 +54,5 @@ docker run --rm --cpus=2 --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=re
     -e GOMAXPROCS=2 --memory=2g "$build_image" go test -p=2 -race -count=1 -v ./cmd/frontiercloud
 docker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 "$build_image" go test -p=2 -race ./...
 bash scripts/test-nginx-maintenance.sh
+bash scripts/test-nginx-response-headers.sh
 printf '%s\n' 'PASS: real MySQL, Redis, native process drain, Nginx maintenance and Go race checks'

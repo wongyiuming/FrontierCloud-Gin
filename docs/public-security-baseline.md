@@ -15,6 +15,7 @@ checked against source and read-only public responses/DNS on 2026-10-09.
 | Nginx version disclosed | `server_tokens off` suppresses the version, including errors. It does not conceal that Nginx exists and is not a substitute for patching. |
 | HTTP/1.1-only ALPN | Enable HTTP/2 on TLS servers; explicitly share TLS 1.2/1.3 and AEAD cipher policy with the default TLS server. Retain HTTP/1.1 fallback. |
 | Error pages lost headers | Add the complete edge headers on the maintenance location. Allow only hashes of its fixed trusted inline script/style, including upstream-generated 503 redirects. |
+| Karaoke duplicated security headers in staging | A child `proxy_hide_header Cache-Control` replaced the parent's entire hide list. All local hide lists now include the shared security/audit response filter; real tests assert each security header occurs once, including karaoke. Recording relays also ignore upstream internal-redirect instructions, as media relays already did. |
 | Admin canonical redirect lost a mapped HTTPS port | Found in the real loopback browser gate, not the third-party scan. Use a relative 308 so the actual public port survives; normal production port 443 is unaffected. The browser follows the original login destination rather than bypassing this hop. |
 | HSTS scored as weak | Keep the existing one-year HTTPS-only policy. Do not add `includeSubDomains` or preload without auditing all current/future subdomains. |
 | Missing discovery files | Publish robots rules and a sitemap of only three public landing pages, never media filenames, resource IDs, recordings or Admin URLs. These are crawler hints, not access controls. |
@@ -80,6 +81,11 @@ it cannot target a live URL. It verifies real HTTP/2, TLS 1.2/1.3, rejection of
 TLS 1.0/1.1, one CSP header, Range responses, valid playback selection,
 Admin/Karaoke scripts, microphone scope, blocked injected inline JS/handlers,
 and the actual maintenance document's script/style under CSP.
+
+`scripts/test-nginx-response-headers.sh` additionally runs a real isolated
+Nginx with a deliberately untrusted synthetic upstream, no published ports or
+external network, and a 64 MiB / 0.5 CPU bound. It checks canonical single
+headers, hidden audit IDs/cookies, and ignored storage internal redirects.
 
 Then push the exact tested commit to `dev`, await its lightweight CI, await the
 event-driven staging CD's complete state and matching live web/updater SHA,

@@ -40,7 +40,16 @@ class BrowserSecurityContractTests(unittest.TestCase):
     def test_edge_preserves_nonce_policy_without_duplicate_headers(self):
         config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
         self.assertIn('server_tokens off;', config)
-        self.assertIn('proxy_hide_header Content-Security-Policy;', config)
+        filtering = (ROOT / 'nginx/proxy-response-headers.conf').read_text(encoding='utf-8')
+        self.assertIn('proxy_hide_header Content-Security-Policy;', filtering)
+        self.assertEqual(config.count('include /etc/nginx/proxy-response-headers.conf;'), 4)
+        # Each locally declared hide list replaces, rather than merges with,
+        # the parent list; cover both relays and the karaoke cache override.
+        for location in re.findall(r'location [^\n]*\{(.*?)\n        }', config, re.S):
+            if 'proxy_hide_header ' in location:
+                self.assertIn('include /etc/nginx/proxy-response-headers.conf;', location)
+        recording = config.split('(?<relay_recording>', 1)[1].split('\n        }', 1)[0]
+        self.assertIn('proxy_ignore_headers X-Accel-Redirect;', recording)
         canonical = config.split('location = /api/v1/media/admin {', 1)[1].split('\n        }', 1)[0]
         self.assertIn('absolute_redirect off;', canonical)
         self.assertIn('return 308 /api/v1/media/admin/$is_args$args;', canonical)

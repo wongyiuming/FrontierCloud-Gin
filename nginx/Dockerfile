@@ -20,6 +20,7 @@ COPY nginx/19-maintenance-gate.sh /docker-entrypoint.d/19-maintenance-gate.sh
 COPY nginx/25-ip-security.sh /docker-entrypoint.d/25-ip-security.sh
 COPY nginx/render-security.awk /etc/nginx/render-security.awk
 COPY nginx/security-headers.conf /etc/nginx/security-headers.conf
+COPY nginx/proxy-response-headers.conf /etc/nginx/proxy-response-headers.conf
 COPY nginx/karaoke-security-headers.conf /etc/nginx/karaoke-security-headers.conf
 COPY nginx/maintenance-gate.conf /etc/nginx/maintenance-gate.conf
 COPY nginx/maintenance.html /usr/share/nginx/html/maintenance.html

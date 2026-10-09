@@ -50,6 +50,12 @@ curl --silent --show-error --cacert "$SSL_CERT_PATH" --http2 -D "$work/headers" 
 grep -q '^HTTP/2 200' "$work/headers"
 ! grep -qi 'server: nginx/' "$work/headers"
 test "$(grep -ci '^content-security-policy:' "$work/headers")" = 1
+for route in /api/v1/media/music /api/v1/media/video /karaoke/; do
+  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" -D "$work/public-headers" -o /dev/null "$base$route"
+  for header in content-security-policy x-content-type-options x-frame-options referrer-policy permissions-policy strict-transport-security; do
+    test "$(grep -ci "^$header:" "$work/public-headers")" = 1
+  done
+done
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" -H 'Range: bytes=0-43' -D "$work/range-headers" \
   "$base/api/v1/media/stream?file_path=music%2Fsecurity-fixture%2F01-first.wav" -o "$work/range-body"
 grep -q ' 206' "$work/range-headers"
