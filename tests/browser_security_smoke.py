@@ -27,7 +27,7 @@ def main():
             robots = context.request.get(base + '/robots.txt')
             assert 'Sitemap: ' + base + '/sitemap.xml' in robots.text()
             contact = context.request.get(base + '/.well-known/security.txt')
-            assert contact.status == 200
+            assert contact.status == 200, (contact.status, contact.text())
             assert 'Canonical: ' + base + '/.well-known/security.txt' in contact.text()
         context.add_init_script("""window.cspViolations=[];document.addEventListener('securitypolicyviolation',e=>window.cspViolations.push(e.effectiveDirective));""")
         page = context.new_page()
