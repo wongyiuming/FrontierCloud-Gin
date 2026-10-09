@@ -195,6 +195,20 @@ func VerifyMediaToken(credential, token string, now int64) (map[string]any, erro
 
 // StorageToken creates a storage capability compatible with the Python runtime.
 func StorageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path string, size, now int64) (string, error) {
+	return storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path, "", size, now)
+}
+
+// StorageUploadToken binds an upload to one reservation generation. Older
+// storage runtimes ignore this additional signed field; new ones fence aborted
+// generations before reserving or writing bytes.
+func StorageUploadToken(credential, relationship, master, storageNode, mediaID, storageObjectID, path, uploadID string, size, now int64) (string, error) {
+	if !identifier.MatchString(uploadID) {
+		return "", errors.New("invalid storage upload generation")
+	}
+	return storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, "upload", path, uploadID, size, now)
+}
+
+func storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path, uploadID string, size, now int64) (string, error) {
 	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(storageNode) ||
 		!objectID.MatchString(mediaID) || !objectID.MatchString(storageObjectID) ||
 		(operation != "upload" && operation != "delete") || size < 0 || size > 10*1024*1024*1024 ||
@@ -205,6 +219,9 @@ func StorageToken(credential, relationship, master, storageNode, mediaID, storag
 		"r": relationship, "m": master, "n": storageNode, "g": mediaID,
 		"i": storageObjectID, "op": operation, "path": path, "size": size,
 		"e": now + TokenSeconds, "v": Version,
+	}
+	if uploadID != "" {
+		payload["upload_id"] = uploadID
 	}
 	return capabilityToken(credential, payload)
 }
@@ -229,6 +246,9 @@ func VerifyStorageToken(credential, token string, now int64) (map[string]any, er
 		if !objectID.MatchString(stringField(value, name)) {
 			return nil, errors.New("invalid or expired storage capability")
 		}
+	}
+	if _, present := value["upload_id"]; present && !identifier.MatchString(stringField(value, "upload_id")) {
+		return nil, errors.New("invalid or expired storage capability")
 	}
 	return value, nil
 }

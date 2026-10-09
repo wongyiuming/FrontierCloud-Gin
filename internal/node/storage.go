@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"regexp"
@@ -86,7 +87,9 @@ func (s *Service) UploadStorage(ctx context.Context, v store.UploadReservation, 
 }
 func (s *Service) StatStorage(ctx context.Context, v store.UploadReservation) (map[string]any, error) {
 	// Capability creation also verifies the current Master identity and protocol.
-	if _, err := s.StorageCapability(ctx, v, "upload"); err != nil {
+	// Stat is also used for existing catalog placements (rename/delete checks),
+	// which have no upload generation. The generated token is not transmitted.
+	if _, err := s.StorageCapability(ctx, v, "delete"); err != nil {
 		return nil, err
 	}
 	r, err := s.storageRelation(ctx, v)
@@ -109,6 +112,33 @@ func (s *Service) DeleteStorage(ctx context.Context, v store.UploadReservation) 
 		return err
 	}
 	if textField(result, "status") != "deleted" {
+		return store.ErrNodeState
+	}
+	return nil
+}
+
+// AbortAbsentStorage is deliberately not DeleteStorage: a completed upload
+// appearing between stat and this request must remain intact. No fallback to
+// the old destructive endpoint is safe when an older storage lacks this API.
+func (s *Service) AbortAbsentStorage(ctx context.Context, v store.UploadReservation) error {
+	if !storageRenameID.MatchString(v.ID) {
+		return store.ErrNodeState
+	}
+	if _, err := s.StorageCapability(ctx, v, "upload"); err != nil {
+		return err
+	}
+	r, err := s.storageRelation(ctx, v)
+	if err != nil {
+		return err
+	}
+	result, err := s.Call(ctx, r, "/internal/v1/storage-control/upload-absence", map[string]any{"upload_id": v.ID, "object_id": v.MediaID, "path": v.Path})
+	if err != nil {
+		if errors.Is(err, ErrRemoteConflict) {
+			return store.ErrNodeState
+		}
+		return err
+	}
+	if textField(result, "status") != "absent" || textField(result, "upload_id") != v.ID || textField(result, "object_id") != v.MediaID || textField(result, "path") != v.Path || textField(result, "fence") != "durable-generation-v1" {
 		return store.ErrNodeState
 	}
 	return nil

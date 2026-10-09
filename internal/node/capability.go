@@ -98,6 +98,9 @@ func (s *Service) StorageCapability(ctx context.Context, v store.UploadReservati
 	if err != nil {
 		return "", ErrCapability
 	}
+	if operation == "upload" {
+		return protocol.StorageUploadToken(credential, relation.ID, row.ID, v.MemberID, v.MediaID, v.MediaID, v.Path, v.ID, v.ExpectedBytes, time.Now().Unix())
+	}
 	return protocol.StorageToken(credential, relation.ID, row.ID, v.MemberID, v.MediaID, v.MediaID, operation, v.Path, v.ExpectedBytes, time.Now().Unix())
 }
 func (s *Service) VerifyOwnedStorage(ctx context.Context, token, objectID, operation string) (store.Relationship, map[string]any, error) {

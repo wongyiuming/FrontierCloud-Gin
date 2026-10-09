@@ -30,6 +30,55 @@ func storageCORS(c *gin.Context, relation store.Relationship) bool {
 	return true
 }
 func RegisterNodeStorage(router *gin.Engine, settings config.Config, resolver *network.Resolver, control *node.Service, volume *media.Service) {
+	router.POST("/internal/v1/storage-control/upload-absence", func(c *gin.Context) {
+		if !nodeHTTPS(c, settings, resolver) {
+			return
+		}
+		body, ok := nodeBody(c)
+		if !ok {
+			return
+		}
+		path := c.Request.URL.EscapedPath()
+		if c.Request.URL.RawQuery != "" {
+			path += "?" + c.Request.URL.RawQuery
+		}
+		relation, err := control.Authenticate(c.Request.Context(), c.Request.Header, c.Request.Method, path, body, false, false)
+		if err != nil {
+			if errors.Is(err, node.ErrAuthentication) {
+				detail(c, 401, "Invalid relationship authentication")
+			} else {
+				internalError(c, err)
+			}
+			return
+		}
+		if err = control.RequireFollower(c.Request.Context(), relation); err != nil {
+			if errors.Is(err, store.ErrNodeState) {
+				detail(c, 403, "Only the active upstream may fence Follower uploads")
+			} else {
+				internalError(c, err)
+			}
+			return
+		}
+		var value struct {
+			UploadID string `json:"upload_id"`
+			ObjectID string `json:"object_id"`
+			Path     string `json:"path"`
+		}
+		if controlJSON(body, &value) != nil {
+			detail(c, 400, "Invalid storage absence request")
+			return
+		}
+		receipt, err := volume.OwnedUploadAbsence(c.Request.Context(), relation.ID, value.UploadID, value.ObjectID, value.Path)
+		if err != nil {
+			if errors.Is(err, store.ErrNodeState) || errors.Is(err, os.ErrExist) {
+				detail(c, 409, "Storage absence cannot be proven")
+			} else {
+				mediaAdminError(c, err)
+			}
+			return
+		}
+		c.JSON(200, receipt)
+	})
 	router.POST("/internal/v1/storage-control/directory-rename", func(c *gin.Context) {
 		if !nodeHTTPS(c, settings, resolver) {
 			return
@@ -180,7 +229,14 @@ func RegisterNodeStorage(router *gin.Engine, settings config.Config, resolver *n
 			inactivity = 120 * time.Second
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, &uploadReader{c.Request.Body, controller, inactivity}, size)
-		receipt, err := volume.OwnedUpload(c.Request.Context(), relation.ID, object, size, c.Request.Body, store.NodeAudit{Actor: relation.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		expiryNumber, ok := value["e"].(json.Number)
+		expiry, expiryErr := expiryNumber.Int64()
+		if !ok || expiryErr != nil {
+			detail(c, 401, "Storage capability invalid or expired")
+			return
+		}
+		uploadID, _ := value["upload_id"].(string)
+		receipt, err := volume.OwnedUploadCapability(c.Request.Context(), relation.ID, object, size, c.Request.Body, store.NodeAudit{Actor: relation.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")}, uploadID, expiry)
 		if err != nil {
 			if errors.Is(err, store.ErrStorageCapacity) {
 				detail(c, 507, "Follower storage is not writable or lacks capacity")

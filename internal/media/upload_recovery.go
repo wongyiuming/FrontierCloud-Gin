@@ -68,9 +68,10 @@ func (s *Service) reconcileExpiredUpload(ctx context.Context, id string) error {
 		if !errors.Is(err, node.ErrRemoteNotFound) {
 			return err
 		}
-		// A paired storage deletion/absence receipt refuses live partial stages.
-		// Never release quota on a timeout, auth/network error or unknown file.
-		if err = s.control.DeleteStorage(ctx, v); err != nil {
+		// Stat's 404 is not atomic absence proof. The non-destructive paired
+		// operation refuses committed/unknown bytes and fences late writers.
+		// Unsupported legacy storage must defer, never fall back to deletion.
+		if err = s.control.AbortAbsentStorage(ctx, v); err != nil {
 			return err
 		}
 	}
@@ -78,6 +79,20 @@ func (s *Service) reconcileExpiredUpload(ctx context.Context, id string) error {
 }
 
 func (s *Service) RetryExpiredUploads(ctx context.Context) error {
+	return s.retryExpiredUploads(ctx, uploadRecoveryBudget, 5*time.Second)
+}
+
+func uploadRecoveryBudget(v store.UploadReservation) time.Duration {
+	// Hash verification happens on storage, not Master. Give large media
+	// a bounded byte-dependent budget instead of timing out every retry.
+	return min(180*time.Second, 10*time.Second+time.Duration(v.ExpectedBytes/(16*1024*1024))*time.Second)
+}
+
+// Keep a cleanup grace inside the sweep deadline: a maximum-size item must
+// leave time to rotate its reservation before the sweep context expires.
+// The budget function permits fast deadline tests without changing production
+// limits. Both investigation and rotation still inherit caller cancellation.
+func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store.UploadReservation) time.Duration, cleanupGrace time.Duration) error {
 	if s.pool == nil || s.nodes == nil {
 		return nil
 	}
@@ -108,14 +123,32 @@ func (s *Service) RetryExpiredUploads(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// Hash verification happens on storage, not Master. Give large media
-		// a bounded byte-dependent budget instead of timing out every retry.
-		budget := min(180*time.Second, 10*time.Second+time.Duration(v.ExpectedBytes/(16*1024*1024))*time.Second)
+		budget := itemBudget(v)
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline) - cleanupGrace
+			if remaining <= 0 {
+				return context.DeadlineExceeded
+			}
+			budget = min(budget, remaining)
+		}
 		bounded, cancel := context.WithTimeout(ctx, budget)
 		err := s.reconcileExpiredUpload(bounded, v.ID)
 		cancel()
 		if err != nil {
-			_ = s.pool.DeferExpiredUpload(ctx, v.ID)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// Rotation updates ordering only; it never renews expiry or releases
+			// quota. Do not detach this SQL write from caller cancellation.
+			rotation, rotationCancel := context.WithTimeout(ctx, cleanupGrace)
+			rotationErr := s.pool.DeferExpiredUpload(rotation, v.ID)
+			rotationCancel()
+			if rotationErr != nil {
+				if ctx.Err() == nil {
+					slog.Warn("expired upload rotation failed", "upload_id", v.ID, "error", rotationErr)
+				}
+				return errors.Join(err, rotationErr)
+			}
 			if !errors.Is(err, store.ErrNodeState) && !errors.Is(err, os.ErrExist) && !errors.Is(err, ErrUnavailable) {
 				slog.Warn("expired upload reconciliation deferred", "upload_id", v.ID, "error", err)
 			}

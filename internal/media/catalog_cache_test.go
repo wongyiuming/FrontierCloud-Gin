@@ -199,12 +199,20 @@ func TestCatalogCacheBoundsTTLFailureAndCancellation(t *testing.T) {
 	close(svc.catalog.building)
 	svc.catalog.building = nil
 	svc.catalog.mu.Unlock()
-	svc.ConfigureCatalogCache(time.Nanosecond)
+	svc.ConfigureCatalogCache(time.Second)
 	beforeFills := fills.Load()
-	for range 2 {
-		if _, err := svc.cachedCatalog(ctx, "ttl", build); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := svc.cachedCatalog(ctx, "ttl", build); err != nil {
+		t.Fatal(err)
+	}
+	// Expire a real populated entry explicitly. Two lookups are not guaranteed
+	// to cross a one-nanosecond TTL on every operating system's clock quantum.
+	svc.catalog.mu.Lock()
+	expired := svc.catalog.entries["ttl"]
+	expired.expires = time.Now().Add(-time.Second)
+	svc.catalog.entries["ttl"] = expired
+	svc.catalog.mu.Unlock()
+	if _, err := svc.cachedCatalog(ctx, "ttl", build); err != nil {
+		t.Fatal(err)
 	}
 	if fills.Load() != beforeFills+2 {
 		t.Fatal("expired entry reused")

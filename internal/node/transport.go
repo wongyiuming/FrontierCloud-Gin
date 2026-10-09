@@ -32,6 +32,7 @@ var resourceIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 // Preserve the sanitized HTTP-status diagnostic while allowing typed recovery.
 var ErrRemoteNotFound = errors.New("node control HTTP 404")
+var ErrRemoteConflict = errors.New("node control HTTP 409")
 
 func ValidIdentifier(value string) bool { return nodeIdentifier.MatchString(value) }
 
@@ -287,6 +288,9 @@ func (t *Transport) Request(ctx context.Context, origin, route, method string, v
 	if response.StatusCode != http.StatusOK {
 		if response.StatusCode == http.StatusNotFound {
 			return nil, ErrRemoteNotFound
+		}
+		if response.StatusCode == http.StatusConflict {
+			return nil, ErrRemoteConflict
 		}
 		return nil, fmt.Errorf("node control HTTP %d", response.StatusCode)
 	}

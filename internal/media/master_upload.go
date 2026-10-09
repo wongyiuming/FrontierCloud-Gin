@@ -339,7 +339,7 @@ func (s *Service) CancelMasterUpload(ctx context.Context, id string, a store.Adm
 		if s.control == nil {
 			return ErrUnavailable
 		}
-		if err = s.control.DeleteStorage(ctx, v); err != nil {
+		if err = s.control.AbortAbsentStorage(ctx, v); err != nil {
 			return err
 		}
 	}
