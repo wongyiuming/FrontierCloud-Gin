@@ -63,6 +63,7 @@ def main():
         catalog = context.request.get(base + '/api/v1/media/catalog/media?media_type=music&path=music%2Fsecurity-fixture&playback_session_id=security-smoke').json()
         media_id = catalog['entries'][0]['karaoke_id']
         page.goto(base + '/karaoke/?media=' + urllib.parse.quote(media_id), wait_until='networkidle')
+        assert 'no-store' in context.request.get(base + '/karaoke/').headers['cache-control']
         assert page.evaluate('window.cspViolations') == []
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is True
         response = context.request.post(base + '/api/v1/media/admin/elevate', form={'token': os.environ['ADMIN_KEY']})
