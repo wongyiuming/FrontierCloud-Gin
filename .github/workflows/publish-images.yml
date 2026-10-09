@@ -21,8 +21,10 @@ jobs:
       matrix:
         component: [web, updater, nginx]
     concurrency:
-      group: native-images-${{ matrix.component }}-${{ github.ref }}
-      cancel-in-progress: true
+      # Shared by dev/main/reruns of one SHA. A trusted writer must never cancel
+      # another writer midway through publication or replace its accepted bytes.
+      group: native-images-${{ github.repository }}-${{ github.sha }}-${{ matrix.component }}
+      cancel-in-progress: false
     steps:
       # Push-triggered so the first dev candidate can be accepted BEFORE merge.
       # No checkout, compilation or package publication precedes this exact gate.
@@ -54,14 +56,27 @@ jobs:
             }
             throw new Error('Exact test CI has not succeeded within its bounded deadline');
       - uses: actions/checkout@v4
+      - name: Verify all existing SHA components anonymously before any build
+        id: publication
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 scripts/registry_images.py --publication-plan "$GITHUB_SHA" "$COMPONENT" > .ci-publication-plan.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          plan = json.load(open('.ci-publication-plan.json'))
+          print('missing=' + str(plan['components'][os.environ['COMPONENT']]['missing']).lower())
+          PY
       - uses: actions/setup-go@v6
-        if: matrix.component != 'nginx'
+        if: steps.publication.outputs.missing == 'true' && matrix.component != 'nginx'
         with:
           go-version: '1.26.8'
           cache: true
       - uses: docker/setup-buildx-action@v3
+        if: steps.publication.outputs.missing == 'true'
       - name: Compile only the selected native binary
-        if: matrix.component != 'nginx'
+        if: steps.publication.outputs.missing == 'true' && matrix.component != 'nginx'
         env:
           COMPONENT: ${{ matrix.component }}
           GOMAXPROCS: '4'
@@ -78,84 +93,16 @@ jobs:
             go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$GITHUB_SHA" -o .ci-out/frontiercloud-updater ./cmd/frontiercloud-updater
           fi
       - name: Authenticate package publication
+        if: steps.publication.outputs.missing == 'true'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - name: Publish exact-SHA runtime image, without runtime source/compiler
+      - name: Reuse verified SHA bytes or publish only proven missing image
         env:
           COMPONENT: ${{ matrix.component }}
         run: |
-          image="ghcr.io/wongyiuming/frontiercloud-gin-$COMPONENT:$GITHUB_SHA"
-          file="ci/Dockerfile.$COMPONENT"
-          if test "$COMPONENT" = nginx; then file=nginx/Dockerfile; fi
-          docker buildx build --platform linux/amd64 --file "$file" \
-            --build-arg "REVISION=$GITHUB_SHA" --build-arg FRONTIERCLOUD_RUNTIME=go \
-            --label org.opencontainers.image.source=https://github.com/wongyiuming/FrontierCloud-Gin \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            --tag "$image" --provenance=mode=max \
-            --cache-from "type=gha,scope=native-$COMPONENT" \
-            --cache-to "type=gha,mode=max,scope=native-$COMPONENT" --push .
+          python3 scripts/publish_native_image.py "$GITHUB_SHA" "$COMPONENT"
       - name: Verify this package is publicly readable without login
         env:
           COMPONENT: ${{ matrix.component }}
         run: python3 scripts/registry_images.py --resolve "$GITHUB_SHA" "$COMPONENT"
-
-  notify-staging:
-    needs: publish
-    if: >-
-      github.repository == 'wongyiuming/FrontierCloud-Gin' &&
-      github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions:
-      actions: read
-    steps:
-      # No triggering-source checkout or execution in the CD-secret job.
-      - name: Resolve the original successful test CI identity
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const result = await github.rest.actions.listWorkflowRuns({
-              owner, repo, workflow_id: 'docker.yml', event: 'push',
-              head_sha: context.sha, per_page: 20,
-            });
-            const runs = result.data.workflow_runs.filter(run =>
-              run.head_sha === context.sha && run.head_branch === 'dev' && run.event === 'push');
-            runs.sort((a, b) => b.run_number - a.run_number || b.run_attempt - a.run_attempt);
-            const run = runs[0];
-            if (!run || run.status !== 'completed' || run.conclusion !== 'success') {
-              throw new Error('Newest exact test CI is not successful');
-            }
-            core.setOutput('id', run.id);
-            core.setOutput('number', run.run_number);
-            core.setOutput('attempt', run.run_attempt);
-      - name: Send signed CD wakeup only after all image publications succeed
-        env:
-          STAGING_CD_SECRET: ${{ secrets.STAGING_CD_SECRET }}
-          SOURCE_ID: ${{ steps.source.outputs.id }}
-          SOURCE_NUMBER: ${{ steps.source.outputs.number }}
-          SOURCE_ATTEMPT: ${{ steps.source.outputs.attempt }}
-        run: |
-          python3 - <<'PY'
-          import hashlib, hmac, json, os, time, urllib.request
-          secret = os.environ['STAGING_CD_SECRET'].encode()
-          if len(secret) < 32:
-              raise SystemExit('STAGING_CD_SECRET is not configured')
-          body = json.dumps({
-              'repository': 'wongyiuming/FrontierCloud-Gin', 'branch': 'dev',
-              'event': 'push', 'conclusion': 'success', 'sha': os.environ['GITHUB_SHA'],
-              'run_id': int(os.environ['SOURCE_ID']), 'run_number': int(os.environ['SOURCE_NUMBER']),
-              'run_attempt': int(os.environ['SOURCE_ATTEMPT']), 'timestamp': int(time.time()),
-          }, separators=(',', ':')).encode()
-          request = urllib.request.Request(
-              'https://ml.520mall.cc:9443/staging-ci-success', body,
-              headers={'Content-Type': 'application/json',
-                       'X-FrontierCloud-Signature': 'sha256=' + hmac.new(secret, body, hashlib.sha256).hexdigest()},
-              method='POST')
-          with urllib.request.urlopen(request, timeout=20) as response:
-              if response.status != 202:
-                  raise SystemExit('Staging did not accept the image-ready CI event')
-          print('Public images ready; successful exact test CI wakeup accepted.')
-          PY

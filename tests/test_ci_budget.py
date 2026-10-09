@@ -20,6 +20,15 @@ class CIBudgetTests(unittest.TestCase):
         for value in ("", "    timeout-minutes: 65\n", "    timeout-minutes: ${{ inputs.limit }}\n"):
             self.assertTrue(inspect_workflow("name: test\njobs:\n  check:\n" + value, "fixture"))
 
+    def test_cd_secret_cannot_be_added_to_push_source_or_compilation_workflow(self):
+        source = "name: test\non:\n  push:\njobs:\n  check:\n    timeout-minutes: 3\n    env:\n      KEY: ${{ secrets.STAGING_CD_SECRET }}\n"
+        self.assertTrue(inspect_workflow(source, 'docker.yml'))
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/staging-cd.yml').read_text()
+        self.assertEqual(inspect_workflow(workflow, 'staging-cd.yml'), [])
+        self.assertTrue(inspect_workflow(workflow.replace('github.workflow_sha', 'github.event.workflow_run.head_sha'), 'staging-cd.yml'))
+        self.assertTrue(inspect_workflow(workflow.replace('  workflow_run:', '  push:'), 'staging-cd.yml'))
+        self.assertTrue(inspect_workflow(workflow.replace('environment: staging-cd-main', 'environment: staging'), 'staging-cd.yml'))
+
     def test_heavywork_and_chains_cannot_hide_behind_short_timeout(self):
         for step in ("bash scripts/test-mixed-runtime.sh", "docker build .", "nohup test &", "federation_stack.py", "bash scripts/test-go-updater.sh",
                      "bash scripts/test-native-api.sh", "bash scripts/test-native-matrix.sh",

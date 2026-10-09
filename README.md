@@ -60,9 +60,13 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
 EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
-Its [bounded local CD controller](docs/staging-cd.md) is triggered by each completed
-successful `dev` push test CI **and public image publication**, never by a polling timer; production follows reviewed
-`dev -> main` releases only.
+Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
+from a default-`main` trusted workflow after successful exact-`dev` test CI and
+all three public image proofs. The signing secret belongs only to the
+`staging-cd-main` Environment restricted to the `main` branch, not to repository
+secrets or dev compilation jobs. Initial activation needs the documented
+operator bootstrap and environment setup; no polling timer or direct main
+write substitutes for `dev -> main` promotion. Production remains manual.
 
 The [public security baseline](docs/public-security-baseline.md) documents
 nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and

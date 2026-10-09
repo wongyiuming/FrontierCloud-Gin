@@ -16,6 +16,19 @@ def inspect_workflow(text: str, name: str) -> list[str]:
     if len(jobs) != 2:
         return findings + [f"{name}: jobs block missing"]
     artifact = name == 'publish-images.yml'
+    if 'secrets.STAGING_CD_SECRET' in text and name != 'staging-cd.yml':
+        findings.append(f"{name}: CD signing secret is forbidden outside the trusted main notifier")
+    if name == 'staging-cd.yml':
+        for contract in ('workflow_run:', 'workflows: ["Publish native images"]',
+                         "github.ref == 'refs/heads/main'", "github.workflow_sha",
+                         'persist-credentials: false', 'scripts/trusted_staging_notify.py',
+                         'environment: staging-cd-main'):
+            if contract not in text:
+                findings.append(f"{name}: default-main notification trust gate missing")
+        if re.search(r'(?m)^  (?:push|pull_request|pull_request_target|workflow_dispatch|schedule):', text):
+            findings.append(f"{name}: privileged notifier must use only workflow_run")
+        if 'ref: ${{ github.event.workflow_run.head_sha }}' in text:
+            findings.append(f"{name}: candidate source checkout is forbidden in the secret-bearing notifier")
     if HEAVY.search(jobs[1]) and not artifact:
         findings.append(f"{name}: heavyweight/background acceptance is prohibited in hosted CI")
     if artifact:
@@ -32,7 +45,7 @@ def inspect_workflow(text: str, name: str) -> list[str]:
         maximum = 10 if artifact and job == 'publish' else 3
         if len(limits) != 1 or not 1 <= int(limits[0]) <= maximum:
             findings.append(f"{name}/{job}: explicit timeout-minutes from 1 through {maximum} required")
-        if re.search(r"(?m)^    needs:", block) and not (artifact and job == 'notify-staging' and re.search(r'(?m)^    needs: publish\s*$', block)):
+        if re.search(r"(?m)^    needs:", block):
             findings.append(f"{name}/{job}: serial CI job chains can exceed the workflow budget")
     return findings
 

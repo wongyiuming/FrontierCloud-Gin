@@ -7,8 +7,10 @@ Browser `finally` is best-effort only; it is not run reliably on page teardown.
 ## Recovery rules
 
 The Master retains the existing 30-minute reservation deadline. A background
-sweep runs at startup and every 30 seconds, examines at most 50 expired
-reservations serially. Checks start with ten seconds and allow one additional
+sweep runs immediately at startup, then waits a full 30 seconds after each
+sweep finishes before starting another. Each sweep examines at most 50 expired
+reservations serially. A long sweep cannot accumulate timer ticks and cause
+continuous verification work without a cooldown. Checks start with ten seconds and allow one additional
 second per 16 MiB, capped at 180 seconds; a sweep is capped at 180 seconds.
 Storage digest verification uses a separate one-connection pool, so hashing
 large files does not consume the ten-second heartbeat pool. Failed checks
@@ -108,5 +110,9 @@ receipt rejection. Real TLS tests distinguish 404 from 401/403/409/5xx.
 Race tests publish after a stat 404 and prove that absence conflicts while media
 bytes, storage catalog and quota survive; they also cover late admitted PUT,
 legacy unsupported API, live writer/journal rejection and fresh same-path retry.
+Controlled-clock scheduler tests execute the production scheduling function
+with short and long sweeps, proving a full completion-relative cooldown and
+parent cancellation during work, waiting, and before the first sweep. They do
+not sleep for 30 seconds or change the system clock.
 Business repository tests run against both SQLite and MySQL on the bounded
 development host, not production fixtures or the three-minute hosted test CI.

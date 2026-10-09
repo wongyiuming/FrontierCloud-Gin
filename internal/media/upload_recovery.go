@@ -158,18 +158,44 @@ func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store
 }
 
 func (s *Service) RunUploadRecovery(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	runUploadRecovery(ctx, s.RetryExpiredUploads, func(delay time.Duration) uploadRecoveryTimer {
+		return liveUploadRecoveryTimer{time.NewTimer(delay)}
+	})
+}
+
+type uploadRecoveryTimer interface {
+	channel() <-chan time.Time
+	stop()
+}
+
+type liveUploadRecoveryTimer struct{ timer *time.Timer }
+
+func (t liveUploadRecoveryTimer) channel() <-chan time.Time { return t.timer.C }
+func (t liveUploadRecoveryTimer) stop()                     { t.timer.Stop() }
+
+// Start immediately, then cool down for a full interval after each sweep.
+// A fixed ticker would accumulate a tick during slow work and immediately
+// restart expensive storage/hash investigations when that work finishes.
+func runUploadRecovery(ctx context.Context, sweep func(context.Context) error, newTimer func(time.Duration) uploadRecoveryTimer) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		bounded, cancel := context.WithTimeout(ctx, 180*time.Second)
-		if err := s.RetryExpiredUploads(bounded); err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
+		if err := sweep(bounded); err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
 			slog.Warn("upload reconciliation sweep deferred", "error", err)
 		}
 		cancel()
+		if ctx.Err() != nil {
+			return
+		}
+		cooldown := newTimer(30 * time.Second)
 		select {
 		case <-ctx.Done():
+			cooldown.stop()
 			return
-		case <-ticker.C:
+		case <-cooldown.channel():
+			cooldown.stop()
 		}
 	}
 }

@@ -1,7 +1,8 @@
 # Public native image delivery
 
 The original `docker.yml` test/promotion CI keeps its three-minute hard limit.
-Heavyweight acceptance still runs serially on the development host. Compilation
+Heavyweight acceptance runs on the development host with bounded parallelism,
+not inside hosted test CI. Compilation
 is a **separate** `Publish native images` workflow (`publish-images.yml`), not a
 longer test CI or a background test workaround.
 
@@ -17,9 +18,13 @@ longer test CI or a background test workaround.
    on the GitHub runner (Go 1.26.8, CGO off, four compiler workers, 2 GiB Go memory
    limit). Runtime Dockerfiles copy those binaries, not source/compiler/tests.
    No `go test`, databases, fleet or browser acceptance runs in compilation CI.
-4. All three packages must be anonymously readable with verified manifests.
-   Only then the isolated, one-minute notification job signs a CD wakeup. It
-   does not check out source or expose the CD secret to compilation jobs.
+4. All three packages must be anonymously readable with verified manifests and
+   image configurations. A separate default-`main` `workflow_run` workflow then
+   handles the CD wakeup with its own three-minute limit. It executes only the
+   trusted default-branch code, not candidate code; its secret is restricted to
+   the `staging-cd-main` Environment with a main-only Branch deployment rule and
+   is never exposed to compilation jobs. A repository/organization secret copy
+   must not remain available to dev workflows.
 5. The receiver keeps the **original test CI** run identity for replay ordering.
    EVOXT independently verifies exact current dev HEAD/test CI, performs native
    deployment and must pass live acceptance before opening/merging dev -> main.
@@ -27,11 +32,14 @@ longer test CI or a background test workaround.
    source CI and publishes its own exact-merge-SHA images. Production remains a
    separate operator-controlled upgrade. Storage is never auto-upgraded.
 
-The workflow is push-triggered with an explicit exact test-CI gate rather than
-only `workflow_run`: this lets its first dev candidate be tested end-to-end
-before the workflow exists on default main. This does not permit premature
-compilation. The old source-success-only staging notification is retired and
-must be disabled on GitHub during the transition, not left racing image builds.
+The compilation workflow is push-triggered with an explicit exact test-CI gate;
+the secret-bearing CD notification uses the default-branch trust boundary.
+Before the new notification workflow exists on default main, its first dev
+candidate requires an explicitly authorized one-time operator bootstrap rather
+than running candidate code with a CD secret. That bootstrap is not implied by
+CI success. See [staging CD](staging-cd.md) for the transition and receiver gates.
+The old source-success-only staging notification must remain retired, not race
+image publication.
 
 ## Public artifacts and deployment
 
@@ -51,6 +59,46 @@ local Compose/native-updater alias. A SHA tag alone is not provenance proof.
 Public images contain no production data, `.env`, keys, Python backend or tests.
 First GHCR packages are private by default: an owner must make these three
 packages public; anonymous validation deliberately fails until that is done.
+
+## Write-once publication discipline
+
+Before setting up Go/Buildx, compiling or logging in, every matrix job
+anonymously checks **all three exact-SHA components**. It verifies the index and
+selected manifest SHA-256, config descriptor size and SHA-256, a unique
+`linux/amd64` runtime, canonical source/revision/component labels, Go/schema
+generation and the Web/Updater release contract. Existing verified bytes are
+reused by digest: rerunning a SHA or promoting the identical SHA from dev to
+main skips compilation and push. A valid partial release resumes only its
+missing components; existing ones are never rebuilt.
+
+Only one canonical `404 MANIFEST_UNKNOWN` for the **SHA tag itself** authorizes
+new publication. Generic 404, private/permission failures, network/5xx errors,
+unsupported existing platform, missing child/config or wrong provenance stop
+publication rather than granting a rebuild. GHCR's config-blob redirect is
+restricted to HTTPS `pkg-containers.githubusercontent.com`; a fresh request
+does not forward registry authorization, and returned bytes are hash-checked.
+
+Trusted publication jobs share a repository + SHA + component concurrency key
+across dev/main, with `cancel-in-progress: false`. The publisher rechecks the
+tag before pushing and verifies its final digest against Buildx's generated
+metadata. A previously verified digest that drifts or disappears is an error,
+not permission to replace it. These are **workflow-level** write-once controls,
+not registry atomic compare-and-swap or intrinsically immutable SHA tags. Every
+trusted writer must use that shared lock; external package administrators can
+still modify tags. Deployment therefore remains digest-pinned and fail-closed.
+
+On 2026-10-10 the new publisher was exercised twice against the already public
+SHA `05617629dc8f1bbb6cf029d24724d6f6b142d3b0`, anonymously checking its real
+three-component manifests/configurations. Both invocations reused identical
+digests with **zero build/push calls and no registry writes** (21.11 seconds
+total). This is a real existing-SHA reuse test, not a new GitHub workflow rerun
+or proof of registry CAS. The verified `linux/amd64` runtime digests were:
+
+| Component | Runtime digest |
+|---|---|
+| Web | `sha256:34d40ba6b751cb0b94075fe0215fcfe55cc9fc61af0f0c948801486431202ab2` |
+| Updater | `sha256:6f0edad01b75449b73a387a3d9bb21ee5d042b460db91da9d5a7b08f8916f624` |
+| Nginx | `sha256:f1c76d52389fa6fd43dd4b730ded3a1ffd3d6429189292480c52eddd4d66f60c` |
 
 Normal fresh deployment remains:
 
@@ -82,9 +130,14 @@ registry or runtime credential. Cleanup removes only exact obsolete project
 aliases, retaining current/previous images and shared registry tags/digests;
 it never force-deletes images, prunes globally, changes data or updates storage.
 
-One bridge upgrade is unavoidable for an old updater whose binary predates this
-feature: it still uses its previous local build implementation to install the
-new updater. Subsequent upgrades use public images. Historical release SHAs
+An old updater whose binary predates this feature needs a controlled bridge.
+Do not force its cold local compilation on a low-memory production host.
+A development-only real fixture has verified preserving the old business,
+identity/data and native idle journal while replacing only the control runtime
+with a verified public updater. Production use still requires explicit operator
+authorization and full acceptance of the final main release; never edit a
+journal to claim idle/success or bypass AdminGUI release policy. Subsequent
+upgrades use public images. Historical release SHAs
 without published images retain the proven-absence local-build fallback.
 `FRONTIERCLOUD_IMAGE_SOURCE=local` is reserved for isolated development fixtures
 whose private synthetic history has no public artifacts; it is not a production
