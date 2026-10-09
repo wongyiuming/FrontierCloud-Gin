@@ -40,6 +40,7 @@ type Config struct {
 	StaticRoot             string
 	SecretsDirectory       string
 	ServerName             string
+	PublicOrigin           string
 	TLSEnabled             bool
 	NginxMedia             bool
 	STUNPort               int
@@ -58,6 +59,7 @@ type Config struct {
 	SecurityExemptNetworks []string
 	SecurityInvalidLimit   int
 	SecurityInvalidWindow  int
+	SecurityContact        string
 	LogLevel               string
 	LogFormat              string
 	GitHubAPIToken         string
@@ -106,6 +108,14 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		ServerName:        fallback(getenv("SERVER_NAME"), "localhost"),
 	}
 	value.SecurityExemptNetworks = strings.Split(fallback(getenv("SECURITY_EXEMPT_NETWORKS"), "127.0.0.0/8,::1/128"), ",")
+	value.SecurityContact = strings.TrimSpace(getenv("SECURITY_CONTACT"))
+	if value.SecurityContact != "" {
+		contact, e := url.Parse(value.SecurityContact)
+		if e != nil || len(value.SecurityContact) > 2048 || strings.ContainsAny(value.SecurityContact, "\r\n\t ") || contact.User != nil || contact.Fragment != "" || contact.RawQuery != "" ||
+			!(contact.Scheme == "https" && contact.Hostname() != "" || contact.Scheme == "mailto" && strings.Count(contact.Opaque, "@") == 1 && !strings.HasPrefix(contact.Opaque, "@") && !strings.HasSuffix(contact.Opaque, "@")) {
+			return Config{}, errors.New("SECURITY_CONTACT must be one real HTTPS reporting URL or mailto address")
+		}
+	}
 	value.GitHubAPIToken = strings.TrimSpace(getenv("GITHUB_API_TOKEN"))
 	if len(value.GitHubAPIToken) > 4096 || strings.ContainsAny(value.GitHubAPIToken, "\r\n") {
 		return Config{}, errors.New("invalid GITHUB_API_TOKEN")
@@ -162,6 +172,10 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	}
 	if value.TLSEnabled && (value.ServerName == "localhost" || value.ServerName == "") {
 		return Config{}, errors.New("SERVER_NAME is required with TLS_ENABLED")
+	}
+	value.PublicOrigin, err = publicOrigin(value, getenv)
+	if err != nil {
+		return Config{}, err
 	}
 	if value.SQLitePath == ":memory:" {
 		return Config{}, errors.New("SQLITE_PATH must name a persistent database file")
@@ -249,6 +263,47 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		}
 	}
 	return value, nil
+}
+
+// Discovery URLs use operator configuration, never a request Host header.
+// PUBLIC_ORIGIN also supports a reverse proxy or a dynamically assigned port.
+func publicOrigin(value Config, getenv func(string) string) (string, error) {
+	raw := strings.TrimSpace(getenv("PUBLIC_ORIGIN"))
+	if raw == "" {
+		scheme, key, standard := "http", "HTTP_PORT", 80
+		if value.TLSEnabled {
+			scheme, key, standard = "https", "HTTPS_PORT", 443
+		}
+		port, err := integer(getenv(key), standard)
+		if err != nil || port < 0 || port > 65535 {
+			return "", fmt.Errorf("invalid %s for public discovery URLs", key)
+		}
+		// Port 0 asks Docker to choose a port; it cannot be inferred inside Web.
+		// The operator/test harness supplies PUBLIC_ORIGIN after allocation.
+		if port == 0 {
+			return "", nil
+		}
+		host := value.ServerName
+		if port != standard {
+			host = net.JoinHostPort(strings.Trim(host, "[]"), strconv.Itoa(port))
+		} else if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+			host = "[" + host + "]"
+		}
+		raw = (&url.URL{Scheme: scheme, Host: host}).String()
+	}
+	origin, err := url.Parse(raw)
+	if err != nil || strings.ContainsAny(raw, "\r\n\t ") || origin.User != nil || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || origin.Opaque != "" || origin.RawPath != "" ||
+		(origin.Path != "" && origin.Path != "/") || (origin.Scheme != "http" && origin.Scheme != "https") || !strings.EqualFold(origin.Hostname(), strings.Trim(value.ServerName, "[]")) {
+		return "", errors.New("PUBLIC_ORIGIN must be an HTTP(S) origin matching SERVER_NAME, without credentials, path, query or fragment")
+	}
+	if origin.Port() != "" {
+		port, err := strconv.Atoi(origin.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return "", errors.New("PUBLIC_ORIGIN port must be from 1 to 65535")
+		}
+	}
+	origin.Path = ""
+	return origin.String(), nil
 }
 
 func boolean(value string, defaultValue bool) (bool, error) {

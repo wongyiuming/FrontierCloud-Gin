@@ -2,6 +2,49 @@ package config
 
 import "testing"
 
+func TestConfiguredPublicOriginsPreservePublishedPorts(t *testing.T) {
+	for _, test := range []struct {
+		values map[string]string
+		want   string
+	}{
+		{nil, "http://localhost"},
+		{map[string]string{"HTTP_PORT": "0"}, ""},
+		{map[string]string{"HTTP_PORT": "9080"}, "http://localhost:9080"},
+		{map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true"}, "https://example.test"},
+		{map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true", "HTTPS_PORT": "8443"}, "https://example.test:8443"},
+		{map[string]string{"SERVER_NAME": "::1", "HTTP_PORT": "9080"}, "http://[::1]:9080"},
+		{map[string]string{"SERVER_NAME": "example.test", "HTTPS_PORT": "0", "PUBLIC_ORIGIN": "https://example.test:49152/"}, "https://example.test:49152"},
+	} {
+		got, err := LoadFrom(environment(test.values))
+		if err != nil || got.PublicOrigin != test.want {
+			t.Fatal(test.values, got.PublicOrigin, test.want, err)
+		}
+	}
+	for _, raw := range []string{"https://attacker.test", "https://user@example.test", "https://example.test/path", "https://example.test?query=1", "https://example.test#fragment", "https://example.test:0", "https://example.test:65536", "javascript:alert(1)", "https://example.test\nInjected: true"} {
+		if _, err := LoadFrom(environment(map[string]string{"SERVER_NAME": "example.test", "PUBLIC_ORIGIN": raw})); err == nil {
+			t.Fatal("invalid configured public origin accepted", raw)
+		}
+	}
+	for _, raw := range []string{"-1", "65536", "invalid"} {
+		if _, err := LoadFrom(environment(map[string]string{"HTTP_PORT": raw})); err == nil {
+			t.Fatal("invalid published port accepted", raw)
+		}
+	}
+}
+
+func TestSecurityReportingContactValidation(t *testing.T) {
+	for _, raw := range []string{"", "mailto:security@example.test", "https://reports.example.test/security"} {
+		if _, err := LoadFrom(environment(map[string]string{"SECURITY_CONTACT": raw})); err != nil {
+			t.Fatal(raw, err)
+		}
+	}
+	for _, raw := range []string{"http://reports.example.test/", "javascript:alert(1)", "mailto:not-an-address", "https://user:password@example.test/", "https://reports.example.test/\nExpires: never", "mailto:a@example.test?subject=secret", "https://"} {
+		if _, err := LoadFrom(environment(map[string]string{"SECURITY_CONTACT": raw})); err == nil {
+			t.Fatal("invalid security reporting URI accepted", raw)
+		}
+	}
+}
+
 func TestCatalogCacheTTLBounds(t *testing.T) {
 	for _, value := range []string{"-1", "86401", "invalid"} {
 		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err == nil {

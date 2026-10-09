@@ -20,7 +20,7 @@ The repository can fail an invalid PR topology, but repository-local code cannot
 3. Change the smallest coherent surface. Do not revive retired compatibility/product features to make a test pass.
 4. Add or strengthen regression coverage for every bug fix and every new invariant.
 5. Run the bounded source CI checks and native acceptance on the development host. A narrow unit test is not release evidence; heavyweight acceptance must never be added to hosted CI.
-6. Open a release PR only when authorized, using the profile's fixed promotion pair. Merge requires owner authorization and successful exact-source validation.
+6. Await successful dev CI, event-triggered preproduction CD completion, matching live revisions and relevant staging behavior before opening the authorized release PR. Use the fixed dev-to-main promotion pair and configured GitHub automatic review within existing quota. Merge requires owner authorization and successful exact-source validation; production upgrade is a separate maintainer action.
 
 ## Documentation ownership
 

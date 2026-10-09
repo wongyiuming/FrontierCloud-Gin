@@ -11,6 +11,7 @@ import argparse
 import http.cookiejar
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -50,6 +51,7 @@ class GinHTTPTests(unittest.TestCase):
                        MYSQL_USER="media_admin", MYSQL_DATABASE="fc_gin_http",
                        MYSQL_PASSWORD_FILE=str(OPTIONS.mysql_password_file or cls.work / "unused"),
                        TLS_ENABLED="false", SERVER_NAME="localhost",
+                       SECURITY_CONTACT="https://reports.example.test/security",
                        RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev")
         cls.binary = str(Path(OPTIONS.binary).resolve(strict=True))
         for command in ("init-secrets", "init-media", "migrate"):
@@ -137,6 +139,38 @@ class GinHTTPTests(unittest.TestCase):
         self.assertNotIn(b"{{", body)
         self.assertRegex(body.decode(), r"audio-continuous-stream\.js\?v=[0-9a-f]{16}")
         self.assertRegex(body.decode(), r"player-directory-label\.js\?v=[0-9a-f]{16}")
+
+    def test_real_gin_nonce_pages_admin_docs_and_microphone_scope(self):
+        seen = set()
+        for route in ("/api/v1/media", "/api/v1/media", "/api/v1/media/music",
+                      "/api/v1/media/music/category?path=music%2Ffixture",
+                      "/api/v1/media/admin", "/docs", "/redoc", "/karaoke/"):
+            status, headers, body = self.request("GET", route)
+            self.assertEqual(status, 200, (route, body))
+            policy = headers['Content-Security-Policy']
+            nonce = re.search(r"script-src 'self' 'nonce-([^']+)'", policy).group(1)
+            self.assertNotIn(nonce, seen)
+            seen.add(nonce)
+            self.assertIn("script-src-attr 'none'", policy)
+            self.assertNotIn('unsafe-eval', policy)
+            self.assertIn('no-store', headers['Cache-Control'])
+            for tag in re.findall(rb'<script\b[^>]*>', body):
+                self.assertIn(f'nonce="{nonce}"'.encode(), tag)
+            self.assertEqual('microphone=(self)' in headers['Permissions-Policy'], route == '/karaoke/')
+
+    def test_real_gin_public_standards_and_error_headers(self):
+        for route in ('/robots.txt', '/sitemap.xml', '/.well-known/security.txt'):
+            status, headers, body = self.request('GET', route, headers={'Host': 'attacker.test'})
+            self.assertEqual(status, 200)
+            self.assertNotIn(b'attacker.test', body)
+            self.assertNotIn(b'song.mp3', body)
+            self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+        status, headers, body = self.request('GET', '/missing-security-fixture')
+        self.assertEqual(status, 404)
+        self.assertIn("default-src 'none'", headers['Content-Security-Policy'])
+        status, headers, _ = self.request('TRACE', '/health')
+        self.assertEqual(status, 405)
+        self.assertIn("frame-ancestors 'none'", headers['Content-Security-Policy'])
 
     def test_stream_range_and_path_fence(self):
         status, headers, body = self.request(

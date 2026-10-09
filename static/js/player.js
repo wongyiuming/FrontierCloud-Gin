@@ -1183,7 +1183,7 @@ function renderPlaylist() {
     const matches = currentMediaList
         .map((item, index) => ({item, index}));
     listContainer.innerHTML = matches.map(({item, index}) => `
-        <li class="media-item ${index === currentIndex ? 'active' : ''}" data-index="${index}" data-media-id="${escapeHTML(item.media_id)}" onclick="selectMedia(${index})">
+        <li class="media-item ${index === currentIndex ? 'active' : ''}" data-index="${index}" data-media-id="${escapeHTML(item.media_id)}">
             <img src="${escapeHTML(item.cover)}" alt="cover">
             <div class="media-info">
                 <div class="media-title" title="${escapeHTML(item.title)}">${escapeHTML(middleEllipsis(item.title, 40))}</div>
@@ -1232,6 +1232,13 @@ async function loadPlayerCatalog() {
 
 window.addEventListener('DOMContentLoaded', () => {
     const listContainer = document.getElementById('mediaList');
+    // Delegation survives asynchronous catalog refreshes and strict script CSP.
+    listContainer.addEventListener('click', event => {
+        const item = event.target.closest('.media-item[data-index]');
+        if (!item || !listContainer.contains(item)) return;
+        const index = Number(item.dataset.index);
+        if (Number.isInteger(index) && index >= 0 && index < currentMediaList.length) selectMedia(index);
+    });
     listContainer.innerHTML = '<li style="padding:20px;color:#888;text-align:center;">正在加载媒体目录…</li>';
     document.getElementById('lyricsLink')?.addEventListener('click', openFullscreenLyrics);
     document.getElementById('karaokeLink')?.addEventListener('click', openKaraoke);

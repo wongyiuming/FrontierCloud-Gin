@@ -61,6 +61,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		}
 	}
 	router.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/api/v1/media") })
+	p.registerPublicStandards(router)
 	router.GET("/favicon.ico", func(c *gin.Context) { p.staticFile(c, "favicon.ico", true) })
 	router.GET("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
 	router.HEAD("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
@@ -351,7 +352,7 @@ func (p *Public) lyricsPage(c *gin.Context) {
 	p.page(c, "lyrics.html", map[string]string{"LYRICS_JSON": jsonString(lines), "LINE_COUNT": strconv.Itoa(len(lines))})
 }
 
-func (p *Public) template(name string) (string, error) {
+func (p *Public) template(c *gin.Context, name string) (string, error) {
 	bytes, err := p.static.ReadFile("media/" + name)
 	if err != nil {
 		return "", err
@@ -364,11 +365,15 @@ func (p *Public) template(name string) (string, error) {
 		}
 		content = strings.Replace(content, "</body>", `<script src="`+p.assets["js/player-directory-label.js"]+`"></script>`+"\n</body>", 1)
 	}
-	return content, nil
+	nonce, err := htmlNonce(c)
+	if err != nil {
+		return "", err
+	}
+	return nonceTemplate(content, nonce), nil
 }
 
 func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
-	content, err := p.template(name)
+	content, err := p.template(c, name)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -388,8 +393,7 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}
-	noStore(c)
-	c.Data(200, "text/html; charset=utf-8", []byte(content))
+	serveHTML(c, content, false)
 }
 
 func (p *Public) categoryPage(c *gin.Context, kind string) {
@@ -515,7 +519,7 @@ func (p *Public) staticFile(c *gin.Context, name string, favicon bool) {
 }
 
 func (p *Public) karaokePage(c *gin.Context) {
-	content, err := p.template("karaoke.html")
+	content, err := p.template(c, "karaoke.html")
 	if err != nil {
 		internalError(c, err)
 		return
@@ -524,6 +528,5 @@ func (p *Public) karaokePage(c *gin.Context) {
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}
-	c.Header("Cache-Control", "no-cache")
-	c.Data(200, "text/html; charset=utf-8", []byte(content))
+	serveHTML(c, content, false)
 }
