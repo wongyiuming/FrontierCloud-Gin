@@ -69,7 +69,15 @@ def main():
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is True
         response = context.request.post(base + '/api/v1/media/admin/elevate', form={'token': os.environ['ADMIN_KEY']})
         assert response.status == 200
-        page.goto(base + '/api/v1/media/admin', wait_until='networkidle')
+        # Nginx canonicalizes its /admin/ proxy location. On an ephemeral
+        # host port its absolute redirect can select container port 443;
+        # inspect that hop without following, then use the canonical route.
+        redirect = context.request.get(base + '/api/v1/media/admin', max_redirects=0)
+        if redirect.status in (301, 302, 307, 308):
+            target = urllib.parse.urlsplit(redirect.headers['location'])
+            assert target.path == '/api/v1/media/admin/'
+            print('Admin canonical redirect:', redirect.status, target.path, 'port', target.port)
+        page.goto(base + '/api/v1/media/admin/', wait_until='networkidle')
         page.locator('#customKeyForm').wait_for(state='attached')
         assert page.evaluate('window.cspViolations') == []
         assert errors == [], errors
