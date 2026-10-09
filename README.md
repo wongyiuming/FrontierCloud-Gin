@@ -22,14 +22,21 @@ use an exact reviewed release; bootstrap history alone is not release proof.
 
 ## Quick start
 
-For a fresh HTTP Standalone node, build the exact committed native source. No
-Python or MySQL service is required:
+For a fresh HTTP Standalone node, prepare images for the exact committed native
+source: pull verified public GHCR images first, compile locally only for confirmed
+missing versions/platforms. No Python application or MySQL service is required
+(the host-side image resolver uses Python 3):
 
 ```bash
 export FRONTIERCLOUD_REVISION="$(git rev-parse HEAD)"
 bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"
 docker compose up -d --no-build --wait
 ```
+
+Compiled images are visible in the repository's [public Packages](https://github.com/wongyiuming/FrontierCloud-Gin/packages).
+See [image delivery](docs/public-image-delivery.md) for exact-SHA/digest checks,
+fallback rules and the independent compilation workflow. Do not use `--build`
+for the normal image-first deployment path.
 
 Open `http://localhost`. The startup initializer creates the managed media tree under `data/media` and the persistent runtime secrets required by the stack.
 
@@ -52,7 +59,7 @@ Detailed configuration, generated-secret recovery, first Admin access, role init
 
 EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
 Its [bounded local CD controller](docs/staging-cd.md) is triggered by each completed
-successful `dev` push CI, never by a polling timer; production follows reviewed
+successful `dev` push test CI **and public image publication**, never by a polling timer; production follows reviewed
 `dev -> main` releases only.
 
 The [public security baseline](docs/public-security-baseline.md) documents
@@ -83,7 +90,7 @@ Operational and subsystem detail belongs in the separate GitHub Wiki (not tracke
 
 The published GitHub Wiki is available at [github.com/wongyiuming/FrontierCloud-Gin/wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki).
 
-Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay), repeated for SQLite and MySQL. Hosted CI stays within three minutes and does not run fleet, database or browser acceptance.
+Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay), repeated for SQLite and MySQL. Hosted test CI stays within three minutes. A separate, success-gated image compilation workflow has ten-minute parallel component jobs; neither workflow runs fleet, database or browser acceptance.
 
 ## Repository delivery
 

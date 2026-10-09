@@ -7,11 +7,14 @@ CLI commands or per-storage upgrade jobs.
 
 The new repository has only `dev` and `main`. Work is pushed to `dev`; a
 same-repository `dev -> main` PR promotes the reviewed exact tree. Hosted CI
-remains lightweight and capped at three minutes; native unit/race, real
+test jobs remain lightweight and capped at three minutes. A separate exact-CI-success-gated
+compilation workflow publishes public images with ten-minute parallel jobs; native unit/race, real
 database, Docker/updater, five-node and browser gates run on the development
 host. After merge, fast-forward development to the release merge commit;
 never force-rewrite it. Bootstrap history alone is not publishable release
-proof.
+proof. Native releases pull and validate exact-SHA public images pinned by digest;
+only confirmed missing images/platforms allow bounded local immutable-source
+builds. Auth/network/proof failures stop. See [image delivery](public-image-delivery.md).
 
 Admin lists up to ten recently merged release PRs, including the merge SHA,
 title, description, date and PR link. History discovery is cached for five

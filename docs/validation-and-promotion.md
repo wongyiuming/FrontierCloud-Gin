@@ -108,6 +108,9 @@ configuration only; production users/configuration are never weakened for tests.
    separately and preserve complete gate evidence, including skips and limits.
 3. When authorized, push `dev`. Hosted source CI is lightweight and capped at
    three minutes; use the newest successful push for that exact source SHA.
+   A separate compilation workflow starts compilation only after that exact
+   success, publishes three public images (ten-minute parallel component jobs),
+   then allows CD notification; it runs no heavyweight acceptance.
 4. Await event-driven preproduction CD for that tested dev SHA. Verify complete
    updater state, matching live web/updater revisions and the relevant public
    behavior; a delivered wakeup or green CI is not deployment acceptance.
@@ -118,8 +121,9 @@ configuration only; production users/configuration are never weakened for tests.
    published release, and CI success alone is not full business acceptance.
 5. Production deployment requires its own authorization. The native Admin
    Master self-upgrade flow verifies published provenance, current identity,
-   maintenance and persistent release journals. It builds immutable allowlisted
-   Git archives locally; it never upgrades storage appliances. Storage rebuilds
+   maintenance and persistent release journals. It pulls verified public images
+   by digest, with bounded immutable allowlisted Git-archive compilation only
+   for confirmed absent versions/platforms; it never upgrades storage appliances. Storage rebuilds
    are operator-controlled exact-revision deployments. Rebuild binaries to apply
    Go security fixes.
 6. Confirm readiness, business transport and actual component runtime SHAs,

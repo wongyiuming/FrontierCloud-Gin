@@ -98,9 +98,9 @@ require('const fleetNodeCount = 5' in fleet and 'go-sqlite' in fleet and 'go-mys
 require('python-' not in fleet.lower() and 'referenceWeb' not in fleet,
         "Native fleet must not select a Python runtime")
 from scripts.check_ci_budget import check_workflows
-require(not check_workflows(ROOT / ".github/workflows"), "Hosted CI exceeds three-minute boundary")
+require(not check_workflows(ROOT / ".github/workflows"), "Test CI or isolated compilation exceeds its boundary")
 from tests.test_repository_policy import RepositoryPolicyRegressionTests
 result = unittest.TextTestRunner(verbosity=1).run(
     unittest.defaultTestLoader.loadTestsFromTestCase(RepositoryPolicyRegressionTests))
 require(result.wasSuccessful(), "Repository policy regression failed")
-print("Native release/deployment policy passed; reviewed provenance and three-minute CI enforced")
+print("Native policy passed: reviewed provenance, three-minute test CI and separate bounded compilation")

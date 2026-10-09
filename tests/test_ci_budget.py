@@ -6,6 +6,13 @@ from scripts.check_ci_budget import check_workflows, inspect_workflow
 
 
 class CIBudgetTests(unittest.TestCase):
+    def test_artifact_exception_does_not_relax_test_ci_or_allow_acceptance(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/publish-images.yml').read_text(encoding='utf-8')
+        self.assertEqual(inspect_workflow(workflow, 'publish-images.yml'), [])
+        self.assertTrue(inspect_workflow(workflow, 'docker.yml'))
+        for work in ('go test ./...', 'bash scripts/test-go-business.sh', 'docker compose up'):
+            self.assertTrue(inspect_workflow(workflow + '\n    run: ' + work, 'publish-images.yml'))
+        self.assertTrue(inspect_workflow(workflow.replace("newest.conclusion !== 'success'", 'false'), 'publish-images.yml'))
     def test_all_actual_workflows_fit_budget(self):
         self.assertEqual(check_workflows(Path(__file__).resolve().parents[1] / ".github/workflows"), [])
 

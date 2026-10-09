@@ -11,14 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class StagingEventPolicyTests(unittest.TestCase):
     def test_only_completed_successful_same_repo_dev_push_can_notify(self):
-        text = (ROOT / '.github/workflows/staging-cd.yml').read_text()
-        for value in ('workflow_run:', 'types: [completed]', 'branches: [dev]',
-                      "conclusion == 'success'", "event == 'push'",
-                      "head_branch == 'dev'", 'head_repository.full_name == github.repository',
-                      'permissions: {}', 'timeout-minutes: 1', 'secrets.STAGING_CD_SECRET'):
+        self.assertFalse((ROOT / '.github/workflows/staging-cd.yml').exists())
+        workflow = (ROOT / '.github/workflows/publish-images.yml').read_text()
+        text = workflow.split('  notify-staging:', 1)[1]
+        for value in ('needs: publish', "github.ref == 'refs/heads/dev'",
+                      "run.conclusion !== 'success'", "run.event === 'push'",
+                      "run.head_branch === 'dev'", "head_sha: context.sha",
+                      'timeout-minutes: 1', 'secrets.STAGING_CD_SECRET'):
             self.assertIn(value, text)
         for forbidden in ('uses: actions/checkout', 'schedule:', 'ssh ', 'docker ', 'sudo '):
             self.assertNotIn(forbidden, text)
+        self.assertIn('permissions: {}', workflow)
+        self.assertIn("'run_number': int(os.environ['SOURCE_NUMBER'])", text)
 
     def test_no_timer_and_receiver_has_no_runtime_mutation_permissions(self):
         self.assertFalse((ROOT / 'scripts/ops/frontiercloud-staging-cd.timer').exists())

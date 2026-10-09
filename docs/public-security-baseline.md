@@ -101,7 +101,7 @@ merge after its required checks. Production is a separate maintainer-run
 upgrade, not part of staging CD. Do not fast-forward dev to a new merge SHA
 before recording which staging SHA was actually accepted.
 
-GitHub CI remains bounded to three minutes; the new browser/TLS and multi-node
+GitHub test CI remains bounded to three minutes; the new browser/TLS and multi-node
 acceptance are not CI jobs. Local source contracts are not substitutes for
 real browser/TLS checks. A successful scan or score is not full penetration
 testing, weak-mainland-network acceptance or a security certification.

@@ -14,11 +14,16 @@ Link the checkout's ignored `.env` to the external environment so both Compose
 interpolation and the application's `env_file` use the same staging settings.
 Promote this fresh instance to Master before enabling CD.
 
-CD is event-driven: a completed successful **dev push** run of `docker.yml`
-triggers `.github/workflows/staging-cd.yml`. Failed/cancelled CI, main pushes,
-PRs and foreign repositories cannot notify staging. The workflow must be present
-on the default `main` branch to receive `workflow_run` events. It does not check
-out triggering code or compile/deploy anything in GitHub; its timeout is one minute.
+CD is event-driven: `publish-images.yml` first verifies the newest successful
+**dev push** `docker.yml` run for its exact SHA, then publishes all three public
+runtime images. Only complete publication triggers its isolated one-minute
+notification job. Original test CI remains capped at three minutes; separate
+parallel compilation jobs are capped at ten minutes and run no acceptance tests.
+Failed/cancelled CI or publication, main pushes, PRs and foreign repositories
+cannot notify staging. The notification job does not check out source or
+compile/deploy anything. See [public image delivery](public-image-delivery.md).
+Disable the old `Trigger preproduction CD` workflow before enabling this path;
+the source-success-only `staging-cd.yml` is retired, not a parallel fallback.
 
 Install `staging-cd.sh` as `/opt/frontiercloud-staging/staging-cd.sh` and
 `staging_updater_state.py` beside it (an operator script, not a Python backend).
@@ -55,7 +60,7 @@ replaced. This is not GitHub polling. Failed deployments require operator
 attention, rather than repeatedly restarting the same failed update.
 
 Inspect `journalctl -u frontiercloud-staging-trigger -u frontiercloud-staging-cd`
-and GitHub's `Trigger preproduction CD` run. A 202 response acknowledges the
+and GitHub's `Publish native images` notification job. A 202 response acknowledges the
 durably queued wakeup, not a completed deployment. Check updater status and the
 live revision to confirm deployment completion. Rerun the notification workflow
 after a delivery failure; rerun source CI for a fresh delivery after resolving a
@@ -65,12 +70,12 @@ deployment failure. No periodic job retries it silently.
 Master identity, the dedicated domain, a healthy idle updater, exact `dev` HEAD
 and the newest successful `docker.yml` push for that same SHA. Pending, failed,
 wrong-branch/event/commit CI, API errors and rate limits fail closed. The native
-updater's immutable archive builds, maintenance, journals, self-handoff and
+updater's verified public-image pulls (confirmed-absence immutable archive fallback), maintenance, journals, self-handoff and
 failed-deployment restore are reused. The staging updater selects `dev`; the
 production updater still selects only `main`. Public production upgrade and
 rollback actions are disabled on a CD-managed site to avoid competing writers.
 
-CD does not add heavyweight jobs to GitHub CI, touch storage appliances or
+CD does not add heavyweight acceptance to GitHub CI, touch storage appliances or
 automatically reopen a failed upgrade. Inspect the local journal after a
 failure; preserve prior images and data for recovery. A successful source push
 is preproduction eligibility, not production publication or full acceptance.
