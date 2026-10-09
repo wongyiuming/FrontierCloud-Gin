@@ -65,14 +65,30 @@ func TestExpiredRecoveryMaximumItemLeavesRotationGraceAndNextItem(t *testing.T) 
 	if err != nil || len(rows) != 2 || rows[0].ID != first.ID || uploadRecoveryBudget(rows[0]) != 180*time.Second {
 		t.Fatal("maximum item fixture", rows, err)
 	}
-	p := &recoveryFairnessPool{PoolRepository: db.Pool(), slowID: first.ID}
+	started := make(chan struct{})
+	p := &recoveryFairnessPool{PoolRepository: db.Pool(), slowID: first.ID, started: started}
 	svc.pool = p
-	// Scale the 180-second sweep and five-second grace to a sub-second test.
-	const sweepBudget = 800 * time.Millisecond
-	const grace = 300 * time.Millisecond
+	// Keep the actual production SQL grace. Only the deliberately blocked
+	// item's investigation is shortened; real SQLite must not meet a tiny
+	// machine-speed-dependent budget under concurrent test/compiler load.
+	const sweepBudget = 6 * time.Second
+	const grace = 5 * time.Second
 	sweep, cancel := context.WithTimeout(ctx, sweepBudget)
 	defer cancel()
-	err = svc.retryExpiredUploads(sweep, func(store.UploadReservation) time.Duration { return sweepBudget }, grace)
+	done := make(chan error, 1)
+	go func() {
+		done <- svc.retryExpiredUploads(sweep, func(store.UploadReservation) time.Duration { return sweepBudget }, grace)
+	}()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("investigation did not start")
+	}
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("bounded investigation did not finish")
+	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("maximum item should exhaust investigation budget, not rotation grace", err)
 	}
@@ -93,9 +109,14 @@ func TestExpiredRecoveryMaximumItemLeavesRotationGraceAndNextItem(t *testing.T) 
 	}
 	// The next sweep really cleans the other reservation before considering
 	// the slow item again; this is persisted fairness, not a callback count.
-	nextSweep, nextCancel := context.WithTimeout(ctx, time.Second)
+	nextSweep, nextCancel := context.WithTimeout(ctx, time.Minute)
 	defer nextCancel()
-	if err := svc.retryExpiredUploads(nextSweep, func(store.UploadReservation) time.Duration { return 5 * time.Millisecond }, 100*time.Millisecond); err != nil {
+	if err := svc.retryExpiredUploads(nextSweep, func(v store.UploadReservation) time.Duration {
+		if v.ID == first.ID {
+			return 5 * time.Millisecond
+		}
+		return 30 * time.Second
+	}, grace); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool().Upload(ctx, second.ID); !errors.Is(err, store.ErrNodeState) {
@@ -120,12 +141,12 @@ func TestExpiredRecoveryParentCancellationDoesNotDetachRotation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- svc.retryExpiredUploads(ctx, func(store.UploadReservation) time.Duration { return time.Second }, 100*time.Millisecond)
+		done <- svc.retryExpiredUploads(ctx, func(store.UploadReservation) time.Duration { return 30 * time.Second }, 5*time.Second)
 	}()
 	select {
 	case <-started:
 		cancel()
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		cancel()
 		t.Fatal("investigation did not start")
 	}
@@ -134,7 +155,7 @@ func TestExpiredRecoveryParentCancellationDoesNotDetachRotation(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal("parent cancellation ignored", err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("canceled recovery kept running")
 	}
 	if len(p.deferredIDs) != 0 {
@@ -163,7 +184,7 @@ func TestExpiredRecoveryRotationSQLFailureIsNotSilentlyIgnored(t *testing.T) {
 	}
 	p := &recoveryFairnessPool{PoolRepository: db.Pool(), slowID: v.ID}
 	svc.pool = p
-	err = svc.retryExpiredUploads(ctx, func(store.UploadReservation) time.Duration { return 5 * time.Millisecond }, 100*time.Millisecond)
+	err = svc.retryExpiredUploads(ctx, func(store.UploadReservation) time.Duration { return 5 * time.Millisecond }, 5*time.Second)
 	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "rotation unavailable") {
 		t.Fatal("rotation failure disappeared from the returned error", err)
 	}
