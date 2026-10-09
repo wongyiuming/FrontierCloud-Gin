@@ -108,7 +108,10 @@ func (s *Service) RetryExpiredUploads(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		bounded, cancel := context.WithTimeout(ctx, 10*time.Second)
+		// Hash verification happens on storage, not Master. Give large media
+		// a bounded byte-dependent budget instead of timing out every retry.
+		budget := min(180*time.Second, 10*time.Second+time.Duration(v.ExpectedBytes/(16*1024*1024))*time.Second)
+		bounded, cancel := context.WithTimeout(ctx, budget)
 		err := s.reconcileExpiredUpload(bounded, v.ID)
 		cancel()
 		if err != nil {
@@ -125,7 +128,7 @@ func (s *Service) RunUploadRecovery(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
-		bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+		bounded, cancel := context.WithTimeout(ctx, 180*time.Second)
 		if err := s.RetryExpiredUploads(bounded); err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
 			slog.Warn("upload reconciliation sweep deferred", "error", err)
 		}

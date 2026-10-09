@@ -124,7 +124,7 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
 	if w.Code != 200 {
-		if w.Code == http.StatusNotFound {
+		if w.Code == http.StatusNotFound && strings.HasPrefix(route, "/internal/v1/storage/") && strings.HasSuffix(route, "/stat") {
 			return nil, node.ErrRemoteNotFound
 		}
 		return nil, fmt.Errorf("control status %d: %s", w.Code, w.Body.String())

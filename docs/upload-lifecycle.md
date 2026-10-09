@@ -8,8 +8,11 @@ Browser `finally` is best-effort only; it is not run reliably on page teardown.
 
 The Master retains the existing 30-minute reservation deadline. A background
 sweep runs at startup and every 30 seconds, examines at most 50 expired
-reservations serially, bounds individual checks to 10 seconds and a sweep to
-30 seconds. Failed checks rotate without renewing expiry or refunding quota.
+reservations serially. Checks start with ten seconds and allow one additional
+second per 16 MiB, capped at 180 seconds; a sweep is capped at 180 seconds.
+Storage digest verification uses a separate one-connection pool, so hashing
+large files does not consume the ten-second heartbeat pool. Failed checks
+rotate without renewing expiry or refunding quota.
 Expiry permits investigation; it is **never evidence to delete media**.
 
 - Master-local: acquire the same cross-process session lease as transfer,
