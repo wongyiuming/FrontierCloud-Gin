@@ -56,10 +56,11 @@ def main():
         # blocked by Chromium, not just absent from a configuration string.
         page.evaluate("""() => {
           const script=document.createElement('script');script.textContent='window.injectedScriptExecuted=true';document.body.append(script);
+          const marker=document.createElement('script');marker.setAttribute('nonce','{{FRONTIERCLOUD_CSP_NONCE}}');marker.textContent='window.injectedMarkerExecuted=true';document.body.append(marker);
           const button=document.createElement('button');button.setAttribute('onclick','window.injectedHandlerExecuted=true');document.body.append(button);button.click();
         }""")
-        page.wait_for_function('window.cspViolations.length >= 2')
-        assert page.evaluate('!!window.injectedScriptExecuted || !!window.injectedHandlerExecuted') is False
+        page.wait_for_function('window.cspViolations.length >= 3')
+        assert page.evaluate('!!window.injectedScriptExecuted || !!window.injectedHandlerExecuted || !!window.injectedMarkerExecuted') is False
         catalog = context.request.get(base + '/api/v1/media/catalog/media?media_type=music&path=music%2Fsecurity-fixture&playback_session_id=security-smoke').json()
         media_id = catalog['entries'][0]['karaoke_id']
         page.goto(base + '/karaoke/?media=' + urllib.parse.quote(media_id), wait_until='networkidle')

@@ -223,7 +223,7 @@ func (a *Admin) asset(name string) (string, error) {
 	return assetURL(name, content), nil
 }
 func (a *Admin) page(c *gin.Context) {
-	content, err := a.public.template("admin.html")
+	content, err := a.public.template(c, "admin.html")
 	if err != nil {
 		internalError(c, err)
 		return
@@ -251,7 +251,7 @@ func (a *Admin) page(c *gin.Context) {
 			internalError(c, err)
 			return
 		}
-		scripts.WriteString(`<script nonce="` + nonceMarker + `" src="` + url + `"></script>` + "\n")
+		scripts.WriteString(`<script nonce="` + c.GetString(htmlNonceKey) + `" src="` + url + `"></script>` + "\n")
 	}
 	content = strings.Replace(content, "</head>", styles.String()+"</head>", 1)
 	content = strings.Replace(content, "</body>", scripts.String()+"</body>", 1)

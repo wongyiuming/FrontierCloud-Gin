@@ -352,7 +352,7 @@ func (p *Public) lyricsPage(c *gin.Context) {
 	p.page(c, "lyrics.html", map[string]string{"LYRICS_JSON": jsonString(lines), "LINE_COUNT": strconv.Itoa(len(lines))})
 }
 
-func (p *Public) template(name string) (string, error) {
+func (p *Public) template(c *gin.Context, name string) (string, error) {
 	bytes, err := p.static.ReadFile("media/" + name)
 	if err != nil {
 		return "", err
@@ -365,11 +365,15 @@ func (p *Public) template(name string) (string, error) {
 		}
 		content = strings.Replace(content, "</body>", `<script src="`+p.assets["js/player-directory-label.js"]+`"></script>`+"\n</body>", 1)
 	}
-	return nonceTemplate(content), nil
+	nonce, err := htmlNonce(c)
+	if err != nil {
+		return "", err
+	}
+	return nonceTemplate(content, nonce), nil
 }
 
 func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
-	content, err := p.template(name)
+	content, err := p.template(c, name)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -515,7 +519,7 @@ func (p *Public) staticFile(c *gin.Context, name string, favicon bool) {
 }
 
 func (p *Public) karaokePage(c *gin.Context) {
-	content, err := p.template("karaoke.html")
+	content, err := p.template(c, "karaoke.html")
 	if err != nil {
 		internalError(c, err)
 		return

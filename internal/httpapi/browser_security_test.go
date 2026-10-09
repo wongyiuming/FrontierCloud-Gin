@@ -34,8 +34,8 @@ func assertNoncePolicy(t *testing.T, w *httptest.ResponseRecorder) string {
 			t.Fatal("trusted script is not nonced", tag)
 		}
 	}
-	if strings.Contains(w.Body.String(), nonceMarker) || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
-		t.Fatal("unresolved or cacheable nonce HTML")
+	if !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+		t.Fatal("cacheable nonce HTML")
 	}
 	return match[1]
 }
@@ -61,15 +61,21 @@ func TestHTMLNoncePoliciesAreFreshAndPreservePlayer(t *testing.T) {
 }
 
 func TestNonceAuthorizationIsAddedBeforeUntrustedSubstitution(t *testing.T) {
-	template := nonceTemplate(`<script>const value = {{VALUE}};</script><script src="/static/trusted.js"></script>`)
 	// Deliberately unescaped: the helper must not traverse a final response
-	// and authorize attacker-added tags. Renderers must escape each context.
-	attack := `"</script><script>window.attacker=1</script>"`
-	content := strings.ReplaceAll(template, "{{VALUE}}", attack)
+	// or replace known placeholders and authorize attacker-added tags.
+	// Renderers must still escape each context.
+	attack := `"</script><script>window.attacker=1</script><script nonce="{{FRONTIERCLOUD_CSP_NONCE}}">window.attacker=2</script>"`
 	router := New(pass, pass)
-	router.GET("/fixture", func(c *gin.Context) { serveHTML(c, content, false) })
+	router.GET("/fixture", func(c *gin.Context) {
+		nonce, err := htmlNonce(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		template := nonceTemplate(`<script>const value = {{VALUE}};</script><script src="/static/trusted.js"></script>`, nonce)
+		serveHTML(c, strings.ReplaceAll(template, "{{VALUE}}", attack), false)
+	})
 	w := request(router, "GET", "/fixture", "")
-	if strings.Contains(w.Body.String(), `<script nonce="`+nonceMarker) || !strings.Contains(w.Body.String(), `<script>window.attacker=1</script>`) {
+	if !strings.Contains(w.Body.String(), `<script>window.attacker=1</script>`) || !strings.Contains(w.Body.String(), `<script nonce="{{FRONTIERCLOUD_CSP_NONCE}}">window.attacker=2</script>`) {
 		t.Fatal("attacker script was authorized")
 	}
 }
