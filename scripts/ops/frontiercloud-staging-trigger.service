@@ -1,0 +1,29 @@
+[Unit]
+Description=Authenticated CI event receiver for isolated FrontierCloud preproduction
+After=network-online.target
+
+[Service]
+User=frontiercloud-staging-trigger
+Group=frontiercloud-staging-trigger
+ExecStart=/usr/local/libexec/frontiercloud-staging-trigger
+Restart=on-failure
+RestartSec=5s
+StateDirectory=frontiercloud-staging-trigger
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=64M
+TasksMax=64
+CPUQuota=10%
+
+[Install]
+WantedBy=multi-user.target

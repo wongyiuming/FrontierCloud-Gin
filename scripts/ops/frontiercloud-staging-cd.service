@@ -5,7 +5,8 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+ExecStartPre=/usr/bin/rm -f -- /var/lib/frontiercloud-staging-trigger/pending.json
 ExecStart=/bin/bash /opt/frontiercloud-staging/staging-cd.sh
-TimeoutStartSec=60
+TimeoutStartSec=360
 UMask=0077
 Nice=10

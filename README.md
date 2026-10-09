@@ -51,8 +51,9 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
 EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
-Its [bounded local CD controller](docs/staging-cd.md) follows successful exact
-`dev` pushes; production follows reviewed `dev -> main` releases only.
+Its [bounded local CD controller](docs/staging-cd.md) is triggered by each completed
+successful `dev` push CI, never by a polling timer; production follows reviewed
+`dev -> main` releases only.
 
 ## Documentation map
 

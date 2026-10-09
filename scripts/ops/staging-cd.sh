@@ -5,7 +5,7 @@ root=/opt/frontiercloud-staging
 test "$(readlink -f "$root")" = "$root"
 test -f "$root/.env"
 exec 9>"$root/cd.lock"
-flock -n 9 || exit 0
+flock -w 300 9
 cd "$root/repo"
 test "$(git remote get-url origin)" = https://github.com/wongyiuming/FrontierCloud-Gin.git
 export COMPOSE_PROJECT_NAME=frontiercloud-staging
@@ -22,4 +22,19 @@ web=$("${compose[@]}" ps -q web)
 test -n "$web"
 test "$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$web")" = frontiercloud-staging
 test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}' "$web")" = "$root/data"
+# Wait only for an earlier accepted local deployment, never poll GitHub.
+# A CI event arriving during that deployment must not be silently discarded.
+deadline=$((SECONDS + 300))
+while true; do
+  status=$("${compose[@]}" exec -T web /app/frontiercloud updater-status < /dev/null)
+  state=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<< "$status")
+  case "$state" in
+    idle|success) break ;;
+    failed|unavailable) printf '%s\n' 'Staging updater requires operator attention.' >&2; exit 1 ;;
+    running|restarting) ;;
+    *) printf '%s\n' 'Unknown staging updater state.' >&2; exit 1 ;;
+  esac
+  (( SECONDS < deadline )) || { printf '%s\n' 'Previous staging deployment is still busy.' >&2; exit 1; }
+  sleep 2
+done
 "${compose[@]}" exec -T web /app/frontiercloud staging-release < /dev/null
