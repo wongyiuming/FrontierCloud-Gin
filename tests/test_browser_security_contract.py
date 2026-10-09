@@ -41,6 +41,9 @@ class BrowserSecurityContractTests(unittest.TestCase):
         config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
         self.assertIn('server_tokens off;', config)
         self.assertIn('proxy_hide_header Content-Security-Policy;', config)
+        canonical = config.split('location = /api/v1/media/admin {', 1)[1].split('\n        }', 1)[0]
+        self.assertIn('absolute_redirect off;', canonical)
+        self.assertIn('return 308 /api/v1/media/admin/$is_args$args;', canonical)
         karaoke = config.split('location = /karaoke/ {', 1)[1].split('\n        }', 1)[0]
         self.assertIn('add_header Cache-Control "private, no-store" always;', karaoke)
         for name in ('security-headers.conf', 'karaoke-security-headers.conf'):

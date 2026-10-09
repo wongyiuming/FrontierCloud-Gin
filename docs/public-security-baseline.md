@@ -15,6 +15,7 @@ checked against source and read-only public responses/DNS on 2026-10-09.
 | Nginx version disclosed | `server_tokens off` suppresses the version, including errors. It does not conceal that Nginx exists and is not a substitute for patching. |
 | HTTP/1.1-only ALPN | Enable HTTP/2 on TLS servers; explicitly share TLS 1.2/1.3 and AEAD cipher policy with the default TLS server. Retain HTTP/1.1 fallback. |
 | Error pages lost headers | Add the complete edge headers on the maintenance location. Allow only hashes of its fixed trusted inline script/style, including upstream-generated 503 redirects. |
+| Admin canonical redirect lost a mapped HTTPS port | Found in the real loopback browser gate, not the third-party scan. Use a relative 308 so the actual public port survives; normal production port 443 is unaffected. The browser follows the original login destination rather than bypassing this hop. |
 | HSTS scored as weak | Keep the existing one-year HTTPS-only policy. Do not add `includeSubDomains` or preload without auditing all current/future subdomains. |
 | Missing discovery files | Publish robots rules and a sitemap of only three public landing pages, never media filenames, resource IDs, recordings or Admin URLs. These are crawler hints, not access controls. |
 | Missing `security.txt` | Publish RFC 9116 contact/expiry/canonical fields only when `SECURITY_CONTACT` names a real monitored HTTPS form or mailbox. Without a supplied contact the endpoint intentionally returns 404, not a fabricated address. |
