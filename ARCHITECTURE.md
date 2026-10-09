@@ -194,6 +194,15 @@ captcha answers. Rejections return 429 with Retry-After; unavailable admission
 fails closed. Captcha SVG outlines must not contain answer-bearing text/metadata;
 OCR resistance is not assumed. Redis noeviction protects security counters and
 sessions under a bounded memory limit. See docs/validation-and-promotion.md for
+the complete contract. Public HTML has a fresh script CSP nonce bound to trusted
+template source before user substitutions. Inline event attributes and eval are
+forbidden; player DOM listeners, HTTPS direct storage, blob playback and
+same-origin karaoke microphone access remain supported. Nginx preserves one CSP
+and protects maintenance/errors; direct Go storage has its own restrictive
+headers. TLS servers share a TLS 1.2/1.3 AEAD policy and negotiate HTTP/2.
+See docs/public-security-baseline.md for verified scope, explicit compatibility
+exceptions and manual DNS/no-mail tasks. These changes are not a penetration-test
+certification. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
 Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted CI has an explicit three-minute hard limit per parallel job, no serial job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit.

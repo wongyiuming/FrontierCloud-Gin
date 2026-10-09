@@ -27,7 +27,7 @@ func NewWithResolver(database, redis Check, resolver *network.Resolver, middlewa
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	m := newMetrics()
-	router.Use(m.instrument, requests(resolver), gin.CustomRecoveryWithWriter(os.Stderr, m.recovered))
+	router.Use(m.instrument, requests(resolver), browserSecurity(resolver), gin.CustomRecoveryWithWriter(os.Stderr, m.recovered))
 	router.Use(middleware...)
 	router.HandleMethodNotAllowed = true
 	router.NoRoute(func(c *gin.Context) { detail(c, 404, "Not Found") })

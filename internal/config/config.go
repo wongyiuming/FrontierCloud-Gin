@@ -58,6 +58,7 @@ type Config struct {
 	SecurityExemptNetworks []string
 	SecurityInvalidLimit   int
 	SecurityInvalidWindow  int
+	SecurityContact        string
 	LogLevel               string
 	LogFormat              string
 	GitHubAPIToken         string
@@ -106,6 +107,14 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		ServerName:        fallback(getenv("SERVER_NAME"), "localhost"),
 	}
 	value.SecurityExemptNetworks = strings.Split(fallback(getenv("SECURITY_EXEMPT_NETWORKS"), "127.0.0.0/8,::1/128"), ",")
+	value.SecurityContact = strings.TrimSpace(getenv("SECURITY_CONTACT"))
+	if value.SecurityContact != "" {
+		contact, e := url.Parse(value.SecurityContact)
+		if e != nil || len(value.SecurityContact) > 2048 || strings.ContainsAny(value.SecurityContact, "\r\n\t ") || contact.User != nil || contact.Fragment != "" || contact.RawQuery != "" ||
+			!(contact.Scheme == "https" && contact.Hostname() != "" || contact.Scheme == "mailto" && strings.Count(contact.Opaque, "@") == 1 && !strings.HasPrefix(contact.Opaque, "@") && !strings.HasSuffix(contact.Opaque, "@")) {
+			return Config{}, errors.New("SECURITY_CONTACT must be one real HTTPS reporting URL or mailto address")
+		}
+	}
 	value.GitHubAPIToken = strings.TrimSpace(getenv("GITHUB_API_TOKEN"))
 	if len(value.GitHubAPIToken) > 4096 || strings.ContainsAny(value.GitHubAPIToken, "\r\n") {
 		return Config{}, errors.New("invalid GITHUB_API_TOKEN")

@@ -108,7 +108,11 @@ configuration only; production users/configuration are never weakened for tests.
    separately and preserve complete gate evidence, including skips and limits.
 3. When authorized, push `dev`. Hosted source CI is lightweight and capped at
    three minutes; use the newest successful push for that exact source SHA.
-4. When authorized, open same-repository dev -> main PR, review and
+4. Await event-driven preproduction CD for that tested dev SHA. Verify complete
+   updater state, matching live web/updater revisions and the relevant public
+   behavior; a delivered wakeup or green CI is not deployment acceptance.
+   Only then open the same-repository dev -> main PR, use the configured
+   GitHub automatic review within existing quota, and
    merge. The resulting production tree must equal the reviewed source tree;
    exact PR/CI provenance is rechecked after merge. A local commit is not a
    published release, and CI success alone is not full business acceptance.

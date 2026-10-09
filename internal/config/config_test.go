@@ -2,6 +2,19 @@ package config
 
 import "testing"
 
+func TestSecurityReportingContactValidation(t *testing.T) {
+	for _, raw := range []string{"", "mailto:security@example.test", "https://reports.example.test/security"} {
+		if _, err := LoadFrom(environment(map[string]string{"SECURITY_CONTACT": raw})); err != nil {
+			t.Fatal(raw, err)
+		}
+	}
+	for _, raw := range []string{"http://reports.example.test/", "javascript:alert(1)", "mailto:not-an-address", "https://user:password@example.test/", "https://reports.example.test/\nExpires: never", "mailto:a@example.test?subject=secret", "https://"} {
+		if _, err := LoadFrom(environment(map[string]string{"SECURITY_CONTACT": raw})); err == nil {
+			t.Fatal("invalid security reporting URI accepted", raw)
+		}
+	}
+}
+
 func TestCatalogCacheTTLBounds(t *testing.T) {
 	for _, value := range []string{"-1", "86401", "invalid"} {
 		if _, err := LoadFrom(environment(map[string]string{"MEDIA_CATALOG_CACHE_TTL": value})); err == nil {

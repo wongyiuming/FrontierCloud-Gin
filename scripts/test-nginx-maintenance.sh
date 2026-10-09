@@ -14,8 +14,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 docker volume create "$volume" >/dev/null
 docker run -d --name "$container" --entrypoint nginx \
+    --cpus=0.5 --memory=64m --memory-swap=64m --pids-limit=64 \
     -v "$PWD/tests/nginx-maintenance.conf:/etc/nginx/nginx.conf:ro" \
     -v "$PWD/nginx/maintenance-gate.conf:/etc/nginx/maintenance-gate.conf:ro" \
+    -v "$PWD/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro" \
     -v "$PWD/nginx/maintenance.html:/usr/share/nginx/html/maintenance.html:ro" \
     -v "$volume:/app/data" nginx:1.30.4-alpine -g 'daemon off;' >/dev/null
 docker exec "$container" nginx -t

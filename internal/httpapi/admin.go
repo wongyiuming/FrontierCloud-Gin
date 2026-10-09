@@ -251,9 +251,9 @@ func (a *Admin) page(c *gin.Context) {
 			internalError(c, err)
 			return
 		}
-		scripts.WriteString(`<script src="` + url + `"></script>` + "\n")
+		scripts.WriteString(`<script nonce="` + nonceMarker + `" src="` + url + `"></script>` + "\n")
 	}
 	content = strings.Replace(content, "</head>", styles.String()+"</head>", 1)
 	content = strings.Replace(content, "</body>", scripts.String()+"</body>", 1)
-	c.Data(200, "text/html; charset=utf-8", []byte(content))
+	serveHTML(c, content, false)
 }

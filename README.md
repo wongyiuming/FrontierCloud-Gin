@@ -55,6 +55,11 @@ Its [bounded local CD controller](docs/staging-cd.md) is triggered by each compl
 successful `dev` push CI, never by a polling timer; production follows reviewed
 `dev -> main` releases only.
 
+The [public security baseline](docs/public-security-baseline.md) documents
+nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and
+manual DNS/no-mail hardening. Its real browser/TLS checks run on the development
+host, not in the three-minute GitHub CI.
+
 ## Documentation map
 
 The three top-level documents have separate jobs:

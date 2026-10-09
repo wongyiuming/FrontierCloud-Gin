@@ -61,6 +61,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		}
 	}
 	router.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/api/v1/media") })
+	p.registerPublicStandards(router)
 	router.GET("/favicon.ico", func(c *gin.Context) { p.staticFile(c, "favicon.ico", true) })
 	router.GET("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
 	router.HEAD("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
@@ -364,7 +365,7 @@ func (p *Public) template(name string) (string, error) {
 		}
 		content = strings.Replace(content, "</body>", `<script src="`+p.assets["js/player-directory-label.js"]+`"></script>`+"\n</body>", 1)
 	}
-	return content, nil
+	return nonceTemplate(content), nil
 }
 
 func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
@@ -388,8 +389,7 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}
-	noStore(c)
-	c.Data(200, "text/html; charset=utf-8", []byte(content))
+	serveHTML(c, content, false)
 }
 
 func (p *Public) categoryPage(c *gin.Context, kind string) {
@@ -524,6 +524,5 @@ func (p *Public) karaokePage(c *gin.Context) {
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}
-	c.Header("Cache-Control", "no-cache")
-	c.Data(200, "text/html; charset=utf-8", []byte(content))
+	serveHTML(c, content, false)
 }
