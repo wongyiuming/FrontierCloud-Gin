@@ -19,6 +19,7 @@ export DATA_DIRECTORY="$work/data" DB_TYPE=sqlite TLS_ENABLED=true SERVER_NAME=1
 export PUBLIC_BIND_ADDRESS=127.0.0.1 HTTP_PORT=0 HTTPS_PORT=0 WEBRTC_STUN_PORT=0
 export SSL_CERT_PATH="$work/cert.pem" SSL_KEY_PATH="$work/key.pem" ACME_WEBROOT="$work/acme"
 export SECURITY_CONTACT=https://reports.example.test/security
+export PUBLIC_ORIGIN=
 export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev STAGING_CD=false
 mkdir -p "$work/acme" "$work/data/media/music/security-fixture"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
@@ -38,6 +39,10 @@ compose up -d --no-build --wait --wait-timeout 180
 compose exec -T nginx nginx -t
 address=$(compose port nginx 443)
 base="https://$address"
+# Docker allocated the public port after Web initialization. Configure its
+# canonical origin explicitly, then test the actual discovery documents too.
+export PUBLIC_ORIGIN="$base"
+compose up -d --no-build --no-deps --wait --wait-timeout 90 web
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
 for protocol in 1.2 1.3; do
   curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" --tlsv1."${protocol#1.}" --tls-max "$protocol" "$base/health/ready" >/dev/null

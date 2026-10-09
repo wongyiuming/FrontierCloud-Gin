@@ -6,7 +6,66 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 )
+
+func TestPublicStandardsUseConfiguredOriginWithPortNotRequestHost(t *testing.T) {
+	for _, tls := range []bool{false, true} {
+		scheme, portKey, port := "http", "HTTP_PORT", "9080"
+		values := map[string]string{"SERVER_NAME": "example.test", "SECURITY_CONTACT": "https://reports.example.test/submit"}
+		if tls {
+			scheme, portKey, port = "https", "HTTPS_PORT", "8443"
+			values["TLS_ENABLED"] = "true"
+		}
+		values[portKey] = port
+		settings, err := config.LoadFrom(func(key string) string { return values[key] })
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := &Public{settings: settings}
+		router := gin.New()
+		p.registerPublicStandards(router)
+		origin := scheme + "://example.test:" + port
+		for path, expected := range map[string]string{
+			"/robots.txt":               origin + "/sitemap.xml",
+			"/sitemap.xml":              origin + "/api/v1/media",
+			"/.well-known/security.txt": "Canonical: " + origin + "/.well-known/security.txt",
+		} {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", path, nil)
+			r.Host = "attacker.test:6666"
+			router.ServeHTTP(w, r)
+			if w.Code != 200 || !strings.Contains(w.Body.String(), expected) || strings.Contains(w.Body.String(), "attacker.test") {
+				t.Fatal(path, w.Code, w.Body.String())
+			}
+		}
+	}
+}
+
+func TestPublicStandardsDoNotAdvertiseUnknownDynamicPorts(t *testing.T) {
+	settings, err := config.LoadFrom(func(key string) string {
+		if key == "HTTP_PORT" {
+			return "0"
+		}
+		if key == "SECURITY_CONTACT" {
+			return "https://reports.example.test/submit"
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Public{settings: settings}
+	router := gin.New()
+	p.registerPublicStandards(router)
+	for _, path := range []string{"/robots.txt", "/sitemap.xml", "/.well-known/security.txt"} {
+		if w := request(router, "GET", path, ""); w.Code != 503 || strings.Contains(w.Body.String(), "http://localhost") {
+			t.Fatal("unknown public port advertised", path, w.Code, w.Body.String())
+		}
+	}
+}
 
 func TestPublicStandardsDoNotEnumeratePrivateResourcesOrTrustHost(t *testing.T) {
 	router, _, _, public := publicFixture(t, false)

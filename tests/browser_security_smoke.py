@@ -20,6 +20,15 @@ def main():
             executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'),
             headless=True, args=['--no-sandbox', '--autoplay-policy=no-user-gesture-required'])
         context = browser.new_context(ignore_https_errors=True)
+        if not args.maintenance_only:
+            sitemap = context.request.get(base + '/sitemap.xml')
+            assert sitemap.status == 200
+            assert base + '/api/v1/media' in sitemap.text()
+            robots = context.request.get(base + '/robots.txt')
+            assert 'Sitemap: ' + base + '/sitemap.xml' in robots.text()
+            contact = context.request.get(base + '/.well-known/security.txt')
+            assert contact.status == 200
+            assert 'Canonical: ' + base + '/.well-known/security.txt' in contact.text()
         context.add_init_script("""window.cspViolations=[];document.addEventListener('securitypolicyviolation',e=>window.cspViolations.push(e.effectiveDirective));""")
         page = context.new_page()
         errors = []
