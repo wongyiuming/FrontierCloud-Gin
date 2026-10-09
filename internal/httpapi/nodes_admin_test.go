@@ -136,7 +136,15 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 			if w.Code != 200 || !strings.Contains(w.Body.String(), "/openapi.json") && path != "/openapi.json" {
 				t.Fatal(path, w.Code, w.Body.String())
 			}
-			if w.Header().Get("Cache-Control") != "no-store" {
+			// Additional directives (no-cache, max-age=0) must not invalidate
+			// the no-store contract used by authenticated nonce HTML.
+			noStoreDirective := false
+			for _, directive := range strings.Split(w.Header().Get("Cache-Control"), ",") {
+				if strings.EqualFold(strings.TrimSpace(directive), "no-store") {
+					noStoreDirective = true
+				}
+			}
+			if !noStoreDirective {
 				t.Fatal("documentation cacheable", path)
 			}
 			if path == "/openapi.json" {
