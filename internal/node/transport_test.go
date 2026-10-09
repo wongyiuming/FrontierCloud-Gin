@@ -11,6 +11,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -22,6 +24,19 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 )
+
+func TestControlNotFoundDistinguishedFromFailure(t *testing.T) {
+	for _, status := range []int{404, 401, 403, 409, 500, 502} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			server, roots := privateCA(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status) }))
+			transport := testTransport(t, server, roots)
+			_, err := transport.Request(context.Background(), "https://node.test", "/internal/v1/storage/test/stat", "POST", map[string]any{}, strings.Repeat("a", 32), protocol.Encode(bytes.Repeat([]byte{1}, 48)))
+			if err == nil || errors.Is(err, ErrRemoteNotFound) != (status == 404) {
+				t.Fatal("ambiguous physical absence", status, err)
+			}
+		})
+	}
+}
 
 func TestEndpointRejectsNonRootAndUnsafeAddresses(t *testing.T) {
 	for _, value := range []string{"http://192.168.6.201", "https://localhost", "https://127.0.0.1", "https://169.254.169.254", "https://224.0.0.1", "https://0.0.0.0", "https://[::1]", "https://user:password@node.test", "https://node.test/path", "https://node.test/?secret=abc", "https://node.test/#fragment", "https://node.test?", "https://node.test:0", "https://node.test:65536", "https://metadata.google.internal", "https://test.localhost"} {

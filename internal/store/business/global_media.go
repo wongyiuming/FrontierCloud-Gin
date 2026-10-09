@@ -291,6 +291,30 @@ func (r *Repository) FinalizeUpload(ctx context.Context, id, objectID string, ac
 	return
 }
 
+// Only background reconciliation with a verified storage receipt may complete
+// an expired reservation. Public finalize keeps its stricter expiry check.
+func (r *Repository) FinalizeRecoveredUpload(ctx context.Context, id, objectID string, actualSize int64, etag string, a store.AdminAudit) (result store.GlobalMedia, err error) {
+	if !nodeIDPattern.MatchString(id) || !nodeHashPattern.MatchString(objectID) || actualSize <= 0 || len(etag) != 66 || etag[0] != '"' || etag[65] != '"' || !nodeHashPattern.MatchString(etag[1:65]) {
+		return result, nodeConflict("invalid recovered upload receipt")
+	}
+	err = r.write(ctx, func(q queryer) error {
+		// Match all other reservation writes: identity, upload, then member.
+		// Locking the upload first can deadlock MySQL with normal finalize.
+		if _, err := readNode(ctx, q, r.lock()); err != nil {
+			return err
+		}
+		v, err := scanUpload(q.QueryRowContext(ctx, "SELECT "+uploadColumns+" FROM cluster_upload_sessions WHERE upload_id=?"+r.lock(), id))
+		if err != nil {
+			return err
+		}
+		if v.State != "reserved" || v.ExpiresAt > time.Now().Unix() {
+			return nodeConflict("recovery requires an expired upload")
+		}
+		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, true, &result)
+	})
+	return
+}
+
 func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID string, actualSize int64, etag string, a store.AdminAudit, physicalProof bool, result *store.GlobalMedia) error {
 	node, err := readNode(ctx, q, r.lock())
 	if err != nil {
@@ -405,7 +429,7 @@ func (r *Repository) ExpiredUploads(ctx context.Context, limit int) ([]store.Upl
 	if limit < 1 || limit > 500 {
 		limit = 50
 	}
-	rows, err := r.db.QueryContext(ctx, "SELECT "+uploadColumns+" FROM cluster_upload_sessions WHERE state='reserved' AND expires_at<=? ORDER BY created_at,upload_id LIMIT ?", time.Now().Unix(), limit)
+	rows, err := r.db.QueryContext(ctx, "SELECT "+uploadColumns+" FROM cluster_upload_sessions WHERE state='reserved' AND expires_at<=? ORDER BY updated_at,upload_id LIMIT ?", time.Now().Unix(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -419,4 +443,13 @@ func (r *Repository) ExpiredUploads(ctx context.Context, limit int) ([]store.Upl
 		result = append(result, v)
 	}
 	return result, rows.Err()
+}
+
+// Rotate busy/offline work without renewing or releasing its reservation.
+func (r *Repository) DeferExpiredUpload(ctx context.Context, id string) error {
+	if !nodeIDPattern.MatchString(id) {
+		return store.ErrNodeState
+	}
+	_, err := r.db.ExecContext(ctx, "UPDATE cluster_upload_sessions SET updated_at=? WHERE upload_id=? AND state='reserved' AND expires_at<=?", time.Now().Unix(), id, time.Now().Unix())
+	return err
 }

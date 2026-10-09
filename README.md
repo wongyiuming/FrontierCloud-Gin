@@ -18,6 +18,8 @@ use an exact reviewed release; bootstrap history alone is not release proof.
 - Karaoke entry from media playback, guest preview, account recordings, and storage quota.
 - Master/storage storage placement using Local, Direct, or Relay transport.
 - Transactional upload, visibility, priority, same-parent folder rename, and recovery-aware deletion.
+- [Abandoned-upload recovery](docs/upload-lifecycle.md): expiry triggers physical
+  reconciliation, never blind deletion; live streams and complete files are protected.
 - Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed Master-only releases.
 
 ## Quick start

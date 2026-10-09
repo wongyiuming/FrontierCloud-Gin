@@ -29,6 +29,7 @@ const MaxControlBytes = 512 * 1024
 
 var nodeIdentifier = regexp.MustCompile(`^[a-f0-9]{32}$`)
 var resourceIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var ErrRemoteNotFound = errors.New("verified node resource not found")
 
 func ValidIdentifier(value string) bool { return nodeIdentifier.MatchString(value) }
 
@@ -276,6 +277,9 @@ func (t *Transport) Request(ctx context.Context, origin, route, method string, v
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		if response.StatusCode == http.StatusNotFound {
+			return nil, ErrRemoteNotFound
+		}
 		return nil, fmt.Errorf("node control HTTP %d", response.StatusCode)
 	}
 	limit := int64(MaxControlBytes)

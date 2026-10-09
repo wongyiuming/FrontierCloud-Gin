@@ -202,6 +202,37 @@ func TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity(t *testin
 	if err = pool.ReleaseCleanedUpload(ctx, expired.ID, store.AdminAudit{}); err != nil {
 		t.Fatal(err)
 	}
+	// A complete remote file may have lost the browser's finalize request.
+	// Recovery alone accepts expired intent, only with matching strong receipt.
+	recovered, err := pool.ReserveUpload(ctx, "music/RecoveredRemote/song.mp3", "direct", 13, 5*store.GiB, store.AdminAudit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	etag := `"` + strings.Repeat("a", 64) + `"`
+	if _, err = pool.FinalizeRecoveredUpload(ctx, recovered.ID, recovered.MediaID, 13, etag, store.AdminAudit{}); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("unexpired intent entered recovery", err)
+	}
+	if _, err = sqlDB.Exec("UPDATE cluster_upload_sessions SET expires_at=? WHERE upload_id=?", time.Now().Unix()-1, recovered.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.FinalizeRecoveredUpload(ctx, recovered.ID, recovered.MediaID, 12, etag, store.AdminAudit{}); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("mismatching receipt published", err)
+	}
+	if _, err = pool.FinalizeRecoveredUpload(ctx, recovered.ID, recovered.MediaID, 13, `"weak"`, store.AdminAudit{}); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("weak receipt published", err)
+	}
+	if _, err = pool.FinalizeUpload(ctx, recovered.ID, recovered.MediaID, 13, etag, store.AdminAudit{}); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("public finalize bypassed expiry", err)
+	}
+	if _, err = pool.FinalizeRecoveredUpload(ctx, recovered.ID, recovered.MediaID, 13, etag, store.AdminAudit{RequestID: "expired-physical-proof"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.ReleaseCleanedUpload(ctx, recovered.ID, store.AdminAudit{}); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("recovered complete file cancelled", err)
+	}
+	if _, err = pool.FinalizeUpload(ctx, recovered.ID, recovered.MediaID, 13, etag, store.AdminAudit{}); err != nil {
+		t.Fatal("complete replay lost idempotency", err)
+	}
 	// Logical quota is 20 GiB, but only 4 GiB is physically writable. Pending
 	// transfers must consume the physical ceiling too.
 	physical, err := pool.ReserveUpload(ctx, "music/GlobalPhysical/large.mp3", "primary", 3*store.GiB, 5*store.GiB, store.AdminAudit{})

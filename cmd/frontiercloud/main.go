@@ -280,6 +280,8 @@ func serve() error {
 	}()
 	deletionDone := make(chan struct{})
 	go func() { defer close(deletionDone); mediaService.RunGlobalDeletes(shutdown) }()
+	uploadRecoveryDone := make(chan struct{})
+	go func() { defer close(uploadRecoveryDone); mediaService.RunUploadRecovery(shutdown) }()
 	recordingDone := make(chan struct{})
 	go func() {
 		defer close(recordingDone)
@@ -295,6 +297,7 @@ func serve() error {
 		stop()
 		<-publisherDone
 		<-deletionDone
+		<-uploadRecoveryDone
 		<-recordingDone
 		<-backupDone
 		<-controlDone
