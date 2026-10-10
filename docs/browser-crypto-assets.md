@@ -47,3 +47,17 @@ output SHA-256 values. The 129 build dependency packages occupied approximately
 delivered scripts occupied approximately 45.0 KiB. These are local build and
 behavior checks, not development-host database, real-browser or staging
 acceptance evidence. No production node was deployed by this step.
+
+`TestBrowserEncryptedHTTPClusterPrimaryDirectRelayLifecycle` subsequently passed
+against the current compiled modules in the Windows development workspace. It
+connects Node real-WebCrypto page/worker adapters to real Gin TLS endpoints and
+tests two encrypted files per Primary, Direct and Relay placement. Each pair
+reuses one ECDH session, receives wrapped grants, decrypts complete downloads and
+seeks across authenticated chunk boundaries, then preserves ciphertext hashes,
+descriptors and stable IDs through rename. Audit-failed local and offline remote
+deletion retain ciphertext/quota until recovery; Direct lost-finalize recovery
+publishes the existing storage receipt. Disk/SQL checks verify nonce tombstones
+and both nodes' quota. DOM/OPFS, the signed cluster transport and the Nginx
+X-Accel relay remain test adapters. This is HTTP/WebCrypto interoperability
+evidence, not real-browser, real-Nginx or deployment acceptance; tests skip when
+Node is unavailable, and such a skip is not interoperability evidence.
