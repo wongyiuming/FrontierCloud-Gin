@@ -59,7 +59,7 @@ cannot renew authorization. Envelopes retain the original server `expires_at`.
 “One-time” means one ephemeral handshake and one bounded
 authorization session, not one file or one HTTP request. The server bounds its
 in-memory session registry to 4096 entries. Master process restart, explicit server
-revocation through `/crypto/revoke`,
+revocation through `/api/v1/media/crypto/revoke`,
 Admin logout or timeout invalidates further envelope issuance. Upload preparation
 tokens are independently signed, bound to the Admin session and descriptor, and
 expire after 15 minutes; reservations still follow the upload lifecycle.
@@ -67,8 +67,9 @@ expire after 15 minutes; reservations still follow the upload lifecycle.
 The browser keeps non-extractable CryptoKey objects in memory and obtains a new
 authorization when needed after expiration. A restarted worker re-registers the
 live page and retrieves its still-valid in-memory keys without another ECDH
-handshake or an extended deadline. Page exit clears that page's and worker's
-in-memory access; it does not call the server revocation endpoint. Decryption tag
+handshake or an extended deadline. A non-persisted page exit clears that page's
+key caches and revokes its worker capability; it does not clear other pages'
+worker access or call the server revocation endpoint. Decryption tag
 failure or identity mismatch is terminal: no plaintext fallback or unverified
 chunk is delivered. This controls this application's behavior. An authorized
 browser user can preserve keys or plaintext; revocation cannot erase already
