@@ -6,10 +6,40 @@ revision=${FRONTIERCLOUD_REVISION:?Exact locally committed candidate SHA require
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
 work=$(mktemp -d /tmp/fc-browser-security-XXXXXXXX)
 project="fc-browser-security-$(cat /proc/sys/kernel/random/uuid)"
+printf 'Browser fixture ownership: project=%s work=%s\n' "$project" "$work"
+compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml -f tests/browser-tls.compose.yaml "$@"; }
+cleanup_failed() {
+  printf 'Browser fixture cleanup failed: %s; preserving project=%s work=%s\n' "$1" "$project" "$work" >&2
+  exit 1
+}
 cleanup() {
-  if [[ "$project" == fc-browser-security-* && "$work" == /tmp/fc-browser-security-* ]]; then
-    compose down --volumes --remove-orphans >/dev/null || true
+  local resolved remaining ids sources source
+  local -a container_ids
+  [[ "$project" =~ ^fc-browser-security-[a-f0-9-]{36}$ ]] || cleanup_failed 'unexpected project identity'
+  [[ -d "$work" && ! -L "$work" ]] || cleanup_failed 'work is missing or a symlink'
+  resolved=$(readlink -f -- "$work") || cleanup_failed 'work cannot be resolved'
+  [[ "$resolved" = "$work" && "$resolved" =~ ^/tmp/fc-browser-security-[a-zA-Z0-9]{8}$ ]] || cleanup_failed 'work is outside its exact temporary directory'
+  compose down --volumes --remove-orphans >/dev/null || cleanup_failed 'project down did not complete'
+  remaining=$(docker ps -aq --filter "label=com.docker.compose.project=$project") || cleanup_failed 'container inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project containers remain'
+  remaining=$(docker network ls -q --filter "label=com.docker.compose.project=$project") || cleanup_failed 'network inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project networks remain'
+  remaining=$(docker volume ls -q --filter "label=com.docker.compose.project=$project") || cleanup_failed 'volume inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project volumes remain'
+  # Include stopped containers: their bind mounts still refer to retained data.
+  ids=$(docker ps -aq) || cleanup_failed 'mount owner inventory failed'
+  if [[ -n "$ids" ]]; then
+    readarray -t container_ids <<< "$ids"
+    sources=$(docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "${container_ids[@]}") || cleanup_failed 'mount inspection failed'
+    while IFS= read -r source; do
+      [[ -z "$source" ]] && continue
+      source=$(readlink -m -- "$source") || cleanup_failed 'mount cannot be resolved'
+      [[ "$source" != "$resolved" && "$source" != "$resolved/"* && "$resolved" != "${source%/}/"* ]] || cleanup_failed 'a container still references work'
+    done <<< "$sources"
   fi
+  rm -rf -- "$resolved" || cleanup_failed 'work removal failed'
+  [[ ! -e "$resolved" ]] || cleanup_failed 'work still exists'
+  printf 'Browser fixture cleanup verified: project=%s work=%s removed\n' "$project" "$resolved"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -45,7 +75,6 @@ for name in ('01-first.wav','02-second.wav'):
     with wave.open(str(root/name),'wb') as out:
         out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(data)
 PY
-compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml -f tests/browser-tls.compose.yaml "$@"; }
 assert_web_cpu() {
   local web_id resources
   web_id=$(compose ps -q web)
