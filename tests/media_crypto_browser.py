@@ -93,6 +93,7 @@ def main():
             Date.now=()=>now()+window.cryptoTestClockOffset;
         })();""")
         context.add_init_script("window.cspViolations=[];document.addEventListener('securitypolicyviolation',e=>window.cspViolations.push(e.effectiveDirective));")
+        context.add_init_script("window.cryptoTestPageHides=0;addEventListener('pagehide',()=>window.cryptoTestPageHides++);")
         requests = []
         grants = []
         recording_tickets = []
@@ -109,8 +110,11 @@ def main():
         assert login.status == 200
         admin = context.new_page()
         worker_errors = []
+        worker_versions = {}
         inspector = context.new_cdp_session(admin)
         inspector.on('ServiceWorker.workerErrorReported', lambda event: worker_errors.append(event['errorMessage']))
+        inspector.on('ServiceWorker.workerVersionUpdated', lambda event: worker_versions.update(
+            {value['versionId']: value for value in event['versions']}))
         inspector.send('ServiceWorker.enable')
         admin.goto(base + '/api/v1/media/admin/', wait_until='networkidle')
         worker_asset = context.request.get(base + '/media-crypto-sw.js')
@@ -179,11 +183,13 @@ def main():
         plan = admin.evaluate("async()=>await api('/api/v1/media/admin/download/plan?paths='+encodeURIComponent(JSON.stringify(['music/encrypted-fixture','lyrics/crypto-lyrics.lrc','vido/encrypted-video'])))")
         encrypted_items = [item for item in plan['items'] if item.get('encryption')]
         assert len(encrypted_items) == 4
+        admin_download_url = admin.url
         with admin.expect_download(timeout=90000) as event:
             admin.evaluate('items=>FrontierMediaCrypto.downloadPlan(items)', plan['items'])
         archive_path = output / 'encrypted-and-plain.zip'
         event.value.save_as(archive_path)
         assert event.value.failure() is None
+        assert admin.url == admin_download_url and admin.evaluate('window.cryptoTestPageHides') == 0
         with zipfile.ZipFile(archive_path) as archive:
             assert archive.testzip() is None
             for name, original in expected.items():
@@ -198,7 +204,34 @@ def main():
         event.value.save_as(single_path)
         assert event.value.failure() is None
         assert digest(single_path.read_bytes()) == digest(expected[pathlib.PurePosixPath(single_item['path']).name])
+        assert admin.url == admin_download_url and admin.evaluate('window.cryptoTestPageHides') == 0
         assert admin.evaluate('window.cspViolations') == []
+
+        # Idle worker termination removes its keys and page capabilities. The
+        # same live page must initiate ZIP directly, without a recovery fetch.
+        active_version = next(value for value in worker_versions.values()
+                              if value.get('status') == 'activated' and value.get('runningStatus') == 'running'
+                              and value.get('scriptURL', '').endswith('/media-crypto-sw.js'))
+        inspector.send('ServiceWorker.stopWorker', {'versionId': active_version['versionId']})
+        for _ in range(50):
+            if worker_versions[active_version['versionId']].get('runningStatus') == 'stopped':
+                break
+            admin.wait_for_timeout(100)
+        assert worker_versions[active_version['versionId']].get('runningStatus') == 'stopped'
+        restart_sessions = sum(item['url'].endswith('/media/admin/crypto/session') for item in requests)
+        restart_plan = admin.evaluate("async()=>await api('/api/v1/media/admin/download/plan?paths='+encodeURIComponent(JSON.stringify(['music/encrypted-fixture'])))")
+        with admin.expect_download(timeout=90000) as event:
+            admin.evaluate('items=>FrontierMediaCrypto.downloadPlan(items)', restart_plan['items'])
+        restarted_path = output / 'worker-restarted.zip'
+        event.value.save_as(restarted_path)
+        assert event.value.failure() is None
+        with zipfile.ZipFile(restarted_path) as archive:
+            assert archive.testzip() is None
+            for name, original in expected.items():
+                assert digest(archive.read('music/encrypted-fixture/' + name)) == digest(original)
+            assert digest(archive.read('music/encrypted-fixture/plain.wav')) == digest((fixtures / 'plain.wav').read_bytes())
+        assert sum(item['url'].endswith('/media/admin/crypto/session') for item in requests) == restart_sessions
+        assert admin.url == admin_download_url and admin.evaluate('window.cryptoTestPageHides') == 0
 
         # Native video retains normal Range/seek behavior through the same
         # browser adapter. Rename/delete use only supported business APIs.
@@ -236,7 +269,7 @@ def main():
         audio_url = base + '/api/v1/media/music/category?path=music%2Fencrypted-fixture'
         audio_session_baseline = sum(item['url'].endswith('/media/crypto/session') for item in requests)
         player = context.new_page()
-        player.goto(audio_url, wait_until='networkidle')
+        player.goto(audio_url, wait_until='domcontentloaded')
         player.wait_for_function('() => art && art.currentTime > 0.05 && window.frontierCloudContinuousAudio.status().active_segment', timeout=45000)
         state = player.evaluate("() => ({index:currentIndex,url:currentMediaList[currentIndex].url,entries:currentMediaList})")
         first_entry = next(item for item in state['entries'] if item['media_path'].endswith('01-first.mp3'))

@@ -120,8 +120,7 @@
     async function ensureWorker() {
         requireCrypto();
         if (!navigator.serviceWorker) throw new Error('此浏览器不支持加密媒体流式播放');
-        if (workerPromise) return workerPromise;
-        workerPromise = (async () => {
+        if (!workerPromise) workerPromise = (async () => {
             await navigator.serviceWorker.register('/media-crypto-sw.js', {scope: '/', updateViaCache: 'none'});
             await navigator.serviceWorker.ready;
             if (!navigator.serviceWorker.controller) {
@@ -140,9 +139,11 @@
                     changed();
                 });
             }
-            await workerMessage(navigator.serviceWorker.controller, {type: 'fc-crypto-register', token});
         })().catch(error => { workerPromise = null; throw error; });
-        return workerPromise;
+        await workerPromise;
+        // Worker suspension discards its in-memory capabilities. Register the
+        // live page again before each operation, retaining its existing keys.
+        await workerMessage(navigator.serviceWorker.controller, {type: 'fc-crypto-register', token});
     }
     navigator.serviceWorker?.addEventListener('message', async event => {
         const data = event.data;
@@ -337,7 +338,8 @@
             const anchor = document.createElement('a');
             anchor.href = normalized[0].encryption
                 ? virtualUrl(normalized[0].path, true, normalized[0].encryption.file_id) : normalized[0].url;
-            anchor.download = normalized[0].filename || normalized[0].path.split('/').pop();
+            if (!normalized[0].encryption)
+                anchor.download = normalized[0].filename || normalized[0].path.split('/').pop();
             anchor.click();
             return;
         }
@@ -356,7 +358,8 @@
             {type: 'fc-crypto-zip', token, download_token: downloadToken, items: normalized});
         const anchor = document.createElement('a');
         anchor.href = '/__fc_zip/' + downloadToken;
-        anchor.download = 'media-download.zip';
+        // Attachment navigation lets the worker serve the download body.
+        // Chromium's download attribute can bypass its fetch handler.
         anchor.click();
     }
     window.addEventListener('pagehide', event => {

@@ -24,6 +24,8 @@ const sessions = new Map();
 const temporary = new Map();
 const plainReads = [];
 const cipherRequests = [];
+const controllerMessages = [];
+const downloadAnchors = [];
 const workerListeners = new Map();
 let pageMessage;
 let nextId = 1;
@@ -56,6 +58,7 @@ const client = {id: 'browser-tab', postMessage(data, ports = []) {
     pageMessage({data, source: controller, ports});
 }};
 const controller = {postMessage(data, ports = []) {
+    controllerMessages.push(data.type);
     for (const listener of workerListeners.get('message') || []) listener({data, ports, source: client});
 }};
 async function workerFetch(input, init = {}) {
@@ -127,7 +130,7 @@ const page = {
     atob, btoa, setTimeout, clearTimeout, console, isSecureContext: true,
     location: new URL('https://cloud.example/api/v1/media/admin'),
     document: {getElementById: id => id === 'uploadFiles' ? {} : null,
-        createElement() { return {click() {}}; }},
+        createElement() { return {click() { downloadAnchors.push(this); }}; }},
     navigator: {storage: {getDirectory: async () => opfs}, serviceWorker: {controller,
         register: async () => ({}), ready: Promise.resolve({}),
         addEventListener(type, listener) { if (type === 'message') pageMessage = listener; },
@@ -231,39 +234,43 @@ await assert.rejects(page.FrontierMediaCrypto.encryptRecordingLyrics([{time: Inf
 await assert.rejects(page.FrontierMediaCrypto.encryptRecordingLyrics([{time: 0, text: 'x'.repeat(4097)}], prepareSnapshot));
 
 const cryptoKeyConstructor = fileKey.constructor;
-worker = {
-    crypto: webcrypto, CryptoKey: cryptoKeyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,
-    ArrayBuffer, DataView, URL, URLSearchParams, Headers, Request, Response, ReadableStream, AbortController,
-    MessageChannel, Date: Clock,
-    performance: {timeOrigin: performance.timeOrigin - 5000, now: () => elapsed + 5000},
-    atob, btoa, setTimeout, clearTimeout,
-    location: new URL('https://cloud.example/media-crypto-sw.js'),
-    clients: {get: async id => id === client.id ? client : null, claim: async () => {}},
-    skipWaiting: async () => {},
-    addEventListener(type, listener) {
-        if (!workerListeners.has(type)) workerListeners.set(type, []);
-        workerListeners.get(type).push(listener);
-    },
-    importScripts() { vm.runInContext(source('media-crypto-common.js'), worker); },
-    async fetch(input, init = {}) {
-        const record = [...records.values()].reverse().find(value => value.source === String(input));
-        if (!record) return backendFetch(input, init);
-        const header = new Headers(init.headers).get('Range');
-        cipherRequests.push({url: String(input), range: header});
-        const range = /^bytes=(\d+)-(\d+)$/.exec(header);
-        assert(range, 'ciphertext fetches must name one exact authenticated chunk');
-        const start = Number(range[1]); const end = Number(range[2]);
-        assert(end - start + 1 <= 1048576 + 16, 'network reads remain within one ciphertext chunk');
-        const payload = record.ciphertext.slice(start, end + 1);
-        return new Response(payload, {status: 206, headers: {
-            'Content-Range': `bytes ${start}-${end}/${record.ciphertext.length}`,
-            'Content-Length': String(payload.length), 'Content-Type': 'application/octet-stream',
-        }});
-    },
-};
-worker.self = worker;
-vm.createContext(worker);
-vm.runInContext(source('media-crypto-sw.js'), worker);
+function createWorker() {
+    workerListeners.clear();
+    worker = {
+        crypto: webcrypto, CryptoKey: cryptoKeyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,
+        ArrayBuffer, DataView, URL, URLSearchParams, Headers, Request, Response, ReadableStream, AbortController,
+        MessageChannel, Date: Clock,
+        performance: {timeOrigin: performance.timeOrigin - 5000, now: () => elapsed + 5000},
+        atob, btoa, setTimeout, clearTimeout,
+        location: new URL('https://cloud.example/media-crypto-sw.js'),
+        clients: {get: async id => id === client.id ? client : null, claim: async () => {}},
+        skipWaiting: async () => {},
+        addEventListener(type, listener) {
+            if (!workerListeners.has(type)) workerListeners.set(type, []);
+            workerListeners.get(type).push(listener);
+        },
+        importScripts() { vm.runInContext(source('media-crypto-common.js'), worker); },
+        async fetch(input, init = {}) {
+            const record = [...records.values()].reverse().find(value => value.source === String(input));
+            if (!record) return backendFetch(input, init);
+            const header = new Headers(init.headers).get('Range');
+            cipherRequests.push({url: String(input), range: header});
+            const range = /^bytes=(\d+)-(\d+)$/.exec(header);
+            assert(range, 'ciphertext fetches must name one exact authenticated chunk');
+            const start = Number(range[1]); const end = Number(range[2]);
+            assert(end - start + 1 <= 1048576 + 16, 'network reads remain within one ciphertext chunk');
+            const payload = record.ciphertext.slice(start, end + 1);
+            return new Response(payload, {status: 206, headers: {
+                'Content-Range': `bytes ${start}-${end}/${record.ciphertext.length}`,
+                'Content-Length': String(payload.length), 'Content-Type': 'application/octet-stream',
+            }});
+        },
+    };
+    worker.self = worker;
+    vm.createContext(worker);
+    vm.runInContext(source('media-crypto-sw.js'), worker);
+}
+createWorker();
 const catalog = [{media_path: 'music/a.mp3', encryption: first.meta}, {media_path: 'music/b.mp3', encryption: second.meta}];
 await page.FrontierMediaCrypto.prepareCatalog(catalog);
 assert.match(catalog[0].url, /^\/__fc_media\/.*\?object=/);
@@ -335,10 +342,19 @@ vm.runInContext('capabilities.clear(); grants.clear();', worker);
 response = await workerFetch(catalog[1].url);
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
 
+// A stopped worker starts with a fresh global scope. ZIP must register the
+// already initialized page directly, before any virtual fetch can restore it.
+createWorker();
+assert.equal(vm.runInContext('capabilities.size + grants.size + zipPlans.size', worker), 0);
+const restartMessages = controllerMessages.length;
+const restartSessions = calls.filter(call => call.url.endsWith('/session')).length;
 await page.FrontierMediaCrypto.downloadPlan([
     {path: 'music/b.mp3', encryption: second.meta, size_bytes: secondBytes.length},
     {path: 'lyrics/plain.lrc', url: '/plain-lyric', size_bytes: 18},
 ]);
+assert.deepEqual(controllerMessages.slice(restartMessages), ['fc-crypto-register', 'fc-crypto-zip']);
+assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
+    'virtual ZIP uses attachment navigation so Chromium dispatches the worker fetch');
 const zipId = vm.runInContext('[...zipPlans.keys()][0]', worker);
 response = await workerFetch('/__fc_zip/' + zipId);
 const zip = new Uint8Array(await response.arrayBuffer());
@@ -365,7 +381,16 @@ assert.equal(new TextDecoder().decode(archived[1]), 'plain legacy lyric');
 assert.equal(new DataView(zip.buffer, cursor).getUint32(0, true), 0x02014b50);
 assert.equal(new DataView(zip.buffer, zip.length - 98).getUint32(0, true), 0x06064b50);
 assert.equal(Number(new DataView(zip.buffer, zip.length - 98).getBigUint64(24, true)), 2);
+assert.equal(calls.filter(call => call.url.endsWith('/session')).length, restartSessions,
+    'worker restart restores its page capability and decrypts ZIP without another master handshake');
 assert.equal((await workerFetch('/__fc_zip/' + zipId)).status, 403, 'download plan capability is consumed once');
+
+await page.FrontierMediaCrypto.downloadPlan([{path: 'music/b.mp3', encryption: second.meta}]);
+assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
+    'single encrypted attachment also reaches the worker through navigation');
+assert.match(downloadAnchors.at(-1).href, /[?&]download=1/);
+await page.FrontierMediaCrypto.downloadPlan([{path: 'lyrics/plain.lrc', url: '/plain-lyric', filename: 'plain.lrc'}]);
+assert.equal(downloadAnchors.at(-1).download, 'plain.lrc', 'normal backend downloads retain their filename attribute');
 
 const oldUrl = catalog[1].url;
 const replacement = await prepare(new TextEncoder().encode('replaced'), 'music/b.mp3', second.source);

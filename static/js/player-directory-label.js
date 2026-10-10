@@ -87,10 +87,18 @@
             };
         }
 
-        function requestedRangeOffset(init) {
-            const raw = String(new Headers(init?.headers || {}).get('Range') || '');
+        function requestHeaders(input, init) {
+            return new Headers(init?.headers !== undefined ? init.headers : input?.headers || {});
+        }
+
+        function requestedRangeOffset(input, init) {
+            if (String(init?.method || input?.method || 'GET').toUpperCase() !== 'GET') return null;
+            const headers = requestHeaders(input, init);
+            if (!headers.has('Range')) return 0;
+            const raw = String(headers.get('Range'));
             const match = /^bytes=(\d+)-$/i.exec(raw);
-            return match ? Number(match[1]) : 0;
+            const offset = match ? Number(match[1]) : NaN;
+            return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
         }
 
         async function requestUntilReadable(input, init, offset, generation, identity = null) {
@@ -115,6 +123,10 @@
                 } catch (_error) {
                     // Network failures are transient for continuous-audio prefetch.
                 }
+                if (response?.status === 416) {
+                    try { await response.body?.cancel(); } catch (_) {}
+                    throw new Error('媒体请求范围无效，请重新选择文件');
+                }
                 // Permission, stale-object and authenticated-decryption failures
                 // must hold the current song for diagnosis, not loop forever.
                 if ([401, 403, 404, 409, 422].includes(response?.status)) {
@@ -135,16 +147,19 @@
 
         async function resilientMediaFetch(input, init = {}) {
             if (!mediaStreamRequest(input, init)) return nativeFetch(input, init);
+            // Only full and open-ended GET streams have a resumable byte offset.
+            // Other Range forms must retain their native response bounds and headers.
+            const initialOffset = requestedRangeOffset(input, init);
+            if (initialOffset === null) return nativeFetch(input, init);
 
             const generation = currentPlaybackGeneration();
             const controller = new AbortController();
-            const callerSignal = init.signal;
+            const callerSignal = init.signal !== undefined ? init.signal : input?.signal;
             const abort = () => controller.abort(callerSignal?.reason);
             if (callerSignal?.aborted) abort();
             else callerSignal?.addEventListener('abort', abort, {once: true});
-            init = {...init, signal: controller.signal};
+            init = {...init, headers: requestHeaders(input, init), signal: controller.signal};
             const release = () => callerSignal?.removeEventListener('abort', abort);
-            const initialOffset = requestedRangeOffset(init);
             let first;
             try {
                 first = await requestUntilReadable(input, init, initialOffset, generation);

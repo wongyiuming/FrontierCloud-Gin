@@ -64,7 +64,9 @@ tokens are independently signed, bound to the Admin session and descriptor, and
 expire after 15 minutes; reservations still follow the upload lifecycle.
 
 The browser keeps non-extractable CryptoKey objects in memory and obtains a new
-authorization when needed after expiration or worker restart. Decryption tag
+authorization when needed after expiration. A restarted worker re-registers the
+live page and retrieves its still-valid in-memory keys without another ECDH
+handshake or an extended deadline. Decryption tag
 failure or identity mismatch is terminal: no plaintext fallback or unverified
 chunk is delivered. This controls this application's behavior. An authorized
 browser user can preserve keys or plaintext; revocation cannot erase already
@@ -85,6 +87,11 @@ encrypted objects. Plaintext is not cached by the worker. Renames preserve file
 identity and descriptors; delete/recovery journals and backup validation include
 the metadata. Admin trees and search results carry the same descriptor, so
 encrypted media and lyrics retain their status after rename.
+
+Virtual encrypted downloads and ZIP downloads use attachment navigation and the
+worker's `Content-Disposition` filename. They omit the link's `download`
+attribute so Chromium dispatches the worker fetch; the live page remains open
+to provide its existing keys.
 
 Karaoke decrypts lyrics in the browser. Saving an account recording with
 encrypted source lyrics creates an independent encrypted snapshot of its lyric

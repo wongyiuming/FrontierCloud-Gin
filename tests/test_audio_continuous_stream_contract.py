@@ -98,7 +98,7 @@ class AudioContinuousStreamContractTests(unittest.TestCase):
         self.assertIn("pendingSeekGlobal", self.core)
         self.assertIn("void startContinuous(this.activeSegment.index, restart)", self.core)
         self.assertIn("preserveBusinessState: true", self.core)
-        self.assertIn("const initialOffset = requestedRangeOffset(init)", self.runtime)
+        self.assertIn("const initialOffset = requestedRangeOffset(input, init)", self.runtime)
         self.assertIn("let offset = initialOffset", self.runtime)
 
     def test_transient_media_reads_retry_and_resume_without_changing_playlist_semantics(self):
