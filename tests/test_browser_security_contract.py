@@ -9,6 +9,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserSecurityContractTests(unittest.TestCase):
+    def test_ciphertext_internal_alias_has_explicit_type_cache_and_cors(self):
+        config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
+        cipher = config.split('location ^~ /_protected_cipher/ {', 1)[1].split('\n        }', 1)[0]
+        for directive in ('internal;', 'alias /app/data/media/;', 'types { }',
+                          'default_type application/octet-stream;', 'expires off;',
+                          'add_header Cache-Control "private, no-store" always;',
+                          'add_header Access-Control-Allow-Origin $upstream_http_access_control_allow_origin always;',
+                          'add_header Access-Control-Expose-Headers $upstream_http_access_control_expose_headers always;',
+                          'add_header Vary $upstream_http_vary always;',
+                          'include /etc/nginx/security-headers.conf;'):
+            self.assertIn(directive, cipher)
+        plain = config.split('location ^~ /_protected_media/ {', 1)[1].split('\n        }', 1)[0]
+        self.assertNotIn('types { }', plain)
+        self.assertNotIn('default_type application/octet-stream;', plain)
+        self.assertNotIn('add_header Cache-Control "private, no-store" always;', plain)
+
+    def test_edge_serves_compiled_crypto_and_rejects_source_alias(self):
+        config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
+        for name in ('media-crypto-common.js', 'media-crypto.js', 'media-crypto-sw.js'):
+            self.assertIn(f'location = /static/js/{name} {{ return 404; }}', config)
+            route = config.split(f'location = /static/js/compiled/{name}', 1)[1].split('}', 1)[0]
+            self.assertIn(f'alias /app/static/js/compiled/{name};', route)
+            self.assertIn('Cache-Control $versioned_static_cache_control', route)
+
     def test_fixed_maintenance_inline_code_matches_csp_hashes(self):
         page = (ROOT / 'nginx/maintenance.html').read_text(encoding='utf-8')
         config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')

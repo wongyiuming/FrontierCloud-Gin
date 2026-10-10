@@ -193,6 +193,8 @@ def main():
             source_url = urllib.parse.urljoin(base, grant['source_url'])
             raw = context.request.get(source_url)
             assert raw.status == 200
+            assert raw.headers.get('content-type', '').split(';', 1)[0].strip() == 'application/octet-stream', raw.headers
+            assert 'no-store' in raw.headers.get('cache-control', '').lower(), raw.headers
             assert len(raw.body()) == grant['encryption']['ciphertext_size']
             assert digest(raw.body()) != digest(expected['01-first.mp3'])
             break

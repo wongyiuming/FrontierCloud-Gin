@@ -286,7 +286,11 @@ func (p *Public) deliver(c *gin.Context, name, id string) {
 	}
 	c.Header("Content-Type", contentType)
 	if p.settings.NginxMedia {
-		c.Header("X-Accel-Redirect", "/_protected_media/"+quoteMediaPath(stream.Path))
+		prefix := "/_protected_media/"
+		if encryption != nil {
+			prefix = "/_protected_cipher/"
+		}
+		c.Header("X-Accel-Redirect", prefix+quoteMediaPath(stream.Path))
 		c.Status(200)
 		return
 	}

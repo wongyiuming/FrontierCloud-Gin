@@ -27,7 +27,7 @@ import (
 )
 
 func TestMediaCryptoStartupRejectsWrongPremasterAndStorageLoadsNoKey(t *testing.T) {
-	_, db, dir, public := publicFixture(t, false)
+	publicRouter, db, dir, public := publicFixture(t, false)
 	keyPath := filepath.Join(dir, "media-keys", "media-premaster.key")
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
@@ -57,6 +57,22 @@ func TestMediaCryptoStartupRejectsWrongPremasterAndStorageLoadsNoKey(t *testing.
 		t.Fatal(err)
 	}
 	public.media.ConfigureCluster(db.Nodes(), db.Pool(), nil)
+	// The original Standalone manager and public routes remain in the running
+	// process after promotion. Current durable role must override that snapshot.
+	afterPromotion := &Admin{public: public}
+	publicRouter.POST("/promoted-admin/session", afterPromotion.cryptoSession)
+	publicRouter.POST("/promoted-admin/prepare", afterPromotion.cryptoPrepare)
+	publicRouter.POST("/promoted-admin/key", afterPromotion.cryptoKey)
+	for _, target := range []string{"/api/v1/media/crypto/session", "/api/v1/media/crypto/key", "/promoted-admin/session", "/promoted-admin/prepare", "/promoted-admin/key"} {
+		w := httptest.NewRecorder()
+		request := httptest.NewRequest("POST", target, bytes.NewBufferString(`{}`))
+		request.RemoteAddr = "127.0.0.1:12345"
+		request.Header.Set("Content-Type", "application/json")
+		publicRouter.ServeHTTP(w, request)
+		if w.Code != 409 || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+			t.Fatal("promoted Follower retained key authorization", target, w.Code, w.Body.String())
+		}
+	}
 	storage := &Public{settings: public.settings, media: public.media}
 	storage.settings.DataRoot = t.TempDir()
 	router := gin.New()

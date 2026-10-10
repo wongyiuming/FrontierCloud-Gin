@@ -105,7 +105,11 @@ func RegisterNodeMedia(router *gin.Engine, settings config.Config, resolver *net
 		}
 		c.Header("Content-Type", contentType)
 		if settings.NginxMedia {
-			c.Header("X-Accel-Redirect", "/_protected_media/"+media.QuotePath(stream.Path))
+			prefix := "/_protected_media/"
+			if meta != nil {
+				prefix = "/_protected_cipher/"
+			}
+			c.Header("X-Accel-Redirect", prefix+media.QuotePath(stream.Path))
 			c.Status(200)
 			return
 		}

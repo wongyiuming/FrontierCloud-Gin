@@ -56,6 +56,11 @@ base="https://$address"
 export PUBLIC_ORIGIN="$base"
 compose up -d --no-build --no-deps --wait --wait-timeout 90 web
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
+for asset in media-crypto-common.js media-crypto.js media-crypto-sw.js; do
+  test "$(curl --silent --show-error --cacert "$SSL_CERT_PATH" -o /dev/null -w '%{http_code}' "$base/static/js/$asset")" = 404
+  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/static/js/compiled/$asset" -o "$work/$asset"
+  cmp "static/js/compiled/$asset" "$work/$asset"
+done
 for protocol in 1.2 1.3; do
   curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" --tlsv1."${protocol#1.}" --tls-max "$protocol" "$base/health/ready" >/dev/null
 done

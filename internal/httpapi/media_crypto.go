@@ -21,9 +21,28 @@ import (
 
 const mediaCryptoCookie = "frontiercloud_browser_crypto"
 
-func (p *Public) cryptoTransport(c *gin.Context) bool {
+// Role changes are durable and may occur after Standalone startup created a
+// manager. Its presence never grants a newly promoted storage node key service.
+func (p *Public) cryptoAvailable(c *gin.Context) bool {
+	noStore(c)
 	if p.crypto == nil {
 		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+		return false
+	}
+	role, err := p.media.BusinessRole(c.Request.Context())
+	if err != nil {
+		internalError(c, err)
+		return false
+	}
+	if role == "Follower" {
+		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+		return false
+	}
+	return true
+}
+
+func (p *Public) cryptoTransport(c *gin.Context) bool {
+	if !p.cryptoAvailable(c) {
 		return false
 	}
 	resolver, err := network.New(p.settings.TrustedProxyNetworks)
@@ -198,8 +217,7 @@ func (p *Public) cryptoSession(c *gin.Context) {
 }
 
 func (a *Admin) cryptoSession(c *gin.Context) {
-	if a.public.crypto == nil {
-		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+	if !a.public.cryptoAvailable(c) {
 		return
 	}
 	var body struct {
@@ -218,8 +236,7 @@ func (a *Admin) cryptoSession(c *gin.Context) {
 }
 
 func (a *Admin) cryptoPrepare(c *gin.Context) {
-	if a.public.crypto == nil {
-		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+	if !a.public.cryptoAvailable(c) {
 		return
 	}
 	var body struct {
@@ -276,6 +293,9 @@ func (p *Public) cryptoKey(c *gin.Context) {
 }
 
 func (a *Admin) cryptoKey(c *gin.Context) {
+	if !a.public.cryptoAvailable(c) {
+		return
+	}
 	var body cryptoKeyBody
 	if !cryptoDecode(c, &body) {
 		return
@@ -284,8 +304,7 @@ func (a *Admin) cryptoKey(c *gin.Context) {
 }
 
 func (p *Public) cryptoKeyFor(c *gin.Context, binding string, body cryptoKeyBody, admin bool) {
-	if p.crypto == nil {
-		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+	if !p.cryptoAvailable(c) {
 		return
 	}
 	if len(body.FilePath) > 4096 || len(body.ResourceID) > 128 || body.FilePath == "" && body.ResourceID == "" {
@@ -411,8 +430,7 @@ func (a *Admin) uploadEncryption(c *gin.Context, mode, encoded, preparation stri
 		detail(c, 400, "每次上传必须明确选择加密落盘或明文落盘")
 		return nil, false
 	}
-	if a.public.crypto == nil {
-		detail(c, 409, "存储节点不提供媒体密钥，请访问主节点")
+	if !a.public.cryptoAvailable(c) {
 		return nil, false
 	}
 	var meta mediacrypto.Metadata

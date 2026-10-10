@@ -811,16 +811,17 @@
 
         fail(error) {
             if (this.closed || session !== this) return;
-            if (this.sourceBuffer && this.segments.length) {
+            const media = currentMediaList?.[currentIndex];
+            if (media?.encryption || (this.sourceBuffer && this.segments.length)) {
                 // Keep the current media session and unfinished business track.
                 // Decoder/state errors are not transport retries or auto-next.
                 this.blockedError = {name: error?.name || 'Error', message: String(error?.message || error)};
+                if (media?.encryption && art) art.notice.show = this.blockedError.message;
                 console.warn('FrontierCloud audio pipeline held', this.blockedError);
                 return;
             }
             const index = currentIndex;
             this.stop();
-            const media = currentMediaList?.[index];
             if (!media) return;
             legacy.initPlayer(media, index);
             window.setTimeout(() => {

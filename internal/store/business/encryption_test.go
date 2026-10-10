@@ -109,6 +109,13 @@ func TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity(t *testing.T) 
 	if err = repo.PrepareDelete(ctx, operation, store.AdminAudit{Action: "delete"}); err != nil {
 		t.Fatal(err)
 	}
+	// SQLite tests own their database, while real-driver MySQL tests share one.
+	// The repository test has no filesystem trash left to retain this intent.
+	t.Cleanup(func() {
+		if err := repo.ForgetDelete(ctx, operation.ID); err != nil {
+			t.Error(err)
+		}
+	})
 	if err = repo.CommitDelete(ctx, operation.ID, store.AdminAudit{Action: "delete"}); err != nil {
 		t.Fatal(err)
 	}
