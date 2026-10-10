@@ -144,7 +144,7 @@ def main():
         # Artificially fail the encryption component; the upload path must stop
         # before a multipart request and must not switch to plaintext.
         before_uploads = sum(item['url'].endswith('/upload/item') for item in requests)
-        admin.evaluate("window.testOriginalEncrypt=FrontierMediaCrypto.encryptFile;FrontierMediaCrypto.encryptFile=async()=>{throw new Error('acceptance encryption failure')}")
+        admin.evaluate("() => {window.testOriginalEncrypt=FrontierMediaCrypto.encryptFile;FrontierMediaCrypto.encryptFile=async()=>{throw new Error('acceptance encryption failure')};}")
         dialog = open_upload_choice(admin, '#uploadFiles')
         with admin.expect_file_chooser() as chooser:
             dialog.get_by_role('button', name='加密落盘', exact=True).click()

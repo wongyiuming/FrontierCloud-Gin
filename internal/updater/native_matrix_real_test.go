@@ -255,7 +255,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		for i := len(containers) - 1; i >= 0; i-- {
 			if c, err := e.Inspect(cleanup, containers[i]); err == nil && c.label("com.docker.compose.project") == project {
 				e.Stop(cleanup, c.ID)
-				e.Remove(cleanup, c.ID)
+				e.call(cleanup, "DELETE", "/containers/"+c.ID+"?force=false&v=true", nil, nil)
 			}
 		}
 		for i := len(networks) - 1; i >= 0; i-- {
