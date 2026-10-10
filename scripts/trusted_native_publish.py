@@ -308,9 +308,22 @@ class RegistryWriter:
                 require(error.code == 404, 'Blob lookup failed')
                 error.close()
             headers = self.request('/v2/' + self.repository + '/blobs/uploads/', 'POST', b'', statuses=(202,))
-            parsed = urllib.parse.urlsplit(headers.get('Location', headers.get('location', '')))
-            require(parsed.scheme in ('', 'https') and parsed.netloc in ('', 'ghcr.io') and
-                    parsed.path.startswith('/v2/' + self.repository + '/blobs/uploads/') and not parsed.fragment, 'Foreign upload location')
+            location = headers.get('Location', headers.get('location', ''))
+            require(isinstance(location, str) and 0 < len(location) <= 8192 and
+                    not any(ord(char) <= 32 or ord(char) == 127 for char in location), 'Invalid upload location')
+            parsed = urllib.parse.urlsplit(location)
+            require(((parsed.scheme == '' and parsed.netloc == '' and location.startswith('/')) or
+                     (parsed.scheme == 'https' and parsed.netloc in ('ghcr.io', 'ghcr.io:443'))) and
+                    not parsed.fragment, 'Foreign upload origin')
+            # GHCR returns singular /upload/; distribution commonly uses /uploads/.
+            # Keep the returned opaque upload ID, but never cross repository scope.
+            prefixes = tuple('/v2/' + self.repository + '/blobs/' + segment + '/'
+                             for segment in ('upload', 'uploads'))
+            prefix = next((value for value in prefixes if parsed.path.startswith(value)), None)
+            upload_id = parsed.path[len(prefix):] if prefix else ''
+            require(upload_id not in ('', '.', '..') and
+                    not any(char in parsed.path for char in ('%', '\\')) and '/' not in upload_id,
+                    'Foreign upload path')
             query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
             require(not any(key == 'digest' for key, _value in query), 'Ambiguous digest')
             target = parsed.path + '?' + urllib.parse.urlencode(query + [('digest', digest)])

@@ -249,7 +249,15 @@ class TrustedNativePublishTests(unittest.TestCase):
 
     def test_scoped_registry_transfer_reads_opaque_blob_and_rejects_external_upload_location(self):
         entries, _digest = oci_payload()
-        for location in ('https://evil.example/uploads/id', '/v2/evil/blobs/uploads/id'):
+        repo = '/v2/wongyiuming/frontiercloud-gin-web/blobs/'
+        for location in ('https://evil.example/uploads/id', '/v2/evil/blobs/uploads/id',
+                         '//ghcr.io' + repo + 'upload/id', 'http://ghcr.io' + repo + 'upload/id',
+                         'https://user@ghcr.io' + repo + 'upload/id',
+                         'https://ghcr.io:444' + repo + 'upload/id',
+                         repo + 'upload/', repo + 'upload/..', repo + 'upload/id/extra',
+                         repo + 'upload/%2e%2e', repo + 'upload/id\\extra',
+                         repo + 'upload/id#fragment', repo + 'upload/id\nheader',
+                         repo + 'upload/id?digest=sha256:other'):
             writer = object.__new__(publisher.RegistryWriter); writer.repository = 'wongyiuming/frontiercloud-gin-web'
             writer.request = Mock(side_effect=[urllib.error.HTTPError('https://ghcr.io', 404, '', {}, None), {'Location': location}])
             with tempfile.TemporaryDirectory() as directory, self.assertRaises(publisher.PublicationRejected):
@@ -278,6 +286,37 @@ class TrustedNativePublishTests(unittest.TestCase):
             archive = save_oci(directory, entries)
             writer.transfer(archive, publisher.verify_oci(archive, REVISION, 'web'), REVISION)
         self.assertEqual(sum('/manifests/' in path for path, _method in calls), 1)
+
+    def test_ghcr_singular_upload_location_retains_scope_opaque_state_and_exact_bytes(self):
+        entries, digest = oci_payload()
+        for origin in ('', 'https://ghcr.io', 'https://ghcr.io:443'):
+            with self.subTest(origin=origin):
+                writer = object.__new__(publisher.RegistryWriter)
+                writer.repository = 'wongyiuming/frontiercloud-gin-web'
+                uploads = []
+                def request(path, method, data=None, headers=None, statuses=(200,)):
+                    if method == 'HEAD': raise urllib.error.HTTPError('https://ghcr.io', 404, '', {}, None)
+                    if method == 'POST':
+                        return {'location': origin + '/v2/' + writer.repository + '/blobs/upload/opaque-id?state=opaque%2Bvalue'}
+                    if '/blobs/upload/' in path:
+                        self.assertEqual(method, 'PUT')
+                        self.assertTrue(path.startswith('/v2/' + writer.repository + '/blobs/upload/opaque-id?'))
+                        query = urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
+                        self.assertEqual(query['state'], ['opaque+value'])
+                        body = b''.join(data)
+                        self.assertEqual(len(body), int(headers['Content-Length']))
+                        self.assertEqual(query['digest'], ['sha256:' + hashlib.sha256(body).hexdigest()])
+                        uploads.append(body)
+                        return {}
+                    self.assertEqual(path, '/v2/' + writer.repository + '/manifests/' + REVISION)
+                    self.assertEqual('sha256:' + hashlib.sha256(data).hexdigest(), digest)
+                    return {'Docker-Content-Digest': digest}
+                writer.request = request
+                with tempfile.TemporaryDirectory() as directory:
+                    archive = save_oci(directory, entries)
+                    verified = publisher.verify_oci(archive, REVISION, 'web')
+                    writer.transfer(archive, verified, REVISION)
+                    self.assertEqual(len(uploads), len(verified['blobs']))
 
     def test_artifact_zip_digest_bound_and_signed_url_receives_no_github_authorization(self):
         entries, _digest = oci_payload()

@@ -44,6 +44,17 @@ longer test CI or a background test workaround.
 
 Both credential-bearing jobs use only immutable default-main code. Their
 dependency chain is an isolated delivery exception, not a relaxation of test CI.
+The REST uploader accepts the registry's returned upload location in both
+GHCR's singular `/blobs/upload/` and distribution's `/blobs/uploads/` forms.
+It retains the opaque upload identifier and query state, while requiring the
+same fixed repository and verified `https://ghcr.io` origin (or a local absolute
+path). Foreign hosts, credentials, insecure schemes, fragments, traversal and
+pre-existing digest parameters fail closed. It streams only hash-verified OCI
+blob bytes; publication still requires the exact revision manifest and digest.
+The [OCI distribution specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md)
+describes upload locations returned by the registry, not a client-constructed
+UUID endpoint. This transfer compatibility does not broaden the package scope.
+
 No personal package PAT or publisher Environment is required. For each public
 Web/Updater/Nginx package, grant repository **`FrontierCloud-Gin` Write** under
 **Manage Actions access**; do not revoke that grant as a prerequisite. Public
