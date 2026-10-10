@@ -108,7 +108,28 @@ def main():
         login = context.request.post(base + '/api/v1/media/admin/elevate', form={'token': os.environ['ADMIN_KEY']})
         assert login.status == 200
         admin = context.new_page()
+        worker_errors = []
+        inspector = context.new_cdp_session(admin)
+        inspector.on('ServiceWorker.workerErrorReported', lambda event: worker_errors.append(event['errorMessage']))
+        inspector.send('ServiceWorker.enable')
         admin.goto(base + '/api/v1/media/admin/', wait_until='networkidle')
+        worker_asset = context.request.get(base + '/media-crypto-sw.js')
+        assert worker_asset.status == 200
+        worker_policy = worker_asset.headers['content-security-policy']
+        assert "default-src 'none'" in worker_policy and "script-src 'self'" in worker_policy
+        assert "connect-src 'self' https:" in worker_policy
+        assert 'unsafe-eval' not in worker_policy and 'unsafe-inline' not in worker_policy
+        registered_worker = admin.evaluate("""async () => {
+            try {
+                const registration=await navigator.serviceWorker.register('/media-crypto-sw.js', {scope:'/',updateViaCache:'none'});
+                await Promise.race([navigator.serviceWorker.ready, new Promise((resolve,reject) => {
+                    setTimeout(() => reject(new Error('Service Worker activation timed out')), 15000);
+                })]);
+                return {scope:registration.scope};
+            } catch(error) {return {error:error.message};}
+        }""")
+        assert not registered_worker.get('error'), (registered_worker, worker_errors)
+        assert registered_worker['scope'] == base + '/' and worker_errors == []
         admin.locator('.admin-module[data-admin-module="media"] .module-heading').click()
         admin.locator('#uploadSiteType').wait_for(state='visible')
         admin.wait_for_function("() => [...document.getElementById('uploadSiteType').options].some(option => option.value === 'primary' && !option.disabled)")

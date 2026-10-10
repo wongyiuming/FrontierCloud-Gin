@@ -123,6 +123,7 @@ func (p *Public) registerMediaCrypto(router *gin.Engine) error {
 	p.crypto = m
 	router.GET("/media-crypto-sw.js", func(c *gin.Context) {
 		noStore(c)
+		c.Header("Content-Security-Policy", mediaCryptoWorkerCSP)
 		c.Header("Service-Worker-Allowed", "/")
 		p.staticFile(c, "js/compiled/media-crypto-sw.js", false)
 	})

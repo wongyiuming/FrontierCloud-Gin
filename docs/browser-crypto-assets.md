@@ -39,6 +39,13 @@ bytes. Unbuilt source, output or lockfile changes fail `--check`. That check
 uses Node built-ins; lightweight CI downloads no npm dependency and does not
 run the obfuscator.
 
+The root worker script has its own response CSP: only same-origin script imports
+and same-origin or HTTPS connections are allowed. HTTPS connections support the
+existing Direct and Relay storage URLs. APIs and other static assets use the
+restrictive default policy. Browser acceptance registers this worker through real Nginx/TLS
+and executes its imports and encrypted data requests; a Node VM does not enforce
+worker response CSP.
+
 The 2026-10-10 development-workspace checks ran the same real-WebCrypto,
 service-worker Range/authorization-expiry and ZIP64 regressions against source
 and compiled modules. Both passed; two consecutive builds produced identical

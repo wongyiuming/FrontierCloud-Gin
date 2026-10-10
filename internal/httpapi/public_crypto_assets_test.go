@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,46 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 )
+
+func TestPublicCryptoRootWorkerHasScopedContentSecurityPolicy(t *testing.T) {
+	router, _, _, public := publicFixture(t, false)
+	w := request(router, http.MethodGet, "/media-crypto-sw.js", "")
+	if w.Code != http.StatusOK {
+		t.Fatal("root worker response", w.Code, w.Body.String())
+	}
+	policy := w.Header().Get("Content-Security-Policy")
+	want := "default-src 'none'; script-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'none'"
+	if policy != want {
+		t.Fatalf("worker CSP blocks required imports/fetches or relaxes other sources: %q", policy)
+	}
+	if strings.Contains(policy, "unsafe-") || w.Header().Get("Service-Worker-Allowed") != "/" || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+		t.Fatal("root worker security/scope/cache contract", w.Header())
+	}
+	for _, target := range []string{
+		"/api/v1/media/catalog/categories?media_type=music",
+		public.assets["js/player.js"],
+		public.assets["js/compiled/media-crypto-common.js"],
+		public.assets["js/compiled/media-crypto-sw.js"],
+	} {
+		if target == "" {
+			t.Fatal("missing public asset fixture")
+		}
+		w = request(router, http.MethodGet, target, "")
+		if w.Code != http.StatusOK || w.Header().Get("Content-Security-Policy") != restrictiveCSP {
+			t.Fatal("worker CSP leaked to ordinary API/asset", target, w.Code, w.Header())
+		}
+	}
+	// ServeContent may emit a conditional response; the worker's policy must
+	// remain present when the browser revalidates its registered script.
+	w = request(router, http.MethodGet, "/media-crypto-sw.js", "")
+	conditional := httptest.NewRequest(http.MethodGet, "/media-crypto-sw.js", nil)
+	conditional.Header.Set("If-Modified-Since", w.Header().Get("Last-Modified"))
+	revalidated := httptest.NewRecorder()
+	router.ServeHTTP(revalidated, conditional)
+	if revalidated.Code != http.StatusNotModified || revalidated.Header().Get("Content-Security-Policy") != want {
+		t.Fatal("worker revalidation lost its policy", revalidated.Code, revalidated.Header())
+	}
+}
 
 func TestPublicCryptoRoutesShipCompiledAssets(t *testing.T) {
 	router, _, _, public := publicFixture(t, false)
