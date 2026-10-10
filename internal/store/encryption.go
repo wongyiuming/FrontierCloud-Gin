@@ -15,3 +15,8 @@ type EncryptionRepository interface {
 	CheckEncryptionKey(context.Context, string) error
 	ReserveEncryptedUpload(context.Context, string, string, int64, int64, AdminAudit, *mediacrypto.Metadata) (UploadReservation, error)
 }
+
+// Recording snapshots have their own identity namespace and authorization.
+type RecordingEncryptionRepository interface {
+	RecordingEncryption(context.Context, string) (*mediacrypto.Metadata, error)
+}

@@ -184,6 +184,52 @@ assert.equal(common.range('bytes=99999999999-', bytes.length), null);
 assert.deepEqual(JSON.parse(JSON.stringify(common.parseLyrics('[offset:100]\n[00:01.20][00:02.30]词\n[ar:Artist]'))),
     [{time: 1.3, text: '词'}, {time: 2.4, text: '词'}]);
 
+// A recorded encrypted-source lyric is an independent opaque object. Its
+// plaintext never enters the preparation request or the stored footer shape.
+const snapshotLyrics = Array.from({length: 1200}, (_, index) => ({time: index / 10,
+    text: 'private recorded lyric marker ' + 'x'.repeat(900)}));
+const snapshotRequests = [];
+const prepareSnapshot = async fields => {
+    snapshotRequests.push(fields);
+    return (await backendFetch('/api/v1/karaoke/account/recordings/crypto/prepare', {
+        method: 'POST', body: JSON.stringify(fields),
+    })).json();
+};
+const snapshot = await page.FrontierMediaCrypto.encryptRecordingLyrics(snapshotLyrics, prepareSnapshot);
+assert(snapshot.encrypted_lyrics.encryption.plaintext_size > 1048576, 'snapshot exercises both authenticated chunks');
+assert.deepEqual(Object.keys(snapshotRequests[0]).sort(), ['plaintext_size', 'session_id']);
+assert(!JSON.stringify(snapshot).includes('private recorded lyric marker'), 'ticket/footer contain no original lyric text');
+assert.deepEqual(Object.keys(snapshot.encrypted_lyrics).sort(), ['ciphertext', 'encryption']);
+assert.equal(snapshot.preparation_token, 'signed-descriptor');
+const snapshotRecord = records.get(snapshot.encrypted_lyrics.encryption.file_id);
+let returnedSnapshot = snapshot.encrypted_lyrics;
+const authorizeSnapshot = async fields => {
+    assert.deepEqual(Object.keys(fields), ['session_id']);
+    return {encrypted_lyrics: returnedSnapshot, key_envelope: await envelope(sessions.get(fields.session_id), snapshotRecord)};
+};
+assert.deepEqual(JSON.parse(JSON.stringify(await page.FrontierMediaCrypto.decryptRecordingLyrics(authorizeSnapshot))), snapshotLyrics);
+const anotherSnapshot = await page.FrontierMediaCrypto.encryptRecordingLyrics(snapshotLyrics, prepareSnapshot);
+assert.notEqual(anotherSnapshot.encrypted_lyrics.encryption.file_id, snapshot.encrypted_lyrics.encryption.file_id,
+    'each saved recording gets a new independent immutable key/nonce identity');
+assert.equal(calls.filter(call => call.url.endsWith('/session')).length, 1,
+    'recordings and media retain the existing multi-file P-256 session');
+const snapshotCipher = common.decode(snapshot.encrypted_lyrics.ciphertext);
+snapshotCipher[1048592] ^= 1;
+returnedSnapshot = {...snapshot.encrypted_lyrics, ciphertext: common.encode(snapshotCipher)};
+await assert.rejects(page.FrontierMediaCrypto.decryptRecordingLyrics(authorizeSnapshot), 'second-chunk tag failure returns no partial lyric snapshot');
+returnedSnapshot = {...snapshot.encrypted_lyrics, ciphertext: snapshot.encrypted_lyrics.ciphertext + '\n'};
+await assert.rejects(page.FrontierMediaCrypto.decryptRecordingLyrics(authorizeSnapshot), /描述无效/, 'snapshot requires canonical strict base64');
+returnedSnapshot = snapshot.encrypted_lyrics;
+await assert.rejects(page.FrontierMediaCrypto.decryptRecordingLyrics(async () => {
+    const error = new Error('not current owner'); error.status = 403; throw error;
+}), /not current owner/, 'owner authorization errors never fall through to plaintext lyrics');
+const snapshotsBeforeOversize = snapshotRequests.length;
+await assert.rejects(page.FrontierMediaCrypto.encryptRecordingLyrics(
+    Array.from({length: 1500}, (_, index) => ({time: index, text: 'x'.repeat(1000)})), prepareSnapshot), /1400 KiB/);
+assert.equal(snapshotRequests.length, snapshotsBeforeOversize, 'oversize plaintext never leaves the browser even in preparation');
+await assert.rejects(page.FrontierMediaCrypto.encryptRecordingLyrics([{time: Infinity, text: 'bad'}], prepareSnapshot));
+await assert.rejects(page.FrontierMediaCrypto.encryptRecordingLyrics([{time: 0, text: 'x'.repeat(4097)}], prepareSnapshot));
+
 const cryptoKeyConstructor = fileKey.constructor;
 worker = {
     crypto: webcrypto, CryptoKey: cryptoKeyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,

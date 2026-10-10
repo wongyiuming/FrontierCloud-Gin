@@ -77,7 +77,7 @@
     "CREATE INDEX IF NOT EXISTS idx_karaoke_users_status ON karaoke_users (status, created_at)",
     "CREATE TABLE IF NOT EXISTS frontiercloud_schema_migrations (\n        generation INTEGER NOT NULL PRIMARY KEY,\n        migration_name VARCHAR(128) NOT NULL,\n        checksum CHAR(64) NOT NULL,\n        applied_at INTEGER NOT NULL\n    )",
     "CREATE TABLE IF NOT EXISTS frontiercloud_schema (\n                singleton INTEGER NOT NULL PRIMARY KEY,\n                generation INTEGER NOT NULL,\n                created_at INTEGER NOT NULL\n            )",
-    "CREATE TABLE IF NOT EXISTS media_encryption (media_id CHAR(64) NOT NULL PRIMARY KEY, file_id CHAR(32) NOT NULL UNIQUE, descriptor_json TEXT NULL, created_at BIGINT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS media_encryption (object_kind VARCHAR(16) NOT NULL CHECK (object_kind IN ('media','recording_lyric')), object_id CHAR(64) NOT NULL, file_id CHAR(32) NOT NULL UNIQUE, descriptor_json TEXT NULL, created_at BIGINT NOT NULL, PRIMARY KEY (object_kind,object_id))",
     "CREATE TABLE IF NOT EXISTS media_crypto_keys (singleton INTEGER NOT NULL PRIMARY KEY, key_id CHAR(64) NOT NULL, created_at BIGINT NOT NULL, CONSTRAINT chk_media_crypto_key_singleton CHECK (singleton=1))"
   ]
 }

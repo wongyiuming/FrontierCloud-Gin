@@ -83,8 +83,32 @@ Single-file downloads decrypt in the browser. Mixed folders use a bounded
 download plan and browser-streamed ZIP64 with CRC32, including plaintext and
 encrypted objects. Plaintext is not cached by the worker. Renames preserve file
 identity and descriptors; delete/recovery journals and backup validation include
-the metadata. Karaoke decrypts lyrics in the browser and submits a bounded
-snapshot for recording replay; ordinary lyrics remain server-authoritative.
+the metadata. Admin trees and search results carry the same descriptor, so
+encrypted media and lyrics retain their status after rename.
+
+Karaoke decrypts lyrics in the browser. Saving an account recording with
+encrypted source lyrics creates an independent encrypted snapshot of its lyric
+entries. The browser encrypts their JSON with a fresh file ID, key and nonce;
+the ticket, recording footer, SQL metadata and storage receipts contain only
+the descriptor and ciphertext. The preparation token is account-, browser-
+and source-bound and is never persisted in the footer or database. Plaintext
+lyric entries cannot replace a reserved encrypted snapshot.
+
+Snapshots are limited to 1400 KiB of plaintext JSON within the existing 2 MiB
+recording-metadata limit. Direct and Relay signed upload capabilities carry
+only the descriptor and canonical metadata SHA-256; the recording footer
+transports the ciphertext. Storage validates that footer against the durable
+reservation before publication. Snapshot file IDs share the global uniqueness
+registry with media file IDs, using a separate `recording_lyric` object namespace.
+Cancel and delete retain consumed IDs as tombstones.
+
+History replay obtains the snapshot key only for the current authenticated
+recording owner, reusing the existing fixed-lifetime browser authorization.
+It remains available after the original lyric is renamed or deleted. Guest
+recordings keep encrypted-source lyric entries only in browser memory until
+account save; their audio preview and download do not embed plaintext lyrics.
+Ordinary plaintext lyric snapshots retain the existing server-authoritative
+behavior.
 
 The premaster lives at `DATA_ROOT/media-keys/media-premaster.key`, separate from
 node signing credentials, and requires regular-file ownership/permissions.

@@ -10,9 +10,17 @@ import (
 	"golang.org/x/text/cases"
 )
 
-func globalTreeItem(row store.GlobalMedia, h map[string]bool) TreeItem {
+func (s *Service) globalTreeItem(ctx context.Context, row store.GlobalMedia, h map[string]bool) (TreeItem, error) {
 	size := row.Bytes
-	return TreeItem{Name: path.Base(row.Path), Path: row.Path, Kind: "file", Size: &size, Hidden: hidden(row.Path, h), HiddenDirect: h[row.Path], Media: true, MediaID: row.ID, MemberID: row.MemberID, Transport: row.Transport, NodeHealth: row.Health}
+	item := TreeItem{Name: path.Base(row.Path), Path: row.Path, Kind: "file", Size: &size, Hidden: hidden(row.Path, h), HiddenDirect: h[row.Path], Media: true, MediaID: row.ID, MemberID: row.MemberID, Transport: row.Transport, NodeHealth: row.Health}
+	if _, ok := s.repository.(store.EncryptionRepository); ok {
+		var err error
+		item.Encryption, err = s.Encryption(ctx, row.ID)
+		if err != nil {
+			return TreeItem{}, err
+		}
+	}
+	return item, nil
 }
 func (s *Service) globalScan(ctx context.Context, scope string, h map[string]bool) ([]TreeItem, error) {
 	rows, err := s.pool.ManagementResources(ctx, scope, false)
@@ -22,7 +30,10 @@ func (s *Service) globalScan(ctx context.Context, scope string, h map[string]boo
 	items := make([]TreeItem, 0, len(rows))
 	byID := map[string]int{}
 	for _, row := range rows {
-		item := globalTreeItem(row, h)
+		item, err := s.globalTreeItem(ctx, row, h)
+		if err != nil {
+			return nil, err
+		}
 		if row.State == "renaming" {
 			item.MutationState = "rename_pending"
 		}
@@ -43,7 +54,10 @@ func (s *Service) globalScan(ctx context.Context, scope string, h map[string]boo
 			if scope != "" && row.Path != scope && !strings.HasPrefix(row.Path, scope+"/") {
 				continue
 			}
-			item := globalTreeItem(row, h)
+			item, err := s.globalTreeItem(ctx, row, h)
+			if err != nil {
+				return nil, err
+			}
 			item.MutationState, item.MutationID, item.RenameTarget = op.State, op.ID, op.New
 			if index, ok := byID[row.ID]; ok {
 				items[index] = item

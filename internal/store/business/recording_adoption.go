@@ -77,7 +77,12 @@ func (r *Repository) ExportRecordingInventory(ctx context.Context, relationship 
 			if v.SHA256 == nil || !validRecording(v) || !nodeHashPattern.MatchString(*v.SHA256) || v.CreatedAt <= 0 {
 				return store.ErrRecordingState
 			}
-			result.Recordings = append(result.Recordings, store.RecordingProof{ID: v.ID, UserID: v.UserID, Filename: v.Filename, ContentType: v.ContentType, Bytes: v.Bytes, SHA256: *v.SHA256, CreatedAt: v.CreatedAt})
+			proof := store.RecordingProof{ID: v.ID, UserID: v.UserID, Filename: v.Filename, ContentType: v.ContentType, Bytes: v.Bytes, SHA256: *v.SHA256, CreatedAt: v.CreatedAt}
+			if v.EncryptedLyrics != nil {
+				proof.EncryptedLyricsEncryption = &v.EncryptedLyrics.Encryption
+				proof.MetadataSHA256 = store.RecordingMetadataSHA256(store.RecordingMetadataFor(v))
+			}
+			result.Recordings = append(result.Recordings, proof)
 		}
 		if err := rows.Err(); err != nil {
 			return err
@@ -110,6 +115,12 @@ func (r *Repository) AdoptOwnedRecordings(ctx context.Context, signed store.Sign
 	var bytes int64
 	for _, proof := range v.Recordings {
 		row := store.Recording{ID: proof.ID, UserID: proof.UserID, Filename: proof.Filename, ContentType: proof.ContentType, Bytes: proof.Bytes}
+		if !store.RecordingProofSnapshotMatches(proof, proof.VerifiedMetadata) {
+			return 0, store.ErrRecordingState
+		}
+		if proof.VerifiedMetadata != nil {
+			row.Title, row.Lyrics, row.EncryptedLyrics = proof.VerifiedMetadata.Title, proof.VerifiedMetadata.Lyrics, proof.VerifiedMetadata.EncryptedLyrics
+		}
 		if !validRecording(row) || !nodeHashPattern.MatchString(proof.SHA256) || proof.CreatedAt <= 0 || proof.CreatedAt > v.CreatedAt || bytes > store.MaxStorageAllocation-proof.Bytes {
 			return 0, store.ErrRecordingState
 		}
@@ -173,7 +184,7 @@ func (r *Repository) AdoptOwnedRecordings(ctx context.Context, signed store.Sign
 			if row.MemberID != n.ID || row.State == "deleted" && ok || row.State == "ready" && !ok {
 				return store.ErrRecordingState
 			}
-			if ok && (row.UserID != proof.UserID || row.Bytes != proof.Bytes || row.Filename != proof.Filename || row.ContentType != proof.ContentType || row.SHA256 == nil || *row.SHA256 != proof.SHA256) {
+			if ok && (!store.RecordingProofSnapshotMatches(proof, ptrMetadata(store.RecordingMetadataFor(row))) || row.UserID != proof.UserID || row.Bytes != proof.Bytes || row.Filename != proof.Filename || row.ContentType != proof.ContentType || row.SHA256 == nil || *row.SHA256 != proof.SHA256) {
 				return store.ErrRecordingState
 			}
 		}
@@ -188,7 +199,20 @@ func (r *Repository) AdoptOwnedRecordings(ctx context.Context, signed store.Sign
 			if _, ok := existing[proof.ID]; ok {
 				continue
 			}
-			if _, err = q.ExecContext(ctx, "INSERT INTO karaoke_recordings("+recordingColumns+") VALUES (?,?,?,?,?,?,?,'ready','','[]',?,?)", proof.ID, proof.UserID, n.ID, proof.Filename, proof.ContentType, proof.Bytes, proof.SHA256, proof.CreatedAt, now); err != nil {
+			metadata := store.RecordingMetadata{Lyrics: []store.RecordingLyric{}}
+			if proof.VerifiedMetadata != nil {
+				metadata = *proof.VerifiedMetadata
+			}
+			lyrics, e := store.EncodeRecordingLyrics(metadata)
+			if e != nil {
+				return e
+			}
+			if metadata.EncryptedLyrics != nil {
+				if err = r.putEncryptionFor(ctx, q, "recording_lyric", proof.ID, &metadata.EncryptedLyrics.Encryption); err != nil {
+					return err
+				}
+			}
+			if _, err = q.ExecContext(ctx, "INSERT INTO karaoke_recordings("+recordingColumns+") VALUES (?,?,?,?,?,?,?,'ready',?,?,?,?)", proof.ID, proof.UserID, n.ID, proof.Filename, proof.ContentType, proof.Bytes, proof.SHA256, metadata.Title, string(lyrics), proof.CreatedAt, now); err != nil {
 				return err
 			}
 			if err = r.nodeAudit(ctx, q, "recording-owned-adopted", rel.ID, map[string]any{"recording_id": proof.ID, "user_id": proof.UserID, "size_bytes": proof.Bytes, "sha256": proof.SHA256, "master_id": v.MasterID}, a); err != nil {

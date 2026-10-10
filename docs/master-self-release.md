@@ -49,6 +49,9 @@ database/filesystem writers, then use the new native runtime's supported
 `Initialize` 2-to-3 migration. Preserve identities, relationships, tokens, file
 IDs and historical plaintext media. Production Master operations remain manual,
 and storage appliances continue to require independent manual upgrades.
+The [first-switch review plan](schema3-first-switch.md) records the separate
+publisher/updater admission boundaries and a scoped staging operation order;
+it does not authorize a gate exception or claim a completed deployment.
 
 After migration, do not start an old schema-2 image against a schema-3 database.
 Automated publication and failed-upgrade recovery accept only the current

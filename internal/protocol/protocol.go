@@ -305,6 +305,47 @@ func RecordingToken(credential, relationship, master, owner, recording, operatio
 	return capabilityToken(credential, payload)
 }
 
+// Only the opaque footer hash and descriptor belong in a bounded capability.
+// The snapshot ciphertext travels in the recording body, never its headers.
+func RecordingTokenWithSnapshot(credential, relationship, master, owner, recording, operation string, now, size int64, contentType, filename string, meta *mediacrypto.Metadata, snapshotHash string) (string, error) {
+	token, err := RecordingToken(credential, relationship, master, owner, recording, operation, now, size, contentType, filename)
+	if err != nil || meta == nil {
+		return token, err
+	}
+	payload, err := verifyCapabilityToken(credential, token)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		return "", err
+	}
+	value, err := ParseStrictJSON(raw, 4096)
+	if err != nil {
+		return "", err
+	}
+	payload["encrypted_lyrics_encryption"], payload["encrypted_lyrics_sha256"] = value, snapshotHash
+	if _, _, err = RecordingSnapshotFromToken(payload); err != nil {
+		return "", err
+	}
+	return capabilityToken(credential, payload)
+}
+
+func RecordingSnapshotFromToken(value map[string]any) (*mediacrypto.Metadata, string, error) {
+	raw, exists := value["encrypted_lyrics_encryption"]
+	hash := stringField(value, "encrypted_lyrics_sha256")
+	if !exists && hash == "" {
+		return nil, "", nil
+	}
+	encoded, err := json.Marshal(raw)
+	var meta mediacrypto.Metadata
+	decodedHash, hashErr := hex.DecodeString(hash)
+	if err != nil || json.Unmarshal(encoded, &meta) != nil || meta.Validate() != nil || meta.PlaintextSize <= 0 || meta.PlaintextSize > 1400*1024 || hashErr != nil || len(decodedHash) != 32 || hex.EncodeToString(decodedHash) != hash {
+		return nil, "", errors.New("invalid recording snapshot capability")
+	}
+	return &meta, hash, nil
+}
+
 // VerifyRecordingToken validates and decodes a recording capability.
 func VerifyRecordingToken(credential, token string, now int64) (map[string]any, error) {
 	value, err := verifyCapabilityToken(credential, token)
@@ -323,6 +364,9 @@ func VerifyRecordingToken(credential, token string, now int64) (map[string]any, 
 		if !identifier.MatchString(stringField(value, name)) {
 			return nil, errors.New("invalid or expired recording capability")
 		}
+	}
+	if _, _, err := RecordingSnapshotFromToken(value); err != nil {
+		return nil, err
 	}
 	return value, nil
 }

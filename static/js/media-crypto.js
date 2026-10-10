@@ -187,6 +187,71 @@
         }
         return new TextDecoder().decode(await common.boundedBytes(response, expected));
     }
+    const MAX_RECORDING_LYRIC_BYTES = 1400 * 1024;
+    function recordingLyrics(entries) {
+        if (!Array.isArray(entries) || entries.length > 10000
+            || entries.some(entry => !Number.isFinite(entry?.time) || entry.time < 0
+                || typeof entry.text !== 'string' || entry.text.length > 4096
+                || new TextEncoder().encode(entry.text).byteLength > 4096))
+            throw new Error('录音歌词快照超过行数或内容限制');
+        return entries.map(entry => ({time: entry.time, text: entry.text}));
+    }
+    async function encryptRecordingLyrics(entries, prepare) {
+        const normalized = recordingLyrics(entries);
+        const encoder = new TextEncoder();
+        let size = 2 + Math.max(0, normalized.length - 1);
+        for (const entry of normalized) {
+            size += encoder.encode(JSON.stringify(entry)).byteLength;
+            if (size > MAX_RECORDING_LYRIC_BYTES) throw new Error('录音歌词快照超过 1400 KiB 限制');
+        }
+        const plaintext = encoder.encode(JSON.stringify(normalized));
+        try {
+            if (plaintext.byteLength > MAX_RECORDING_LYRIC_BYTES)
+                throw new Error('录音歌词快照超过 1400 KiB 限制');
+            const activeSession = await getSession();
+            const prepared = await prepare({session_id: activeSession.session_id, plaintext_size: plaintext.byteLength});
+            const metadata = common.validate(prepared.encryption);
+            if (metadata.plaintext_size !== plaintext.byteLength || !prepared.preparation_token)
+                throw new Error('录音歌词加密准备无效');
+            const key = await unwrap(activeSession, metadata, prepared.key_envelope);
+            const ciphertext = new Uint8Array(metadata.ciphertext_size);
+            for (let start = 0, index = 0; start < plaintext.byteLength; start += common.CHUNK_SIZE, index += 1) {
+                const chunk = plaintext.subarray(start, Math.min(plaintext.byteLength, start + common.CHUNK_SIZE));
+                ciphertext.set(new Uint8Array(await crypto.subtle.encrypt(common.parameters(metadata, index), key, chunk)),
+                    common.cipherRange(metadata, index).start);
+            }
+            return {encrypted_lyrics: {encryption: metadata, ciphertext: common.encode(ciphertext)},
+                preparation_token: prepared.preparation_token};
+        } finally { plaintext.fill(0); }
+    }
+    async function decryptRecordingLyrics(authorize) {
+        const activeSession = await getSession();
+        const grant = await authorize({session_id: activeSession.session_id});
+        const snapshot = grant.encrypted_lyrics;
+        const metadata = common.validate(snapshot?.encryption);
+        if (metadata.plaintext_size > MAX_RECORDING_LYRIC_BYTES || typeof snapshot.ciphertext !== 'string'
+            || snapshot.ciphertext.length !== 4 * Math.ceil(metadata.ciphertext_size / 3)
+            || !/^[A-Za-z0-9+/]*={0,2}$/.test(snapshot.ciphertext))
+            throw new Error('加密录音歌词描述无效');
+        const ciphertext = common.decode(snapshot.ciphertext);
+        if (ciphertext.byteLength !== metadata.ciphertext_size || common.encode(ciphertext) !== snapshot.ciphertext)
+            throw new Error('加密录音歌词长度无效');
+        const key = await unwrap(activeSession, metadata, grant.key_envelope);
+        const plaintext = new Uint8Array(metadata.plaintext_size);
+        try {
+            for (let index = 0; index < Math.ceil(metadata.plaintext_size / common.CHUNK_SIZE); index += 1) {
+                const range = common.cipherRange(metadata, index);
+                const chunk = new Uint8Array(await crypto.subtle.decrypt(common.parameters(metadata, index), key,
+                    ciphertext.subarray(range.start, range.end + 1)));
+                try { plaintext.set(chunk, index * common.CHUNK_SIZE); }
+                finally { chunk.fill(0); }
+            }
+            return recordingLyrics(JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(plaintext)));
+        } catch (error) {
+            error.status = error.status || 422;
+            throw error;
+        } finally { plaintext.fill(0); }
+    }
     async function temporaryDirectory() {
         if (!navigator.storage?.getDirectory) throw new Error('加密上传需要支持临时文件存储的浏览器');
         const directory = await navigator.storage.getDirectory();
@@ -304,6 +369,7 @@
         }).catch(() => {});
     });
     window.FrontierMediaCrypto = {prepareCatalog, ensureWorker, encryptFile, textFor,
+        encryptRecordingLyrics, decryptRecordingLyrics,
         virtualUrl, failureFor, resetFault, downloadPlan, parseLyrics: common?.parseLyrics, crcUpdate};
     void cleanAbandonedTemporaryFiles().catch(() => {});
 })();

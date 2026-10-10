@@ -14,9 +14,21 @@ import (
 func (r *Repository) Encryption(ctx context.Context, id string) (*mediacrypto.Metadata, error) {
 	return readEncryption(ctx, r.db, id, "")
 }
+
+func (r *Repository) RecordingEncryption(ctx context.Context, id string) (*mediacrypto.Metadata, error) {
+	return readEncryptionFor(ctx, r.db, "recording_lyric", id, "")
+}
+
 func readEncryption(ctx context.Context, q queryer, id, lock string) (*mediacrypto.Metadata, error) {
+	return readEncryptionFor(ctx, q, "media", id, lock)
+}
+
+func readEncryptionFor(ctx context.Context, q queryer, kind, id, lock string) (*mediacrypto.Metadata, error) {
+	if kind != "media" && kind != "recording_lyric" {
+		return nil, mediacrypto.ErrMetadata
+	}
 	var raw sql.NullString
-	err := q.QueryRowContext(ctx, "SELECT descriptor_json FROM media_encryption WHERE media_id=?"+lock, id).Scan(&raw)
+	err := q.QueryRowContext(ctx, "SELECT descriptor_json FROM media_encryption WHERE object_kind=? AND object_id=?"+lock, kind, id).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) || err == nil && !raw.Valid {
 		return nil, nil
 	}
@@ -86,26 +98,33 @@ func (r *Repository) CheckEncryptionKey(ctx context.Context, id string) error {
 	})
 }
 func (r *Repository) putEncryption(ctx context.Context, q queryer, id string, meta *mediacrypto.Metadata) error {
+	return r.putEncryptionFor(ctx, q, "media", id, meta)
+}
+
+func (r *Repository) putEncryptionFor(ctx context.Context, q queryer, kind, id string, meta *mediacrypto.Metadata) error {
 	if meta == nil {
 		return nil
+	}
+	if kind == "media" && !nodeHashPattern.MatchString(id) || kind == "recording_lyric" && !nodeIDPattern.MatchString(id) || kind != "media" && kind != "recording_lyric" {
+		return mediacrypto.ErrMetadata
 	}
 	if err := meta.Validate(); err != nil {
 		return err
 	}
 	var raw sql.NullString
 	var fileID string
-	err := q.QueryRowContext(ctx, "SELECT file_id,descriptor_json FROM media_encryption WHERE media_id=?"+r.lock(), id).Scan(&fileID, &raw)
+	err := q.QueryRowContext(ctx, "SELECT file_id,descriptor_json FROM media_encryption WHERE object_kind=? AND object_id=?"+r.lock(), kind, id).Scan(&fileID, &raw)
 	if err == nil {
 		// A storage appliance may retry the same signed Master object after its
 		// private stage was interrupted. It does not consume a second object ID
 		// or descriptor. New business reservations always allocate a new ID, and
 		// the unique file ID still prevents reuse for any different object.
-		if !raw.Valid && fileID == meta.FileID {
+		if kind == "media" && !raw.Valid && fileID == meta.FileID {
 			encoded, err := json.Marshal(meta)
 			if err != nil {
 				return err
 			}
-			_, err = q.ExecContext(ctx, "UPDATE media_encryption SET descriptor_json=? WHERE media_id=? AND descriptor_json IS NULL", string(encoded), id)
+			_, err = q.ExecContext(ctx, "UPDATE media_encryption SET descriptor_json=? WHERE object_kind=? AND object_id=? AND descriptor_json IS NULL", string(encoded), kind, id)
 			return err
 		}
 		var old mediacrypto.Metadata
@@ -117,11 +136,19 @@ func (r *Repository) putEncryption(ctx context.Context, q queryer, id string, me
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
+	var used string
+	err = q.QueryRowContext(ctx, "SELECT file_id FROM media_encryption WHERE file_id=?"+r.lock(), meta.FileID).Scan(&used)
+	if err == nil {
+		return mediacrypto.ErrMetadata
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	encoded, err := json.Marshal(meta)
 	if err != nil {
 		return err
 	}
-	_, err = q.ExecContext(ctx, "INSERT INTO media_encryption(media_id,file_id,descriptor_json,created_at) VALUES (?,?,?,?)", id, meta.FileID, string(encoded), time.Now().Unix())
+	_, err = q.ExecContext(ctx, "INSERT INTO media_encryption(object_kind,object_id,file_id,descriptor_json,created_at) VALUES (?,?,?,?,?)", kind, id, meta.FileID, string(encoded), time.Now().Unix())
 	return err
 }
 func (r *Repository) checkEncryption(ctx context.Context, q queryer, id string, meta *mediacrypto.Metadata, size int64) error {
@@ -137,6 +164,13 @@ func (r *Repository) checkEncryption(ctx context.Context, q queryer, id string, 
 
 // Retain a small random-ID tombstone so cleanup never permits nonce reuse.
 func retireEncryption(ctx context.Context, q queryer, id string) error {
-	_, err := q.ExecContext(ctx, "UPDATE media_encryption SET descriptor_json=NULL WHERE media_id=?", id)
+	return retireEncryptionFor(ctx, q, "media", id)
+}
+
+func retireEncryptionFor(ctx context.Context, q queryer, kind, id string) error {
+	if kind != "media" && kind != "recording_lyric" {
+		return mediacrypto.ErrMetadata
+	}
+	_, err := q.ExecContext(ctx, "UPDATE media_encryption SET descriptor_json=NULL WHERE object_kind=? AND object_id=?", kind, id)
 	return err
 }

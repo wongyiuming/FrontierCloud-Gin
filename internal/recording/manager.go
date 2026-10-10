@@ -136,7 +136,7 @@ func (s *Manager) Ticket(ctx context.Context, user store.KaraokeUser, size int64
 	if e != nil {
 		return Ticket{}, e
 	}
-	v, m, e := s.repo.ReserveRecording(ctx, store.Recording{ID: id, UserID: user.ID, Bytes: size, ContentType: ct, Filename: Filename(metadata.Title, user.Username, id, ct, time.Now()), Title: metadata.Title, Lyrics: metadata.Lyrics}, free, a)
+	v, m, e := s.repo.ReserveRecording(ctx, store.Recording{ID: id, UserID: user.ID, Bytes: size, ContentType: ct, Filename: Filename(metadata.Title, user.Username, id, ct, time.Now()), Title: metadata.Title, Lyrics: metadata.Lyrics, EncryptedLyrics: metadata.EncryptedLyrics}, free, a)
 	if e != nil {
 		return Ticket{}, e
 	}

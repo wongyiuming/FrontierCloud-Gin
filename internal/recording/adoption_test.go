@@ -19,6 +19,16 @@ import (
 )
 
 func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		name := "plain"
+		if encrypted {
+			name = "encrypted"
+		}
+		t.Run(name, func(t *testing.T) { testSignedRecordingAdoption(t, encrypted) })
+	}
+}
+
+func testSignedRecordingAdoption(t *testing.T, encrypted bool) {
 	s, db, user, local := storageFixture(t)
 	ctx := context.Background()
 	raw := db.Database()
@@ -48,8 +58,18 @@ func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *t
 		t.Fatal(err)
 	}
 	payload := []byte("historical recording bytes")
+	var metadata *store.RecordingMetadata
+	if encrypted {
+		snapshot := encryptedMetadataFixture(t, 256)
+		metadata = &snapshot
+		payload = encryptedFooter(t, snapshot)
+	}
 	sum := sha256.Sum256(payload)
 	inventory := store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 3, MasterID: master, FollowerID: local, Relationship: relationship, CreatedAt: now, ExpiresAt: now + 1800, Recordings: []store.RecordingProof{{ID: id, UserID: user.ID, Filename: "录音.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]), CreatedAt: now - 1}}}
+	if encrypted {
+		inventory.Recordings[0].EncryptedLyricsEncryption = &metadata.EncryptedLyrics.Encryption
+		inventory.Recordings[0].MetadataSHA256 = store.RecordingMetadataSHA256(*metadata)
+	}
 	sign := func(v store.RecordingInventory) store.SignedRecordingInventory {
 		t.Helper()
 		canonical, err := v.CanonicalPayload()
@@ -107,6 +127,17 @@ func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *t
 		undo     func()
 		manifest store.SignedRecordingInventory
 	}{name: "expired", manifest: sign(expired)})
+	if encrypted {
+		changed := inventory
+		changed.Recordings = append([]store.RecordingProof{}, inventory.Recordings...)
+		changed.Recordings[0].MetadataSHA256 = strings.Repeat("0", 64)
+		cases = append(cases, struct {
+			name     string
+			prepare  func()
+			undo     func()
+			manifest store.SignedRecordingInventory
+		}{name: "snapshot-hash", manifest: sign(changed)})
+	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.prepare != nil {
@@ -163,6 +194,16 @@ func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *t
 			t.Fatal(count, err)
 		}
 	}
+	if encrypted {
+		row, err := db.Recordings().Recording(ctx, id)
+		if err != nil || row.EncryptedLyrics == nil || !store.RecordingReceiptMetadataMatches(*row, metadata) {
+			t.Fatal("adoption lost opaque snapshot", row, err)
+		}
+		var descriptor string
+		if err = raw.QueryRow("SELECT descriptor_json FROM media_encryption WHERE object_kind='recording_lyric' AND object_id=?", id).Scan(&descriptor); err != nil || !strings.Contains(descriptor, metadata.EncryptedLyrics.Encryption.FileID) {
+			t.Fatal("adoption did not register snapshot", err)
+		}
+	}
 	if got, err := os.ReadFile(full); err != nil || !bytes.Equal(got, payload) {
 		t.Fatal("bytes changed", err)
 	}
@@ -182,6 +223,12 @@ func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *t
 		t.Fatal(err)
 	}
 	raw.QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_id=?", local).Scan(&used)
+	if encrypted {
+		var descriptor any
+		if err = raw.QueryRow("SELECT descriptor_json FROM media_encryption WHERE object_kind='recording_lyric' AND object_id=?", id).Scan(&descriptor); err != nil || descriptor != nil {
+			t.Fatal("adoption deletion lost nonce tombstone", descriptor, err)
+		}
+	}
 	if used != 0 {
 		t.Fatal("refund", used)
 	}

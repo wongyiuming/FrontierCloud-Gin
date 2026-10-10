@@ -7,26 +7,28 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 )
 
 type TreeItem struct {
-	Name          string `json:"name"`
-	Path          string `json:"path"`
-	Kind          string `json:"kind"`
-	Size          *int64 `json:"size"`
-	Hidden        bool   `json:"hidden"`
-	HiddenDirect  bool   `json:"hidden_direct"`
-	Media         bool   `json:"media"`
-	Hideable      bool   `json:"hideable"`
-	MediaID       string `json:"media_id,omitempty"`
-	MemberID      string `json:"storage_member_id,omitempty"`
-	Transport     string `json:"transport,omitempty"`
-	NodeHealth    string `json:"node_health,omitempty"`
-	MutationState string `json:"mutation_state,omitempty"`
-	MutationID    string `json:"mutation_operation,omitempty"`
-	RenameTarget  string `json:"rename_target,omitempty"`
+	Name          string                `json:"name"`
+	Path          string                `json:"path"`
+	Kind          string                `json:"kind"`
+	Size          *int64                `json:"size"`
+	Hidden        bool                  `json:"hidden"`
+	HiddenDirect  bool                  `json:"hidden_direct"`
+	Media         bool                  `json:"media"`
+	Hideable      bool                  `json:"hideable"`
+	MediaID       string                `json:"media_id,omitempty"`
+	MemberID      string                `json:"storage_member_id,omitempty"`
+	Transport     string                `json:"transport,omitempty"`
+	NodeHealth    string                `json:"node_health,omitempty"`
+	MutationState string                `json:"mutation_state,omitempty"`
+	MutationID    string                `json:"mutation_operation,omitempty"`
+	RenameTarget  string                `json:"rename_target,omitempty"`
+	Encryption    *mediacrypto.Metadata `json:"encryption,omitempty"`
 }
 type Tree struct {
 	Path  string     `json:"path"`
@@ -143,6 +145,9 @@ func (s *Service) Tree(ctx context.Context, name string) (Tree, error) {
 		media := validExt("music", rel) || validExt("vido", rel)
 		result.Items = append(result.Items, TreeItem{Name: entry.Name(), Path: rel, Kind: kind, Size: size, Hidden: hidden(rel, h), HiddenDirect: h[rel], Media: media, Hideable: entry.IsDir() && parts[0] != "lyrics"})
 	}
+	if err := s.treeEncryption(ctx, result.Items); err != nil {
+		return Tree{}, err
+	}
 	fold := cases.Fold()
 	sort.SliceStable(result.Items, func(i, j int) bool {
 		a, b := result.Items[i], result.Items[j]
@@ -152,6 +157,46 @@ func (s *Service) Tree(ctx context.Context, name string) (Tree, error) {
 		return fold.String(a.Name) < fold.String(b.Name)
 	})
 	return result, nil
+}
+
+// treeEncryption runs under the caller's shared mutation lease. It uses the
+// existing object identities and never inspects ciphertext as media content.
+func (s *Service) treeEncryption(ctx context.Context, items []TreeItem) error {
+	if _, ok := s.repository.(store.EncryptionRepository); !ok {
+		return nil
+	}
+	objects := []store.MediaObject{}
+	for _, item := range items {
+		if item.Kind != "file" || !managedObject(item.Path, false) {
+			continue
+		}
+		kind := "audio"
+		if strings.HasPrefix(item.Path, "vido/") {
+			kind = "video"
+		} else if strings.HasPrefix(item.Path, "lyrics/") {
+			kind = "lyric"
+		}
+		objects = append(objects, store.MediaObject{Path: item.Path, Kind: kind})
+	}
+	if len(objects) == 0 {
+		return nil
+	}
+	ids, err := s.repository.EnsureObjects(ctx, objects)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		id := ids[items[i].Path]
+		if id == "" {
+			continue
+		}
+		items[i].MediaID = id
+		items[i].Encryption, err = s.Encryption(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) DirectoryPreferences(ctx context.Context, scope string) ([]DirectoryPreference, error) {

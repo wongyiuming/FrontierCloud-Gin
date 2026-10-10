@@ -1,0 +1,11 @@
+# Test-only certificate trust for normal Master promotion through private TLS.
+services:
+  web:
+    cpus: "1.0"
+    environment:
+      SSL_CERT_FILE: /run/frontiercloud-browser-root.pem
+    volumes:
+      - ${SSL_CERT_PATH}:/run/frontiercloud-browser-root.pem:ro
+  nginx:
+    environment:
+      SERVER_NAME: "127.0.0.1 nginx"

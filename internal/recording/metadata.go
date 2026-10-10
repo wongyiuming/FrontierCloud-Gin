@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"unicode/utf8"
@@ -30,12 +31,17 @@ func Metadata(file io.ReaderAt, size int64) *store.RecordingMetadata {
 	if _, e := file.ReadAt(raw, size-tailSize-int64(length)); e != nil || !utf8.Valid(raw) {
 		return nil
 	}
+	if _, e := protocol.ParseStrictJSON(raw, store.MaxRecordingMetadata); e != nil {
+		return nil
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
 	decoder.UseNumber()
 	var value struct {
-		Version json.Number `json:"version"`
-		Title   string      `json:"title"`
-		Lyrics  []struct {
+		Version         json.Number                     `json:"version"`
+		EncryptedLyrics *store.RecordingEncryptedLyrics `json:"encrypted_lyrics,omitempty"`
+		Title           string                          `json:"title"`
+		Lyrics          []struct {
 			Time json.Number `json:"time"`
 			Text string      `json:"text"`
 		} `json:"lyrics"`
@@ -51,7 +57,7 @@ func Metadata(file io.ReaderAt, size int64) *store.RecordingMetadata {
 	if e != nil || version != 1 || len(value.Lyrics) > 10000 {
 		return nil
 	}
-	result := &store.RecordingMetadata{Title: string([]rune(value.Title)[:min(255, utf8.RuneCountInString(value.Title))]), Lyrics: []store.RecordingLyric{}}
+	result := &store.RecordingMetadata{Title: string([]rune(value.Title)[:min(255, utf8.RuneCountInString(value.Title))]), Lyrics: []store.RecordingLyric{}, EncryptedLyrics: value.EncryptedLyrics}
 	for _, line := range value.Lyrics {
 		at, e := line.Time.Float64()
 		if e != nil {

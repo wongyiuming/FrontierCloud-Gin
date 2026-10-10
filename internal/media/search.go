@@ -79,6 +79,9 @@ func (s *Service) scan(ctx context.Context, scope string, h map[string]bool) ([]
 	if err := visit(scope); err != nil {
 		return nil, err
 	}
+	if err := s.treeEncryption(ctx, items); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 

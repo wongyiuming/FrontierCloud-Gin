@@ -15,7 +15,7 @@ const EncryptionName = "browser-media-encryption-descriptors"
 
 // SHA256 of the two canonical SQLite generation-3 CREATE TABLE statements joined
 // by one newline. MySQL applies equivalent DDL under the same migration identity.
-const EncryptionChecksum = "99f658e1d12c564c3c4ed1bb6a9d9772802d0bcee5eae04421085ab272d8ab11"
+const EncryptionChecksum = "e5cee839fd964c7146758c365abf72fbde94dab1e74c4a9f8dc20df8ea62176b"
 
 //go:embed mysql/*.json sqlite/*.json
 var assets embed.FS

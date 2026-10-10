@@ -35,7 +35,7 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=15:d
   -an -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart -y "$work/crypto/encrypted-video/clip.mp4"
 printf '[00:00.10]浏览器解密歌词\n[00:01.00]会话复用多个文件\n' > "$work/crypto/crypto-lyrics.lrc"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
-  -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1 >/dev/null 2>&1
+  -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1,DNS:nginx >/dev/null 2>&1
 chmod 600 "$SSL_KEY_PATH"
 python3 - "$work/data/media/music/security-fixture" <<'PY'
 import math,pathlib,struct,sys,wave
@@ -45,9 +45,18 @@ for name in ('01-first.wav','02-second.wav'):
     with wave.open(str(root/name),'wb') as out:
         out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(data)
 PY
-compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml "$@"; }
+compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml -f tests/browser-tls.compose.yaml "$@"; }
+assert_web_cpu() {
+  local web_id resources
+  web_id=$(compose ps -q web)
+  test -n "$web_id"
+  resources=$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$web_id")
+  test "$resources" = 1000000000
+  printf 'Verified browser fixture Web %s: NanoCpus=%s (1 CPU)\n' "${web_id:0:12}" "$resources"
+}
 FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 compose up -d --no-build --wait --wait-timeout 180
+assert_web_cpu
 compose exec -T nginx nginx -t
 address=$(compose port nginx 443)
 base="https://$address"
@@ -60,6 +69,7 @@ proxy=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${proj
 [[ "$proxy" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 export FRONTIERCLOUD_TEST_TRUSTED_PROXY_NETWORKS="$proxy/32"
 compose up -d --no-build --no-deps --wait --wait-timeout 90 web
+assert_web_cpu
 test "$(compose ps -q nginx)" = "$nginx_id"
 test "$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")" = "$proxy"
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null

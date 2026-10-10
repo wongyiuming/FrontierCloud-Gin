@@ -176,6 +176,19 @@ func AdoptOwnedRecordings(ctx context.Context, directory string, repo store.Main
 		}
 		digest := sha256.New()
 		count, copyErr := io.CopyBuffer(digest, &inventoryReader{ctx, io.LimitReader(file, proof.Bytes+1)}, make([]byte, 64*1024))
+		metadata := Metadata(file, proof.Bytes)
+		if !store.RecordingProofSnapshotMatches(proof, metadata) {
+			file.Close()
+			return ErrRecovery
+		}
+		if proof.EncryptedLyricsEncryption != nil {
+			for index := range signed.Payload.Recordings {
+				if signed.Payload.Recordings[index].ID == proof.ID {
+					signed.Payload.Recordings[index].VerifiedMetadata = metadata
+					break
+				}
+			}
+		}
 		after, statErr := file.Stat()
 		closeErr := file.Close()
 		current, pathErr := s.info(name)

@@ -29,7 +29,7 @@ func TestEncryptedBackupRequiresIndependentPremasterProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	records := preflightRecords()
-	row := map[string]any{"kind": "row", "table": "media_encryption", "value": map[string]any{"media_id": strings.Repeat("a", 64), "file_id": meta.FileID, "descriptor_json": string(raw), "created_at": 1}}
+	row := map[string]any{"kind": "row", "table": "media_encryption", "value": map[string]any{"object_kind": "media", "object_id": strings.Repeat("a", 64), "file_id": meta.FileID, "descriptor_json": string(raw), "created_at": 1}}
 	key := map[string]any{"kind": "row", "table": "media_crypto_keys", "value": map[string]any{"singleton": 1, "key_id": strings.Repeat("c", 64), "created_at": 1}}
 	records = append(records[:len(records)-1], row, key, map[string]any{"kind": "end"})
 	data := encodedPreflight(records)
