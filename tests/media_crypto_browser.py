@@ -14,10 +14,17 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def choose_files(page, button, mode, files, expected_success):
+def open_upload_choice(page, button):
+    # The media module and hover/focus upload menu follow the normal Admin UI.
+    page.locator('#uploadBtn').click()
     page.locator(button).click()
     dialog = page.locator('dialog.upload-storage-mode-dialog')
     dialog.wait_for(state='visible')
+    return dialog
+
+
+def choose_files(page, button, mode, files, expected_success):
+    dialog = open_upload_choice(page, button)
     assert dialog.locator('div button').all_text_contents() == ['加密落盘', '明文落盘']
     # A new picker must never inherit the previous selection's mode.
     assert page.evaluate("() => [...document.querySelectorAll('input[type=file]')].every(input => !input.dataset.storageMode)")
@@ -67,6 +74,9 @@ def main():
         assert login.status == 200
         admin = context.new_page()
         admin.goto(base + '/api/v1/media/admin/', wait_until='networkidle')
+        admin.locator('.admin-module[data-admin-module="media"] .module-heading').click()
+        admin.locator('#uploadSiteType').wait_for(state='visible')
+        admin.wait_for_function("() => [...document.getElementById('uploadSiteType').options].some(option => option.value === 'primary' && !option.disabled)")
         admin.locator('#uploadSiteType').select_option('primary')
         admin.locator('.tree-row[data-path="music"]').dblclick()
         admin.wait_for_function("() => currentPath === 'music'")
@@ -82,8 +92,7 @@ def main():
         }""") == 0
 
         # Every subsequent file/lyric choice independently asks for its mode.
-        admin.locator('#uploadFiles').click()
-        admin.locator('dialog.upload-storage-mode-dialog').get_by_role('button', name='取消', exact=True).click()
+        open_upload_choice(admin, '#uploadFiles').get_by_role('button', name='取消', exact=True).click()
         choose_files(admin, '#uploadFiles', '明文落盘', str(fixtures / 'plain.wav'), 1)
         choose_files(admin, '#uploadLyrics', '加密落盘', str(lyric), 1)
         admin.evaluate("async()=>{currentPath='vido';clearMediaSelection();await renderTree()}")
@@ -98,9 +107,9 @@ def main():
         # before a multipart request and must not switch to plaintext.
         before_uploads = sum(item['url'].endswith('/upload/item') for item in requests)
         admin.evaluate("window.testOriginalEncrypt=FrontierMediaCrypto.encryptFile;FrontierMediaCrypto.encryptFile=async()=>{throw new Error('acceptance encryption failure')}")
-        admin.locator('#uploadFiles').click()
+        dialog = open_upload_choice(admin, '#uploadFiles')
         with admin.expect_file_chooser() as chooser:
-            admin.locator('dialog.upload-storage-mode-dialog').get_by_role('button', name='加密落盘', exact=True).click()
+            dialog.get_by_role('button', name='加密落盘', exact=True).click()
         chooser.value.set_files({'name': 'must-not-publish.wav', 'mimeType': 'audio/wav', 'buffer': b'must not leave browser as plaintext'})
         admin.wait_for_function("() => document.getElementById('uploadSummary').textContent === '完成：成功 0，失败 1'")
         assert sum(item['url'].endswith('/upload/item') for item in requests) == before_uploads

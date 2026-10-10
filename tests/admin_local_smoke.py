@@ -111,7 +111,7 @@ def main() -> int:
             ({"target_dir": multiple_dir}, "三.wav", WAV_ONE),
         ]
         for fields, filename, content in uploads:
-            body, content_type = multipart(fields, filename, content)
+            body, content_type = multipart({**fields, "storage_mode": "plain"}, filename, content)
             result = request_json(
                 opener,
                 "/api/v1/media/admin/upload/item",

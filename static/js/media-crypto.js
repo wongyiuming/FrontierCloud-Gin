@@ -156,9 +156,9 @@
         }
         return entries;
     }
-    async function textFor(filePath) {
+    async function textFor(filePath, fileId = '') {
         await ensureWorker();
-        const response = await fetch(virtualUrl(filePath), {credentials: 'same-origin', cache: 'no-store'});
+        const response = await fetch(virtualUrl(filePath, false, fileId), {credentials: 'same-origin', cache: 'no-store'});
         if (!response.ok) throw new Error('加密歌词读取失败');
         // Lyrics are a separately bounded business object (not media content).
         const limit = 8 * 1024 * 1024;

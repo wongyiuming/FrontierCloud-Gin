@@ -27,7 +27,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const encrypted = window.frontierCloudEncryptedLyrics;
     if (!encrypted?.file_path) { renderLyrics(); return; }
     try {
-        const text = await window.FrontierMediaCrypto.textFor(encrypted.file_path);
+        const text = await window.FrontierMediaCrypto.textFor(encrypted.file_path, encrypted.encryption?.file_id);
         lyricLines.splice(0, lyricLines.length, ...window.FrontierMediaCrypto.parseLyrics(text).map(entry => entry.text));
         renderLyrics();
     } catch (error) { document.getElementById('lyricsBoard').textContent = error.message; }

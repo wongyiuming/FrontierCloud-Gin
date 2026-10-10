@@ -85,7 +85,7 @@ func (p *Public) encryptedLyrics(c *gin.Context, page bool) bool {
 		return false
 	}
 	if page {
-		p.page(c, "lyrics.html", map[string]string{"LYRICS_JSON": "[]", "LINE_COUNT": "0", "ENCRYPTED_LYRICS_JSON": jsonString(gin.H{"file_path": object.Path})})
+		p.page(c, "lyrics.html", map[string]string{"LYRICS_JSON": "[]", "LINE_COUNT": "0", "ENCRYPTED_LYRICS_JSON": jsonString(gin.H{"file_path": object.Path, "encryption": object.Encryption})})
 	} else {
 		noStore(c)
 		c.JSON(200, cryptoEncryptedLyrics(object.Path, object.Encryption))

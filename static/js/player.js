@@ -778,7 +778,7 @@ async function loadInlineLyrics(media) {
         const data = await response.json();
         if (data.encrypted) {
             if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
-            const text = await window.FrontierMediaCrypto.textFor(data.lyric_path || data.file_path);
+            const text = await window.FrontierMediaCrypto.textFor(data.lyric_path || data.file_path, data.encryption?.file_id);
             data.entries = window.FrontierMediaCrypto.parseLyrics(text);
         }
         const entries = Array.isArray(data.entries) ? data.entries

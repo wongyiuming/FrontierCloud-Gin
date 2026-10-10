@@ -383,7 +383,7 @@ async function initialize() {
   if (state.context.encryption || state.context.encrypted) {
     if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
     await window.FrontierMediaCrypto.ensureWorker();
-    state.context.stream_url = window.FrontierMediaCrypto.virtualUrl(state.context.file_path);
+    state.context.stream_url = window.FrontierMediaCrypto.virtualUrl(state.context.file_path, false, state.context.encryption?.file_id);
   }
   elements.media.src = state.context.stream_url;
   if (state.context.type === 'audio') elements.media.style.display = 'none';
@@ -392,7 +392,7 @@ async function initialize() {
     if (!lyricResponse.ok) throw new Error(`无法读取歌词（HTTP ${lyricResponse.status}）`);
     const payload = await lyricResponse.json();
     if (payload.encrypted) {
-      const text = await window.FrontierMediaCrypto.textFor(payload.lyric_path || payload.file_path);
+      const text = await window.FrontierMediaCrypto.textFor(payload.lyric_path || payload.file_path, payload.encryption?.file_id);
       payload.entries = window.FrontierMediaCrypto.parseLyrics(text);
     }
     state.lyrics = Array.isArray(payload.entries) ? payload.entries : [];

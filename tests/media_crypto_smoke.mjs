@@ -271,6 +271,8 @@ assert.equal((await workerFetch('/__fc_zip/' + zipId)).status, 403, 'download pl
 
 const oldUrl = catalog[1].url;
 const replacement = await prepare(new TextEncoder().encode('replaced'), 'music/b.mp3', second.source);
+assert.equal(await page.FrontierMediaCrypto.textFor('music/b.mp3', replacement.meta.file_id), 'replaced',
+    'a fresh lyric descriptor must replace a same-path cached key before its authorization expires');
 now += 100000;
 assert.equal((await workerFetch(oldUrl)).status, 409, 'same-path replacement cannot reuse another object key');
 const fresh = [{media_path: 'music/b.mp3', encryption: replacement.meta}];

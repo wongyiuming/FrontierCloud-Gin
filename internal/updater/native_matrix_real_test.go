@@ -593,55 +593,87 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	placements := map[string]bool{}
 	var mediaPaths []string
-	for i, siteType := range []string{"primary", "direct", "direct", "relay", "relay"} {
-		t.Log("checking real native matrix media transport", i, siteType)
-		category := "music/混合验收-" + big.NewInt(int64(i)).String()
-		mediaPaths = append(mediaPaths, category+"/曲目.mp3")
-		payload := []byte("ID3disposable-native matrix-media-payload")
-		ticket := perform(master, "POST", "/upload/session", map[string]any{"site_type": siteType, "target_dir": category, "filename": "曲目.mp3", "size_bytes": len(payload)})
-		member, _ := ticket["member_id"].(string)
-		placements[member] = true
-		path, _ := ticket["upload_url"].(string)
-		target := master
-		if strings.HasPrefix(path, "https://") {
-			u, err := url.Parse(path)
-			if err != nil {
-				t.Fatal("invalid private upload URL")
+	var encryptedFixtures []fleetEncryptedFixture
+	browserCrypto := newFleetBrowserCrypto(t, ctx, master)
+	for _, storageMode := range []string{"plain", "encrypted"} {
+		for i, siteType := range []string{"primary", "direct", "direct", "relay", "relay"} {
+			t.Log("checking real native matrix media transport", i, siteType, storageMode)
+			category := "music/混合验收-" + big.NewInt(int64(i)).String()
+			if storageMode == "encrypted" {
+				category += "-encrypted"
 			}
-			target = nil
-			for _, site := range sites {
-				if u.Scheme+"://"+u.Host == site.origin {
-					target = site
-					break
+			mediaPaths = append(mediaPaths, category+"/曲目.mp3")
+			payload := []byte("ID3disposable-native matrix-media-payload")
+			plaintext := payload
+			prepared := fleetPreparedCrypto{}
+			body := map[string]any{"storage_mode": storageMode, "site_type": siteType, "target_dir": category, "filename": "曲目.mp3", "size_bytes": len(payload)}
+			if storageMode == "encrypted" {
+				plaintext = make([]byte, 1048576+97)
+				for offset := range plaintext {
+					plaintext[offset] = byte((offset*13 + i*7) % 251)
 				}
+				copy(plaintext, "ID3")
+				prepared, payload = browserCrypto.prepare(t, ctx, master, plaintext)
+				body["size_bytes"], body["encryption"], body["preparation_token"] = len(payload), prepared.Encryption, prepared.Preparation
 			}
-			if target == nil {
-				t.Fatal("upload left private fleet")
+			ticket := perform(master, "POST", "/upload/session", body)
+			member, _ := ticket["member_id"].(string)
+			if storageMode == "plain" {
+				placements[member] = true
 			}
-			path = u.RequestURI()
+			path, _ := ticket["upload_url"].(string)
+			target := master
+			if strings.HasPrefix(path, "https://") {
+				u, err := url.Parse(path)
+				if err != nil {
+					t.Fatal("invalid private upload URL")
+				}
+				target = nil
+				for _, site := range sites {
+					if u.Scheme+"://"+u.Host == site.origin {
+						target = site
+						break
+					}
+				}
+				if target == nil {
+					t.Fatal("upload left private fleet")
+				}
+				path = u.RequestURI()
+			}
+			code, _, err := target.request(ctx, "PUT", path, payload)
+			if err != nil || code != 200 {
+				t.Fatal("real native matrix upload", siteType, target.runtime, target.database, code, err)
+			}
+			id, _ := ticket["upload_id"].(string)
+			if siteType == "direct" {
+				perform(master, "POST", "/upload/session/"+id+"/finalize", nil)
+			}
+			code, catalog, err := master.request(ctx, "GET", "/api/v1/media/catalog/media?"+url.Values{"media_type": {"music"}, "path": {category}, "playback_session_id": {"private-fleet-session"}}.Encode(), nil)
+			entries, ok := catalog["entries"].([]any)
+			if err != nil || code != 200 || !ok || len(entries) != 1 || entries[0].(map[string]any)["resource_id"] != ticket["media_id"] {
+				t.Fatal("real native matrix catalog lost placement", siteType, code, err)
+			}
+			track := entries[0].(map[string]any)
+			stream, _ := track["url"].(string)
+			resource, _ := ticket["media_id"].(string)
+			fleetRange(t, ctx, sites, stream, resource, payload)
+			if storageMode == "encrypted" {
+				actual := fleetPreparedCrypto{}
+				fleetCryptoDecode(t, map[string]any{"encryption": track["encryption"]}, &actual)
+				if actual.Encryption != prepared.Encryption {
+					t.Fatal("real native matrix catalog changed encryption metadata")
+				}
+				aead := browserCrypto.decryptGrant(t, ctx, master, category+"/曲目.mp3", prepared.Encryption)
+				fleetDecryptCiphertext(t, ctx, sites, stream, prepared.Encryption, aead, plaintext)
+				encryptedFixtures = append(encryptedFixtures, fleetEncryptedFixture{category + "/曲目.mp3", prepared.Encryption, plaintext})
+			}
 		}
-		code, _, err := target.request(ctx, "PUT", path, payload)
-		if err != nil || code != 200 {
-			t.Fatal("real native matrix upload", siteType, target.runtime, target.database, code, err)
-		}
-		id, _ := ticket["upload_id"].(string)
-		if siteType == "direct" {
-			perform(master, "POST", "/upload/session/"+id+"/finalize", nil)
-		}
-		code, catalog, err := master.request(ctx, "GET", "/api/v1/media/catalog/media?"+url.Values{"media_type": {"music"}, "path": {category}, "playback_session_id": {"private-fleet-session"}}.Encode(), nil)
-		entries, ok := catalog["entries"].([]any)
-		if err != nil || code != 200 || !ok || len(entries) != 1 || entries[0].(map[string]any)["resource_id"] != ticket["media_id"] {
-			t.Fatal("real native matrix catalog lost placement", siteType, code, err)
-		}
-		track := entries[0].(map[string]any)
-		stream, _ := track["url"].(string)
-		resource, _ := ticket["media_id"].(string)
-		fleetRange(t, ctx, sites, stream, resource, payload)
 	}
 	if len(placements) != fleetNodeCount {
 		t.Fatal("fair native matrix placement did not cover all five stores", len(placements))
 	}
 	t.Log("real native matrix Primary/Direct/Relay uploads, global catalog and byte ranges passed", kind, "all five stores")
+	t.Log("real native matrix encrypted Primary/Direct/Relay upload, wrapped decrypt grants, two authenticated Range chunks and edge octet/no-store passed", kind, "five files reused one ECDH session")
 	account := func(method, path string, value any) map[string]any {
 		t.Helper()
 		code, out, err := master.request(ctx, method, "/api/v1/karaoke/account"+path, value)
@@ -930,6 +962,29 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	fleetRange(t, ctx, sites, "/api/v1/karaoke/account/recordings/"+recordings[0]+"/stream", "", []byte("disposable native matrix recording payload"))
 	t.Log("real native matrix durable-role Web, Redis and MySQL restart preserved identity, relationships, sessions and recordings", kind)
+	code, _, err := master.request(ctx, "POST", "/api/v1/media/admin/crypto/key", map[string]any{"session_id": browserCrypto.grant.SessionID, "file_path": encryptedFixtures[0].name})
+	if err != nil || code != 401 {
+		t.Fatal("real native Master restart retained an invalidated in-memory crypto session", code, err)
+	}
+	resumedCrypto := newFleetBrowserCrypto(t, ctx, master)
+	for _, fixture := range encryptedFixtures {
+		category := fixture.name[:strings.LastIndex(fixture.name, "/")]
+		code, catalog, err := master.request(ctx, "GET", "/api/v1/media/catalog/media?"+url.Values{"media_type": {"music"}, "path": {category}, "playback_session_id": {"private-fleet-session"}}.Encode(), nil)
+		entries, ok := catalog["entries"].([]any)
+		if err != nil || code != 200 || !ok || len(entries) != 1 {
+			t.Fatal("real native restart lost encrypted media catalog", code, err)
+		}
+		track := entries[0].(map[string]any)
+		actual := fleetPreparedCrypto{}
+		fleetCryptoDecode(t, map[string]any{"encryption": track["encryption"]}, &actual)
+		if actual.Encryption != fixture.metadata {
+			t.Fatal("real native restart changed encrypted media descriptor")
+		}
+		aead := resumedCrypto.decryptGrant(t, ctx, master, fixture.name, fixture.metadata)
+		stream, _ := track["url"].(string)
+		fleetDecryptCiphertext(t, ctx, sites, stream, fixture.metadata, aead, fixture.plain)
+	}
+	t.Log("real native restart invalidated old crypto authorization and preserved all five encrypted file keys/bytes with one new session", kind)
 	for _, id := range recordings {
 		account("DELETE", "/recordings/"+id, nil)
 	}
@@ -941,7 +996,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	deleted := perform(master, "POST", "/delete", map[string]any{"paths": mediaPaths})
 	count, ok := deleted["deleted"].(json.Number)
 	pending, _ := deleted["pending_delete"].([]any)
-	if !ok || count.String() != big.NewInt(fleetNodeCount).String() || len(pending) != 0 {
+	if !ok || count.String() != big.NewInt(int64(len(mediaPaths))).String() || len(pending) != 0 {
 		t.Fatal("real native matrix media deletion did not converge")
 	}
 	for _, name := range mediaPaths {
