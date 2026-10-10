@@ -117,7 +117,7 @@ func (f *nativePublicationFixture) manifest(t *testing.T, version, target string
 	f.policies[target] = release.Policy{Branch: "gin_main", Source: "gin_dev"}
 	f.heads["gin_main"] = target
 	f.mu.Unlock()
-	return &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 2, Artifacts: map[string]release.Artifact{"gin_main": artifact, "main": {Kind: "git-archive", CommitSHA: reference, SourceSHA: source, TreeSHA: tree}}}
+	return &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 3, Artifacts: map[string]release.Artifact{"gin_main": artifact, "main": {Kind: "git-archive", CommitSHA: reference, SourceSHA: source, TreeSHA: tree}}}
 }
 
 func (f *nativePublicationFixture) reply(w http.ResponseWriter, r *http.Request) {

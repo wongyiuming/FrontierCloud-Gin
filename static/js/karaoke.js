@@ -380,12 +380,21 @@ async function initialize() {
   state.context = await response.json();
   elements.title.textContent = state.context.title;
   elements.kind.textContent = state.context.type === 'video' ? '视频' : '音乐';
+  if (state.context.encryption || state.context.encrypted) {
+    if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
+    await window.FrontierMediaCrypto.ensureWorker();
+    state.context.stream_url = window.FrontierMediaCrypto.virtualUrl(state.context.file_path);
+  }
   elements.media.src = state.context.stream_url;
   if (state.context.type === 'audio') elements.media.style.display = 'none';
   if (state.context.has_lyrics && state.context.lyrics_url) {
     const lyricResponse = await fetch(state.context.lyrics_url, {cache: 'no-store'});
     if (!lyricResponse.ok) throw new Error(`无法读取歌词（HTTP ${lyricResponse.status}）`);
     const payload = await lyricResponse.json();
+    if (payload.encrypted) {
+      const text = await window.FrontierMediaCrypto.textFor(payload.lyric_path || payload.file_path);
+      payload.entries = window.FrontierMediaCrypto.parseLyrics(text);
+    }
     state.lyrics = Array.isArray(payload.entries) ? payload.entries : [];
   } else {
     elements.fullLyrics.disabled = true;
@@ -553,9 +562,20 @@ async function loadRecordings() {
 
 async function uploadBlob(blob, title, media = null) {
   if (!state.account) throw new Error('请先登录 卡拉OK账号');
+  let lyricSnapshot;
+  if (media) {
+    lyricSnapshot = state.lyrics;
+    if (!Array.isArray(lyricSnapshot) || lyricSnapshot.length > 10000
+      || lyricSnapshot.some(entry => !Number.isFinite(entry?.time) || entry.time < 0
+        || typeof entry.text !== 'string' || new TextEncoder().encode(entry.text).byteLength > 4096)
+      || new TextEncoder().encode(JSON.stringify(lyricSnapshot)).byteLength > 2 * 1024 * 1024) {
+      throw new Error('录音歌词快照超过 10,000 行或 2 MiB 限制');
+    }
+  }
   setStatus('正在预留个人空间…');
   const ticket = await accountApi('/recordings/ticket', {method: 'POST', headers: karaokeHeaders(), body: JSON.stringify({
     size_bytes: blob.size, content_type: blob.type || 'application/octet-stream', media, title,
+    ...(media ? {lyrics: lyricSnapshot} : {}),
   })});
   const headers = {'Content-Type': blob.type || 'application/octet-stream'};
   if (ticket.direct) headers['X-Recording-Capability'] = ticket.capability;

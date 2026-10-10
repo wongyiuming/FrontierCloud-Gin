@@ -138,7 +138,7 @@ class AudioContinuousStreamContractTests(unittest.TestCase):
         self.assertIn("v.ID != affinity", self.routing)
         self.assertIn("no online writable member has enough capacity for this media folder", self.routing)
         self.assertIn("historical media folder is spread across multiple storage members", self.routing)
-        self.assertIn("ReserveMasterUpload", self.upload)
+        self.assertIn("ReserveMasterEncryptedUpload", self.upload)
         self.assertIn("mutationAudit", self.upload)
 
 

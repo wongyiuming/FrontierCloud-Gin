@@ -22,7 +22,8 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
-const MaxLyricBytes int64 = 2 * 1024 * 1024
+// Two GCM tags bound the additional size of an encrypted 2 MiB lyric.
+const MaxLyricBytes int64 = 2*1024*1024 + 32
 
 type Source interface {
 	WithBusinessBackup(context.Context, func(*os.Root) error) error

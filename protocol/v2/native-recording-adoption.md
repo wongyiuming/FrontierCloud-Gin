@@ -12,7 +12,7 @@ Run `recording-inventory --relationship <id> --confirm-node-id <master-id>` on
 the existing Master and securely save stdout as an inventory file. No new node
 key is generated. The current Master signs its complete ready-recording set for
 that active downstream relationship using its existing Ed25519 identity.
-The inventory is valid for 30 minutes and binds schema generation 2, Master,
+The inventory is valid for 30 minutes and binds the current schema generation 3, Master,
 Follower, relationship, user/recording IDs, filename, type, exact size and hash.
 It contains no password, relationship credential, signing key or account data.
 

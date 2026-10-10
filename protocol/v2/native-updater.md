@@ -44,8 +44,10 @@ a saved name is never removed. Container removal never removes business volumes.
 Before replacement, a durable private journal preserves all original service
 snapshots. A separate mounted native helper closes/drains the local lifecycle
 fence; executing that command inside the draining Web container would kill the
-helper prematurely. Offline preparation only admits an existing compatible
-generation 2 store and never performs reverse DDL. Native initializers, Web
+helper prematurely. Offline preparation only admits an existing current
+generation 3 store and never performs reverse DDL. A generation-2 first upgrade
+requires a separate backed-up maintenance migration before entering this
+release path; older images cannot be relabeled as compatible. Native initializers, Web
 health and rendered/running Nginx configuration must succeed before committing
 the new local generation. Docker stop/wait/build use different bounded deadlines.
 

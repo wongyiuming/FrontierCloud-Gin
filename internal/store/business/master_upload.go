@@ -31,6 +31,9 @@ func (r *Repository) CompleteMasterUpload(ctx context.Context, operation string,
 		if v.MemberID != n.ID || v.MediaID != o.ID || v.Path != o.Path || v.Kind != o.Kind || v.ExpectedBytes != size {
 			return nodeConflict("Master publication differs from reservation")
 		}
+		if err = r.checkEncryption(ctx, q, o.ID, o.Encryption, size); err != nil {
+			return err
+		}
 		var id, name, kind string
 		err = q.QueryRowContext(ctx, "SELECT media_id,media_path,object_kind FROM media_objects WHERE media_id=? OR path_locator=?"+r.lock(), o.ID, locator(o.Path)).Scan(&id, &name, &kind)
 		if err == nil {

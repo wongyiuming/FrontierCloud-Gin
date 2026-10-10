@@ -13,10 +13,44 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const testGeneration int64 = 1790000000000000123
+
+func TestEncryptedBackupRequiresIndependentPremasterProof(t *testing.T) {
+	meta, err := mediacrypto.NewMetadata(84)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := preflightRecords()
+	row := map[string]any{"kind": "row", "table": "media_encryption", "value": map[string]any{"media_id": strings.Repeat("a", 64), "file_id": meta.FileID, "descriptor_json": string(raw), "created_at": 1}}
+	key := map[string]any{"kind": "row", "table": "media_crypto_keys", "value": map[string]any{"singleton": 1, "key_id": strings.Repeat("c", 64), "created_at": 1}}
+	records = append(records[:len(records)-1], row, key, map[string]any{"kind": "end"})
+	data := encodedPreflight(records)
+	report, err := Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.LogicalValid || report.RestoreReady || len(report.PendingGates) != 5 || report.PendingGates[4] != "media-premaster-key-proof" {
+		t.Fatal("encrypted data claimed independent restoration", report)
+	}
+	withoutKey := append(append([]map[string]any{}, records[:len(records)-2]...), map[string]any{"kind": "end"})
+	missingKeyData := encodedPreflight(withoutKey)
+	if _, err = Preflight(context.Background(), bytes.NewReader(missingKeyData), expectedPreflight(missingKeyData), t.TempDir()); err == nil {
+		t.Fatal("encrypted backup without key identity accepted")
+	}
+	row["value"].(map[string]any)["descriptor_json"] = `{"version":1}`
+	data = encodedPreflight(records)
+	if _, err = Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), t.TempDir()); err == nil {
+		t.Fatal("invalid encrypted descriptor admitted")
+	}
+}
 
 func preflightRecords() []map[string]any {
 	id, lyric, owner, user := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 32), strings.Repeat("d", 32)
@@ -79,7 +113,7 @@ func TestBackupPreflightExactGenerationTypedRowsGeneratedColumnReferencesAndClea
 		data := encodedPreflight(records)
 		directory := t.TempDir()
 		report, err := Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), directory)
-		if err != nil || !report.LogicalValid || report.RestoreReady || report.Generation != testGeneration || report.Rows["media_objects"] != 2 || len(report.Rows) != 23 || report.Lyrics != 1 || len(report.PendingGates) != 4 {
+		if err != nil || !report.LogicalValid || report.RestoreReady || report.Generation != testGeneration || report.Rows["media_objects"] != 2 || len(report.Rows) != 25 || report.Lyrics != 1 || len(report.PendingGates) != 4 {
 			t.Fatal(report, err)
 		}
 		checkScratchEmpty(t, directory)

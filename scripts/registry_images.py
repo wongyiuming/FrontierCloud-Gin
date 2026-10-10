@@ -12,6 +12,7 @@ import urllib.request
 
 ROOT = 'https://ghcr.io'
 SOURCE = 'https://github.com/wongyiuming/FrontierCloud-Gin'
+SCHEMA_GENERATION = '3'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
 ACCEPT = ', '.join(('application/vnd.oci.image.index.v1+json',
                     'application/vnd.docker.distribution.manifest.list.v2+json',
@@ -185,7 +186,7 @@ def publication_probe(revision, component, request=fetch):
         raise ValueError('Publication config content digest mismatch')
     configuration = strict_json(raw)
     expected = {'frontiercloud.revision': revision, 'frontiercloud.component': component,
-                'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '2',
+                'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': SCHEMA_GENERATION,
                 'org.opencontainers.image.source': SOURCE, 'org.opencontainers.image.revision': revision}
     labels = configuration.get('config', {}).get('Labels', {})
     if (configuration.get('os') != 'linux' or configuration.get('architecture') != 'amd64'
@@ -220,7 +221,7 @@ def ensure(revision, component):
     architecture = {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine(), platform.machine())
     labels = image.get('Config', {}).get('Labels', {})
     expected = {'frontiercloud.revision': revision, 'frontiercloud.component': component,
-                'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '2',
+                'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': SCHEMA_GENERATION,
                 'org.opencontainers.image.source': SOURCE, 'org.opencontainers.image.revision': revision}
     if any(labels.get(key) != value for key, value in expected.items()) or image.get('Os') != 'linux' or image.get('Architecture') != architecture:
         raise ValueError('Public image provenance/schema mismatch')

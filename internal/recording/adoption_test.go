@@ -49,7 +49,7 @@ func TestSignedRecordingAdoptionCompletePhysicalProofNoBytesOrQuotaMutation(t *t
 	}
 	payload := []byte("historical recording bytes")
 	sum := sha256.Sum256(payload)
-	inventory := store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 2, MasterID: master, FollowerID: local, Relationship: relationship, CreatedAt: now, ExpiresAt: now + 1800, Recordings: []store.RecordingProof{{ID: id, UserID: user.ID, Filename: "录音.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]), CreatedAt: now - 1}}}
+	inventory := store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 3, MasterID: master, FollowerID: local, Relationship: relationship, CreatedAt: now, ExpiresAt: now + 1800, Recordings: []store.RecordingProof{{ID: id, UserID: user.ID, Filename: "录音.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]), CreatedAt: now - 1}}}
 	sign := func(v store.RecordingInventory) store.SignedRecordingInventory {
 		t.Helper()
 		canonical, err := v.CanonicalPayload()
@@ -201,7 +201,7 @@ func (r *adoptionAuthorityRace) AdoptOwnedRecordings(ctx context.Context, v stor
 }
 
 func TestRecordingInventoryParserRejectsAmbiguityAndOversize(t *testing.T) {
-	value := store.SignedRecordingInventory{Payload: store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 2, Recordings: []store.RecordingProof{}}, Signature: "fixture"}
+	value := store.SignedRecordingInventory{Payload: store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 3, Recordings: []store.RecordingProof{}}, Signature: "fixture"}
 	raw, _ := json.Marshal(value)
 	if got, err := ParseInventory(bytes.NewReader(raw)); err != nil || got.Signature != value.Signature {
 		t.Fatal(got, err)

@@ -3,7 +3,7 @@ FROM nginx:1.30.4-alpine
 ARG REVISION
 ARG FRONTIERCLOUD_RUNTIME=go
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="nginx" \
-      frontiercloud.runtime=$FRONTIERCLOUD_RUNTIME frontiercloud.schema-generation="2"
+      frontiercloud.runtime=$FRONTIERCLOUD_RUNTIME frontiercloud.schema-generation="3"
 
 # Remove the bundled default server.
 RUN rm /etc/nginx/conf.d/default.conf

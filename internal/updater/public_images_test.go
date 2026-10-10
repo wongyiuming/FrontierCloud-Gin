@@ -20,7 +20,7 @@ type publicImageTransport func(*http.Request) (*http.Response, error)
 func (f publicImageTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestCanonicalReleasePrefersPublicImageAndNeverBuildsOnPullOrProofFailure(t *testing.T) {
-	for _, scenario := range []string{"success", "registry-forbidden", "pull-error", "bad-label", "wrong-platform", "missing-release-proof", "missing"} {
+	for _, scenario := range []string{"success", "registry-forbidden", "pull-error", "bad-label", "wrong-platform", "previous-schema", "missing-release-proof", "missing"} {
 		t.Run(scenario, func(t *testing.T) {
 			source, _, target := gitFixture(t)
 			if _, err := source.git(context.Background(), time.Second, "remote", "set-url", "origin", release.ImageSource+".git"); err != nil {
@@ -30,7 +30,7 @@ func TestCanonicalReleasePrefersPublicImageAndNeverBuildsOnPullOrProofFailure(t 
 			image := Image{ID: "sha256:" + strings.Repeat("b", 64), Architecture: runtime.GOARCH, OS: "linux"}
 			image.Config.Labels = map[string]string{
 				"frontiercloud.revision": target, "frontiercloud.component": "web", "frontiercloud.runtime": "go",
-				"frontiercloud.schema-generation": "2", "frontiercloud.release-manifest-version": "1",
+				"frontiercloud.schema-generation": "3", "frontiercloud.release-manifest-version": "1",
 				"org.opencontainers.image.source": release.ImageSource, "org.opencontainers.image.revision": target,
 			}
 			if scenario == "bad-label" {
@@ -38,6 +38,9 @@ func TestCanonicalReleasePrefersPublicImageAndNeverBuildsOnPullOrProofFailure(t 
 			}
 			if scenario == "wrong-platform" {
 				image.Architecture = "unknown"
+			}
+			if scenario == "previous-schema" {
+				image.Config.Labels["frontiercloud.schema-generation"] = "2"
 			}
 			if scenario == "missing-release-proof" {
 				delete(image.Config.Labels, "frontiercloud.release-manifest-version")
@@ -107,7 +110,7 @@ func TestValidatedPublicCacheIsReusableButWrongPlatformIsNot(t *testing.T) {
 				t.Fatal(err)
 			}
 			image := Image{ID: "sha256:" + strings.Repeat("b", 64), OS: "linux", Architecture: runtime.GOARCH}
-			image.Config.Labels = map[string]string{"frontiercloud.revision": target, "frontiercloud.component": "updater", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.release-manifest-version": "1", "org.opencontainers.image.source": release.ImageSource, "org.opencontainers.image.revision": target}
+			image.Config.Labels = map[string]string{"frontiercloud.revision": target, "frontiercloud.component": "updater", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "frontiercloud.release-manifest-version": "1", "org.opencontainers.image.source": release.ImageSource, "org.opencontainers.image.revision": target}
 			if wrong {
 				image.OS = "windows"
 			}
@@ -154,7 +157,7 @@ func TestPublicCleanupOnlyRemovesOwnedProjectAliasNotSharedDigest(t *testing.T) 
 			return
 		}
 		image := Image{ID: "sha256:" + strings.Repeat("b", 64)}
-		image.Config.Labels = map[string]string{"frontiercloud.revision": stale, "frontiercloud.component": "web", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "org.opencontainers.image.source": release.ImageSource, "org.opencontainers.image.revision": stale}
+		image.Config.Labels = map[string]string{"frontiercloud.revision": stale, "frontiercloud.component": "web", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "org.opencontainers.image.source": release.ImageSource, "org.opencontainers.image.revision": stale}
 		json.NewEncoder(w).Encode(image)
 	})
 	e.Project = project

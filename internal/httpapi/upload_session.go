@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
@@ -17,11 +18,14 @@ func (a *Admin) storagePool(c *gin.Context) {
 }
 func (a *Admin) reserveUpload(c *gin.Context) {
 	var body struct {
-		Site     string `json:"site_type"`
-		Target   string `json:"target_dir"`
-		Relative string `json:"relative_path"`
-		Filename string `json:"filename"`
-		Bytes    int64  `json:"size_bytes"`
+		Site        string          `json:"site_type"`
+		Target      string          `json:"target_dir"`
+		Relative    string          `json:"relative_path"`
+		Filename    string          `json:"filename"`
+		Bytes       int64           `json:"size_bytes"`
+		Mode        string          `json:"storage_mode"`
+		Encryption  json.RawMessage `json:"encryption"`
+		Preparation string          `json:"preparation_token"`
 	}
 	if !decodeAdmin(c, &body) {
 		return
@@ -30,11 +34,27 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 		invalid(c, "body", "upload")
 		return
 	}
-	if body.Bytes > a.settings.AdminMaxUploadBytes {
+	encoded := ""
+	if len(body.Encryption) > 0 && string(body.Encryption) != "null" {
+		encoded = string(body.Encryption)
+	}
+	meta, ok := a.uploadEncryption(c, body.Mode, encoded, body.Preparation)
+	if !ok {
+		return
+	}
+	plainSize := body.Bytes
+	if meta != nil {
+		plainSize = meta.PlaintextSize
+		if body.Bytes != meta.CiphertextSize {
+			detail(c, 400, "密文大小与加密元数据不一致")
+			return
+		}
+	}
+	if plainSize > a.settings.AdminMaxUploadBytes {
 		detail(c, 413, "文件超过单文件上传限制")
 		return
 	}
-	result, err := a.public.media.ReserveMasterUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, body.Site, body.Bytes, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, "upload-reserved", []string{body.Filename}))
+	result, err := a.public.media.ReserveMasterEncryptedUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, body.Site, body.Bytes, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, "upload-reserved", []string{body.Filename}), meta)
 	if err != nil {
 		uploadError(c, err)
 		return
@@ -44,7 +64,7 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 func (a *Admin) uploadBytes(c *gin.Context) {
 	controller := http.NewResponseController(c.Writer)
 	defer controller.SetReadDeadline(time.Time{})
-	c.Request.Body = http.MaxBytesReader(c.Writer, &uploadReader{c.Request.Body, controller, time.Duration(min(a.settings.AdminUploadInactivity, 315360000)) * time.Second}, a.settings.AdminMaxUploadBytes)
+	c.Request.Body = http.MaxBytesReader(c.Writer, &uploadReader{c.Request.Body, controller, time.Duration(min(a.settings.AdminUploadInactivity, 315360000)) * time.Second}, encryptedUploadLimit(a.settings.AdminMaxUploadBytes))
 	result, err := a.public.media.UploadMasterBytes(c.Request.Context(), c.Param("upload"), c.Request.Body, a.mutationAudit(c, "upload-finalized", []string{c.Param("upload")}))
 	if err != nil {
 		uploadError(c, err)

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"io"
 	"log/slog"
 	"os"
@@ -364,6 +365,9 @@ func (s *Service) writeUploadJournal(journal uploadJournal) error {
 }
 
 func (s *Service) finishUpload(ctx context.Context, journal uploadJournal) error {
+	if journal.Object.Encryption != nil && (journal.Object.Encryption.Validate() != nil || journal.Object.Encryption.CiphertextSize != journal.Bytes) {
+		return ErrRecovery
+	}
 	owned := journal.Format == "frontiercloud-owned-upload"
 	master := journal.Format == "frontiercloud-master-upload"
 	if (!owned && !master && journal.Format != "frontiercloud-local-upload") || journal.Version != 1 || !operationID.MatchString(journal.ID) || !managedObject(journal.Object.Path, false) || journal.Bytes < 1 || len(journal.SHA256) != 64 {
@@ -461,6 +465,10 @@ func (s *Service) finishUpload(ctx context.Context, journal uploadJournal) error
 }
 
 func (s *Service) Publish(ctx context.Context, stage *Stage, filename, target, relative string, lyric bool, maxName int, audit store.AdminAudit) (string, error) {
+	return s.PublishEncrypted(ctx, stage, filename, target, relative, lyric, maxName, audit, nil)
+}
+
+func (s *Service) PublishEncrypted(ctx context.Context, stage *Stage, filename, target, relative string, lyric bool, maxName int, audit store.AdminAudit, encryption *mediacrypto.Metadata) (string, error) {
 	role, roleErr := s.role(ctx)
 	if roleErr != nil {
 		return "", roleErr
@@ -474,7 +482,13 @@ func (s *Service) Publish(ctx context.Context, stage *Stage, filename, target, r
 	if stage.Bytes == 0 {
 		return "", ErrSignature
 	}
-	if lyric {
+	if encryption != nil && (encryption.Validate() != nil || encryption.CiphertextSize != stage.Bytes) {
+		return "", mediacrypto.ErrMetadata
+	}
+	if lyric && encryption != nil && encryption.PlaintextSize > MaxLyricUploadBytes {
+		return "", ErrUploadSize
+	}
+	if lyric && encryption == nil {
 		if stage.Bytes > MaxLyricUploadBytes {
 			return "", ErrUploadSize
 		}
@@ -509,7 +523,21 @@ func (s *Service) Publish(ctx context.Context, stage *Stage, filename, target, r
 	if err != nil {
 		return "", err
 	}
-	if !lyric && !signature(strings.ToLower(path.Ext(object.Path)), stage.Head) {
+	if encryption != nil {
+		repository, ok := s.repository.(store.EncryptionRepository)
+		if !ok {
+			return "", mediacrypto.ErrMetadata
+		}
+		used, err := repository.EncryptionUsed(ctx, encryption.FileID)
+		if err != nil {
+			return "", err
+		}
+		if used {
+			return "", mediacrypto.ErrMetadata
+		}
+		object.Encryption = encryption
+	}
+	if encryption == nil && !lyric && !signature(strings.ToLower(path.Ext(object.Path)), stage.Head) {
 		return "", ErrSignature
 	}
 	if _, err := s.safeInfo(object.Path); err == nil {

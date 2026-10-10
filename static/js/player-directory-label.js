@@ -20,7 +20,7 @@
             try {
                 const url = new URL(raw, window.location.href);
                 return url.origin === window.location.origin
-                    && url.pathname === '/api/v1/media/stream';
+                    && (url.pathname === '/api/v1/media/stream' || url.pathname.startsWith('/__fc_media/'));
             } catch (_error) {
                 return false;
             }
@@ -96,6 +96,8 @@
         async function requestUntilReadable(input, init, offset, generation, identity = null) {
             let attempt = 0;
             while (generationIsCurrent(generation) && !init?.signal?.aborted) {
+                const cryptoFailure = window.FrontierMediaCrypto?.failureFor(input);
+                if (cryptoFailure) throw new Error(cryptoFailure);
                 let response = null;
                 try {
                     const headers = new Headers(init?.headers || {});
@@ -112,6 +114,12 @@
                     }
                 } catch (_error) {
                     // Network failures are transient for continuous-audio prefetch.
+                }
+                // Permission, stale-object and authenticated-decryption failures
+                // must hold the current song for diagnosis, not loop forever.
+                if ([401, 403, 404, 409, 422].includes(response?.status)) {
+                    try { await response.body?.cancel(); } catch (_) {}
+                    throw new Error('媒体授权或完整性校验失败，请重新选择文件');
                 }
                 try {
                     await response?.body?.cancel?.();
@@ -179,6 +187,13 @@
                                 return;
                             }
                         } catch (_error) {
+                            const cryptoFailure = window.FrontierMediaCrypto?.failureFor(input);
+                            if (cryptoFailure) {
+                                closed = true;
+                                release();
+                                controller.error(new Error(cryptoFailure));
+                                return;
+                            }
                             if (!generationIsCurrent(generation) || init?.signal?.aborted) {
                                 closed = true;
                                 release();

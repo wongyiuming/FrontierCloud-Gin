@@ -12,12 +12,13 @@ if issues:
     raise SystemExit("\n".join(issues))
 for path in (root / "protocol").rglob("*.json"):
     json.loads(path.read_text(encoding="utf-8"))
-documents = [json.loads((root / "migrations" / kind / "0002-schema.json").read_text(encoding="utf-8"))
-             for kind in ("sqlite", "mysql")]
-assert all(document["generation"] == 2 for document in documents)
-with sqlite3.connect(":memory:") as database:
-    for statement in documents[0]["statements"]:
-        database.execute(statement)
-    assert database.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-    assert database.execute("SELECT COUNT(*) FROM sqlite_schema WHERE type='table'").fetchone()[0] == 34
+for generation, tables in ((2, 34), (3, 36)):
+    documents = [json.loads((root / "migrations" / kind / f"{generation:04d}-schema.json").read_text(encoding="utf-8"))
+                 for kind in ("sqlite", "mysql")]
+    assert all(document["generation"] == generation for document in documents)
+    with sqlite3.connect(":memory:") as database:
+        for statement in documents[0]["statements"]:
+            database.execute(statement)
+        assert database.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+        assert database.execute("SELECT COUNT(*) FROM sqlite_schema WHERE type='table'").fetchone()[0] == tables
 print("Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external")

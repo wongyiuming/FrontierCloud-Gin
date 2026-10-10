@@ -33,3 +33,30 @@ newer database. The local maintenance, crash-recovery journal, immutable image
 checks and failed-upgrade restore remain enforced. Historical manifest parsing
 is retained only for reading/recovering existing local updater state; no new
 HTTP whole-cluster manifest publication is supported.
+
+## Browser encryption and schema generation 3
+
+Browser media encryption descriptors introduce schema generation 3. Current
+Web, Updater and Nginx image labels, release manifests and
+`prepare-release --confirm-generation 3` must agree. Historical schema-2
+manifest bytes and canonical digests remain preserved but cannot prove a
+current-schema release. Protocol 2 does not imply cross-generation rollback.
+
+A compiled schema-2 updater cannot admit schema-3 images; the first switch is
+operator-managed. Before development or staging migration, verify independent
+database, media metadata and key backups, close maintenance and stop all
+database/filesystem writers, then use the new native runtime's supported
+`Initialize` 2-to-3 migration. Preserve identities, relationships, tokens, file
+IDs and historical plaintext media. Production Master operations remain manual,
+and storage appliances continue to require independent manual upgrades.
+
+After migration, do not start an old schema-2 image against a schema-3 database.
+Automated publication and failed-upgrade recovery accept only the current
+compatible generation; reverse DDL is not implemented. Offline MySQL inventory
+also requires the source and tool to use the same generation; schema-2 evidence
+cannot prove a schema-3 database unchanged. Recovery across that boundary needs
+the independent maintenance-time recovery material and a reviewed procedure.
+
+These are code and deployment boundaries, not proof that staging or production
+was upgraded. Record executed, passed, skipped and undeployed work separately in
+the current validation evidence.

@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -192,6 +193,20 @@ func checkBackupRow(table string, r map[string]any) error {
 		}
 	}
 	switch table {
+	case "media_crypto_keys":
+		if num("singleton") != 1 || !hexID(text("key_id"), 64) || num("created_at") <= 0 {
+			return bad
+		}
+	case "media_encryption":
+		if !hexID(text("file_id"), 32) {
+			return bad
+		}
+		if r["descriptor_json"] != nil {
+			var meta mediacrypto.Metadata
+			if json.Unmarshal([]byte(text("descriptor_json")), &meta) != nil || meta.Validate() != nil || meta.FileID != text("file_id") {
+				return bad
+			}
+		}
 	case "global_media_objects":
 		if text("state") != "active" || num("size_bytes") <= 0 || (text("object_kind") != "audio" && text("object_kind") != "video") {
 			return bad
@@ -291,6 +306,8 @@ func checkBackupReferences(ctx context.Context, tx *sql.Tx) error {
 	// evidence, not ownership. Do not invent active relationships from any ID.
 	checks := []struct{ name, query string }{
 		{"placement-owner", "SELECT EXISTS(SELECT 1 FROM global_media_objects g LEFT JOIN cluster_storage_members s ON s.member_id=g.storage_member_id WHERE s.member_id IS NULL)"},
+		{"encryption-identity", "SELECT EXISTS(SELECT 1 FROM media_encryption e LEFT JOIN media_objects o ON o.media_id=e.media_id LEFT JOIN global_media_objects g ON g.media_id=e.media_id WHERE e.descriptor_json IS NOT NULL AND o.media_id IS NULL AND g.media_id IS NULL)"},
+		{"encryption-key-identity", "SELECT EXISTS(SELECT 1 FROM media_encryption WHERE descriptor_json IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM media_crypto_keys WHERE singleton=1)"},
 		{"placement-identity", "SELECT EXISTS(SELECT 1 FROM global_media_objects g JOIN media_objects o ON o.media_id=g.media_id OR o.path_locator=g.path_locator WHERE o.media_id<>g.media_id OR o.media_path<>g.media_path OR o.object_kind<>g.object_kind)"},
 		{"playback-identity", "SELECT EXISTS(SELECT 1 FROM media_playback_stats p LEFT JOIN media_objects o ON o.media_id=p.media_id LEFT JOIN global_media_objects g ON g.media_id=p.media_id WHERE COALESCE(g.media_path,o.media_path,'')<>p.media_path)"},
 		{"playback-event", "SELECT EXISTS(SELECT 1 FROM media_playback_events p LEFT JOIN media_objects o ON o.media_id=p.media_id LEFT JOIN global_media_objects g ON g.media_id=p.media_id WHERE o.media_id IS NULL AND g.media_id IS NULL)"},

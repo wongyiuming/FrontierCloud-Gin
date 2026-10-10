@@ -18,6 +18,9 @@ func (r *Repository) CompleteUpload(ctx context.Context, object store.MediaObjec
 		if err != nil {
 			return err
 		}
+		if err = r.putEncryption(ctx, q, id, object.Encryption); err != nil {
+			return err
+		}
 		// Serialize replay on the persistent object. Use a locking CURRENT read
 		// for audit deduplication: MySQL's earlier repeatable-read snapshot can
 		// predate the winning commit even after its object lock is acquired.

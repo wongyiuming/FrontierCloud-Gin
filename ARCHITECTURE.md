@@ -50,6 +50,19 @@ Compute Worker is **retired**. Worker slots, leased compute scheduling, worker U
 
 ## 4. Heartbeat and Backup
 
+### Browser encryption boundary
+
+Every upload selection explicitly chooses plaintext or encrypted storage; neither
+remembered choices nor crypto-error fallback can silently choose plaintext.
+Browser AES-GCM chunks preserve bounded Range playback and one complete object
+per storage owner. The Master owns durable encryption metadata and permissions
+and wraps small file keys through session-scoped asymmetric handshakes; ordinary
+media encryption/decryption runs only in the browser. Fixed authorization expiry
+covers multiple files without per-request ECDH. Obfuscation does not replace
+standard cryptography or prevent authorized users retaining keys or plaintext.
+Premaster recovery is independent of storage-node business backups. See the
+[browser encryption contract](docs/browser-media-encryption.md).
+
 Heartbeat is node-health control traffic. Backup is asynchronous recovery work. They are independent failure domains:
 
 - a successful heartbeat stays successful even if Backup subsequently fails;

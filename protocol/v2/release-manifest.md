@@ -18,6 +18,12 @@ trailing input, malformed SHAs, boolean/floating protocol numbers, missing
 artifacts and unsupported protocol/schema are rejected. See the schema and
 historical canonical vectors verified by Go for the exact wire format and canonical digest.
 
+The current native schema gate is generation 3. The original
+`vectors/release-manifest.json` remains the unchanged generation-2 historical
+fixture; `vectors/release-manifest-generation3.json` defines current acceptance,
+including refusal of generation 2 and future generation 4. Historical bytes and
+their digest do not authorize a current-schema deployment or reverse migration.
+
 Parsing, a Master signature or a manifest digest alone is NOT publication proof.
 Each selected artifact requires independent exact production/source/tree
 evidence, an exact merged same-repository source PR and the newest corresponding

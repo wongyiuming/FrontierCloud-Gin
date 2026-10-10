@@ -23,10 +23,10 @@ func TestPrepareReleaseRequiresExistingStoreClosedFenceAndCompatibleGeneration(t
 	t.Setenv("SQLITE_PATH", dbPath)
 	t.Setenv("DATA_ROOT", data)
 	t.Setenv("SECRETS_DIR", secrets)
-	if err := prepareReleaseCommand([]string{"--confirm-generation", "3"}); err == nil {
+	if err := prepareReleaseCommand([]string{"--confirm-generation", "4"}); err == nil {
 		t.Fatal("future generation accepted")
 	}
-	if err := prepareReleaseCommand([]string{"--confirm-generation", "2"}); !errors.Is(err, maintenance.ErrState) {
+	if err := prepareReleaseCommand([]string{"--confirm-generation", "3"}); !errors.Is(err, maintenance.ErrState) {
 		t.Fatal("open fence admitted preparation", err)
 	}
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
@@ -50,7 +50,7 @@ func TestPrepareReleaseRequiresExistingStoreClosedFenceAndCompatibleGeneration(t
 	if runtime.GOOS == "windows" {
 		t.Skip("initializer ownership repair requires Unix; fence and non-creation checks passed")
 	}
-	if err = prepareReleaseCommand([]string{"--confirm-generation", "2"}); err != nil {
+	if err = prepareReleaseCommand([]string{"--confirm-generation", "3"}); err != nil {
 		t.Fatal(err)
 	}
 	row, err := db.Nodes().ReadIdentity(context.Background())
@@ -66,7 +66,7 @@ func TestPrepareReleaseRequiresExistingStoreClosedFenceAndCompatibleGeneration(t
 		t.Fatal("preparation reopened fence", err)
 	}
 	t.Setenv("SQLITE_PATH", filepath.Join(directory, "absent.sqlite"))
-	if err = prepareReleaseCommand([]string{"--confirm-generation", "2"}); err == nil {
+	if err = prepareReleaseCommand([]string{"--confirm-generation", "3"}); err == nil {
 		t.Fatal("missing store admitted")
 	}
 }

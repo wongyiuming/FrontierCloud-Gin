@@ -20,6 +20,8 @@ const LYRIC_WINDOW_OFFSETS = [-1, 0, 1, 2, 3];
 const DIRECT_SEEK_ZONE_START = 0.75;
 const PRELOAD_MAX_BYTES = 128 * 1024 * 1024;
 const PRELOAD_START_SECONDS = 5;
+const cryptoPreparedCatalogs = new WeakSet();
+let cryptoCatalogSequence = 0;
 
 
 const PLAYER_ICONS = {
@@ -480,6 +482,7 @@ function checkAndPreloadNext(currentTime) {
     const start = duration > 0 ? Math.min(PRELOAD_START_SECONDS, duration / 4) : PRELOAD_START_SECONDS;
     if (currentTime < start) return;
     const next = currentMediaList[nextMediaIndex()];
+    if (next.encryption || next.encrypted) return;
     // Keep speculative memory bounded; video continues to use normal streaming.
     if (next.type !== 'audio') return;
     let attempt = 0;
@@ -773,6 +776,11 @@ async function loadInlineLyrics(media) {
         });
         if (!response.ok) throw new Error('Lyrics unavailable');
         const data = await response.json();
+        if (data.encrypted) {
+            if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
+            const text = await window.FrontierMediaCrypto.textFor(data.lyric_path || data.file_path);
+            data.entries = window.FrontierMediaCrypto.parseLyrics(text);
+        }
         const entries = Array.isArray(data.entries) ? data.entries
             .map(entry => ({time: Number(entry?.time), text: String(entry?.text || '')}))
             .filter(entry => Number.isFinite(entry.time) && entry.time >= 0 && entry.text)
@@ -1199,6 +1207,21 @@ function mediaIdentity(item) {
 
 function applyMediaCatalog(entries) {
     if (!Array.isArray(entries)) return;
+    const generation = ++cryptoCatalogSequence;
+    if (entries.some(media => media.encryption || media.encrypted) && !cryptoPreparedCatalogs.has(entries)) {
+        if (!window.FrontierMediaCrypto) {
+            document.getElementById('mediaList').textContent = '浏览器解密组件未加载';
+            return;
+        }
+        void window.FrontierMediaCrypto.prepareCatalog(entries).then(() => {
+            if (generation !== cryptoCatalogSequence) return;
+            cryptoPreparedCatalogs.add(entries);
+            applyMediaCatalog(entries);
+        }).catch(error => {
+            if (generation === cryptoCatalogSequence) document.getElementById('mediaList').textContent = error.message;
+        });
+        return;
+    }
     const selectedIdentity = mediaIdentity(currentMediaList?.[currentIndex]);
     currentMediaList = entries;
     if (!entries.length) {
@@ -1276,6 +1299,8 @@ window.addEventListener('resize', () => {
 });
 
 function selectMedia(index) {
+    const media = currentMediaList?.[index];
+    if (media?.encryption || media?.encrypted) window.FrontierMediaCrypto?.resetFault(media.media_path || media.path);
     const targetElement = document.querySelector(`.media-item[data-index="${index}"]`);
     const items = document.querySelectorAll('.media-item');
     items.forEach(item => item.classList.remove('active'));

@@ -2,7 +2,7 @@
 FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="updater" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="2" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="3" \
       frontiercloud.release-manifest-version="1"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssh-client && \
     rm -rf /var/lib/apt/lists/*

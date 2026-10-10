@@ -21,6 +21,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/brand"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -30,6 +31,7 @@ type Public struct {
 	static   *os.Root
 	assets   map[string]string
 	brand    *brand.Service
+	crypto   *mediacrypto.Manager
 }
 
 func assetURL(name string, content []byte) string {
@@ -45,7 +47,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		return nil, err
 	}
 	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}}
-	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js"} {
+	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
 		content, err := root.ReadFile(name)
 		if err != nil {
 			root.Close()
@@ -61,6 +63,10 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		}
 	}
 	router.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/api/v1/media") })
+	if err := p.registerMediaCrypto(router); err != nil {
+		root.Close()
+		return nil, err
+	}
 	p.registerPublicStandards(router)
 	router.GET("/favicon.ico", func(c *gin.Context) { p.staticFile(c, "favicon.ico", true) })
 	router.GET("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
@@ -196,6 +202,14 @@ func (p *Public) catalog(c *gin.Context) {
 		}
 		return
 	}
+	for i := range entries {
+		meta, e := p.media.Encryption(c.Request.Context(), entries[i].MediaID)
+		if e != nil {
+			internalError(c, e)
+			return
+		}
+		entries[i].Encryption = meta
+	}
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": entries})
 }
@@ -242,6 +256,20 @@ func (p *Public) deliver(c *gin.Context, name, id string) {
 	}
 	stream := delivery.Stream
 	defer stream.File.Close()
+	encryptionID := delivery.ObjectID
+	identity, err := p.media.IdentityState(c.Request.Context())
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	if identity.Role == "Master" {
+		encryptionID = delivery.ResourceID
+	}
+	encryption, err := p.media.Encryption(c.Request.Context(), encryptionID)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
 	if c.GetBool("karaoke_no_store") {
 		noStore(c)
 	} else {
@@ -250,6 +278,11 @@ func (p *Public) deliver(c *gin.Context, name, id string) {
 	contentType := mime.TypeByExtension(path.Ext(stream.Path))
 	if contentType == "" {
 		contentType = "application/octet-stream"
+	}
+	if encryption != nil {
+		contentType = "application/octet-stream"
+		noStore(c)
+		c.Header("X-Media-Encrypted", "1")
 	}
 	c.Header("Content-Type", contentType)
 	if p.settings.NginxMedia {
@@ -333,6 +366,9 @@ func (p *Public) lyrics(c *gin.Context) ([]media.LyricEntry, bool) {
 	return entries, true
 }
 func (p *Public) lyricsContent(c *gin.Context) {
+	if p.encryptedLyrics(c, false) {
+		return
+	}
 	entries, ok := p.lyrics(c)
 	if !ok {
 		return
@@ -341,6 +377,9 @@ func (p *Public) lyricsContent(c *gin.Context) {
 	c.JSON(200, gin.H{"entries": entries})
 }
 func (p *Public) lyricsPage(c *gin.Context) {
+	if p.encryptedLyrics(c, true) {
+		return
+	}
 	entries, ok := p.lyrics(c)
 	if !ok {
 		return
@@ -358,6 +397,8 @@ func (p *Public) template(c *gin.Context, name string) (string, error) {
 		return "", err
 	}
 	content := string(bytes)
+	cryptoScripts := `<script src="` + p.assets["js/compiled/media-crypto-common.js"] + `"></script>` + "\n" + `<script src="` + p.assets["js/compiled/media-crypto.js"] + `"></script>` + "\n"
+	content = strings.Replace(content, "<script", cryptoScripts+"<script", 1)
 	if name == "audio-player.html" || name == "video-player.html" {
 		content = strings.Replace(content, "<span>四大发明</span>", `<span id="playerDirectoryLabel">当前目录</span>`, 1)
 		if name == "audio-player.html" {
@@ -386,6 +427,7 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 		"LYRICS_JS_URL": html.EscapeString(p.assets["js/lyrics.js"]), "LYRICS_CSS_URL": html.EscapeString(p.assets["css/lyrics.css"]),
 		"MEDIA_BROWSER_JS_URL":       html.EscapeString(p.assets["js/media-browser.js"]),
 		"MEDIA_PREFETCH_ASSETS_JSON": jsonString([]string{p.assets["js/player.js"], p.assets["css/player.css"], p.assets["js/lyrics.js"], p.assets["css/lyrics.css"]}),
+		"ENCRYPTED_LYRICS_JSON":      "null",
 	}
 	for key, value := range extra {
 		values[key] = value
@@ -490,6 +532,10 @@ func randomUUID() (string, error) {
 }
 
 func (p *Public) staticFile(c *gin.Context, name string, favicon bool) {
+	if name == "js/media-crypto-common.js" || name == "js/media-crypto.js" || name == "js/media-crypto-sw.js" {
+		detail(c, 404, "Not found")
+		return
+	}
 	if name == "" || name != path.Clean(name) || strings.ContainsAny(name, "\\\x00") {
 		detail(c, 404, "Not found")
 		return

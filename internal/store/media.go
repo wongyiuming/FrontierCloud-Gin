@@ -1,12 +1,16 @@
 package store
 
-import "context"
+import (
+	"context"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+)
 
 // MediaObject is the durable identity of a file. Paths are locators, not IDs.
 type MediaObject struct {
-	ID   string `json:"media_id"`
-	Path string `json:"media_path"`
-	Kind string `json:"object_kind"`
+	ID         string                `json:"media_id"`
+	Path       string                `json:"media_path"`
+	Kind       string                `json:"object_kind"`
+	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
 }
 
 type PlaybackStats struct {

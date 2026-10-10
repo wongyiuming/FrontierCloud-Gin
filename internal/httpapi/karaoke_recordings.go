@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"net/http"
 	"strings"
 	"unicode/utf8"
 )
@@ -37,12 +38,15 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 	}
 	g.POST("/ticket", func(c *gin.Context) {
 		var value struct {
-			Bytes       int64   `json:"size_bytes"`
-			ContentType string  `json:"content_type"`
-			Media       *string `json:"media"`
-			Title       *string `json:"title"`
+			Bytes       int64                   `json:"size_bytes"`
+			ContentType string                  `json:"content_type"`
+			Media       *string                 `json:"media"`
+			Title       *string                 `json:"title"`
+			Lyrics      *[]store.RecordingLyric `json:"lyrics"`
 		}
-		if !decodeAdmin(c, &value) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, store.MaxRecordingMetadata+8192)
+		if err := c.ShouldBindJSON(&value); err != nil {
+			invalid(c, "body", "payload")
 			return
 		}
 		ct := strings.ToLower(strings.Split(value.ContentType, ";")[0])
@@ -65,9 +69,23 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 				return
 			}
 			metadata = resolved
+			if metadata.EncryptedLyricPath != "" {
+				// The authorized browser supplies its already decrypted lyric snapshot.
+				// Ordinary lyrics remain derived from the authoritative server relation.
+				if value.Lyrics == nil {
+					detail(c, 400, "加密歌词需要浏览器提供已解密的录音快照")
+					return
+				}
+				metadata.Lyrics = *value.Lyrics
+				metadata.EncryptedLyricPath = ""
+			}
 			if value.Title != nil && strings.TrimSpace(*value.Title) != "" {
 				metadata.Title = strings.TrimSpace(*value.Title)
 			}
+		}
+		if !store.ValidRecordingMetadata(metadata) {
+			invalid(c, "body", "lyrics")
+			return
 		}
 		ticket, e := manager.Ticket(c.Request.Context(), *user(c), value.Bytes, ct, metadata, audit(c))
 		if e != nil {

@@ -21,8 +21,9 @@ type RecordingLyric struct {
 	Text string  `json:"text"`
 }
 type RecordingMetadata struct {
-	Title  string           `json:"title"`
-	Lyrics []RecordingLyric `json:"lyrics"`
+	EncryptedLyricPath string           `json:"encrypted_lyric_path,omitempty"`
+	Title              string           `json:"title"`
+	Lyrics             []RecordingLyric `json:"lyrics"`
 }
 type Recording struct {
 	ID          string           `json:"recording_id"`
@@ -53,6 +54,16 @@ func RecordingContentType(v string) bool {
 	return false
 }
 func ValidRecordingMetadata(v RecordingMetadata) bool {
+	if v.EncryptedLyricPath != "" {
+		if !utf8.ValidString(v.EncryptedLyricPath) || len(v.EncryptedLyricPath) > 1024 || !strings.HasPrefix(v.EncryptedLyricPath, "lyrics/") || !strings.HasSuffix(v.EncryptedLyricPath, ".lrc") || strings.ContainsAny(v.EncryptedLyricPath, "\\\x00") {
+			return false
+		}
+		for _, part := range strings.Split(v.EncryptedLyricPath, "/") {
+			if part == "" || part == "." || part == ".." {
+				return false
+			}
+		}
+	}
 	if !utf8.ValidString(v.Title) || utf8.RuneCountInString(v.Title) > 255 || len(v.Lyrics) > 10000 {
 		return false
 	}

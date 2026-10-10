@@ -19,6 +19,8 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 const Format = "frontiercloud-offline-mysql-master-v1"
@@ -79,8 +81,8 @@ func captureRole(ctx context.Context, conn *sql.Conn, database, data, secrets, e
 		return s, errors.New("existing HTTPS " + expectedRole + " required")
 	}
 	var generation int
-	if err := conn.QueryRowContext(ctx, "SELECT generation FROM frontiercloud_schema WHERE singleton=1").Scan(&generation); err != nil || generation != 2 {
-		return s, errors.New("schema generation 2 required")
+	if err := conn.QueryRowContext(ctx, "SELECT generation FROM frontiercloud_schema WHERE singleton=1").Scan(&generation); err != nil || generation != migrations.Generation {
+		return s, fmt.Errorf("schema generation %d required", migrations.Generation)
 	}
 	// These objects have behavior outside the supported native schema. Preserve
 	// rather than silently omit them: require a separately reviewed migration.

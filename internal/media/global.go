@@ -415,6 +415,11 @@ func (s *Service) LyricsResource(ctx context.Context, name, id string) ([]LyricE
 		}
 		lyric = defaultLyric
 	}
+	if encrypted, err := s.lyricEncryption(ctx, lyric); err != nil {
+		return nil, err
+	} else if encrypted {
+		return nil, ErrEncryptedLyric
+	}
 	f, err := s.root.Open(lyric)
 	if err != nil {
 		return nil, ErrLyrics

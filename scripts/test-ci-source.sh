@@ -10,7 +10,12 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 scripts/check_ci_assets.py
 git diff --check
 for file in static/js/*.js; do node --check "$file"; done
+node scripts/obfuscate-media-crypto.mjs --check
+node tests/media_crypto_build_smoke.mjs
+node tests/media_crypto_smoke.mjs
+FC_CRYPTO_COMPILED=1 node tests/media_crypto_smoke.mjs
 node tests/admin_ui_smoke.mjs
+node tests/admin_crypto_upload_smoke.mjs
 node tests/catalog_startup_smoke.mjs
 node tests/player_cache_smoke.mjs
 node tests/network_observation_smoke.mjs

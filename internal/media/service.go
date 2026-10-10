@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -46,14 +47,15 @@ type Category struct {
 	URL  string `json:"url"`
 }
 type Track struct {
-	MediaPath  string `json:"media_path"`
-	Title      string `json:"title"`
-	Artist     string `json:"artist"`
-	Type       string `json:"type"`
-	URL        string `json:"url"`
-	Cover      string `json:"cover"`
-	MediaID    string `json:"media_id"`
-	ResourceID string `json:"resource_id,omitempty"`
+	MediaPath  string                `json:"media_path"`
+	Title      string                `json:"title"`
+	Artist     string                `json:"artist"`
+	Type       string                `json:"type"`
+	URL        string                `json:"url"`
+	Cover      string                `json:"cover"`
+	MediaID    string                `json:"media_id"`
+	ResourceID string                `json:"resource_id,omitempty"`
+	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
 	store.PlaybackStats
 	HasLyrics *bool  `json:"has_lyrics,omitempty"`
 	KaraokeID string `json:"karaoke_id"`

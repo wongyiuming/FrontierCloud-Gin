@@ -1,15 +1,58 @@
 package release
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 )
+
+func TestHistoricalSchema2ManifestDigestIsPreservedButRuntimeRejectsIt(t *testing.T) {
+	raw, err := os.ReadFile("../../protocol/v2/vectors/release-manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors struct {
+		Cases []struct {
+			Name     string          `json:"name"`
+			Manifest json.RawMessage `json:"manifest"`
+			Valid    bool            `json:"valid"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vectors.Cases {
+		if !v.Valid {
+			continue
+		}
+		if _, err := ParseManifest(v.Manifest); err == nil {
+			t.Fatal("previous schema admitted as a current release", v.Name)
+		}
+		if v.Name == "distinct-private-artifacts" {
+			value, err := protocol.ParseStrictJSON(v.Manifest, MaxManifestBytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			canonical, err := protocol.Canonical(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(canonical)
+			if hex.EncodeToString(sum[:]) != "6db944731759d32042875701c66049ff9df0bfacd7f10eb8920ef2b7c9c25e70" {
+				t.Fatal("historical manifest bytes or identity changed")
+			}
+		}
+	}
+}
 
 func sharedManifest(t *testing.T) Manifest {
 	t.Helper()
-	raw, err := os.ReadFile("../../protocol/v2/vectors/release-manifest.json")
+	raw, err := os.ReadFile("../../protocol/v2/vectors/release-manifest-generation3.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +89,7 @@ func sharedManifest(t *testing.T) Manifest {
 func TestSharedManifestBoundedProtocolAndDistinctPrivatePolicies(t *testing.T) {
 	m := sharedManifest(t)
 	id, err := m.ID()
-	if err != nil || id != "6db944731759d32042875701c66049ff9df0bfacd7f10eb8920ef2b7c9c25e70" {
+	if err != nil || id != "52155c1db13df99a94384bf8c4d338d1eef7ecd7306d8e23c8c9a66c7589e2d7" {
 		t.Fatal(id, err)
 	}
 	reference, err := m.Select(DefaultPolicy())

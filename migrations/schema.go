@@ -7,9 +7,15 @@ import (
 	"fmt"
 )
 
-const Generation = 2
+const Generation = 3
 const JournalName = "create-schema-migration-journal"
 const JournalChecksum = "aee46be69d8c5b005cbee58ebfd37feb41d3431eb1fb23bb8339c9076147c03e"
+
+const EncryptionName = "browser-media-encryption-descriptors"
+
+// SHA256 of the two canonical SQLite generation-3 CREATE TABLE statements joined
+// by one newline. MySQL applies equivalent DDL under the same migration identity.
+const EncryptionChecksum = "99f658e1d12c564c3c4ed1bb6a9d9772802d0bcee5eae04421085ab272d8ab11"
 
 //go:embed mysql/*.json sqlite/*.json
 var assets embed.FS

@@ -46,7 +46,17 @@ func RegisterKaraokeMedia(router *gin.Engine, public *Public, resolver *network.
 		if v.HasLyrics {
 			lyrics = "/api/v1/karaoke/lyrics?" + query
 		}
-		c.JSON(200, gin.H{"id": c.Query("media"), "title": strings.TrimSuffix(path.Base(v.Path), path.Ext(v.Path)), "type": v.Type, "stream_url": "/api/v1/karaoke/stream?" + query, "has_lyrics": v.HasLyrics, "lyrics_url": lyrics, "cover_url": "/favicon.ico"})
+		object, err := public.media.CryptoObject(c.Request.Context(), v.Path, func() string {
+			if v.Kind == "global" {
+				return v.ID
+			}
+			return ""
+		}(), false)
+		if err != nil {
+			cryptoError(c, err)
+			return
+		}
+		c.JSON(200, gin.H{"id": c.Query("media"), "file_path": v.Path, "encryption": object.Encryption, "title": strings.TrimSuffix(path.Base(v.Path), path.Ext(v.Path)), "type": v.Type, "stream_url": "/api/v1/karaoke/stream?" + query, "has_lyrics": v.HasLyrics, "lyrics_url": lyrics, "cover_url": "/favicon.ico"})
 	})
 	serve := func(c *gin.Context) {
 		v, ok := resolve(c)
@@ -69,6 +79,19 @@ func RegisterKaraokeMedia(router *gin.Engine, public *Public, resolver *network.
 		}
 		if !v.HasLyrics {
 			detail(c, 404, "Lyrics not found")
+			return
+		}
+		id := ""
+		if v.Kind == "global" {
+			id = v.ID
+		}
+		object, err := public.media.EncryptedLyric(c.Request.Context(), v.Path, id)
+		if err != nil {
+			cryptoError(c, err)
+			return
+		}
+		if object.Encryption != nil {
+			c.JSON(200, cryptoEncryptedLyrics(object.Path, object.Encryption))
 			return
 		}
 		entries, e := public.media.KaraokeLyrics(c.Request.Context(), v)

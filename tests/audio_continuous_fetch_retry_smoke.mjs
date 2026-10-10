@@ -207,4 +207,39 @@ const oldRequest = stale.fetch('/api/v1/media/stream', {credentials:'same-origin
 stale.playerSwitchSequence += 1;
 await assert.rejects(oldRequest, error => error.name === 'AbortError');
 
+for (const status of [401, 403, 404, 409, 422]) {
+    let failedRequests = 0;
+    const denied = await isolatedRetry(async () => {
+        failedRequests += 1;
+        return new Response('authorization/integrity failure', {status});
+    });
+    await assert.rejects(denied.fetch('/__fc_media/session/music%2Fa.mp3', {credentials: 'same-origin'}));
+    assert.equal(failedRequests, 1, `HTTP ${status} must hold encrypted playback instead of looping`);
+}
+let virtualRequests = 0;
+const virtual = await isolatedRetry(async (_input, init) => {
+    virtualRequests += 1;
+    if (virtualRequests === 1) {
+        let pulls = 0;
+        return new Response(new ReadableStream({pull(output) {
+            if (pulls++ === 0) output.enqueue(new Uint8Array([10, 11]));
+            else output.error(new TypeError('encrypted source network interrupted'));
+        }}), {headers: {'Content-Length': '4', ETag: '"fc-plain-file-id"'}});
+    }
+    assert.equal(new Headers(init.headers).get('Range'), 'bytes=2-');
+    return new Response(new Uint8Array([12, 13]), {status: 206,
+        headers: {'Content-Range': 'bytes 2-3/4', ETag: '"fc-plain-file-id"'}});
+});
+const virtualResponse = await virtual.fetch('/__fc_media/session/music%2Fa.mp3', {credentials: 'same-origin'});
+assert.deepEqual([...new Uint8Array(await virtualResponse.arrayBuffer())], [10, 11, 12, 13]);
+assert.equal(virtualRequests, 2, 'encrypted streaming resumes at delivered plaintext byte offset');
+
+const tampered = await isolatedRetry(async () => new Response(new ReadableStream({
+    pull(output) { output.error(new TypeError('AES-GCM authentication failed')); },
+}), {headers: {'Content-Length': '4'}}));
+tampered.FrontierMediaCrypto = {failureFor: () => null};
+const tamperedResponse = await tampered.fetch('/__fc_media/session/music%2Fa.mp3', {credentials: 'same-origin'});
+tampered.FrontierMediaCrypto.failureFor = () => '加密媒体完整性校验失败';
+await assert.rejects(tamperedResponse.arrayBuffer(), /完整性校验失败/);
+
 console.log('audio-continuous-fetch-retry-smoke-ok');

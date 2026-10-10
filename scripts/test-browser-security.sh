@@ -22,6 +22,18 @@ export SECURITY_CONTACT=https://reports.example.test/security
 export PUBLIC_ORIGIN=
 export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev STAGING_CD=false
 mkdir -p "$work/acme" "$work/data/media/music/security-fixture"
+mkdir -p "$work/crypto/encrypted-fixture" "$work/crypto/encrypted-video" "$work/crypto-results"
+command -v ffmpeg >/dev/null
+for spec in '01-first:90' '02-second:8'; do
+  name=${spec%:*}; duration=${spec#*:}
+  ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=$duration" \
+    -c:a libmp3lame -b:a 128k -y "$work/crypto/encrypted-fixture/$name.mp3"
+done
+ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:sample_rate=16000:duration=1' \
+  -c:a pcm_s16le -y "$work/crypto/plain.wav"
+ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=10' \
+  -an -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart -y "$work/crypto/encrypted-video/clip.mp4"
+printf '[00:00.10]浏览器解密歌词\n[00:01.00]会话复用多个文件\n' > "$work/crypto/crypto-lyrics.lrc"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
   -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1 >/dev/null 2>&1
 chmod 600 "$SSL_KEY_PATH"
@@ -77,6 +89,7 @@ export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$browser"
 ADMIN_KEY=$(compose exec -T web sh -c 'cat /run/frontiercloud-secrets/admin_key')
 export ADMIN_KEY
 "$work/tools/bin/python" tests/browser_security_smoke.py --base-url "$base"
+"$work/tools/bin/python" tests/media_crypto_browser.py --base-url "$base" --fixtures "$work/crypto" --output "$work/crypto-results"
 unset ADMIN_KEY
 volume="${project}_maintenance_state"
 test "$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "$volume")" = "$project"

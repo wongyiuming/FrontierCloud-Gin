@@ -106,6 +106,30 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=2 WHERE singleton=1"); err != nil {
 				return err
 			}
+			generation = 2
+		}
+		if generation == 2 {
+			for _, statement := range statements {
+				if match := tablePattern.FindStringSubmatch(statement); len(match) == 2 && (match[1] == "media_encryption" || match[1] == "media_crypto_keys") {
+					if _, err := conn.ExecContext(ctx, statement); err != nil {
+						return err
+					}
+				}
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=3"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (3,?,?,?)", migrations.EncryptionName, migrations.EncryptionChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=3 WHERE singleton=1"); err != nil {
+				return err
+			}
 		} else if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)
 		}

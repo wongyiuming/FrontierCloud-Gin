@@ -138,6 +138,9 @@ func (r *Repository) deleteMetadata(ctx context.Context, q queryer, item store.D
 	}
 	sort.Strings(ordered)
 	for _, id := range ordered {
+		if err := retireEncryption(ctx, q, id); err != nil {
+			return err
+		}
 		if _, err := q.ExecContext(ctx, "DELETE FROM media_playback_events WHERE media_id=?", id); err != nil {
 			return err
 		}

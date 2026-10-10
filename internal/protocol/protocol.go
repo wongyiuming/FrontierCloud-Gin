@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"io"
 	"math"
 	"regexp"
@@ -208,6 +209,16 @@ func StorageUploadToken(credential, relationship, master, storageNode, mediaID, 
 	return storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, "upload", path, uploadID, size, now)
 }
 
+// A distinct operation makes historical storage fail closed instead of treating
+// ciphertext as an ordinary upload or ignoring an unfamiliar descriptor field.
+func EncryptedStorageUploadToken(credential, relationship, master, storageNode, mediaID, storageObjectID, path, uploadID string, size, now int64, meta mediacrypto.Metadata) (string, error) {
+	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(storageNode) || !identifier.MatchString(uploadID) || !objectID.MatchString(mediaID) || !objectID.MatchString(storageObjectID) || meta.Validate() != nil || meta.CiphertextSize != size || size > 10*1024*1024*1024 || utf8.RuneCountInString(path) < 1 || utf8.RuneCountInString(path) > 1024 {
+		return "", errors.New("invalid encrypted storage capability")
+	}
+	descriptor := map[string]any{"version": meta.Version, "algorithm": meta.Algorithm, "file_id": meta.FileID, "nonce_prefix": meta.NoncePrefix, "plaintext_size": meta.PlaintextSize, "chunk_size": meta.ChunkSize, "ciphertext_size": meta.CiphertextSize}
+	return capabilityToken(credential, map[string]any{"r": relationship, "m": master, "n": storageNode, "g": mediaID, "i": storageObjectID, "op": "upload-encrypted", "path": path, "size": size, "upload_id": uploadID, "encryption": descriptor, "e": now + TokenSeconds, "v": Version})
+}
+
 func storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path, uploadID string, size, now int64) (string, error) {
 	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(storageNode) ||
 		!objectID.MatchString(mediaID) || !objectID.MatchString(storageObjectID) ||
@@ -232,7 +243,7 @@ func VerifyStorageToken(credential, token string, now int64) (map[string]any, er
 	size, sizeOK := integerField(value, "size")
 	path := stringField(value, "path")
 	operation := stringField(value, "op")
-	if err != nil || !validExpiry(value, now) || (operation != "upload" && operation != "delete") ||
+	if err != nil || !validExpiry(value, now) || (operation != "upload" && operation != "upload-encrypted" && operation != "delete") ||
 		!sizeOK || size < 0 || size > 10*1024*1024*1024 || utf8.RuneCountInString(path) < 1 ||
 		utf8.RuneCountInString(path) > 1024 {
 		return nil, errors.New("invalid or expired storage capability")
@@ -250,7 +261,31 @@ func VerifyStorageToken(credential, token string, now int64) (map[string]any, er
 	if _, present := value["upload_id"]; present && !identifier.MatchString(stringField(value, "upload_id")) {
 		return nil, errors.New("invalid or expired storage capability")
 	}
+	if operation == "upload-encrypted" {
+		meta, err := StorageEncryption(value)
+		if err != nil || meta == nil || meta.CiphertextSize != size || !identifier.MatchString(stringField(value, "upload_id")) {
+			return nil, errors.New("invalid encrypted storage capability")
+		}
+	} else if _, present := value["encryption"]; present {
+		return nil, errors.New("encryption descriptor requires encrypted storage operation")
+	}
 	return value, nil
+}
+
+func StorageEncryption(value map[string]any) (*mediacrypto.Metadata, error) {
+	raw, present := value["encryption"]
+	if !present {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return nil, mediacrypto.ErrMetadata
+	}
+	var meta mediacrypto.Metadata
+	if json.Unmarshal(encoded, &meta) != nil || meta.Validate() != nil {
+		return nil, mediacrypto.ErrMetadata
+	}
+	return &meta, nil
 }
 
 // RecordingToken creates a recording capability compatible with the Python runtime.

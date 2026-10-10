@@ -29,6 +29,9 @@ func (r *Repository) ownedStorageNode(ctx context.Context, q queryer, relationsh
 	return row, nil
 }
 func (r *Repository) ReserveOwnedUpload(ctx context.Context, operation, relationship string, o store.MediaObject, size, free int64, a store.NodeAudit) error {
+	if o.Encryption != nil && (o.Encryption.Validate() != nil || o.Encryption.CiphertextSize != size) {
+		return nodeConflict("invalid encrypted owned upload reservation")
+	}
 	kind := o.Kind
 	if !poolPath(store.LocalMedia{MediaObject: o, Bytes: size}) || !nodeIDPattern.MatchString(operation) || !nodeIDPattern.MatchString(relationship) || !nodeHashPattern.MatchString(o.ID) || size <= 0 || size > 10*store.GiB {
 		return nodeConflict("invalid owned upload reservation")
@@ -65,6 +68,9 @@ func (r *Repository) ReserveOwnedUpload(ctx context.Context, operation, relation
 		if _, err = q.ExecContext(ctx, "INSERT INTO cluster_upload_sessions(upload_id,storage_member_id,media_id,media_path,path_locator,object_kind,expected_bytes,state,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'reserved',?,?,?)", operation, row.ID, o.ID, o.Path, locator(o.Path), kind, size, now+1800, now, now); err != nil {
 			return err
 		}
+		if err = r.putEncryption(ctx, q, o.ID, o.Encryption); err != nil {
+			return err
+		}
 		if _, err = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", size, max(0, free), now, row.ID); err != nil {
 			return err
 		}
@@ -90,6 +96,9 @@ func (r *Repository) CompleteOwnedUpload(ctx context.Context, operation string, 
 		}
 		if session.MemberID != row.ID || session.MediaID != o.ID || session.Path != o.Path || session.Kind != kind || session.ExpectedBytes != size {
 			return nodeConflict("owned publication differs from reservation")
+		}
+		if err = r.checkEncryption(ctx, q, o.ID, o.Encryption, size); err != nil {
+			return err
 		}
 		var objectID, objectPath, objectKind string
 		err = q.QueryRowContext(ctx, "SELECT media_id,media_path,object_kind FROM media_objects WHERE media_id=? OR path_locator=?"+r.lock(), o.ID, locator(o.Path)).Scan(&objectID, &objectPath, &objectKind)
@@ -172,6 +181,9 @@ func (r *Repository) ReleaseOwnedUpload(ctx context.Context, operation string, a
 			return err
 		}
 		if _, err = q.ExecContext(ctx, "DELETE FROM cluster_upload_sessions WHERE upload_id=?", operation); err != nil {
+			return err
+		}
+		if err = retireEncryption(ctx, q, v.MediaID); err != nil {
 			return err
 		}
 		return r.nodeAudit(ctx, q, "storage-upload-cleaned", "", map[string]any{"operation": operation, "object_id": v.MediaID}, a)
