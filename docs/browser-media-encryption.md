@@ -47,7 +47,7 @@ without replacing those algorithms or adding expensive playback transformations.
 An authorization is bound to either the authenticated Admin session or an
 HttpOnly same-site browser cookie. Key endpoints require same-origin requests
 and HTTPS, with a loopback-only development exception. Public authorization
-rechecks current visibility and object ownership for each envelope. A session
+rechecks current visibility and object ownership for each envelope. A public session
 cannot grant Admin access, grant hidden content, or transfer to another cookie.
 
 The session has a fixed 15-minute lifetime. Multiple files, Range requests,
@@ -58,7 +58,8 @@ before the handshake request, so client clock offsets and wall-clock changes
 cannot renew authorization. Envelopes retain the original server `expires_at`.
 “One-time” means one ephemeral handshake and one bounded
 authorization session, not one file or one HTTP request. The server bounds its
-in-memory session registry to 4096 entries. Restart, explicit browser revoke,
+in-memory session registry to 4096 entries. Master process restart, explicit server
+revocation through `/crypto/revoke`,
 Admin logout or timeout invalidates further envelope issuance. Upload preparation
 tokens are independently signed, bound to the Admin session and descriptor, and
 expire after 15 minutes; reservations still follow the upload lifecycle.
@@ -66,7 +67,8 @@ expire after 15 minutes; reservations still follow the upload lifecycle.
 The browser keeps non-extractable CryptoKey objects in memory and obtains a new
 authorization when needed after expiration. A restarted worker re-registers the
 live page and retrieves its still-valid in-memory keys without another ECDH
-handshake or an extended deadline. Decryption tag
+handshake or an extended deadline. Page exit clears that page's and worker's
+in-memory access; it does not call the server revocation endpoint. Decryption tag
 failure or identity mismatch is terminal: no plaintext fallback or unverified
 chunk is delivered. This controls this application's behavior. An authorized
 browser user can preserve keys or plaintext; revocation cannot erase already
@@ -129,9 +131,10 @@ encrypted metadata without that fingerprint. Storage nodes do not load the
 Master premaster or issue browser key envelopes. Losing
 the premaster makes existing encrypted media unrecoverable.
 
-The public verifier is stored in `media_crypto_keys`. A promotion to Master
-requires restoring and proving the original premaster before starting its
-browser key service.
+The public verifier is stored in `media_crypto_keys`. A Master restored from a
+business backup must restore and prove the original premaster before starting
+its browser key service. An existing Standalone promoted to Master continues
+using its existing verified premaster.
 
 Schema generation 3 stores the descriptors and is forward-only from generation
 2. The first schema-3 runtime switch requires operator maintenance, independent
