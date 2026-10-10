@@ -54,6 +54,24 @@ func (s *Service) StorageStat(ctx context.Context, id, name string) (StorageRece
 	return StorageReceipt{ObjectID: id, Bytes: size, SHA256: hash, ETag: `"` + hash + `"`}, nil
 }
 func (s *Service) OwnedUpload(ctx context.Context, relationship string, object store.MediaObject, expected int64, reader io.Reader, a store.NodeAudit) (StorageReceipt, error) {
+	return s.ownedUpload(ctx, relationship, object, expected, reader, a, nil)
+}
+
+// OwnedUploadCapability checks admission again under the reservation's volume
+// lease. Authentication before waiting for that lease does not fence a writer.
+func (s *Service) OwnedUploadCapability(ctx context.Context, relationship string, object store.MediaObject, expected int64, reader io.Reader, a store.NodeAudit, uploadID string, expires int64) (StorageReceipt, error) {
+	if uploadID != "" && !operationID.MatchString(uploadID) {
+		return StorageReceipt{}, store.ErrNodeState
+	}
+	return s.ownedUpload(ctx, relationship, object, expected, reader, a, func() error {
+		if expires <= time.Now().Unix() {
+			return store.ErrNodeState
+		}
+		return s.checkOwnedUploadFence(uploadID, object.ID)
+	})
+}
+
+func (s *Service) ownedUpload(ctx context.Context, relationship string, object store.MediaObject, expected int64, reader io.Reader, a store.NodeAudit, admission func() error) (StorageReceipt, error) {
 	if s.owned == nil {
 		return StorageReceipt{}, ErrUnavailable
 	}
@@ -86,6 +104,11 @@ func (s *Service) OwnedUpload(ctx context.Context, relationship string, object s
 		defer release()
 		if err = s.ready(); err != nil {
 			return err
+		}
+		if admission != nil {
+			if err = admission(); err != nil {
+				return err
+			}
 		}
 		if _, err = s.safeInfo(object.Path); err == nil {
 			return os.ErrExist

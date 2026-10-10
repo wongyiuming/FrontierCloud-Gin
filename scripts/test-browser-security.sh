@@ -34,7 +34,7 @@ for name in ('01-first.wav','02-second.wav'):
         out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(data)
 PY
 compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml "$@"; }
-bash scripts/build-native-images.sh "$revision"
+FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 compose up -d --no-build --wait --wait-timeout 180
 compose exec -T nginx nginx -t
 address=$(compose port nginx 443)

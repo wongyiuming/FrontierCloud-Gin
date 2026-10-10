@@ -133,12 +133,26 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 	}
 	transport.routers["https://follower.test"] = fr
 	w = perform("DELETE", "/api/v1/media/admin/upload/session/"+ticket.ID, "")
-	if w.Code != 200 {
-		t.Fatal("physical cleanup", w.Code, w.Body.String())
+	if w.Code != 409 {
+		t.Fatal("cancellation must preserve committed bytes", w.Code, w.Body.String())
 	}
 	object, err := fdb.Media().ObjectByID(ctx, ticket.MediaID)
+	if err != nil || object == nil {
+		t.Fatal("cancel destroyed Follower commit", object, err)
+	}
+	// Lost-finalize recovery first restores the managed placement. Actual media
+	// removal remains an explicit ordinary admin deletion, not cancellation.
+	w = perform("POST", "/api/v1/media/admin/upload/session/"+ticket.ID+"/finalize", "")
+	if w.Code != 200 {
+		t.Fatal("recover managed placement", w.Code, w.Body.String())
+	}
+	w = perform("POST", "/api/v1/media/admin/delete", `{"paths":["music/CancelRemote"]}`)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"deleted":1`) {
+		t.Fatal("explicit deletion after publication", w.Code, w.Body.String())
+	}
+	object, err = fdb.Media().ObjectByID(ctx, ticket.MediaID)
 	if err != nil || object != nil {
-		t.Fatal("Follower bytes retained", object, err)
+		t.Fatal("ordinary deletion did not remove object", object, err)
 	}
 	var used, reserved int64
 	if err := fdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members").Scan(&used, &reserved); err != nil || used != 20 || reserved != 0 {

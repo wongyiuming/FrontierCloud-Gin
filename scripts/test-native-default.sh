@@ -27,7 +27,7 @@ trap diagnose ERR
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-bash scripts/build-native-images.sh "$revision"
+FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 export FRONTIERCLOUD_REVISION="$revision"
 export PUBLIC_BIND_ADDRESS=127.0.0.1 HTTP_PORT=0 HTTPS_PORT=0 WEBRTC_STUN_PORT=0
 export TLS_ENABLED=false SERVER_NAME=localhost DB_TYPE=sqlite

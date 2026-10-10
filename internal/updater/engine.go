@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,10 @@ func dockerOperation(path string) string {
 	switch {
 	case path == "/images/json":
 		return "image-list"
+	case path == "/images/create":
+		return "image-pull"
+	case strings.HasPrefix(path, "/images/") && strings.HasSuffix(path, "/tag"):
+		return "image-tag"
 	case strings.HasPrefix(path, "/images/") && strings.HasSuffix(path, "/json"):
 		return "image-inspect"
 	case path == "/containers/json":
@@ -61,9 +66,10 @@ func dockerOperation(path string) string {
 // Engine only talks to the configured local Unix socket; no proxy, redirect,
 // remote host selection, shell interpolation or Docker CLI is involved.
 type Engine struct {
-	client  *http.Client
-	version string
-	Project string
+	client   *http.Client
+	version  string
+	Project  string
+	Registry *release.RegistryClient
 }
 
 func NewEngine(ctx context.Context, socket string) (*Engine, error) {
@@ -73,7 +79,7 @@ func NewEngine(ctx context.Context, socket string) (*Engine, error) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "unix", socket)
 	}, MaxConnsPerHost: 8}
-	e := &Engine{client: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("Docker redirects forbidden") }}}
+	e := &Engine{client: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("Docker redirects forbidden") }}, Registry: release.NewRegistryClient()}
 	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var version struct {
@@ -113,6 +119,7 @@ func (e *Engine) Close() {
 	if t, ok := e.client.Transport.(*http.Transport); ok {
 		t.CloseIdleConnections()
 	}
+	e.Registry.Close()
 }
 func (e *Engine) request(ctx context.Context, method, path string, body io.Reader, contentType string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, "http://docker"+e.version+path, body)
@@ -417,6 +424,40 @@ func (e *Engine) Build(ctx context.Context, source Source, target, component, do
 	if !release.ValidSHA(target) || !dockerName.MatchString(e.Project) || (component != "web" && component != "nginx" && component != "updater") {
 		return "", ErrState
 	}
+	// Private test histories have no public namespace. Real releases prefer a
+	// pinned digest; only confirmed missing artifacts permit source fallback.
+	public := false
+	if e.Registry != nil {
+		var err error
+		public, err = source.publicImages(ctx)
+		if err != nil {
+			return "", err
+		}
+	}
+	if public {
+		tag := releaseImageTag(e.Project, target, component)
+		cached, err := e.Image(ctx, tag, target, component)
+		if err == nil {
+			labels := cached.Config.Labels
+			if cached.OS != "linux" || cached.Architecture != runtime.GOARCH {
+				return "", errors.New("cached image platform mismatch")
+			}
+			if labels["frontiercloud.project"] == e.Project || (labels["frontiercloud.project"] == "" && labels["org.opencontainers.image.source"] == release.ImageSource && labels["org.opencontainers.image.revision"] == target && (component == "nginx" || labels["frontiercloud.release-manifest-version"] == "1")) {
+				return tag, nil
+			}
+			return "", errors.New("cached release image ownership mismatch")
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return "", err
+		}
+		ref, err := e.Registry.Resolve(ctx, target, component)
+		if err == nil {
+			return e.pullPublic(ctx, ref, target, component)
+		}
+		if !errors.Is(err, release.ErrImageUnavailable) {
+			return "", err
+		}
+	}
 	archive, err := source.Archive(ctx, target)
 	if err != nil {
 		return "", err
@@ -467,10 +508,60 @@ func (e *Engine) Build(ctx context.Context, source Source, target, component, do
 	return tag, nil
 }
 
+func (e *Engine) pullPublic(ctx context.Context, ref, target, component string) (string, error) {
+	query := url.Values{"fromImage": {ref}}
+	response, err := e.request(ctx, "POST", "/images/create?"+query.Encode(), nil, "")
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	reader := bufio.NewReaderSize(response.Body, 1<<20)
+	for {
+		line, err := reader.ReadSlice('\n')
+		if err == io.EOF && len(line) == 0 {
+			break
+		}
+		if err != nil && err != io.EOF {
+			return "", errors.New("invalid Docker pull stream")
+		}
+		if len(bytes.TrimSpace(line)) != 0 {
+			parsed, failure := protocol.ParseStrictJSON(line, 1<<20)
+			row, ok := parsed.(map[string]any)
+			if failure != nil || !ok || row["error"] != nil || row["errorDetail"] != nil {
+				return "", errors.New("public image pull failed; local compilation forbidden")
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+	image, err := e.Image(ctx, ref, target, component)
+	if err != nil {
+		return "", err
+	}
+	labels := image.Config.Labels
+	if labels["org.opencontainers.image.source"] != release.ImageSource || labels["org.opencontainers.image.revision"] != target ||
+		image.Architecture != runtime.GOARCH || image.OS != "linux" || (component != "nginx" && labels["frontiercloud.release-manifest-version"] != "1") {
+		return "", errors.New("public image source, platform or release proof mismatch")
+	}
+	tag := releaseImageTag(e.Project, target, component)
+	repository, version, _ := strings.Cut(tag, ":")
+	query = url.Values{"repo": {repository}, "tag": {version}}
+	if err := e.call(ctx, "POST", "/images/"+url.PathEscape(image.ID)+"/tag?"+query.Encode(), nil, nil); err != nil {
+		return "", err
+	}
+	if _, err = e.Image(ctx, tag, target, component); err != nil {
+		return "", err
+	}
+	return tag, nil
+}
+
 type Image struct {
-	ID       string   `json:"Id"`
-	RepoTags []string `json:"RepoTags"`
-	Config   struct {
+	Architecture string   `json:"Architecture"`
+	OS           string   `json:"Os"`
+	ID           string   `json:"Id"`
+	RepoTags     []string `json:"RepoTags"`
+	Config       struct {
 		Labels map[string]string `json:"Labels"`
 	} `json:"Config"`
 }
@@ -600,7 +691,14 @@ func (e *Engine) Cleanup(ctx context.Context, current, previous string) error {
 			}
 			// Remove only our exact release tag, never an ID/shared tag/parent, and
 			// never force deletion of an image currently used by another container.
-			if owned, err := e.Image(ctx, tag, match[2], match[1]); err != nil || owned.Config.Labels["frontiercloud.project"] != e.Project {
+			owned, err := e.Image(ctx, tag, match[2], match[1])
+			if err != nil {
+				continue
+			}
+			labels := owned.Config.Labels
+			public := match[3] == projectTagHash(e.Project) && labels["frontiercloud.project"] == "" &&
+				labels["org.opencontainers.image.source"] == release.ImageSource && labels["org.opencontainers.image.revision"] == match[2]
+			if labels["frontiercloud.project"] != e.Project && !public {
 				continue
 			}
 			e.call(ctx, "DELETE", "/images/"+url.PathEscape(tag)+"?force=false&noprune=true", nil, nil)

@@ -1,0 +1,198 @@
+name: Publish native images
+
+on:
+  workflow_run:
+    workflows: ["Build and Test Docker Compose"]
+    branches: [dev, main]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  plan:
+    if: >-
+      github.repository == 'wongyiuming/FrontierCloud-Gin' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.default_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.proof.outputs.plan }}
+      revision: ${{ steps.proof.outputs.revision }}
+      branch: ${{ steps.proof.outputs.branch }}
+      source_run_id: ${{ steps.proof.outputs.source_run_id }}
+      source_run_number: ${{ steps.proof.outputs.source_run_number }}
+      source_run_attempt: ${{ steps.proof.outputs.source_run_attempt }}
+      missing_web: ${{ steps.proof.outputs.missing_web }}
+      missing_updater: ${{ steps.proof.outputs.missing_updater }}
+      missing_nginx: ${{ steps.proof.outputs.missing_nginx }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/trusted_native_publish.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Prove newest completed source CI and existing public digests
+        id: proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_native_publish.py plan
+
+  compile:
+    needs: [plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [web, updater, nginx]
+    steps:
+      - name: Select only a proven-missing component
+        id: selection
+        env:
+          COMPONENT: ${{ matrix.component }}
+          MISSING_WEB: ${{ needs.plan.outputs.missing_web }}
+          MISSING_UPDATER: ${{ needs.plan.outputs.missing_updater }}
+          MISSING_NGINX: ${{ needs.plan.outputs.missing_nginx }}
+        run: |
+          case "$COMPONENT" in
+            web) MISSING="$MISSING_WEB";;
+            updater) MISSING="$MISSING_UPDATER";;
+            nginx) MISSING="$MISSING_NGINX";;
+            *) exit 1;;
+          esac
+          test "$MISSING" = true -o "$MISSING" = false
+          printf 'missing=%s\n' "$MISSING" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.selection.outputs.missing == 'true'
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        if: steps.selection.outputs.missing == 'true' && matrix.component != 'nginx'
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - uses: docker/setup-buildx-action@v3
+        if: steps.selection.outputs.missing == 'true'
+      - name: Compile candidate without package credentials or candidate scripts
+        if: steps.selection.outputs.missing == 'true' && matrix.component != 'nginx'
+        env:
+          COMPONENT: ${{ matrix.component }}
+          REVISION: ${{ needs.plan.outputs.revision }}
+          GOMAXPROCS: '4'
+          GOMEMLIMIT: 2GiB
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          test ! -e .ci-out && test ! -L .ci-out
+          mkdir .ci-out
+          if test "$COMPONENT" = web; then
+            go build -p=4 -trimpath -ldflags='-s -w' -o .ci-out/frontiercloud ./cmd/frontiercloud
+          else
+            go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/frontiercloud-updater ./cmd/frontiercloud-updater
+          fi
+      - name: Export OCI data without login, push or writable cache
+        if: steps.selection.outputs.missing == 'true'
+        env:
+          COMPONENT: ${{ matrix.component }}
+          REVISION: ${{ needs.plan.outputs.revision }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          OUTPUT_DIR="$(mktemp -d "$RUNNER_TEMP/native-oci.XXXXXXXX")"
+          if test "$COMPONENT" = nginx; then
+            DOCKERFILE=nginx/Dockerfile
+          else
+            DOCKERFILE="ci/Dockerfile.$COMPONENT"
+          fi
+          docker buildx build --platform linux/amd64 --file "$DOCKERFILE" \
+            --build-arg "REVISION=$REVISION" --build-arg FRONTIERCLOUD_RUNTIME=go \
+            --label org.opencontainers.image.source=https://github.com/wongyiuming/FrontierCloud-Gin \
+            --label "org.opencontainers.image.revision=$REVISION" \
+            --tag "ghcr.io/wongyiuming/frontiercloud-gin-$COMPONENT:$REVISION" \
+            --provenance=false --sbom=false \
+            --output "type=oci,dest=$OUTPUT_DIR/$COMPONENT.oci.tar" .
+          printf 'OCI_OUTPUT=%s\n' "$OUTPUT_DIR/$COMPONENT.oci.tar" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        if: steps.selection.outputs.missing == 'true'
+        with:
+          name: native-oci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.component }}
+          path: ${{ env.OCI_OUTPUT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    needs: [plan, compile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Only this job receives the automatic, short-lived package-write token.
+    # Repository workflow writers are trusted; no personal PAT is required.
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [web, updater, nginx]
+    concurrency:
+      group: native-images-${{ github.repository }}-${{ needs.plan.outputs.revision }}-${{ matrix.component }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/trusted_native_publish.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Verify OCI data and publish only the exact source SHA or reuse its digest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLAN_JSON: ${{ needs.plan.outputs.plan }}
+          COMPONENT: ${{ matrix.component }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_native_publish.py publish --component "$COMPONENT"
+
+  notify-staging:
+    needs: [plan, publish]
+    if: needs.plan.outputs.branch == 'dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: staging-cd-main
+    permissions:
+      contents: read
+      actions: read
+    concurrency:
+      group: trusted-preproduction-notification
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/trusted_staging_notify.py
+            scripts/trusted_native_publish.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Prove this publication attempt before signed staging wakeup
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_CD_SECRET: ${{ secrets.STAGING_CD_SECRET }}
+          PLAN_JSON: ${{ needs.plan.outputs.plan }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_staging_notify.py

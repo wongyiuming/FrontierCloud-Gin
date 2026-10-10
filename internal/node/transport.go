@@ -30,6 +30,10 @@ const MaxControlBytes = 512 * 1024
 var nodeIdentifier = regexp.MustCompile(`^[a-f0-9]{32}$`)
 var resourceIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// Preserve the sanitized HTTP-status diagnostic while allowing typed recovery.
+var ErrRemoteNotFound = errors.New("node control HTTP 404")
+var ErrRemoteConflict = errors.New("node control HTTP 409")
+
 func ValidIdentifier(value string) bool { return nodeIdentifier.MatchString(value) }
 
 var hostPattern = regexp.MustCompile(`^[a-z0-9.-]+$`)
@@ -129,7 +133,7 @@ func (t *Transport) MediaRead(ctx context.Context, origin, objectID, resourceID,
 	return resp.Body, nil
 }
 
-type Transport struct{ client, backup, storage *http.Client }
+type Transport struct{ client, backup, storage, storageStat *http.Client }
 
 func NewTransport() *Transport { return transportWithRoots(nil) }
 func transportWithRoots(roots *x509.CertPool) *Transport {
@@ -140,7 +144,9 @@ func transportWithRoots(roots *x509.CertPool) *Transport {
 	}
 	storage := makeClient(4, 30*time.Second)
 	storage.Timeout = 0 // Large media uses a separate pool and caller cancellation.
-	return &Transport{makeClient(4, 10*time.Second), makeClient(1, 60*time.Second), storage}
+	// A stat verifies the full object digest. Large objects must not inherit
+	// the ten-second heartbeat budget or monopolize heartbeat connections.
+	return &Transport{makeClient(4, 10*time.Second), makeClient(1, 60*time.Second), storage, makeClient(1, 180*time.Second)}
 }
 func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
@@ -176,6 +182,7 @@ func (t *Transport) Close() {
 	t.client.CloseIdleConnections()
 	t.backup.CloseIdleConnections()
 	t.storage.CloseIdleConnections()
+	t.storageStat.CloseIdleConnections()
 }
 
 func (t *Transport) StorageUpload(ctx context.Context, origin, objectID, token string, reader io.Reader, size int64) (map[string]any, error) {
@@ -270,12 +277,21 @@ func (t *Transport) Request(ctx context.Context, origin, route, method string, v
 	if strings.HasPrefix(u.Path, "/internal/v1/backup/") {
 		client = t.backup
 	}
+	if strings.HasPrefix(u.Path, "/internal/v1/storage/") && strings.HasSuffix(u.Path, "/stat") {
+		client = t.storageStat
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, errors.New("node control HTTPS request failed")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		if response.StatusCode == http.StatusNotFound {
+			return nil, ErrRemoteNotFound
+		}
+		if response.StatusCode == http.StatusConflict {
+			return nil, ErrRemoteConflict
+		}
 		return nil, fmt.Errorf("node control HTTP %d", response.StatusCode)
 	}
 	limit := int64(MaxControlBytes)

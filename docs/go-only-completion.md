@@ -72,10 +72,13 @@ data. They never reuse or stop a deployed node and never globally prune Docker.
 The release matrix retains upgrade/rollback, updater handoff, business/data
 transport, backup and restart assertions at the smaller fleet size.
 
-Hosted CI only runs scripts/test-ci-source.sh and bounded metadata promotion
+Hosted test CI only runs scripts/test-ci-source.sh and bounded metadata promotion
 checks, with parallel jobs capped at three minutes and no serial dependency
 chain. It does not build Docker, run a database/fleet/browser/race acceptance,
 install FastAPI, or evade limits through background work.
+The separately authorized image compilation workflow waits for exact test CI
+success and publishes public runtime images, with ten-minute parallel jobs and
+no acceptance tests. See [image delivery](public-image-delivery.md).
 
 ## Documentation and release scope
 

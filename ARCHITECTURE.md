@@ -205,9 +205,35 @@ exceptions and manual DNS/no-mail tasks. These changes are not a penetration-tes
 certification. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
-Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted CI has an explicit three-minute hard limit per parallel job, no serial job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit.
+Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Updater/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. CD notification waits for every public image. Deployers pin manifest digests and validate runtime/schema/source/platform before use; only confirmed absent versions/platforms permit bounded immutable-source compilation. Auth/network/proof failures stop, rather than fall back.
 
 Wiki operations guidance is maintained in the separate GitHub Wiki repository. Do not track docs/wiki in this repository.
+
+Publication is a default-main `workflow_run` consumer of completed successful
+source CI, not a dev-defined credentialed push workflow. Compile jobs are
+free of package-write credentials; a separate immutable-main publisher validates bounded OCI data
+and writes only the verified source SHA tag. It must not run candidate scripts,
+Dockerfiles, containers or archive-extracted executables with write credentials.
+Only the publisher receives automatic `GITHUB_TOKEN` `packages: write`; plan,
+compile and notify jobs do not. The public packages must grant
+`FrontierCloud-Gin` Actions Write; public pulls remain anonymous. Repository
+workflow writers are explicitly trusted to request package writes in other
+workflows, so this is not an ACL preventing dev writers from replacing tags.
+No personal package PAT or publisher Environment is required; previously
+created unreferenced credentials/settings are not consumed or deployment triggers.
+The separate staging signing key still belongs only to `staging-cd-main` with
+an exact main Branch rule, never a dev-accessible repository/organization secret.
+These external settings are not properties proved by source tests. The owner
+authorized one image-only bootstrap exception for same-repository PR #5: an
+owner-applied full-SHA label, fixed PR workflow snapshot, exact successful source
+CI and current refs gate bounded compilation and verified OCI publication.
+This explicitly authorized candidate snapshot is not immutable-main code. Its
+publisher is the only package writer; it reads no signing secret or Environment
+and cannot deploy. Only the first matching run/latest owner retry may claim
+that label. No future PR inherits this exception. Actual staging acceptance
+still precedes merging; the normal main-only signing boundary is unchanged.
+Delivery dependencies are allowed only in these isolated publication workflows;
+hosted test job chains and their three-minute limit remain unchanged.
 
 The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
 identity, secrets and updater control from any production storage appliance on

@@ -64,7 +64,32 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 ## Validation workflow
 
-Hosted CI is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial job chains. Do not raise this budget or use background jobs to evade it.
+Hosted **test CI** is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial test-job chains. Do not raise this budget or use background jobs to evade it. The normal delivery exception is the separate default-main `publish-images.yml`: a completed successful exact-source CI event gates its trusted plan, parallel compilation without package-write credentials (ten minutes per component job) and isolated trusted publication (three minutes per component job), followed by a three-minute signed CD notification. Only these explicit delivery dependencies are allowed, not serial test chains. No tests/fleet/databases/browser acceptance belong in compilation workflows. Normal credential-bearing jobs never execute candidate code. See [image delivery](docs/public-image-delivery.md).
+
+The owner separately authorized one first-activation exception:
+`bootstrap-images.yml` for **PR #5 only**, triggered by an owner-applied
+`bootstrap:<full dev SHA>` label after development acceptance/source CI success.
+Its fixed PR workflow code is an explicitly authorized snapshot, not main code.
+The plan verifies current refs, source run/attempt and first authorization claim;
+read-only compilation exports OCI data to an isolated automatic-token publisher.
+There is no signing secret, Environment or deployment job. Plan/publication
+remain three minutes, compilation ten minutes per component. Relabel-triggered
+duplicate runs and future PRs cannot use it. Staging acceptance remains a merge
+gate even though PR #5 must exist before this first label-triggered publication.
+
+Only the publish job receives automatic `GITHUB_TOKEN` `packages: write`; plan,
+compile and notify jobs do not. Public packages must grant `FrontierCloud-Gin`
+Actions Write while anonymous image pulls require no credentials. Personal PATs
+and a publisher Environment are not required; old unreferenced ones may remain
+without being used or triggering deployments. Repository workflow writers are
+trusted to request package write permissions in other workflows: do not present
+this model as preventing every dev-authored workflow from replacing old tags.
+The CD signing secret remains exclusively in `staging-cd-main`, restricted to the
+exact main Branch rule, with no dev-accessible repository/organization copy.
+External permissions must be verified separately from source tests. Record
+actual bootstrap CI completion and public image proofs before claiming initial
+activation; do not direct-write main or merge before staging acceptance to
+sidestep that bootstrap boundary.
 
 Run native unit/race, actual SQLite/MySQL business/API, deployment and updater tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Reference app/ and updater/server.py are illustrative only and must not be deployed. Keep syntax examples aligned when relevant; runnable Python compatibility is not a product requirement.
 

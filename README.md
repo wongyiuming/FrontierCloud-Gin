@@ -18,18 +18,27 @@ use an exact reviewed release; bootstrap history alone is not release proof.
 - Karaoke entry from media playback, guest preview, account recordings, and storage quota.
 - Master/storage storage placement using Local, Direct, or Relay transport.
 - Transactional upload, visibility, priority, same-parent folder rename, and recovery-aware deletion.
+- [Abandoned-upload recovery](docs/upload-lifecycle.md): expiry triggers physical
+  reconciliation, never blind deletion; live streams and complete files are protected.
 - Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed Master-only releases.
 
 ## Quick start
 
-For a fresh HTTP Standalone node, build the exact committed native source. No
-Python or MySQL service is required:
+For a fresh HTTP Standalone node, prepare images for the exact committed native
+source: pull verified public GHCR images first, compile locally only for confirmed
+missing versions/platforms. No Python application or MySQL service is required
+(the host-side image resolver uses Python 3):
 
 ```bash
 export FRONTIERCLOUD_REVISION="$(git rev-parse HEAD)"
 bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"
 docker compose up -d --no-build --wait
 ```
+
+Compiled images are visible in the repository's [public Packages](https://github.com/wongyiuming/FrontierCloud-Gin/packages).
+See [image delivery](docs/public-image-delivery.md) for exact-SHA/digest checks,
+fallback rules and the independent compilation workflow. Do not use `--build`
+for the normal image-first deployment path.
 
 Open `http://localhost`. The startup initializer creates the managed media tree under `data/media` and the persistent runtime secrets required by the stack.
 
@@ -51,9 +60,24 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
 EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
-Its [bounded local CD controller](docs/staging-cd.md) is triggered by each completed
-successful `dev` push CI, never by a polling timer; production follows reviewed
-`dev -> main` releases only.
+Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
+from a default-`main` trusted workflow after successful exact-`dev` test CI and
+all three public image proofs. Publication itself also executes immutable main
+code: candidate compilation has no package-write credentials, and the isolated
+publisher consumes verified OCI data without running candidate code. Only the
+publisher receives automatic `GITHUB_TOKEN` `packages: write`; plan, compilation
+and notification do not. Each public package grants `FrontierCloud-Gin` Actions
+Write access. Repository workflow writers are trusted to request package write
+permissions; this model does not isolate them from publishing package versions.
+The signing secret belongs only to the
+`staging-cd-main` Environment restricted to the `main` branch, not to repository
+secrets or dev compilation jobs. Initial activation uses an explicitly
+owner-authorized, exact-SHA label on PR #5 for image-only CI compilation and
+publication, followed by a separately verified operator staging wakeup. This
+one-time PR workflow reads no deployment secret and cannot deploy production.
+The normal workflow becomes active after promotion to default main; no polling
+timer or direct main write substitutes for `dev -> main` promotion. Production
+remains manual. See the first-activation gates in [staging CD](docs/staging-cd.md).
 
 The [public security baseline](docs/public-security-baseline.md) documents
 nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and
@@ -83,7 +107,7 @@ Operational and subsystem detail belongs in the separate GitHub Wiki (not tracke
 
 The published GitHub Wiki is available at [github.com/wongyiuming/FrontierCloud-Gin/wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki).
 
-Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay), repeated for SQLite and MySQL. Hosted CI stays within three minutes and does not run fleet, database or browser acceptance.
+Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay), repeated for SQLite and MySQL. Hosted test CI stays within three minutes. A separate, success-gated image compilation workflow has ten-minute parallel component jobs; neither workflow runs fleet, database or browser acceptance.
 
 ## Repository delivery
 

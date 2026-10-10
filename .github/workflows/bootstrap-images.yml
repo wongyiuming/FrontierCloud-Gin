@@ -1,0 +1,175 @@
+name: Bootstrap native images once
+run-name: "Bootstrap images PR${{ github.event.pull_request.number }} ${{ github.event.label.name }}"
+
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: owner-bootstrap-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: >-
+      github.repository == 'wongyiuming/FrontierCloud-Gin' &&
+      github.event.pull_request.number == 5 &&
+      github.actor == 'wongyiuming' &&
+      github.event.sender.login == 'wongyiuming' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.label.name == format('bootstrap:{0}', github.event.pull_request.head.sha)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      plan: ${{ steps.proof.outputs.plan }}
+      revision: ${{ steps.proof.outputs.revision }}
+      missing_web: ${{ steps.proof.outputs.missing_web }}
+      missing_updater: ${{ steps.proof.outputs.missing_updater }}
+      missing_nginx: ${{ steps.proof.outputs.missing_nginx }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/bootstrap_native_publish.py
+            scripts/trusted_native_publish.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Record public bootstrap commit bindings
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          printf 'PR=%s source_sha=%s\n' "$PR_NUMBER" "$SOURCE_SHA"
+          printf 'workflow_sha=%s event_sha=%s ref=%s\n' "$GITHUB_WORKFLOW_SHA" "$GITHUB_SHA" "$GITHUB_REF"
+      - name: Verify owner authorization, immutable PR and exact successful source CI
+        id: proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/bootstrap_native_publish.py plan
+
+  compile:
+    needs: [plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [web, updater, nginx]
+    steps:
+      - name: Select only a proven-missing component
+        id: selection
+        env:
+          COMPONENT: ${{ matrix.component }}
+          MISSING_WEB: ${{ needs.plan.outputs.missing_web }}
+          MISSING_UPDATER: ${{ needs.plan.outputs.missing_updater }}
+          MISSING_NGINX: ${{ needs.plan.outputs.missing_nginx }}
+        run: |
+          case "$COMPONENT" in
+            web) MISSING="$MISSING_WEB";;
+            updater) MISSING="$MISSING_UPDATER";;
+            nginx) MISSING="$MISSING_NGINX";;
+            *) exit 1;;
+          esac
+          test "$MISSING" = true -o "$MISSING" = false
+          printf 'missing=%s\n' "$MISSING" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.selection.outputs.missing == 'true'
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        if: steps.selection.outputs.missing == 'true' && matrix.component != 'nginx'
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - uses: docker/setup-buildx-action@v3
+        if: steps.selection.outputs.missing == 'true'
+      - name: Compile approved source without package-write credentials
+        if: steps.selection.outputs.missing == 'true' && matrix.component != 'nginx'
+        env:
+          COMPONENT: ${{ matrix.component }}
+          REVISION: ${{ needs.plan.outputs.revision }}
+          GOMAXPROCS: '4'
+          GOMEMLIMIT: 2GiB
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          test ! -e .ci-out && test ! -L .ci-out
+          mkdir .ci-out
+          if test "$COMPONENT" = web; then
+            go build -p=4 -trimpath -ldflags='-s -w' -o .ci-out/frontiercloud ./cmd/frontiercloud
+          else
+            go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/frontiercloud-updater ./cmd/frontiercloud-updater
+          fi
+      - name: Export OCI data without login, push or writable cache
+        if: steps.selection.outputs.missing == 'true'
+        env:
+          COMPONENT: ${{ matrix.component }}
+          REVISION: ${{ needs.plan.outputs.revision }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          OUTPUT_DIR="$(mktemp -d "$RUNNER_TEMP/native-oci.XXXXXXXX")"
+          if test "$COMPONENT" = nginx; then DOCKERFILE=nginx/Dockerfile; else DOCKERFILE="ci/Dockerfile.$COMPONENT"; fi
+          docker buildx build --platform linux/amd64 --file "$DOCKERFILE" \
+            --build-arg "REVISION=$REVISION" --build-arg FRONTIERCLOUD_RUNTIME=go \
+            --label org.opencontainers.image.source=https://github.com/wongyiuming/FrontierCloud-Gin \
+            --label "org.opencontainers.image.revision=$REVISION" \
+            --tag "ghcr.io/wongyiuming/frontiercloud-gin-$COMPONENT:$REVISION" \
+            --provenance=false --sbom=false --output "type=oci,dest=$OUTPUT_DIR/$COMPONENT.oci.tar" .
+          printf 'OCI_OUTPUT=%s\n' "$OUTPUT_DIR/$COMPONENT.oci.tar" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        if: steps.selection.outputs.missing == 'true'
+        with:
+          name: native-oci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.component }}
+          path: ${{ env.OCI_OUTPUT }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    needs: [plan, compile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [web, updater, nginx]
+    concurrency:
+      group: native-images-${{ github.repository }}-${{ needs.plan.outputs.revision }}-${{ matrix.component }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/bootstrap_native_publish.py
+            scripts/trusted_native_publish.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Validate authorized snapshot and OCI then publish only the approved SHA
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLAN_JSON: ${{ needs.plan.outputs.plan }}
+          COMPONENT: ${{ matrix.component }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/bootstrap_native_publish.py publish --component "$COMPONENT"

@@ -71,9 +71,11 @@ type PoolRepository interface {
 	ReserveUpload(context.Context, string, string, int64, int64, AdminAudit) (UploadReservation, error)
 	Upload(context.Context, string) (UploadReservation, error)
 	FinalizeUpload(context.Context, string, string, int64, string, AdminAudit) (GlobalMedia, error)
+	FinalizeRecoveredUpload(context.Context, string, string, int64, string, AdminAudit) (GlobalMedia, error)
 	CompleteMasterUpload(context.Context, string, MediaObject, int64, string, int64, AdminAudit) error
 	ReleaseCleanedUpload(context.Context, string, AdminAudit) error
 	ExpiredUploads(context.Context, int) ([]UploadReservation, error)
+	DeferExpiredUpload(context.Context, string) error
 	RecordGlobalPlayback(context.Context, string, string) (PlaybackResult, error)
 	SetGlobalPreference(context.Context, string, int, AdminAudit) (PlaybackResult, error)
 	BindGlobalLyric(context.Context, string, MediaObject) error

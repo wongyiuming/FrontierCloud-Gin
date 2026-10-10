@@ -76,6 +76,14 @@ func (s Source) Validate(ctx context.Context, target, mode string) error {
 
 var archivePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin"}
 
+func (s Source) publicImages(ctx context.Context) (bool, error) {
+	origin, err := s.git(ctx, 20*time.Second, "remote", "get-url", "origin")
+	if err != nil {
+		return false, err
+	}
+	return origin == release.ImageSource || origin == release.ImageSource+".git" || origin == "git@github.com:wongyiuming/FrontierCloud-Gin.git", nil
+}
+
 func (s Source) Archive(ctx context.Context, target string) (io.ReadCloser, error) {
 	if !release.ValidSHA(target) {
 		return nil, ErrState

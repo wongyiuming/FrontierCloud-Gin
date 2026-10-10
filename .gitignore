@@ -77,3 +77,6 @@ certs/*.pem
 
 # Storage appliance state is never a build/source artifact.
 /storage-data/
+
+# Precompiled CI binaries are build inputs, never source-controlled files.
+/.ci-out/

@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -231,6 +232,22 @@ func TestStorageTokenVector(t *testing.T) {
 		t.Fatal(err)
 	}
 	canonicalEqual(t, payload, fixture.Payload)
+}
+
+func TestStorageUploadGenerationSignedAndValidated(t *testing.T) {
+	credential := strings.Repeat("a", 64)
+	reservation := strings.Repeat("7", 32)
+	token, err := StorageUploadToken(credential, strings.Repeat("1", 32), strings.Repeat("2", 32), strings.Repeat("3", 32), strings.Repeat("4", 64), strings.Repeat("4", 64), "music/Test/song.mp3", reservation, 10, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := VerifyStorageToken(credential, token, 1001)
+	if err != nil || stringField(payload, "upload_id") != reservation {
+		t.Fatal(payload, err)
+	}
+	if _, err := StorageUploadToken(credential, strings.Repeat("1", 32), strings.Repeat("2", 32), strings.Repeat("3", 32), strings.Repeat("4", 64), strings.Repeat("4", 64), "music/Test/song.mp3", "../bad", 10, 1000); err == nil {
+		t.Fatal("invalid generation accepted")
+	}
 }
 
 func TestRecordingTokenVector(t *testing.T) {
