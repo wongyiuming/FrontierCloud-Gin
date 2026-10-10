@@ -804,7 +804,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal("real native matrix backup failed independent read-only logical preflight", follower.runtime, follower.database, err)
 		}
 	}
-	t.Log("real native matrix cold backups passed transfer and independent logical preflight", kind, "Go/MySQL and Go/SQLite followers")
+	t.Log("real native matrix cold backups passed transfer and independent logical preflight", kind, "SQLite storage followers")
 
 	// A follower outage must become visible while the Master remains live; an
 	// all-services restart alone would not prove offline admission/recovery.

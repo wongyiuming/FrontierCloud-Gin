@@ -52,9 +52,16 @@ compose exec -T nginx nginx -t
 address=$(compose port nginx 443)
 base="https://$address"
 # Docker allocated the public port after Web initialization. Configure its
-# canonical origin explicitly, then test the actual discovery documents too.
+# canonical origin and exact private Nginx peer explicitly. Docker can choose
+# a bridge outside the application's default trusted-proxy network range.
 export PUBLIC_ORIGIN="$base"
+nginx_id=$(compose ps -q nginx)
+proxy=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")
+[[ "$proxy" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+export FRONTIERCLOUD_TEST_TRUSTED_PROXY_NETWORKS="$proxy/32"
 compose up -d --no-build --no-deps --wait --wait-timeout 90 web
+test "$(compose ps -q nginx)" = "$nginx_id"
+test "$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")" = "$proxy"
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
 for asset in media-crypto-common.js media-crypto.js media-crypto-sw.js; do
   test "$(curl --silent --show-error --cacert "$SSL_CERT_PATH" -o /dev/null -w '%{http_code}' "$base/static/js/$asset")" = 404

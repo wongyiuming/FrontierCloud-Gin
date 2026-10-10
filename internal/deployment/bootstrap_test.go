@@ -96,7 +96,16 @@ done
 	run := func(selection string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "bash", "scripts/build-native-images.sh", selection)
 		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "PATH="+filepath.Join(root, "fake-bin")+":"+os.Getenv("PATH"), "BOOTSTRAP_CAPTURE="+capture)
+		// This fixture captures immutable source builds, not registry resolution.
+		// Select the operator's isolated acceptance mode explicitly rather than
+		// inheriting a driver's setting or consulting the public registry.
+		for _, variable := range os.Environ() {
+			name, _, _ := strings.Cut(variable, "=")
+			if name != "PATH" && name != "BOOTSTRAP_CAPTURE" && name != "FRONTIERCLOUD_IMAGE_SOURCE" {
+				cmd.Env = append(cmd.Env, variable)
+			}
+		}
+		cmd.Env = append(cmd.Env, "PATH="+filepath.Join(root, "fake-bin")+":"+os.Getenv("PATH"), "BOOTSTRAP_CAPTURE="+capture, "FRONTIERCLOUD_IMAGE_SOURCE=local")
 		return cmd.CombinedOutput()
 	}
 	for _, invalid := range []string{"HEAD", "gin_dev", revision[:12], strings.Repeat("f", 40)} {

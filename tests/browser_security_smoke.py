@@ -77,7 +77,13 @@ def main():
         assert page.evaluate('window.cspViolations') == []
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is True
         response = context.request.post(base + '/api/v1/media/admin/elevate', form={'token': os.environ['ADMIN_KEY']})
-        assert response.status == 200
+        if response.status != 200:
+            try:
+                detail = str(response.json().get('detail', 'missing error detail'))
+            except Exception:
+                detail = 'non-JSON error response'
+            detail = detail.replace(os.environ['ADMIN_KEY'], '<redacted>')[:512]
+            raise AssertionError(('Admin elevation', response.status, detail))
         # Follow the real login destination. A relative canonical redirect
         # must preserve the ephemeral public HTTPS port.
         redirect = context.request.get(base + '/api/v1/media/admin?security_probe=1', max_redirects=0)
