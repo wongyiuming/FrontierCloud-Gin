@@ -19,6 +19,42 @@ import (
 
 const testGeneration int64 = 1790000000000000123
 
+func TestPremasterProofRemainsRequiredForVerifierOnlyAndRetiredMedia(t *testing.T) {
+	for _, retired := range []bool{false, true} {
+		name := "verifier-only"
+		if retired {
+			name = "retired-media"
+		}
+		t.Run(name, func(t *testing.T) {
+			records := preflightRecords()
+			key := map[string]any{"kind": "row", "table": "media_crypto_keys", "value": map[string]any{"singleton": 1, "key_id": strings.Repeat("c", 64), "created_at": 1}}
+			records = append(records[:len(records)-1], key)
+			if retired {
+				records = append(records, map[string]any{"kind": "row", "table": "media_encryption", "value": map[string]any{"object_kind": "media", "object_id": strings.Repeat("f", 64), "file_id": strings.Repeat("e", 32), "descriptor_json": nil, "created_at": 1}})
+			}
+			records = append(records, map[string]any{"kind": "end"})
+			data := encodedPreflight(records)
+			report, err := Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), t.TempDir())
+			if err != nil || !report.LogicalValid || report.RestoreReady || len(report.PendingGates) != 5 || report.PendingGates[4] != "media-premaster-key-proof" {
+				t.Fatal("registered verifier lost its independent key restoration gate", report, err)
+			}
+			// A fixture with no verifier and no active encrypted objects has no
+			// registered premaster identity to prove. Retired nonce IDs stay intact.
+			without := make([]map[string]any, 0, len(records))
+			for _, record := range records {
+				if record["table"] != "media_crypto_keys" {
+					without = append(without, record)
+				}
+			}
+			data = encodedPreflight(without)
+			report, err = Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), t.TempDir())
+			if err != nil || !report.LogicalValid || report.RestoreReady || len(report.PendingGates) != 4 {
+				t.Fatal("unregistered plaintext fixture changed restoration contract", report, err)
+			}
+		})
+	}
+}
+
 func TestEncryptedBackupRequiresIndependentPremasterProof(t *testing.T) {
 	meta, err := mediacrypto.NewMetadata(84)
 	if err != nil {

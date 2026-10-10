@@ -307,11 +307,13 @@ def main():
             'challenge': challenge['challenge'], 'captcha': visible_captcha_answer(image.text()), 'webrtc_addresses': []})
         assert registered.status == 200, (registered.status, registered.json().get('detail'))
         karaoke.evaluate('async()=>await refreshAccount()')
+        karaoke.evaluate("state.recordingSnapshot.title=' \\u0085 '+state.recordingSnapshot.title+' \\u0085 '")
         karaoke.locator('#upload').click()
         karaoke.wait_for_function("() => document.getElementById('status').textContent === '录音已上传到个人空间。'", timeout=60000)
         assert len(recording_tickets) == 1
         submitted = recording_tickets[0]
         assert submitted['lyrics'] == [] and submitted['preparation_token']
+        assert submitted['title'] == karaoke.evaluate('recordingTitle(state.recordingSnapshot.title)')
         assert '浏览器解密歌词' not in json.dumps(submitted, ensure_ascii=False)
         assert set(submitted['encrypted_lyrics']) == {'encryption', 'ciphertext'}
         saved = karaoke.evaluate("async()=>await accountApi('/recordings')")['items']
@@ -322,6 +324,7 @@ def main():
         assert stored.status == 200
         opaque_footer = recording_footer(stored.body())
         assert opaque_footer['lyrics'] == [] and opaque_footer['encrypted_lyrics'] == submitted['encrypted_lyrics']
+        assert opaque_footer['title'] == submitted['title']
         assert 'preparation_token' not in opaque_footer
         assert '浏览器解密歌词'.encode() not in stored.body()
         assert len(stored.body()) == submitted['size_bytes']

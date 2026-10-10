@@ -249,7 +249,7 @@ func Preflight(ctx context.Context, reader io.Reader, expected Expectation, dire
 		return Report{}, err
 	}
 	var encrypted bool
-	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM media_encryption WHERE descriptor_json IS NOT NULL)").Scan(&encrypted); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM media_crypto_keys) OR EXISTS(SELECT 1 FROM media_encryption WHERE descriptor_json IS NOT NULL)").Scan(&encrypted); err != nil {
 		return Report{}, err
 	}
 	if encrypted {
