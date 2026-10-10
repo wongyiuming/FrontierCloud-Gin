@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -27,6 +28,10 @@ func TestBrowserSessionWrapMultipleFilesFixedExpiryAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if grant.ExpiresIn != int64(SessionLifetime/time.Second) {
+		t.Fatal("unexpected initial session duration", grant.ExpiresIn)
+	}
+	deadline := manager.sessions[grant.SessionID].expires
 	encoded, _ := base64.StdEncoding.DecodeString(grant.PublicKey)
 	server, _ := ecdh.P256().NewPublicKey(encoded)
 	shared, _ := client.ECDH(server)
@@ -42,6 +47,9 @@ func TestBrowserSessionWrapMultipleFilesFixedExpiryAndRevocation(t *testing.T) {
 		wrapped, err := manager.Wrap("cookie-session", grant.SessionID, meta)
 		if err != nil || wrapped.ExpiresAt != grant.ExpiresAt {
 			t.Fatal(wrapped, err)
+		}
+		if !manager.sessions[grant.SessionID].expires.Equal(deadline) {
+			t.Fatal("file request extended the session deadline")
 		}
 		iv, _ := base64.StdEncoding.DecodeString(wrapped.IV)
 		data, _ := base64.StdEncoding.DecodeString(wrapped.WrappedKey)
@@ -67,6 +75,60 @@ func TestBrowserSessionWrapMultipleFilesFixedExpiryAndRevocation(t *testing.T) {
 	manager.RevokeBinding("cookie-session")
 	if _, err = manager.Wrap("cookie-session", grant.SessionID, meta); !errors.Is(err, ErrSession) {
 		t.Fatal("revoked grant accepted", err)
+	}
+}
+
+func TestBrowserSessionDurationUsesConservativeServerRemainingTime(t *testing.T) {
+	base := time.Unix(1800000000, 0)
+	for _, test := range []struct {
+		name    string
+		start   time.Time
+		elapsed time.Duration
+		seconds int64
+	}{
+		{"whole-second", base, 0, 900},
+		{"fractional-deadline", base.Add(300 * time.Millisecond), 0, 899},
+		{"elapsed-handshake", base, 1500 * time.Millisecond, 898},
+		{"server-clock-behind-client", base.Add(-7 * time.Hour), 0, 900},
+		{"server-clock-adjustment-capped", base, -time.Second, 900},
+		{"expired-before-response", base, SessionLifetime, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager, _ := New(bytes.Repeat([]byte{1}, 32))
+			calls := 0
+			manager.now = func() time.Time {
+				calls++
+				if calls == 1 {
+					return test.start
+				}
+				return test.start.Add(test.elapsed)
+			}
+			client, _ := ecdh.P256().GenerateKey(rand.Reader)
+			grant, err := manager.NewSession("cookie-session", base64.StdEncoding.EncodeToString(client.PublicKey().Bytes()))
+			if test.seconds == 0 {
+				if !errors.Is(err, ErrSession) || len(manager.sessions) != 0 {
+					t.Fatal("already expired handshake retained a session", grant, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if grant.ExpiresIn != test.seconds || grant.ExpiresIn <= 0 || grant.ExpiresIn > 900 {
+				t.Fatal("unexpected conservative duration", grant.ExpiresIn)
+			}
+			if grant.ExpiresAt != test.start.Add(SessionLifetime).Unix() || !manager.sessions[grant.SessionID].expires.Equal(test.start.Add(SessionLifetime)) {
+				t.Fatal("duration changed the server deadline")
+			}
+			encoded, err := json.Marshal(grant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire map[string]any
+			if err = json.Unmarshal(encoded, &wire); err != nil || wire["expires_in"] != float64(test.seconds) {
+				t.Fatal("session duration missing from wire response", string(encoded), err)
+			}
+		})
 	}
 }
 

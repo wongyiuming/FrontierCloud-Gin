@@ -8,6 +8,14 @@ const directory = process.env.FRONTIER_CRYPTO_JS_DIR
     || (process.env.FC_CRYPTO_COMPILED === '1' ? 'static/js/compiled' : 'static/js');
 const source = name => fs.readFileSync(`${directory}/${name}`, 'utf8');
 let now = Date.now();
+let serverNow = now - 7 * 60 * 60 * 1000;
+let elapsed = 0;
+const performance = {timeOrigin: now, now: () => elapsed};
+function advance(milliseconds) {
+    elapsed += milliseconds;
+    serverNow += milliseconds;
+    now += milliseconds;
+}
 class Clock extends Date { static now() { return now; } }
 const calls = [];
 const records = new Map();
@@ -20,6 +28,10 @@ const workerListeners = new Map();
 let pageMessage;
 let nextId = 1;
 let nextSession = 1;
+let keyDelay = 0;
+let mismatchedEnvelope = false;
+let sessionLifetime = 899;
+let handshakeDelay = 0;
 let worker;
 let common;
 
@@ -60,7 +72,7 @@ async function envelope(active, record) {
     const wrapped = await webcrypto.subtle.encrypt({name: 'AES-GCM', iv,
         additionalData: new TextEncoder().encode(`frontiercloud:key-envelope:v1:${active.id}:${record.meta.file_id}`)},
     active.wrapKey, record.raw);
-    return {iv: common.encode(iv), wrapped_key: common.encode(wrapped), expires_at: active.expires};
+    return {iv: common.encode(iv), wrapped_key: common.encode(wrapped), expires_at: active.expires + (mismatchedEnvelope ? 1 : 0)};
 }
 async function backendFetch(input, init = {}) {
     const url = new URL(String(input), 'https://cloud.example');
@@ -82,13 +94,14 @@ async function backendFetch(input, init = {}) {
         const wrapKey = await webcrypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt,
             info: new TextEncoder().encode('frontiercloud:browser-wrap:v1:' + id)},
         hkdf, {name: 'AES-GCM', length: 256}, false, ['encrypt']);
-        const expires = Math.floor(now / 1000) + 90;
+        const expires = Math.floor(serverNow / 1000) + 900;
         sessions.set(id, {id, wrapKey, expires});
-        return Response.json({session_id: id, expires_at: expires, salt: common.encode(salt),
+        advance(handshakeDelay);
+        return Response.json({session_id: id, expires_at: expires, expires_in: sessionLifetime, salt: common.encode(salt),
             public_key: common.encode(await webcrypto.subtle.exportKey('raw', pair.publicKey))});
     }
     const active = sessions.get(body.session_id);
-    if (!active || active.expires * 1000 <= now) return Response.json({detail: 'expired session'}, {status: 403});
+    if (!active || active.expires * 1000 <= serverNow) return Response.json({detail: 'expired session'}, {status: 403});
     if (url.pathname.endsWith('/prepare')) {
         const size = body.plaintext_size;
         const meta = {version: 1, algorithm: 'AES-256-GCM', file_id: (nextId++).toString(16).padStart(32, '0'),
@@ -99,6 +112,7 @@ async function backendFetch(input, init = {}) {
         return Response.json({encryption: meta, key_envelope: await envelope(active, record), preparation_token: 'signed-descriptor'});
     }
     if (url.pathname.endsWith('/key')) {
+        advance(keyDelay);
         const record = pathRecords.get(body.file_path);
         if (!record) return Response.json({detail: 'missing'}, {status: 404});
         return Response.json({encryption: record.meta, key_envelope: await envelope(active, record),
@@ -109,7 +123,7 @@ async function backendFetch(input, init = {}) {
 
 const page = {
     crypto: webcrypto, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, DataView, URL, URLSearchParams,
-    Blob, Headers, Request, Response, ReadableStream, MessageChannel, Date: Clock,
+    Blob, Headers, Request, Response, ReadableStream, MessageChannel, Date: Clock, performance,
     atob, btoa, setTimeout, clearTimeout, console, isSecureContext: true,
     location: new URL('https://cloud.example/api/v1/media/admin'),
     document: {getElementById: id => id === 'uploadFiles' ? {} : null,
@@ -174,7 +188,9 @@ const cryptoKeyConstructor = fileKey.constructor;
 worker = {
     crypto: webcrypto, CryptoKey: cryptoKeyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,
     ArrayBuffer, DataView, URL, URLSearchParams, Headers, Request, Response, ReadableStream, AbortController,
-    MessageChannel, Date: Clock, atob, btoa, setTimeout, clearTimeout,
+    MessageChannel, Date: Clock,
+    performance: {timeOrigin: performance.timeOrigin - 5000, now: () => elapsed + 5000},
+    atob, btoa, setTimeout, clearTimeout,
     location: new URL('https://cloud.example/media-crypto-sw.js'),
     clients: {get: async id => id === client.id ? client : null, claim: async () => {}},
     skipWaiting: async () => {},
@@ -226,7 +242,43 @@ assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
 assert.equal(calls.filter(call => call.url.endsWith('/session')).length, 1, 'playback across files reuses the same session');
 assert.equal(calls.filter(call => call.url.endsWith('/key')).length, 2, 'multiple requests for one file reuse its temporary envelope');
 
-now += 100000;
+const originalDeadline = vm.runInContext('[...grants.values()][0].deadline', worker);
+assert.equal(originalDeadline, performance.timeOrigin + 899000, 'grant lifetime starts before the handshake POST');
+for (const skew of [-7, 7, -7]) {
+    now = serverNow + skew * 60 * 60 * 1000;
+    response = await workerFetch(catalog[1].url);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
+    assert.equal(calls.filter(call => call.url.endsWith('/session')).length, 1,
+        'wall-clock offsets and jumps cannot expire or renew live authorization');
+}
+keyDelay = 5000;
+page.FrontierMediaCrypto.resetFault('music/b.mp3');
+response = await workerFetch(catalog[1].url);
+assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
+assert.equal(vm.runInContext('[...grants.values()].at(-1).deadline', worker), originalDeadline,
+    'later file grants and response delays never extend the fixed session deadline');
+keyDelay = 0;
+mismatchedEnvelope = true;
+page.FrontierMediaCrypto.resetFault('music/b.mp3');
+assert.equal((await workerFetch(catalog[1].url)).status, 403, 'envelope lifetime must match its handshake exactly');
+mismatchedEnvelope = false;
+page.FrontierMediaCrypto.resetFault('music/b.mp3');
+const originalPageMessage = pageMessage;
+for (const invalidDeadline of [NaN, Infinity, common.monotonicNow() - 1, common.monotonicNow() + 900001]) {
+    pageMessage = event => {
+        const reply = event.ports[0];
+        return originalPageMessage({...event, ports: [{postMessage(grant) {
+            reply.postMessage({...grant, deadline: invalidDeadline});
+        }}]});
+    };
+    page.FrontierMediaCrypto.resetFault('music/b.mp3');
+    assert.equal((await workerFetch(catalog[1].url)).status, 403,
+        'worker rejects missing/expired/unbounded deadlines without a wall-clock fallback');
+}
+pageMessage = originalPageMessage;
+page.FrontierMediaCrypto.resetFault('music/b.mp3');
+
+advance(901000);
 response = await workerFetch(catalog[1].url);
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
 assert.equal(calls.filter(call => call.url.endsWith('/session')).length, 2, 'expired authorization performs one fresh handshake');
@@ -273,7 +325,7 @@ const oldUrl = catalog[1].url;
 const replacement = await prepare(new TextEncoder().encode('replaced'), 'music/b.mp3', second.source);
 assert.equal(await page.FrontierMediaCrypto.textFor('music/b.mp3', replacement.meta.file_id), 'replaced',
     'a fresh lyric descriptor must replace a same-path cached key before its authorization expires');
-now += 100000;
+advance(901000);
 assert.equal((await workerFetch(oldUrl)).status, 409, 'same-path replacement cannot reuse another object key');
 const fresh = [{media_path: 'music/b.mp3', encryption: replacement.meta}];
 await page.FrontierMediaCrypto.prepareCatalog(fresh);
@@ -285,4 +337,20 @@ response = await workerFetch(fresh[0].url);
 await assert.rejects(response.arrayBuffer(), 'tampered ciphertext cannot return plaintext');
 assert(page.FrontierMediaCrypto.failureFor(fresh[0].url), 'tag failures propagate to the playback retry guard');
 assert.equal((await workerFetch(fresh[0].url)).status, 422, 'integrity failure must not be retried as a network failure');
+
+advance(901000);
+for (const invalidLifetime of [0, 901, 1.5]) {
+    sessionLifetime = invalidLifetime;
+    await assert.rejects(page.FrontierMediaCrypto.encryptFile(inputFile(secondBytes, 'clock.mp3')),
+        /会话期限无效/, 'invalid server lifetime cannot create a browser key authorization');
+}
+sessionLifetime = 899;
+handshakeDelay = 900000;
+await assert.rejects(page.FrontierMediaCrypto.encryptFile(inputFile(secondBytes, 'clock.mp3')),
+    /授权已过期/, 'delayed handshake responses cannot restart the authorization lifetime');
+handshakeDelay = 0;
+const originalOrigin = performance.timeOrigin;
+performance.timeOrigin = NaN;
+assert.throws(() => common.monotonicNow(), /单调时钟不可用/, 'clock failure has no wall-clock fallback');
+performance.timeOrigin = originalOrigin;
 console.log('media-crypto-smoke-ok (' + directory + ')');

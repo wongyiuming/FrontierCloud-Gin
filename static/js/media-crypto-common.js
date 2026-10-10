@@ -6,6 +6,17 @@
     const CHUNK_SIZE = 1024 * 1024;
     const TAG_SIZE = 16;
     const encoder = new TextEncoder();
+    function monotonicNow() {
+        // This timestamp can cross page/worker contexts without depending on
+        // later changes to the user's wall clock.
+        const value = globalThis.performance?.timeOrigin + globalThis.performance?.now?.();
+        if (!Number.isFinite(value)) {
+            const error = new Error('浏览器单调时钟不可用');
+            error.status = 422;
+            throw error;
+        }
+        return value;
+    }
     function decode(value) {
         const binary = atob(value);
         return Uint8Array.from(binary, character => character.charCodeAt(0));
@@ -95,6 +106,6 @@
         }
         return entries.sort((left, right) => left.time - right.time);
     }
-    globalThis.FrontierCryptoCommon = {CHUNK_SIZE, TAG_SIZE, encode, decode, validate,
+    globalThis.FrontierCryptoCommon = {CHUNK_SIZE, TAG_SIZE, monotonicNow, encode, decode, validate,
         parameters, cipherRange, range, boundedBytes, parseLyrics};
 })();

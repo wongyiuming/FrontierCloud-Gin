@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createHash, webcrypto} from 'node:crypto';
 import {MessageChannel} from 'node:worker_threads';
+import {performance} from 'node:perf_hooks';
 
 process.on('uncaughtException', error => {
     process.stderr.write(String(error.stack || error) + '\n');
@@ -77,7 +78,7 @@ const opfs = {
 };
 const page = {
     crypto: webcrypto, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, DataView, URL, URLSearchParams,
-    Blob, Headers, Request, Response, ReadableStream, MessageChannel, Date,
+    Blob, Headers, Request, Response, ReadableStream, MessageChannel, Date, performance,
     atob, btoa, setTimeout, clearTimeout, console, isSecureContext: true,
     location: new URL(origin + '/api/v1/media/admin'),
     document: {getElementById: id => id === 'uploadFiles' ? {} : null},
@@ -95,7 +96,7 @@ const keyConstructor = (await webcrypto.subtle.importKey('raw', new Uint8Array(3
 worker = {
     crypto: webcrypto, CryptoKey: keyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,
     ArrayBuffer, DataView, URL, URLSearchParams, Headers, Request, Response, ReadableStream, AbortController,
-    MessageChannel, Date, atob, btoa, setTimeout, clearTimeout,
+    MessageChannel, Date, performance, atob, btoa, setTimeout, clearTimeout,
     location: new URL(origin + '/media-crypto-sw.js'),
     clients: {get: async id => id === client.id ? client : null, claim: async () => {}},
     skipWaiting: async () => {},

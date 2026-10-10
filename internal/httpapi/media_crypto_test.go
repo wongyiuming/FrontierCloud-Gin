@@ -128,6 +128,18 @@ func TestEncryptedUploadExplicitChoiceSessionReuseRangeAndVisibility(t *testing.
 	}
 	var sessionGrant mediacrypto.SessionGrant
 	json.Unmarshal(w.Body.Bytes(), &sessionGrant)
+	limit := a.settings.AdminMaxUploadBytes
+	a.settings.AdminMaxUploadBytes = 64
+	for _, boundary := range []struct {
+		size int64
+		code int
+	}{{48, 200}, {49, 413}, {64, 413}, {65, 413}} {
+		w = perform("/api/v1/media/admin/crypto/prepare", gin.H{"session_id": sessionGrant.SessionID, "plaintext_size": boundary.size}, nil)
+		if w.Code != boundary.code {
+			t.Fatal("preparation ignored authenticated ciphertext upload size", boundary.size, w.Code)
+		}
+	}
+	a.settings.AdminMaxUploadBytes = limit
 	var preparations []struct {
 		Encryption  mediacrypto.Metadata    `json:"encryption"`
 		Preparation string                  `json:"preparation_token"`

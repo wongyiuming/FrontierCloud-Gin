@@ -60,6 +60,11 @@ def main():
             executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'), headless=True,
             args=['--no-sandbox', '--ignore-certificate-errors', '--autoplay-policy=no-user-gesture-required'])
         context = browser.new_context(ignore_https_errors=True, accept_downloads=True)
+        context.add_init_script("""(() => {
+            const now=Date.now.bind(Date);
+            window.cryptoTestClockOffset=7*60*60*1000;
+            Date.now=()=>now()+window.cryptoTestClockOffset;
+        })();""")
         context.add_init_script("window.cspViolations=[];document.addEventListener('securitypolicyviolation',e=>window.cspViolations.push(e.effectiveDirective));")
         requests = []
         grants = []
@@ -85,6 +90,8 @@ def main():
         admin.locator('.tree-row[data-path="music/encrypted-fixture/01-first.mp3"]').wait_for()
         assert admin.locator('.media-encryption-badge').all_text_contents() == ['加密落盘', '加密落盘']
         assert sum(item['url'].endswith('/admin/crypto/session') for item in requests) == 1
+        # Another file must reuse the same deadline even after a wall-clock jump.
+        admin.evaluate('window.cryptoTestClockOffset=-7*60*60*1000')
         assert admin.evaluate("""async () => {
             const root=await navigator.storage.getDirectory();
             const directory=await root.getDirectoryHandle('frontiercloud-cipher-upload-v1');

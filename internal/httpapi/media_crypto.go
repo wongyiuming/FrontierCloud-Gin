@@ -255,6 +255,10 @@ func (a *Admin) cryptoPrepare(c *gin.Context) {
 		cryptoError(c, err)
 		return
 	}
+	if meta.CiphertextSize > a.settings.AdminMaxUploadBytes {
+		detail(c, 413, "加密后的文件超过单文件上传限制")
+		return
+	}
 	binding := "admin:" + session(c).Hash
 	envelope, err := a.public.crypto.Wrap(binding, body.SessionID, meta)
 	if err != nil {

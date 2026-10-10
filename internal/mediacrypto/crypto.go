@@ -94,6 +94,7 @@ type SessionGrant struct {
 	PublicKey string `json:"public_key"`
 	Salt      string `json:"salt"`
 	ExpiresAt int64  `json:"expires_at"`
+	ExpiresIn int64  `json:"expires_in"`
 }
 type KeyEnvelope struct {
 	IV         string `json:"iv"`
@@ -274,8 +275,15 @@ func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, err
 		return SessionGrant{}, ErrSession
 	}
 	expires := now.Add(SessionLifetime)
+	// Give browsers a conservative duration independent of their wall clock.
+	// Floor against the serialized deadline so its second precision never grants
+	// longer than expires_at; the registry deadline remains authoritative.
+	expiresIn := min(int64(SessionLifetime/time.Second), int64(time.Unix(expires.Unix(), 0).Sub(m.now())/time.Second))
+	if expiresIn <= 0 {
+		return SessionGrant{}, ErrSession
+	}
 	m.sessions[sessionID] = session{binding, key, expires}
-	return SessionGrant{sessionID, base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), base64.StdEncoding.EncodeToString(salt), expires.Unix()}, nil
+	return SessionGrant{SessionID: sessionID, PublicKey: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), Salt: base64.StdEncoding.EncodeToString(salt), ExpiresAt: expires.Unix(), ExpiresIn: expiresIn}, nil
 }
 
 func (m *Manager) Wrap(binding, sessionID string, meta Metadata) (KeyEnvelope, error) {

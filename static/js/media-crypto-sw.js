@@ -29,8 +29,8 @@ self.addEventListener('message', event => {
             event.ports[0]?.postMessage({error: '下载任务过多，请分批下载'});
             return;
         }
-        for (const [id, plan] of zipPlans) if (plan.expires < Date.now()) zipPlans.delete(id);
-        zipPlans.set(data.download_token, {token: data.token, items: data.items, expires: Date.now() + 120000});
+        for (const [id, plan] of zipPlans) if (plan.expires < common.monotonicNow()) zipPlans.delete(id);
+        zipPlans.set(data.download_token, {token: data.token, items: data.items, expires: common.monotonicNow() + 120000});
         event.ports[0]?.postMessage({ok: true});
     } else if (data.type === 'fc-crypto-revoke'
         && capabilities.get(data.token)?.clientId === event.source.id) {
@@ -76,12 +76,16 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
         error.status = 422;
         throw error;
     }
-    if (cached && cached.expires_at * 1000 > Date.now() + 10000) return cached;
+    if (cached && cached.deadline > common.monotonicNow() + 10000) return cached;
     if (pendingGrants.has(identity)) return pendingGrants.get(identity);
     const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId).then(grant => {
         common.validate(grant.encryption);
-        if (!(grant.key instanceof CryptoKey) || !grant.source_url
-            || grant.expires_at * 1000 <= Date.now()) throw new Error('解密授权已失效');
+        if (!(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
+            || grant.deadline <= common.monotonicNow() || grant.deadline > common.monotonicNow() + 900000) {
+            const error = new Error('解密授权已失效');
+            error.status = 403;
+            throw error;
+        }
         // The worker is a transient byte adapter. Keys are never written to
         // CacheStorage, IndexedDB, cookies or local/session storage.
         if (grants.size >= 32) grants.delete(grants.keys().next().value);
@@ -149,7 +153,7 @@ async function servePlaintext(request, token, filePath, download, expectedFileId
         async pull(output) {
             try {
                 if (index > last) { output.close(); return; }
-                if (grant.expires_at * 1000 <= Date.now() + 10000) {
+                if (grant.deadline <= common.monotonicNow() + 10000) {
                     const refreshed = await getGrant(token, filePath, expectedFileId, fallbackClientId);
                     if (refreshed.encryption.file_id !== grant.encryption.file_id)
                         throw new Error('播放文件已变化，请重新选择');
@@ -308,7 +312,7 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
         const id = url.pathname.slice('/__fc_zip/'.length);
         const plan = zipPlans.get(id);
-        if (!plan || plan.expires < Date.now() || !capabilities.has(plan.token))
+        if (!plan || plan.expires < common.monotonicNow() || !capabilities.has(plan.token))
             return new Response('下载授权已失效', {status: 403});
         zipPlans.delete(id);
         const controller = new AbortController();

@@ -52,7 +52,11 @@ cannot grant Admin access, grant hidden content, or transfer to another cookie.
 
 The session has a fixed 15-minute lifetime. Multiple files, Range requests,
 seeks and continuous playback reuse its wrapping key; file requests do not
-extend its deadline. “One-time” means one ephemeral handshake and one bounded
+extend its deadline. The server returns a conservative `expires_in` of 1–900
+seconds. Page and service worker use a shared monotonic countdown starting
+before the handshake request, so client clock offsets and wall-clock changes
+cannot renew authorization. Envelopes retain the original server `expires_at`.
+“One-time” means one ephemeral handshake and one bounded
 authorization session, not one file or one HTTP request. The server bounds its
 in-memory session registry to 4096 entries. Restart, explicit browser revoke,
 Admin logout or timeout invalidates further envelope issuance. Upload preparation
@@ -94,13 +98,9 @@ encrypted metadata without that fingerprint. Storage nodes do not load the
 Master premaster or issue browser key envelopes. Losing
 the premaster makes existing encrypted media unrecoverable.
 
-The database also preserves a public, domain-separated HMAC fingerprint in
-`media_crypto_keys`; business backups include this verifier. Startup compares
-the restored premaster against it and rejects even a structurally valid 32-byte
-key that belongs to another installation. Active encrypted metadata without its
-verifier is rejected as incomplete recovery. Storage Followers do not initialize
-or load a premaster; a promotion to Master requires restoring and proving the
-original key before starting its browser key service.
+The public verifier is stored in `media_crypto_keys`. A promotion to Master
+requires restoring and proving the original premaster before starting its
+browser key service.
 
 Schema generation 3 stores the descriptors and is forward-only from generation
 2. The first schema-3 runtime switch requires operator maintenance, independent

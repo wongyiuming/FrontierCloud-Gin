@@ -34,12 +34,26 @@
     }
     async function getSession() {
         requireCrypto();
-        if (session && session.expires_at * 1000 > Date.now() + 30000) return session;
+        if (session && session.deadline > common.monotonicNow() + 30000) return session;
         if (sessionPromise) return sessionPromise;
         sessionPromise = (async () => {
             const pair = await crypto.subtle.generateKey({name: 'ECDH', namedCurve: 'P-256'}, false, ['deriveBits']);
             const publicKey = await crypto.subtle.exportKey('raw', pair.publicKey);
+            const startedAt = common.monotonicNow();
             const handshake = await jsonRequest('/session', {public_key: common.encode(publicKey)});
+            if (!Number.isInteger(handshake.expires_in) || handshake.expires_in < 1 || handshake.expires_in > 900
+                || !Number.isSafeInteger(handshake.expires_at)
+                || handshake.expires_at <= 0) {
+                const error = new Error('临时密钥会话期限无效');
+                error.status = 422;
+                throw error;
+            }
+            const deadline = startedAt + handshake.expires_in * 1000;
+            if (deadline <= common.monotonicNow()) {
+                const error = new Error('临时密钥授权已过期');
+                error.status = 403;
+                throw error;
+            }
             const serverKey = await crypto.subtle.importKey('raw', common.decode(handshake.public_key),
                 {name: 'ECDH', namedCurve: 'P-256'}, false, []);
             const secret = await crypto.subtle.deriveBits({name: 'ECDH', public: serverKey}, pair.privateKey, 256);
@@ -49,7 +63,7 @@
                 salt: common.decode(handshake.salt),
                 info: new TextEncoder().encode('frontiercloud:browser-wrap:v1:' + handshake.session_id)},
             hkdfKey, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
-            session = {session_id: handshake.session_id, expires_at: handshake.expires_at, wrapKey};
+            session = {session_id: handshake.session_id, expires_at: handshake.expires_at, deadline, wrapKey};
             envelopes.clear();
             return session;
         })().finally(() => { sessionPromise = null; });
@@ -57,7 +71,11 @@
     }
     async function unwrap(activeSession, metadata, envelope) {
         common.validate(metadata);
-        if (envelope.expires_at * 1000 <= Date.now()) throw new Error('临时密钥授权已过期');
+        if (envelope.expires_at !== activeSession.expires_at || activeSession.deadline <= common.monotonicNow()) {
+            const error = new Error('临时密钥授权已过期或期限不一致');
+            error.status = 403;
+            throw error;
+        }
         const raw = await crypto.subtle.decrypt({name: 'AES-GCM', tagLength: 128,
             iv: common.decode(envelope.iv), additionalData: new TextEncoder().encode(
                 `frontiercloud:key-envelope:v1:${activeSession.session_id}:${metadata.file_id}`)},
@@ -70,7 +88,7 @@
     async function fileGrant(filePath, expectedFileId = '') {
         const activeSession = await getSession();
         const cached = envelopes.get(filePath);
-        if (cached && cached.expires_at * 1000 > Date.now() + 10000
+        if (cached && cached.deadline > common.monotonicNow() + 10000
             && (!expectedFileId || cached.encryption.file_id === expectedFileId)) return cached;
         const data = await jsonRequest('/key', {session_id: activeSession.session_id, file_path: filePath});
         if (expectedFileId && data.encryption?.file_id !== expectedFileId) {
@@ -81,7 +99,7 @@
         const key = await unwrap(activeSession, data.encryption, data.key_envelope);
         const grant = {encryption: data.encryption, key,
             source_url: data.source_url || data.download_url, content_type: data.content_type,
-            filename: data.filename, expires_at: data.key_envelope.expires_at};
+            filename: data.filename, expires_at: data.key_envelope.expires_at, deadline: activeSession.deadline};
         if (envelopes.size >= 32) envelopes.delete(envelopes.keys().next().value);
         envelopes.set(filePath, grant);
         return grant;
