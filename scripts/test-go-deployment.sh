@@ -21,7 +21,7 @@ export COMPOSE_PROJECT_NAME="fc-go-config-$$"
 export DB_TYPE=sqlite SQLITE_PATH=/app/data/frontiercloud.db
 COMPOSE_FILE=docker-compose.yaml docker compose --env-file /dev/null config --format json > "$work/sqlite.json"
 COMPOSE_FILE=docker-compose.yaml:docker-compose.gin-mysql.yaml docker compose --env-file /dev/null config --format json > "$work/mysql.json"
-docker run --rm -v "$PWD:/src:ro" -v "$work:/compose-check:ro" \
+docker run --rm --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e GOMEMLIMIT=300MiB -e GOGC=5 -e GOFLAGS=-p=1 -v "$PWD:/src:ro" -v "$work:/compose-check:ro" \
     -e FRONTIERCLOUD_TEST_COMPOSE_JSON_DIR=/compose-check -e FRONTIERCLOUD_REVISION \
     frontiercloud-go:business-test \
     go test -count=1 -v ./internal/deployment

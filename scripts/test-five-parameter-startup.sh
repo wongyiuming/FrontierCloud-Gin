@@ -107,7 +107,7 @@ test "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$cid")" = 1000000000
 address=$(compose port nginx 443)
 port=${address##*:}
 curl --fail --silent --show-error --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" "https://fc-startup.test:$port/health/ready" >/dev/null
-curl --fail --silent --show-error --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" "https://fc-startup.test:$port/" | grep -q '前沿娱乐'
+curl --fail --silent --show-error --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" --location --max-redirs 1 "https://fc-startup.test:$port/" | grep -q '前沿娱乐'
 compose exec -T web sh -c 'test "$(id -u)" = 10001; test -s /run/frontiercloud-secrets/admin_key; ! command -v python; ! command -v go'
 test -d "$work/data/media"
 test -f "$work/data/frontiercloud.db"
