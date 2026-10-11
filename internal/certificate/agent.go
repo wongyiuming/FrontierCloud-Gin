@@ -568,6 +568,11 @@ func (a *Agent) Serve(socket string) error {
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	go func() {
+		// Persisted automatic renewal must also recover after a long outage.
+		// Start retains the same validity, coalescing and durable cooldown guards.
+		if a.Status().AutoRenew {
+			_, _ = a.Start()
+		}
 		for {
 			select {
 			case <-a.ctx.Done():

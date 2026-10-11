@@ -123,7 +123,7 @@ same state directory or resetting another live job.
 One job runs per host; repeated requests coalesce while it is running. A
 managed valid certificate with more than 30 days left is a no-op. Other attempts
 respect a durable one-hour cooldown. Auto-renew defaults **off**, persists when
-changed from Master, and checks every six hours. The first managed issuance may
+changed from Master, checks immediately after container startup, then every six hours. The first managed issuance may
 replace a still-valid bootstrap certificate because it establishes this
 agent's ownership; no implicit import of externally managed private keys occurs.
 
@@ -136,7 +136,18 @@ provider integration; DNS credentials are not accepted by this API.
 Firewall/DNS must permit public HTTP-01 validation. The temporary-listener
 mode owns no listener at rest; shared mode never owns one.
 Expired certificates cannot be renewed through an untrusted/expired node HTTPS
-connection: recover the certificate locally, retaining TLS verification.
+connection. Recover locally using the reviewed runtime's fixed Unix-socket client:
+
+```bash
+docker compose exec certificate-agent /app/frontiercloud certificate-renew
+docker compose exec certificate-agent /app/frontiercloud certificate-status
+```
+
+The no-argument renewal command only submits the same bounded job; it never
+accepts hostname, CA, paths, keys or shell commands. Poll status for success;
+the one-hour retry cooldown still applies. No private-volume edits, host tools,
+TLS bypass or media restart are needed. Keep the node's verified bootstrap
+configuration available if Web must start after recovery.
 
 New pairs are checked for matching key, exact hostname and current validity,
 written as complete generation directories with read-only storage-group access,

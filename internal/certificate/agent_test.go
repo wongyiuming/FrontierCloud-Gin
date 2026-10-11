@@ -505,3 +505,86 @@ func TestRenewalRetainsExactlyCurrentAndPreviousCompleteGeneration(t *testing.T)
 		t.Fatal("unbounded renewal generations", count)
 	}
 }
+
+func TestPersistedAutoRenewChecksImmediatelyOnRestart(t *testing.T) {
+	for _, test := range []struct {
+		name                         string
+		enabled, cooldown, wantIssue bool
+		days                         int
+	}{
+		{"missing", true, false, true, 0},
+		{"near-expiry", true, false, true, 1},
+		{"expired", true, false, true, -1},
+		{"valid", true, false, false, 90},
+		{"disabled", false, false, false, 0},
+		{"cooldown", true, true, false, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			issued := make(chan struct{}, 1)
+			cert, key := testPair(t, "storage.fixture.test", 90)
+			issue := func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error) {
+				issued <- struct{}{}
+				return cert, key, nil
+			}
+			directory, address := t.TempDir(), port(t)
+			if e := os.Chmod(directory, 0700); e != nil {
+				t.Fatal(e)
+			}
+			first, e := Open(context.Background(), "storage.fixture.test", directory, address, issue)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if test.days != 0 {
+				if e = first.publish(cert, key); e != nil {
+					t.Fatal(e)
+				}
+				pair, e := manifest(directory)
+				if e != nil {
+					t.Fatal(e)
+				}
+				oldCert, oldKey := testPair(t, first.host, test.days)
+				if e = os.WriteFile(filepath.Join(directory, pair.Generation, "fullchain.pem"), oldCert, 0600); e != nil {
+					t.Fatal(e)
+				}
+				if e = os.WriteFile(filepath.Join(directory, pair.Generation, "privkey.pem"), oldKey, 0600); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if _, e = first.SetAutoRenew(test.enabled); e != nil {
+				t.Fatal(e)
+			}
+			if test.cooldown {
+				first.state.Job.StartedAt = time.Now().Unix()
+				if e = first.save(); e != nil {
+					t.Fatal(e)
+				}
+			}
+			first.Close()
+			next, e := Open(context.Background(), first.host, directory, address, issue)
+			if e != nil {
+				t.Fatal(e)
+			}
+			done := make(chan error, 1)
+			go func() { done <- next.Serve(filepath.Join(directory, "control.sock")) }()
+			defer func() {
+				next.Close()
+				if e := <-done; e != nil {
+					t.Error(e)
+				}
+			}()
+			select {
+			case <-issued:
+				if !test.wantIssue {
+					t.Fatal("startup bypassed disabled policy, validity or cooldown")
+				}
+				if state := waitJob(t, next); state.Job.State != "success" {
+					t.Fatal(state)
+				}
+			case <-time.After(500 * time.Millisecond):
+				if test.wantIssue {
+					t.Fatal("persisted renewal waited for the six-hour ticker")
+				}
+			}
+		})
+	}
+}

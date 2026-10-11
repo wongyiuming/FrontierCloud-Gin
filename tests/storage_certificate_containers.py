@@ -128,7 +128,7 @@ def run(work, project, revision):
     print("PASS: bridged Compose certificate container; pre-existing reader survives agent recreation")
     compose("stop", "certificate-agent")
     mounts = ["-v", volumes["certificate_state"] + ":/var/lib/frontiercloud-certificate", "-v", volumes["certificate_runtime"] + ":/run/frontiercloud-certificate", "-v", str(public) + ":/run/frontiercloud-http01", "-v", str(work / "certificate.test") + ":/certificate.test:ro"]
-    result = call(["docker", "run", "--rm", "--name", tester, "--user=0:10001", *common, "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_VOLUMES=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerSharedVolumes|TestACMEV2OrderRealHTTPChallengeCSRAndCertificate"])
+    result = call(["docker", "run", "--rm", "--name", tester, "--user=0:10001", *common, "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_VOLUMES=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerSharedVolumes|TestCertificateContainerLocalExpiredRenewal|TestACMEV2OrderRealHTTPChallengeCSRAndCertificate"])
     print(result)
     assert "--- SKIP" not in result and "PASS" in result
     compose("up", "-d", "--no-build", "certificate-agent")

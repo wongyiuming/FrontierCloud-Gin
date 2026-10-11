@@ -89,6 +89,11 @@ func command(arguments []string) error {
 			return errors.New("certificate-status accepts no arguments")
 		}
 		return certificateContainerStatus(os.Stdout)
+	case "certificate-renew":
+		if len(arguments) != 1 {
+			return errors.New("certificate-renew accepts no arguments")
+		}
+		return certificateContainerRenew(os.Stdout)
 	case "storage-pair":
 		if len(arguments) != 1 {
 			return errors.New("storage-pair accepts no arguments")

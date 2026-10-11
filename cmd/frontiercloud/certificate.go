@@ -119,7 +119,15 @@ func certificateHealthcheck() error {
 }
 
 func certificateContainerStatus(output io.Writer) error {
-	v, e := queryCertificateContainerStatus()
+	return certificateContainerAction("status", output)
+}
+
+func certificateContainerRenew(output io.Writer) error {
+	return certificateContainerAction("renew", output)
+}
+
+func certificateContainerAction(action string, output io.Writer) error {
+	v, e := queryCertificateContainer(action)
 	if e != nil {
 		return e
 	}
@@ -127,11 +135,15 @@ func certificateContainerStatus(output io.Writer) error {
 }
 
 func queryCertificateContainerStatus() (certificate.View, error) {
+	return queryCertificateContainer("status")
+}
+
+func queryCertificateContainer(action string) (certificate.View, error) {
 	host := os.Getenv("SERVER_NAME")
 	if !certificate.Hostname(host) {
 		return certificate.View{}, errors.New("invalid certificate container hostname")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return (certificate.UnixClient{Socket: "/run/frontiercloud-certificate/control.sock", Hostname: host}).Control(ctx, certificate.Request{Action: "status"})
+	return (certificate.UnixClient{Socket: "/run/frontiercloud-certificate/control.sock", Hostname: host}).Control(ctx, certificate.Request{Action: action})
 }

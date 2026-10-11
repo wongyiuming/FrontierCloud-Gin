@@ -82,6 +82,9 @@ func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
 }
 
 func TestCertificateInitializerRefusesHostAndArbitraryArguments(t *testing.T) {
+	if e := command([]string{"certificate-renew", "--hostname", "other.fixture.test"}); e == nil {
+		t.Fatal("local renewal accepted caller-controlled options")
+	}
 	if e := initializeCertificateVolumes([]string{"/etc/systemd/system"}); e == nil {
 		t.Fatal("initializer accepted caller paths")
 	}
