@@ -82,6 +82,7 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return nil, nil, err
 	}
 	closers = append(closers, public.Close)
+	public.ConfigureNetwork(controlService)
 	adminService, err := admin.New(settings, admin.NewRedisCache(redisClient), database.Admin())
 	if err != nil {
 		return nil, nil, err

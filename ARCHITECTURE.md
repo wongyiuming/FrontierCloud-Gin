@@ -94,7 +94,7 @@ All Master path mutations participate in one process-local reader/writer fence. 
 
 ### Process model for mutation safety
 
-The production Web service must remain a single native Go process. Media mutation fences and recovery OS leases do not authorize horizontally replicated Web services or multiple independent business authorities. Python application sources are non-executable syntax references, not a supported deployment profile.
+The production Web service must remain a single native Go process. Media mutation fences and recovery OS leases do not authorize horizontally replicated Web services or multiple independent business authorities. Python application and display references are removed; Python is restricted to script and test drivers.
 
 Do not add multiple Web workers as a performance tweak. Multi-process or horizontally scaled Web execution requires replacing the process-local media mutation fence with a database-backed or distributed lock, plus new cross-process concurrency regressions, before deployment topology changes are allowed.
 
@@ -105,6 +105,10 @@ Do not turn folder rename into an arbitrary cross-parent move without a new tran
 Folders are first-class sorting objects. Directory priority is distinct from media-file priority and uses the same bounded preference range.
 
 Public category/subcategory ordering is `directory priority descending -> name`. Priority state is stored as managed metadata and must migrate with a successful folder rename.
+
+Media catalog ordering is `file priority descending -> managed path -> stable media ID`.
+Equal priorities must keep the same order across page loads, playback sessions,
+Local/Master catalogs and cache hits. Session IDs never seed a shuffle.
 
 Catalog ordering is cached server-side. A cache hit must not cause a new MySQL sort query; changing priority or a directory name must invalidate the catalog generation.
 
@@ -138,7 +142,7 @@ An accepted lyric upload is successful only after the file and its managed-objec
 
 Bounded process-local catalog generations cache expensive scans/catalog queries. Browser/API cache headers must not make mutable directory structure remain stale after a successful Admin mutation.
 
-For mutable catalog APIs, the HTTP client revalidates while a single-process cache avoids repeated catalog work. All domain handles from one selected Store share a SQL commit generation; successful writes conservatively invalidate it, rolled-back writes do not. Managed filesystem mutation fences also clear the cache, including ambiguous/failing mutations. A fill racing a commit is not published. Scope keys separate role, media type, path and hidden visibility; caller-specific ordering is applied to copied results rather than creating per-session entries. Cache hits never bypass readiness, role checks or stream authorization.
+For mutable catalog APIs, the HTTP client revalidates while a single-process cache avoids repeated catalog work. All domain handles from one selected Store share a SQL commit generation; successful writes conservatively invalidate it, rolled-back writes do not. Managed filesystem mutation fences also clear the cache, including ambiguous/failing mutations. A fill racing a commit is not published. Scope keys separate role, media type, path and hidden visibility; deterministic ordering is applied to copied results without per-session entries. Cache hits never bypass readiness, role checks or stream authorization.
 
 `MEDIA_CATALOG_CACHE_TTL` defaults to 300 seconds, accepts 0 to disable, and is bounded by 86400. Admission is capped at 64 entries / 8 MiB accounted payload; entries above 1 MiB bypass caching. Errors are not cached, waiting readers honor cancellation, and restart drops all cache state. Stores without an invalidation contract bypass caching. This is not cross-process cache coherence: maintenance/offline writers must close the native runtime fence first; live direct SQL or filesystem edits remain prohibited.
 
@@ -199,7 +203,7 @@ GitHub-side ref creation cannot be fully prevented by a unit test. The repositor
 
 Only Gin/Go may serve business APIs or run the updater. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
-Python application sources remain explicitly non-executable examples for comparing syntax. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.
+No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.
 
 Karaoke password work has one non-queuing slot. Atomic Redis admission budgets
 apply before captcha/password validation and cannot be bypassed by correct
@@ -248,10 +252,10 @@ still precedes merging; the normal main-only signing boundary is unchanged.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
-The dedicated RN preproduction Master at `www4399.sbs` has separate data,
-identity, secrets and updater control from any production storage appliance on
-the same host. Its local CD follows the newest successful exact `dev` push,
-never substitutes that evidence for reviewed production `main` publication.
+The owner retired RN preproduction and its external CD on 2026-10-11.
+`STAGING_CD_ENABLED=false` suppresses notifications until a separately provisioned
+preproduction environment exists. No live preproduction proof can be claimed.
+Production storage retains its own state, identity, secrets and media.
 Native immutable image builds are bounded to one CPU and 1 GiB with no extra
 swap allowance. Production migration artifacts are built on the development
 host before the cutover. See `docs/staging-cd.md`.
@@ -268,7 +272,61 @@ A regression may not be weakened merely to accommodate a new feature. Architectu
 container. Initializers exit; no Nginx, Redis, MySQL, updater, coturn, Admin GUI
 or player is deployed on storage. SQL payload backups are files, not online
 replicas or SQL BLOB copies. Master controls transport and allocations.
-Ports 80/443 are prohibited; the default explicit HTTPS port is 8443.
+Business public HTTP is fixed at 80 and HTTPS at 443. HTTP_PORT and HTTPS_PORT
+are retired and nonstandard business origins are rejected before startup.
+Storage has an explicit deployment profile, STORAGE_TRANSPORT=direct|relay.
+Direct defaults to and requires HTTPS 443 for browser media/Range and Master
+traffic. Relay uses an authenticated communication high port (default 8443),
+without idle 80/443 listeners. HTTP-01 temporarily binds host 80 during
+validation and releases it after success, failure or cancellation. Changing
+profile requires a fenced endpoint transition; it cannot be a GUI mode toggle.
+ UDP STUN defaults to 3478 and runs inside the
+existing Go process: one packet loop, a 513-byte receive buffer, a small kernel
+queue, at most ten datagrams/second including malformed requests. Binding only;
+no TURN, relay forwarding or per-packet goroutines. Diagnostic failure must not
+stop or degrade the successful HTTPS/media/heartbeat service.
+
+Master supplies its own STUN address and every active, paired downstream storage
+hostname, with custom UDP ports from signed heartbeat facts (legacy default
+3478). Browser ICE diagnostics are strictly serial: one node/one live peer at a
+time, close before advancing, three-second timeout, 250 ms inter-node yield,
+and a cooldown of at least 30 seconds after the complete round. Same-origin
+tabs share a non-queued Web Lock where supported; older browsers serialize per
+page. No fan-out, overlapping timers, four-node truncation or parallel probe
+workers. Reports retain the existing maximum eight observed addresses.
+
+All product components are built and run through Docker/Compose. Do not install
+host executables, users, systemd units or invoke systemctl for product services.
+Enabling TLS requires automatic certificate control in a Compose container using the same Go image,
+a five-percent CPU/128 MiB/no-swap limit, read-only rootfs and dropped capabilities.
+Its exiting initializer touches only explicit volume mount roots. No host PID,
+privileged mode, service-manager access, Docker socket or arbitrary commands exist.
+The default Linux temporary mode uses host networking and only NET_BIND_SERVICE: no Docker 80 publication persists after
+the Go listener closes. Host networking shares only the network namespace; it
+does not authorize host process/filesystem/service management. Business uses a private bridge challenge service, reached through Nginx on
+public 80. No user-managed webroot or optional manual certificate mode exists.
+User-owned external CI/CD integration is outside the business product boundary
+and may use systemd; the business GUI does not manage those host services.
+Certificate TLS/control state uses project-scoped persistent Docker volumes;
+container recreation must not replace the volume directory mounted by Web.
+Container UID 0/GID 10001 can publish TLS for the Web's read-only group mount;
+ACME account and job journal remain root-private. It is not a storage business
+service. Hostname/approved CA and public paths are fixed in local Compose.
+The active upstream Master observes certificate lifecycle state through existing
+relationship authentication. AdminGUI provides status and authenticated,
+audited certificate/key downloads; it cannot upload, configure paths, request
+renewal or disable automatic renewal. Storage key exports are encrypted to the
+requesting browser so Master can relay opaque data without reading the key.
+Certificate accounts remain private to their originating node. Renewal uses a
+mature ACME library's scheduling, retries, storage locks and ARI when available.
+Published complete generations occupy a separate volume from private account
+state. Edge reload performs fixed local validation and reload only; no business
+process receives host service control or Docker access. First issuance failure
+keeps a diagnosable controller running without plaintext business fallback.
+Storage HTTP-01 binds public 80 only during validation; an occupied port produces
+a clear failure without displacing another application. Relay retains its
+high-port communication endpoint; Direct retains public HTTPS 443.
+See [automatic TLS audit and replacement contract](docs/automatic-tls-audit.md).
 
 The persisted role discriminator `Follower` remains in protocol-v2/SQL to
 preserve node IDs, references and transactional recovery. It is not a supported
@@ -276,19 +334,22 @@ independent business deployment or another business authority. Do not globally
 rewrite persisted roles or reinitialize an owned disk to rename the product.
 See [storage appliance operations](docs/storage-appliance.md).
 
-RN's production storage and preproduction Master (`www4399.sbs`) are
-separate security/data/Compose projects. Only the staging Master uses 80/443.
-No production operation is automated in this change.
+RN's preproduction and external CD are decommissioned at the owner's request
+on 2026-10-11. Production storage retains its own identity and high-port HTTPS.
+A future isolated preproduction IP does not inherit the retired deployment.
 
 ## Fresh-start configuration baseline
 
-A fresh HTTPS business deployment requires only `TLS_ENABLED`, `SERVER_NAME`,
-`SSL_CERT_PATH`, `SSL_KEY_PATH` and `ACME_WEBROOT`. Every other operator setting
+A fresh HTTPS business deployment requires only `TLS_ENABLED` and `SERVER_NAME`.
+Certificate paths and ACME webroot are not operator configuration. Every other operator setting
 has a usable default. Plain `docker compose up -d` pulls public GHCR `latest`
 Web/Updater/Nginx images; it must not require a user-supplied source SHA or run
 local builds. Empty optional values retain their defaults. HTTP without `.env`
-also remains supported. Certificates and available listening ports are host
-prerequisites, not additional mandatory application variables.
+also remains supported. Public DNS and reachable standard validation/listening
+ports are prerequisites. Fresh installations never require prepared certificates.
+Go obtains, validates and renews certificates; bootstrap exposes no plaintext
+business while waiting for issuance. Published HTTPS must be verified before
+reporting TLS ready or generating a five-minute storage pairing package.
 
 Only immutable-main workflow code, after successful current-main source CI and
 all three verified exact-SHA publication jobs, may advance `latest`. Candidate

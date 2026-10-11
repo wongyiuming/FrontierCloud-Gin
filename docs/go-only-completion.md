@@ -5,13 +5,10 @@
 Only Gin/Go serves the backend and updater. The default is Gin + SQLite; the
 only database alternative is Gin + MySQL. .env selects DB_TYPE and the MySQL
 Compose overlay; it does not migrate existing data. Python deployment is
-prohibited, its Docker/Compose entrypoints are removed, and Python executable
-entrypoints fail explicitly.
-
-app/, main.py and updater/server.py remain non-executable syntax references.
-Their execution is not supported or tested. Reference maintenance may document
-the same algorithms without promising a runnable Python product. Production
-build context excludes application Python, tests, scripts and their dependencies.
+prohibited. The retired application tree app/, main.py, updater/server.py and
+updater/release_evidence.py, including illustrative code, are removed. The unused
+Python migration package marker is removed; Go migration code and schema assets
+are preserved. Production build context excludes tests, scripts and their dependencies.
 Tests/scripts may use Python to drive real Gin or inspect native contracts.
 
 Preserving existing serialized keys, tokens, password hashes, media IDs,

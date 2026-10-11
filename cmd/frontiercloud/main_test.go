@@ -43,3 +43,13 @@ func TestDurableNativeRolesCannotRestartWithDowngradedTransport(t *testing.T) {
 		t.Fatal("HTTP Standalone blocked", err)
 	}
 }
+
+func TestPersistedMasterCannotStartOnNonstandardPublicHTTPSPort(t *testing.T) {
+	identity := &node.Identity{NodeIdentity: store.NodeIdentity{Role: "Master", Endpoint: "https://business.fixture.test:8443"}}
+	if err := runtimeIdentityTransport(config.Config{TLSEnabled: true, DeploymentMode: config.DeploymentBusiness}, identity); err == nil {
+		t.Fatal("persisted nonstandard public port bypassed startup validation")
+	}
+	if identity.Endpoint != "https://business.fixture.test:8443" || identity.Role != "Master" {
+		t.Fatal("invalid startup silently rewrote identity")
+	}
+}

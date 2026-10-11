@@ -31,6 +31,8 @@ def compose(node, *args):
 
 class Client:
     def __init__(self, node):
+        if (Path(__file__).resolve().parents[2] / "internal/certmanager").is_dir():
+            raise RuntimeError("Legacy persistent Admin/whole-fleet control is retired; current Storage uses signed native control and Master-only releases")
         self.node = node
         inventory = json.loads((ROOT / "inventory.json").read_text())
         self.endpoint = next(n["endpoint"] for n in inventory["nodes"] if n["name"] == node)

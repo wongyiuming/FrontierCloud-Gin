@@ -160,7 +160,7 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 		cleanup, stop := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer stop()
 		// Stop the updater first, joining its worker before retiring its helpers.
-		for _, service := range []string{"updater", "nginx", "web", "secrets-init", "media-init", "redis", "mysql"} {
+		for _, service := range []string{"updater", "nginx", "web", "certificate-agent", "certificate-init", "secrets-init", "media-init", "redis", "mysql"} {
 			if c, err := e.Service(cleanup, prefix, service); err == nil {
 				e.Stop(cleanup, c.ID)
 				e.Remove(cleanup, c.ID)
@@ -211,7 +211,7 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 	}
 	networkID = network.ID
 
-	for _, dir := range []string{"data", "secrets", "control", "maintenance", "redis", "mysql"} {
+	for _, dir := range []string{"data", "secrets", "control", "maintenance", "redis", "mysql", "certificate-private", "certificate-published", "certificate-runtime"} {
 		if err = os.Mkdir(filepath.Join(root, dir), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +223,8 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 		}
 		return filepath.Join(root, dir) + ":" + mount + mode
 	}
-	appBinds := []string{bind("data", "/app/data", false), bind("secrets", "/run/frontiercloud-secrets", false), bind("control", "/run/frontiercloud-updater", true)}
+	appBinds := []string{bind("data", "/app/data", false), bind("secrets", "/run/frontiercloud-secrets", false), bind("control", "/run/frontiercloud-updater", true), bind("certificate-runtime", "/run/frontiercloud-certificate", true)}
+	certificateBinds := []string{bind("certificate-private", "/var/lib/frontiercloud-certificate", false), bind("certificate-published", "/run/frontiercloud-tls", false), bind("certificate-runtime", "/run/frontiercloud-certificate", false)}
 	appEnv := []string{"DB_TYPE=" + database, "SQLITE_PATH=/app/data/frontiercloud.db", "DATA_ROOT=/app/data", "REDIS_URL=redis://redis:6379/0", "RELEASE_BRANCH=main", "RELEASE_SOURCE_BRANCH=dev", "TLS_ENABLED=false", "MYSQL_HOST=mysql", "MYSQL_DATABASE=fc_native", "MYSQL_USER=media_admin"}
 	create := func(service, image string, cmd []string, env, binds []string, user string, health bool, readonly bool, rootCaps bool) Container {
 		t.Helper()
@@ -238,11 +239,19 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 		if rootCaps {
 			host["CapAdd"] = []string{"CHOWN", "DAC_OVERRIDE", "FOWNER"}
 		}
+		if service == "certificate-agent" {
+			host["NanoCpus"] = int64(50_000_000)
+			host["Memory"] = int64(128 << 20)
+			host["MemorySwap"] = int64(128 << 20)
+		}
 		body := map[string]any{"Image": image, "Cmd": cmd, "User": user, "Env": env, "HostConfig": host, "Labels": map[string]string{"com.docker.compose.project": prefix, "com.docker.compose.service": service}, "NetworkingConfig": map[string]any{"EndpointsConfig": map[string]any{prefix + "-net": map[string]any{"Aliases": []string{service}}}}}
 		if health {
 			body["Healthcheck"] = map[string]any{"Test": []string{"CMD", "/app/frontiercloud", "healthcheck"}, "Interval": int64(time.Second), "Timeout": int64(5 * time.Second), "Retries": 30, "StartPeriod": int64(2 * time.Second)}
 			if service == "mysql" {
 				body["Healthcheck"] = map[string]any{"Test": []string{"CMD-SHELL", "MYSQL_PWD=\"$(cat /run/frontiercloud-secrets/mysql_password)\" mysql -h 127.0.0.1 -u media_admin -e 'SELECT 1' fc_native"}, "Interval": int64(time.Second), "Timeout": int64(5 * time.Second), "Retries": 90, "StartPeriod": int64(60 * time.Second)}
+			}
+			if service == "certificate-agent" {
+				body["Healthcheck"] = map[string]any{"Test": []string{"CMD", "/app/frontiercloud", "certificate-healthcheck"}, "Interval": int64(time.Second), "Timeout": int64(3 * time.Second), "Retries": 30}
 			}
 		}
 		id, err := e.Create(ctx, name, body)
@@ -269,6 +278,14 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 			t.Fatal(service, err)
 		}
 	}
+	certificateInit := create("certificate-init", webImage, []string{"init-certificate"}, appEnv, certificateBinds, "0:10001", false, true, true)
+	if err = e.Wait(ctx, certificateInit.ID); err != nil {
+		t.Fatal("certificate volume initialization", err)
+	}
+	controller := create("certificate-agent", webImage, []string{"certificate-agent"}, appEnv, certificateBinds, "0:10001", true, true, false)
+	if err = e.Healthy(ctx, controller.ID); err != nil {
+		t.Fatal("disabled TLS controller readiness", err)
+	}
 	if database == "mysql" {
 		mysql := create("mysql", "mysql:8.4.11", []string{"--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"}, []string{"MYSQL_DATABASE=fc_native", "MYSQL_USER=media_admin", "MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password", "MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password"}, []string{bind("mysql", "/var/lib/mysql", false), bind("secrets", "/run/frontiercloud-secrets", true)}, "", true, false, false)
 		if err = e.Healthy(ctx, mysql.ID); err != nil {
@@ -281,7 +298,7 @@ func testRealNativeUpdaterStack(t *testing.T, staging bool) {
 		diagnose()
 		t.Fatal(err)
 	}
-	nginx := create("nginx", nginxImage, nil, []string{"TLS_ENABLED=false", "SERVER_NAME=localhost", "INSTANCE_NAME=native-test", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{bind("data", "/app/data", true), bind("maintenance", "/run/frontiercloud-maintenance", true)}, "", false, false, false)
+	nginx := create("nginx", nginxImage, nil, []string{"TLS_ENABLED=false", "SERVER_NAME=localhost", "INSTANCE_NAME=native-test", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{bind("data", "/app/data", true), bind("maintenance", "/run/frontiercloud-maintenance", true), bind("certificate-published", "/run/frontiercloud-tls", true)}, "", false, false, false)
 	if err = e.NginxReady(ctx, nginx.ID); err != nil {
 		diagnose()
 		t.Fatal(err)

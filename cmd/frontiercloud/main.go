@@ -16,6 +16,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
@@ -26,6 +28,7 @@ import (
 	storecontract "github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/stun"
 	"path/filepath"
 )
 
@@ -73,6 +76,37 @@ func command(arguments []string) error {
 		return guardedCommand(settings, func(ctx context.Context) error { return bootstrap.InitializeMediaContext(ctx, settings.DataRoot) })
 	case "healthcheck":
 		return healthcheck()
+	case "certificate-agent":
+		return certificateAgentCommand(arguments[1:])
+	case "init-certificate":
+		return initializeCertificateVolumes(arguments[1:])
+	case "certificate-healthcheck":
+		if len(arguments) != 1 {
+			return errors.New("certificate-healthcheck accepts no arguments")
+		}
+		return certificateHealthcheck()
+	case "certificate-status":
+		if len(arguments) != 1 {
+			return errors.New("certificate-status accepts no arguments")
+		}
+		return certificateContainerStatus(os.Stdout)
+	case "certificate-ready":
+		if len(arguments) != 1 {
+			return errors.New("certificate-ready accepts no arguments")
+		}
+		v, err := queryCertificateContainerStatus()
+		if err != nil {
+			return err
+		}
+		if !v.ControllerRunning || v.Enabled && (!v.HTTPSReady || !v.ServingMatches) {
+			return errors.New("automatic TLS has not verified the serving certificate")
+		}
+		return nil
+	case "certificate-renew":
+		if len(arguments) != 1 {
+			return errors.New("certificate-renew accepts no arguments")
+		}
+		return certificateContainerRenew(os.Stdout)
 	case "storage-pair":
 		if len(arguments) != 1 {
 			return errors.New("storage-pair accepts no arguments")
@@ -249,6 +283,39 @@ func serve() error {
 			return err
 		}
 	}
+	var storageTLS *certmanager.Serving
+	var certificateMonitor *certificate.AutomaticMonitor
+	client := certificate.UnixClient{Socket: certmanager.ControlSocket, Hostname: settings.ServerName}
+	certificateMonitor = certificate.NewAutomaticMonitor(client, settings.ServerName, settings.TLSEnabled)
+	certificateDone := make(chan struct{})
+	go func() { defer close(certificateDone); certificateMonitor.Run(shutdown) }()
+	defer func() { stop(); <-certificateDone }()
+	controlService.ConfigureNetwork(0, certificateMonitor, certificateMonitor.Status, database.Admin())
+	if settings.DeploymentMode == config.DeploymentStorage {
+		storageTLS = certmanager.NewServing(settings.ServerName)
+		if err = controlService.ConfigureStorageTransport(settings.StorageTransport); err != nil {
+			return err
+		}
+		address, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", settings.STUNPort))
+		if err != nil {
+			return err
+		}
+		conn, err := net.ListenUDP("udp", address)
+		if err != nil {
+			slog.Warn("storage STUN unavailable; HTTPS remains independent")
+		} else {
+			controlService.SetSTUNPort(settings.STUNPort)
+			stunDone := make(chan struct{})
+			go func() {
+				defer close(stunDone)
+				defer controlService.SetSTUNPort(0)
+				if stun.Serve(shutdown, conn) != nil && shutdown.Err() == nil {
+					slog.Warn("storage STUN stopped; HTTPS remains independent")
+				}
+			}()
+			defer func() { stop(); conn.Close(); <-stunDone }()
+		}
+	}
 	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
 	if err != nil {
 		return err
@@ -315,15 +382,35 @@ func serve() error {
 	}
 	defer listener.Close()
 	if settings.DeploymentMode == config.DeploymentStorage {
-		if _, err := tls.LoadX509KeyPair(settings.StorageTLSCert, settings.StorageTLSKey); err != nil {
-			return err
-		}
-		go func() { errorsChannel <- server.ServeTLS(listener, settings.StorageTLSCert, settings.StorageTLSKey) }()
-		// Valid certificate material is checked by ServeTLS. No private signing
-		// key/Admin Key is printed, only the five-minute one-use signed package.
-		if err := printStoragePair(initialization, controlService, database.Nodes(), os.Stdout); err != nil {
-			return err
-		}
+		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: storageTLS.GetCertificate}
+		go func() { errorsChannel <- server.ServeTLS(listener, "", "") }()
+		// Pair lifetime begins only after the serving certificate has passed
+		// a real handshake. Issuance delay never consumes its five-minute TTL.
+		pairingDone := make(chan struct{})
+		go func() {
+			defer close(pairingDone)
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-shutdown.Done():
+					return
+				case <-ticker.C:
+					if !certificateMonitor.Status().HTTPSReady {
+						continue
+					}
+					ctx, cancel := context.WithTimeout(shutdown, 5*time.Second)
+					err := printStoragePair(ctx, controlService, database.Nodes(), os.Stdout)
+					cancel()
+					if err != nil {
+						slog.Warn("storage pairing package generation failed; retrying after HTTPS readiness")
+						continue
+					}
+					return
+				}
+			}
+		}()
+		defer func() { stop(); <-pairingDone }()
 	} else {
 		go func() { errorsChannel <- server.Serve(listener) }()
 	}
@@ -357,6 +444,11 @@ func runtimeIdentityTransport(settings config.Config, identity *node.Identity) e
 		}
 		if _, err := node.Endpoint(identity.Endpoint); err != nil {
 			return err
+		}
+		if identity.Role == "Master" {
+			if _, err := node.MasterEndpoint(identity.Endpoint); err != nil {
+				return err
+			}
 		}
 		return nil
 	default:

@@ -70,7 +70,7 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
     parsed = urllib.parse.urlsplit(args.base_url)
-    if parsed.scheme != 'https' or parsed.hostname != '127.0.0.1' or not parsed.port:
+    if parsed.scheme != 'https' or parsed.hostname != 'business.fixture.localhost' or parsed.port not in (None,443):
         raise SystemExit('Only a fresh loopback HTTPS fixture is allowed')
     base = args.base_url.rstrip('/')
     fixtures = pathlib.Path(args.fixtures).resolve()

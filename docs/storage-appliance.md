@@ -6,8 +6,9 @@ deployment contract. It does not serve an independent site or Admin GUI.
 ## Resident components
 
 Use `docker-compose.storage.yaml` alone, not as an overlay on business Compose.
-There is one resident container: the native Go HTTPS/file/control service.
-`secrets-init` and `media-init` run once and exit. There is no Nginx, Redis,
+The native Go HTTPS/file/control service and bounded Go certificate controller
+remain resident. `secrets-init`, `media-init` and `certificate-init` run once
+and exit. There is no Nginx, Redis,
 MySQL, coturn, updater, Docker socket or version synchronization on storage.
 SQLite is an embedded library for local identity, permissions, quotas and
 durable file-operation journals; it is not a database container or a copy of
@@ -23,23 +24,30 @@ security publisher or business-backup builder.
 
 1. Build a reviewed exact `main` revision from `wongyiuming/FrontierCloud-Gin`.
 2. Copy `.env.storage.example` to `.env` and replace every placeholder.
-3. Provide a valid certificate/key for `SERVER_NAME`, readable by UID 10001.
-   Master clients verify the normal trust chain. A private CA must be trusted
-   explicitly; disabling verification is prohibited.
+3. Point the node domain at this host and allow public HTTP-01 on TCP 80.
+   TLS_ENABLED=true automatically issues and persists its certificate; no
+   certificate paths, external tools or manually prepared keys are required.
 4. Run `bash scripts/deploy-storage.sh`. This builds, waits for HTTPS readiness
    and prints a signed one-use pairing package. Import it on the Master within
    five minutes. Treat the package as a temporary credential, not a public log.
-5. Master Admin sets Direct/Relay, storage enablement/capacity and backup
-   enablement. They are not selected on the appliance.
+5. Master Admin sets storage enablement/capacity and backup enablement.
+   Direct/Relay follows the signed deployment transport profile; changing
+   transport requires an explicit quiescent redeployment and endpoint handover.
 
-The only published port defaults to 8443. `STORAGE_PORT` and the explicit port
-in `STORAGE_ENDPOINT` must agree and must be in 1024–65535. HTTP/HTTPS host
-ports 80/443 are prohibited for this mode. No HTTP redirect listener is added.
+Direct Storage HTTPS is fixed at 443. Relay Storage uses a high communication
+port, default 8443 (1024–65535), matching STORAGE_ENDPOINT. STORAGE_TRANSPORT
+defaults to direct. The native bounded STUN responder uses UDP 3478 independently.
+Go occupies public 80 only during bounded HTTP-01 validation and releases it
+after success, failure or cancellation; Relay never opens public 443. A port
+conflict is diagnosed and retried rather than stealing another application's
+listener. TLS failure never opens plaintext business.
 For a new unpaired node, startup also emits a package. If it expires, run
 `docker compose -f docker-compose.storage.yaml exec -T web /app/frontiercloud storage-pair`.
 Restarting a paired node preserves its identity and does not emit another
-package. Restart after certificate rotation; the running listener does not
-watch certificate files.
+package. The mandatory [Compose certificate controller](storage-certificate-control.md)
+publishes complete TLS generations for hot loading without restarting media.
+Pairing begins only after actual HTTPS readiness, giving a fresh five-minute
+credential rather than consuming its lifetime while waiting for issuance.
 
 ## Existing data: do not use fresh installation as migration
 
@@ -50,7 +58,7 @@ SQLite state, secrets and the Master database together. Never use `down -v`,
 `reset-identity` or direct SQL deletion as a migration shortcut.
 
 Startup rejects silently changing a fixed identity's endpoint. The offline
-`storage-endpoint` / `storage-rebind` commands provide an explicit high-port
+`storage-endpoint` / `storage-rebind` commands provide an explicit endpoint
 handover under closed maintenance gates, retaining IDs, signing keys, pairing
 credentials, object IDs and capacity policy. The Master must verify a signed
 identity challenge over certificate-verified HTTPS at the new endpoint before
@@ -86,12 +94,11 @@ consistent logical export; never hot-copy its data directory. InnoDB
 `mysqldump --single-transaction` requires avoiding concurrent schema changes.
 Do not start a database container on storage merely to hold a backup file.
 
-## RN dual-purpose host
+## Retired RN preproduction
 
-Production storage uses high-port HTTPS and its own Compose project, data
-directory and secrets volume. The preproduction Master at `www4399.sbs`
-uses 80/443 and separate business Compose state. Never share SQLite files,
-media roots, Redis, identity secrets or updater sockets between these two
-instances. DNS/certificates must match each endpoint. Public staging tests
-start only after the operator has safely freed 80/443; this change does not
-stop or rebuild existing production services.
+The owner retired the RN preproduction Master and external CD on 2026-10-11.
+Production Storage and unrelated applications remain. No live staging gate is
+available until a new independent preproduction IP is provisioned. Do not infer
+an available staging site or recreate its deleted business data. Production
+Storage migration remains a separate operation with preserved identity/media.
+See [first automatic TLS migration](automatic-tls-migration.md).

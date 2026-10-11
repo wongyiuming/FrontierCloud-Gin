@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 import subprocess
 import unittest
 from pathlib import Path
@@ -112,9 +113,28 @@ class RepositoryPolicyRegressionTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("https://github.com/wongyiuming/FrontierCloud-Gin/wiki", readme)
         self.assertIn("/docs/wiki/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
-        for name in ("main.py", "updater/server.py"):
-            self.assertIn('raise SystemExit("Python deployment is prohibited.',
-                          (ROOT / name).read_text(encoding="utf-8"))
+        for name in ("app", "main.py", "updater/server.py", "updater/release_evidence.py",
+                     "migrations/__init__.py"):
+            self.assertFalse((ROOT / name).exists(), name)
+        tooling = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn('include = ["scripts*", "tests*"]', tooling)
+        self.assertIn("dependencies = []", tooling)
+        for folder in ("scripts", "tests"):
+            self.assertTrue(any((ROOT / folder).glob("*.py")))
+
+    def test_language_neutral_routes_preserve_wire_contract_without_application_references(self):
+        routes = json.loads((ROOT / "protocol/v2/http-routes.json").read_text(encoding="utf-8"))
+        identities = set()
+        for route in routes:
+            self.assertNotIn("handler", route)
+            self.assertTrue(route["path"].startswith("/"))
+            for method in route["methods"]:
+                identity = (method, route["path"])
+                self.assertNotIn(identity, identities)
+                identities.add(identity)
+        self.assertIn(("GET", "/health/ready"), identities)
+        self.assertIn(("POST", "/internal/v1/pair"), identities)
+        self.assertIn(("GET", "/api/v1/media/stream"), identities)
 
 
 if __name__ == "__main__":

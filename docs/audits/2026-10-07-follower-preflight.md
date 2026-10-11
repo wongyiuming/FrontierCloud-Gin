@@ -1,5 +1,8 @@
 # Remaining production Follower: pre-cutover evidence
 
+As of 2026-10-11, the retired Python application/display references have been
+removed. Statements below describe the dated audit, not current source policy.
+
 This receipt records read-only production inspection and an isolated restored-data
 rehearsal. It does NOT claim the production node was migrated or publicly reopened.
 No production role reset, re-pair, media deletion or database correction has occurred.

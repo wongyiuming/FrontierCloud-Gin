@@ -4,7 +4,6 @@ set -eu
 snapshot=/app/data/.ip-security/active-bans.tsv
 rules=/etc/nginx/runtime/ip-security.conf
 candidate=/etc/nginx/runtime/ip-security.candidate
-previous=/etc/nginx/runtime/ip-security.previous
 
 render_rules() {
     awk -v now="$(date +%s)" -f /etc/nginx/render-security.awk "$snapshot" > "$candidate"
@@ -22,12 +21,9 @@ watch_rules() {
     while kill -0 "$master_pid" 2>/dev/null; do
         if render_rules; then
             if ! cmp -s "$candidate" "$rules"; then
-                cp "$rules" "$previous"
-                mv "$candidate" "$rules"
-                if nginx -t && nginx -s reload; then
+                if /usr/local/bin/frontiercloud-tls-edge security; then
                     echo 'nginx: applied IP security rules'
                 else
-                    mv "$previous" "$rules"
                     echo 'nginx: rejected IP security update; retaining previous rules' >&2
                 fi
             fi

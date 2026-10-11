@@ -51,9 +51,15 @@ for path in ("Dockerfile.python", "docker-compose.python.yaml",
              "scripts/test-mixed-runtime.sh", "scripts/test-mixed-release.sh",
              "scripts/test-store-interop.sh", "tests/store.Dockerfile"):
     require(not (ROOT / path).exists(), f"Retired runtime/interop entrypoint exists: {path}")
-for path in ("main.py", "updater/server.py"):
-    require('raise SystemExit("Python deployment is prohibited.' in read(path),
-            f"Reference executable must reject deployment: {path}")
+for path in ("app", "main.py", "updater/server.py", "updater/release_evidence.py",
+             "migrations/__init__.py"):
+    require(not (ROOT / path).exists(), f"Retired Python application source exists: {path}")
+for path in ROOT.rglob("*.py"):
+    relative = path.relative_to(ROOT)
+    if any(part.startswith(".") for part in relative.parts):
+        continue
+    require(relative.parts[0] in {"scripts", "tests"},
+            f"Python is restricted to script/test drivers: {relative}")
 require('FROM golang:1.26.8-bookworm' in web and 'FROM golang:1.26.8-bookworm' in agent,
         "Native builder base must remain patch-pinned")
 for token, path in (('FROM nginx:1.30.4-alpine', "nginx/Dockerfile"),

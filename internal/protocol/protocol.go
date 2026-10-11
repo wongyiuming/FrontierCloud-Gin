@@ -158,7 +158,7 @@ func AuthHeaders(credential, relationship, method, path string, body []byte, now
 	return map[string]string{"X-Node-Relationship": relationship, "X-Node-Time": stamp, "X-Node-Nonce": nonce, "X-Node-Signature": hex.EncodeToString(mac.Sum(nil))}, nil
 }
 
-// MediaToken creates a media capability compatible with the Python runtime.
+// MediaToken creates a media capability compatible with historical serialized capabilities.
 func MediaToken(credential, relationship, master, owner, original, mediaID string, now int64, requestID, traceID string) (string, error) {
 	if !objectID.MatchString(mediaID) || !objectID.MatchString(original) || !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(owner) {
 		return "", errors.New("invalid global media identity")
@@ -194,7 +194,7 @@ func VerifyMediaToken(credential, token string, now int64) (map[string]any, erro
 	return value, nil
 }
 
-// StorageToken creates a storage capability compatible with the Python runtime.
+// StorageToken creates a storage capability compatible with historical serialized capabilities.
 func StorageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path string, size, now int64) (string, error) {
 	return storageToken(credential, relationship, master, storageNode, mediaID, storageObjectID, operation, path, "", size, now)
 }
@@ -288,7 +288,7 @@ func StorageEncryption(value map[string]any) (*mediacrypto.Metadata, error) {
 	return &meta, nil
 }
 
-// RecordingToken creates a recording capability compatible with the Python runtime.
+// RecordingToken creates a recording capability compatible with historical serialized capabilities.
 func RecordingToken(credential, relationship, master, owner, recording, operation string, now, size int64, contentType, filename string) (string, error) {
 	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(owner) ||
 		!identifier.MatchString(recording) || (operation != "upload" && operation != "stream" && operation != "download") ||

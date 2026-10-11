@@ -25,6 +25,8 @@ else
     test "$(docker image inspect --format '{{index .Config.Labels "frontiercloud.revision"}}' "$item")" = "$revision"
   done
 fi
+docker run --rm --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e CGO_ENABLED=0 -v "$work:/out" "$driver" go test -c -p=1 -o /out/certificate.test ./internal/certmanager
+chmod 755 "$work/certificate.test"
 # Engine Create does not pull images. Provision the shared fixtures explicitly
 # so a fresh runner behaves like a development engine with cached images.
 docker pull mysql:8.4.11

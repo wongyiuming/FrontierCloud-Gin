@@ -1,5 +1,6 @@
 """Real Chromium against an isolated loopback Gin/Nginx HTTPS fixture only."""
 import argparse
+import json
 import os
 import urllib.parse
 
@@ -12,7 +13,7 @@ def main():
     parser.add_argument('--maintenance-only', action='store_true')
     args = parser.parse_args()
     parsed = urllib.parse.urlsplit(args.base_url)
-    if parsed.scheme != 'https' or parsed.hostname != '127.0.0.1' or not parsed.port:
+    if parsed.scheme != 'https' or parsed.hostname != 'business.fixture.localhost' or parsed.port not in (None,443):
         raise SystemExit('Only a fresh loopback HTTPS fixture is allowed')
     base = args.base_url.rstrip('/')
     with sync_playwright() as runtime:
@@ -58,6 +59,7 @@ def main():
         page.goto(base + '/api/v1/media/music/category?path=music%2Fsecurity-fixture', wait_until='networkidle')
         page.locator('#mediaList .media-item').nth(1).wait_for(state='visible')
         assert page.evaluate('window.cspViolations') == []
+
         page.locator('#mediaList .media-item').nth(1).click()
         page.wait_for_function('() => currentIndex === 1 && art && art.currentTime > 0.1')
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is False
@@ -99,6 +101,60 @@ def main():
         assert page.evaluate('window.cspViolations') == []
         assert errors == [], errors
         assert 'h2' in protocols, protocols
+        # Exercise the certificate panel in real Chromium with bounded node facts.
+        # Native signed ownership and the real Unix/TLS lifecycle have separate tests.
+        operations = []
+        facts = {'hostname': 'storage.fixture.test', 'state': 'DEGRADED', 'enabled': True,
+                 'not_after': 1900000000, 'managed': True, 'auto_renew': True, 'validation': 'temporary_port80',
+                 'controller_running': True, 'https_ready': True, 'serving_matches': False,
+                 'last_error': 'port80_busy', 'job': {'state': 'DEGRADED', 'port80_active': False}}
+        member = {'member_id': 'storage-fixture', 'member_kind': 'Follower', 'transport': 'Direct',
+                  'storage_enabled': True, 'allocated_bytes': 1073741824}
+        relation = {'relationship_id': 'certificate-fixture', 'peer_id': 'storage-fixture',
+                    'peer_endpoint': 'https://storage.fixture.test', 'direction': 'downstream',
+                    'state': 'active', 'status': 'online', 'mode': 'Direct',
+                    'summary': {'certificate': facts}}
+        def certificate_route(route):
+            path = urllib.parse.urlsplit(route.request.url).path
+            if path.endswith('/certificate'):
+                if route.request.method == 'POST':
+                    assert route.request.headers.get('x-csrf-token'), 'certificate GUI omitted CSRF'
+                    value = route.request.post_data_json
+                    operations.append(value)
+                    raise AssertionError('read-only status fixture received a management operation: '+str(value))
+                route.fulfill(status=202 if route.request.method == 'POST' else 200,
+                              content_type='application/json', body=json.dumps(facts))
+            elif path.endswith('/observability'):
+                route.fulfill(content_type='application/json', body=json.dumps({'members': []}))
+            elif path.endswith('/nodes'):
+                route.fulfill(content_type='application/json', body=json.dumps({
+                    'role': 'Master', 'node_id': 'master-fixture', 'app_version': 'fixture', 'protocol': 2,
+                    'relationships': [relation], 'storage_pool': {'members': [member]}}))
+            else:
+                route.continue_()
+        page.route('**/api/v1/media/admin/nodes**', certificate_route)
+        page.locator('#nodesPanel .module-heading').click()
+        panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
+        panel.get_by_role('button', name='查询证书', exact=True).click()
+        panel.get_by_text('80 端口被占用', exact=False).wait_for(state='visible')
+        assert panel.get_by_role('button').all_text_contents() == ['查询证书','下载证书及私钥']
+        assert panel.get_by_role('button', name='下载证书及私钥', exact=True).is_disabled()
+        assert operations == [], operations
+        for width in (1280, 390):
+            page.set_viewport_size({'width': width, 'height': 900})
+            assert panel.is_visible()
+            assert panel.evaluate('(e) => e.scrollWidth <= e.clientWidth + 2'), 'certificate panel overflow'
+        assert page.evaluate('window.cspViolations') == []
+        # Older peers have no signed certificate capability. Do not dispatch
+        # queries or downloads to routes that those peers never implemented.
+        relation['summary'] = {}
+        page.reload()
+        page.locator('#nodesPanel .module-heading').click()
+        panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
+        assert panel.get_by_role('button', name='查询证书', exact=True).is_disabled()
+        assert panel.get_by_role('button', name='下载证书及私钥', exact=True).is_disabled()
+        assert errors == [], errors
+        print('PASS: Chromium read-only certificate facts, no manual management, inactive export disabled, port conflict text and desktop/mobile layout')
         print('PASS: real HTTP/2, home/category/player/Admin/karaoke CSP; click playback; malicious inline JS blocked; microphone scope preserved')
         browser.close()
 

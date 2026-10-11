@@ -29,15 +29,16 @@ class PlayerUIContractTests(unittest.TestCase):
         self.assertNotIn("next_music", audio_template + video_template)
         self.assertIn("function playNext()", script)
         self.assertIn("function playPrev()", script)
-        media_api = (ROOT / "app" / "api" / "v1" / "media.py").read_text(encoding="utf-8")
-        self.assertNotIn('@router.post("/preference")', media_api)
+        media_api = (ROOT / "internal" / "httpapi" / "public.go").read_text(encoding="utf-8")
+        self.assertNotIn('group.POST("/preference"', media_api)
 
     def test_audio_and_video_players_use_independent_templates(self):
-        api = (ROOT / "app" / "api" / "v1" / "media.py").read_text(encoding="utf-8")
+        api = (ROOT / "internal" / "httpapi" / "public.go").read_text(encoding="utf-8")
 
         self.assertIn('"audio-player.html"', api)
         self.assertIn('"video-player.html"', api)
-        self.assertIn("html = load_html_template(player_template)", api)
+        self.assertIn('if kind == "video"', api)
+        self.assertIn("p.page(c, template,", api)
         self.assertFalse((ROOT / "static" / "media" / "player.html").exists())
 
     def test_player_runtime_is_native_and_has_no_artplayer_dependency(self):
@@ -155,22 +156,21 @@ class PlayerUIContractTests(unittest.TestCase):
         self.assertNotIn("gesture-hud", template)
 
     def test_media_ui_assets_are_versioned_and_offer_cache_reset(self):
-        api = (ROOT / "app" / "api" / "v1" / "media.py").read_text(encoding="utf-8")
-        assets = (ROOT / "app" / "core" / "static_assets.py").read_text(encoding="utf-8")
+        api = (ROOT / "internal" / "httpapi" / "public.go").read_text(encoding="utf-8")
         browser = (ROOT / "static" / "js" / "media-browser.js").read_text(encoding="utf-8")
         templates = [
             (ROOT / "static" / "media" / name).read_text(encoding="utf-8")
             for name in ("index.html", "category.html", "audio-player.html", "video-player.html")
         ]
 
-        self.assertIn("hashlib.sha256", assets)
+        self.assertIn("sha256.Sum256(content)", api)
         self.assertIn("requestIdleCallback", browser)
         self.assertIn("sessionStorage", browser)
         self.assertNotIn("eval(", browser)
         self.assertNotIn("new Function", browser)
         self.assertIn("/catalog/categories", api)
-        self.assertIn('"Clear-Site-Data": \'"cache"\'', api)
-        self.assertIn('"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"', api)
+        self.assertIn('c.Header("Clear-Site-Data", `"cache"`)', api)
+        self.assertIn('c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")', api)
         self.assertIn("/api/v1/media/refresh", templates[0])
         for template in templates[1:]:
             self.assertNotIn("/api/v1/media/refresh", template)
@@ -196,7 +196,7 @@ class PlayerUIContractTests(unittest.TestCase):
         browser = (ROOT / "static" / "js" / "media-browser.js").read_text(encoding="utf-8")
         category = (ROOT / "static" / "media" / "category.html").read_text(encoding="utf-8")
         home = (ROOT / "static" / "media" / "index.html").read_text(encoding="utf-8")
-        api = (ROOT / "app" / "api" / "v1" / "media.py").read_text(encoding="utf-8")
+        api = (ROOT / "internal" / "httpapi" / "public.go").read_text(encoding="utf-8")
 
         self.assertIn("HIDDEN_REVEAL_CLICK_LIMIT = 15", browser)
         self.assertIn("HIDDEN_REVEAL_WINDOW_MS = 60 * 1000", browser)
@@ -208,9 +208,8 @@ class PlayerUIContractTests(unittest.TestCase):
         self.assertIn("brandKind === 'music' ? 'music'", category)
         self.assertIn("brandKind === 'media' ? 'video'", category)
         self.assertNotIn("frontierCloudCatalogRevealKind", home)
-        self.assertIn("include_hidden: bool = False", api)
-        self.assertNotIn("SELECT EXISTS(SELECT 1 FROM media_visibility", api)
-        self.assertNotIn("_is_publicly_hidden(normalized_track, await _hidden_set())", api)
+        self.assertIn('queryBool(c, "include_hidden")', api)
+        self.assertIn('params.Set("include_hidden", "true")', api)
 
     def test_android_portrait_layout_stacks_player_above_sidebar(self):
         style = (ROOT / "static" / "css" / "player.css").read_text(encoding="utf-8")

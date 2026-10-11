@@ -85,11 +85,12 @@ func (e Envelope) wire() map[string]any {
 }
 
 type Peer struct {
-	ID         string
-	Endpoint   string
-	PublicKey  string
-	Role       string
-	AppVersion string
+	ID               string
+	Endpoint         string
+	PublicKey        string
+	Role             string
+	AppVersion       string
+	StorageTransport string
 }
 type ControlClient interface {
 	Request(context.Context, string, string, string, any, string, string) (map[string]any, error)
@@ -368,7 +369,7 @@ func (t *Transport) Identity(ctx context.Context, origin, expectedID, expectedKe
 	}
 	value := signed.Payload
 	version, valid := intField(value, "protocol")
-	peer := Peer{textField(value, "node_id"), textField(value, "endpoint"), public, textField(value, "role"), textField(value, "app_version")}
+	peer := Peer{ID: textField(value, "node_id"), Endpoint: textField(value, "endpoint"), PublicKey: public, Role: textField(value, "role"), AppVersion: textField(value, "app_version"), StorageTransport: textField(value, "storage_transport")}
 	if textField(value, "challenge") != challenge || !valid || version != protocol.Version || !nodeIdentifier.MatchString(peer.ID) || (expectedID != "" && peer.ID != expectedID) || (expectedKey != "" && public != expectedKey) || (role != "" && peer.Role != role) || (peer.Role != "Standalone" && peer.Role != "Master" && peer.Role != "Follower") || len(peer.AppVersion) > 64 {
 		return Peer{}, errors.New("node identity, endpoint or protocol mismatch")
 	}
@@ -382,6 +383,9 @@ func (t *Transport) Identity(ctx context.Context, origin, expectedID, expectedKe
 			return Peer{}, errors.New("node identity endpoint mismatch")
 		}
 		peer.Endpoint = endpoint
+	}
+	if err = validateStorageTransport(peer.StorageTransport, peer.Endpoint); err != nil {
+		return Peer{}, err
 	}
 	return peer, nil
 }

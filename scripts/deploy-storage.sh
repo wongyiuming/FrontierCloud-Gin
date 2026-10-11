@@ -12,6 +12,10 @@ if ! [[ "$revision" =~ ^[0-9a-f]{40}$ ]]; then
   exit 1
 fi
 bash scripts/build-native-images.sh "$revision" web-only
-docker compose -f docker-compose.storage.yaml up -d --no-build --wait --wait-timeout 120
+if ! docker compose -f docker-compose.storage.yaml up -d --no-build --wait --wait-timeout 600; then
+  docker compose -f docker-compose.storage.yaml exec -T certificate-agent /app/frontiercloud certificate-status || true
+  printf '%s\n' 'Storage HTTPS is not ready. Inspect automatic TLS status and DNS/public 80; pairing was not generated. The controller continues bounded retries.' >&2
+  exit 1
+fi
 printf '%s\n' 'Storage ready. Import the following one-use package on the Master within five minutes.'
 docker compose -f docker-compose.storage.yaml exec -T web /app/frontiercloud storage-pair < /dev/null

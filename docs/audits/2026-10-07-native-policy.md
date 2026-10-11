@@ -1,5 +1,8 @@
 # Native-only policy verification receipt
 
+As of 2026-10-11, the retired Python application/display references have been
+removed. Statements below describe the dated audit, not current source policy.
+
 The playback repair is a separate commit (6e0ccb5), not part of this runtime
 retirement. Existing production deployments have NOT been changed by this
 policy commit. Python reference source is retained; Python deployment and

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 )
 
 const (
@@ -24,8 +26,8 @@ const (
 type Config struct {
 	DeploymentMode         string
 	StorageEndpoint        string
-	StorageTLSCert         string
-	StorageTLSKey          string
+	StorageTransport       string
+	StoragePort            int
 	DatabaseType           string
 	SQLitePath             string
 	MySQLHost              string
@@ -84,6 +86,10 @@ func Load() (Config, error) {
 
 // LoadFrom makes configuration parsing deterministic in tests.
 func LoadFrom(getenv func(string) string) (Config, error) {
+	reportRetiredTLS(getenv)
+	if err := validateRetiredPublicPorts(getenv); err != nil {
+		return Config{}, err
+	}
 	port, err := integer(getenv("MYSQL_PORT"), 3306)
 	if err != nil || port < 1 || port > 65535 {
 		return Config{}, errors.New("MYSQL_PORT must be an integer from 1 to 65535")
@@ -91,8 +97,7 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	value := Config{
 		DeploymentMode:    normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
 		StorageEndpoint:   strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
-		StorageTLSCert:    fallback(getenv("STORAGE_TLS_CERT"), "/run/frontiercloud-tls/fullchain.pem"),
-		StorageTLSKey:     fallback(getenv("STORAGE_TLS_KEY"), "/run/frontiercloud-tls/privkey.pem"),
+		StorageTransport:  normalized(getenv("STORAGE_TRANSPORT"), "direct"),
 		DatabaseType:      normalized(getenv("DB_TYPE"), DatabaseSQLite),
 		SQLitePath:        fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
 		MySQLHost:         fallback(getenv("MYSQL_HOST"), "mysql"),
@@ -105,7 +110,7 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		DataRoot:          fallback(getenv("DATA_ROOT"), "/app/data"),
 		StaticRoot:        fallback(getenv("STATIC_ROOT"), "/app/static"),
 		SecretsDirectory:  fallback(getenv("SECRETS_DIR"), "/run/frontiercloud-secrets"),
-		ServerName:        fallback(getenv("SERVER_NAME"), "localhost"),
+		ServerName:        strings.ToLower(strings.TrimSpace(fallback(getenv("SERVER_NAME"), "localhost"))),
 	}
 	value.SecurityExemptNetworks = strings.Split(fallback(getenv("SECURITY_EXEMPT_NETWORKS"), "127.0.0.0/8,::1/128"), ",")
 	value.SecurityContact = strings.TrimSpace(getenv("SECURITY_CONTACT"))
@@ -170,8 +175,8 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if err != nil || value.WebRTCCooldown < 10 || value.WebRTCCooldown > 3600 {
 		return Config{}, errors.New("invalid WEBRTC_REPORT_COOLDOWN")
 	}
-	if value.TLSEnabled && (value.ServerName == "localhost" || value.ServerName == "") {
-		return Config{}, errors.New("SERVER_NAME is required with TLS_ENABLED")
+	if value.TLSEnabled && !certificate.Hostname(value.ServerName) {
+		return Config{}, errors.New("SERVER_NAME must be a DNS hostname for automatic TLS")
 	}
 	value.PublicOrigin, err = publicOrigin(value, getenv)
 	if err != nil {
@@ -244,49 +249,48 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		if value.DatabaseType != DatabaseSQLite || !value.TLSEnabled || value.NginxMedia {
 			return Config{}, errors.New("only_stroge requires embedded SQLite, TLS_ENABLED=true and NGINX_MEDIA_ACCEL=false")
 		}
-		endpoint, err := url.Parse(value.StorageEndpoint)
-		if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" || endpoint.Opaque != "" {
-			return Config{}, errors.New("STORAGE_ENDPOINT must be an HTTPS root URL with an explicit high port")
+		if value.StorageTransport != "direct" && value.StorageTransport != "relay" {
+			return Config{}, errors.New("STORAGE_TRANSPORT must be direct or relay")
 		}
-		publicPort, err := strconv.Atoi(endpoint.Port())
-		if err != nil || publicPort < 1024 || publicPort > 65535 {
-			return Config{}, errors.New("only_stroge public port must be from 1024 through 65535; 80/443 are reserved")
+		defaultPort := 443
+		if value.StorageTransport == "relay" {
+			defaultPort = 8443
 		}
-		published, err := integer(getenv("STORAGE_PORT"), 8443)
-		if err != nil || published < 1024 || published > 65535 || published != publicPort || !strings.EqualFold(endpoint.Hostname(), value.ServerName) {
-			return Config{}, errors.New("STORAGE_PORT must match STORAGE_ENDPOINT's high port and SERVER_NAME must match its hostname")
+		value.StoragePort, err = integer(getenv("STORAGE_PORT"), defaultPort)
+		if err != nil || value.StorageTransport == "direct" && value.StoragePort != 443 || value.StorageTransport == "relay" && (value.StoragePort < 1024 || value.StoragePort > 65535) {
+			return Config{}, errors.New("direct storage requires port 443; relay storage requires a private communication port from 1024 through 65535")
 		}
-		_, listenPort, err := net.SplitHostPort(value.HTTPAddress)
-		port, portErr := strconv.Atoi(listenPort)
-		if err != nil || portErr != nil || port < 1024 || port > 65535 {
-			return Config{}, errors.New("only_stroge HTTP_ADDR must bind a high port")
+		endpoint, e := url.Parse(value.StorageEndpoint)
+		if e != nil || endpoint.Scheme != "https" || !strings.EqualFold(endpoint.Hostname(), value.ServerName) || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" || endpoint.Opaque != "" {
+			return Config{}, errors.New("STORAGE_ENDPOINT must be a certificate-verified HTTPS root URL matching SERVER_NAME")
+		}
+		endpointPort := 443
+		if endpoint.Port() != "" {
+			endpointPort, e = strconv.Atoi(endpoint.Port())
+		}
+		if e != nil || endpointPort != value.StoragePort {
+			return Config{}, errors.New("STORAGE_ENDPOINT port must match the direct or relay deployment profile")
+		}
+		value.HTTPAddress = fallback(getenv("HTTP_ADDR"), ":"+strconv.Itoa(value.StoragePort))
+		_, port, e := net.SplitHostPort(value.HTTPAddress)
+		if e != nil || port != strconv.Itoa(value.StoragePort) {
+			return Config{}, errors.New("storage HTTP_ADDR must match the enforced storage transport port")
 		}
 	}
 	return value, nil
 }
 
 // Discovery URLs use operator configuration, never a request Host header.
-// PUBLIC_ORIGIN also supports a reverse proxy or a dynamically assigned port.
+// Public HTTP(S) always uses its standard port, including external proxies.
 func publicOrigin(value Config, getenv func(string) string) (string, error) {
 	raw := strings.TrimSpace(getenv("PUBLIC_ORIGIN"))
 	if raw == "" {
-		scheme, key, standard := "http", "HTTP_PORT", 80
+		scheme := "http"
 		if value.TLSEnabled {
-			scheme, key, standard = "https", "HTTPS_PORT", 443
-		}
-		port, err := integer(getenv(key), standard)
-		if err != nil || port < 0 || port > 65535 {
-			return "", fmt.Errorf("invalid %s for public discovery URLs", key)
-		}
-		// Port 0 asks Docker to choose a port; it cannot be inferred inside Web.
-		// The operator/test harness supplies PUBLIC_ORIGIN after allocation.
-		if port == 0 {
-			return "", nil
+			scheme = "https"
 		}
 		host := value.ServerName
-		if port != standard {
-			host = net.JoinHostPort(strings.Trim(host, "[]"), strconv.Itoa(port))
-		} else if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+		if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
 			host = "[" + host + "]"
 		}
 		raw = (&url.URL{Scheme: scheme, Host: host}).String()
@@ -296,11 +300,11 @@ func publicOrigin(value Config, getenv func(string) string) (string, error) {
 		(origin.Path != "" && origin.Path != "/") || (origin.Scheme != "http" && origin.Scheme != "https") || !strings.EqualFold(origin.Hostname(), strings.Trim(value.ServerName, "[]")) {
 		return "", errors.New("PUBLIC_ORIGIN must be an HTTP(S) origin matching SERVER_NAME, without credentials, path, query or fragment")
 	}
-	if origin.Port() != "" {
-		port, err := strconv.Atoi(origin.Port())
-		if err != nil || port < 1 || port > 65535 {
-			return "", errors.New("PUBLIC_ORIGIN port must be from 1 to 65535")
-		}
+	if err := PublicPort(origin); err != nil {
+		return "", fmt.Errorf("PUBLIC_ORIGIN: %w", err)
+	}
+	if value.TLSEnabled && origin.Scheme != "https" || !value.TLSEnabled && origin.Scheme != "http" {
+		return "", errors.New("PUBLIC_ORIGIN scheme must match TLS_ENABLED")
 	}
 	origin.Path = ""
 	return origin.String(), nil

@@ -4,7 +4,7 @@ The root `Dockerfile` and `docker-compose.yaml` now select native Go. The retain
 `Dockerfile.gin` / `docker-compose.gin.yaml` aliases are identical. The default
 SQLite profile has no MySQL service, volume or dependency; the optional
 `docker-compose.gin-mysql.yaml` overlay adds MySQL and its healthy dependency.
-Python deployment is prohibited. app/ and Python entrypoint sources are non-executable syntax references only, excluded from native images. Database selection is not permission to overwrite an existing cluster's database, identity or physical ownership.
+Python deployment is prohibited. Retired app/ and Python application entrypoints have been removed. Python scripts and test drivers remain outside native images. Database selection is not permission to overwrite an existing cluster's database, identity or physical ownership.
 
 In `.env`, select the runtime/database combination:
 
@@ -17,8 +17,9 @@ Use `;` instead of `:` as the separator on Windows. An external MySQL deployment
 can select `DB_TYPE=mysql` and a stable `MYSQL_HOST` without the service overlay.
 Use a distinct `COMPOSE_PROJECT_NAME`, `DATA_DIRECTORY`, database and secrets
 volume for acceptance fixtures. These are optional overrides, not fresh-start
-requirements. Normal HTTPS startup needs only the five TLS/hostname/certificate/
-ACME values shown in README.md, then `docker compose up -d --wait`. The default
+requirements. Normal HTTPS startup needs only TLS_ENABLED and SERVER_NAME,
+then `docker compose up -d --wait`. Certificate issuance and renewal are automatic;
+no certificate paths or external certificate tools are accepted. The default
 stack pulls public main-release `latest` images and has no build definitions.
 An optional `FRONTIERCLOUD_REVISION` pins a full published SHA. Local acceptance
 may explicitly run `bash scripts/build-native-images.sh` (default commit: HEAD),

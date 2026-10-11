@@ -32,7 +32,7 @@ frontiercloud.exe
 .env
 certs/
 
-# Non-executable Python references and test/script drivers are never runtime assets.
+# Guard against reintroduced Python application sources; script/test drivers are not runtime assets.
 app/
 main.py
 pyproject.toml
