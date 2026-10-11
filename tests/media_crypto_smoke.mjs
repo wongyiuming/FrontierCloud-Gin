@@ -379,6 +379,7 @@ assert.deepEqual(controllerMessages.slice(restartMessages), ['fc-crypto-register
 assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
     'virtual ZIP uses attachment navigation so Chromium dispatches the worker fetch');
 const zipId = vm.runInContext('[...zipPlans.keys()][0]', worker);
+const zipItems = vm.runInContext('zipPlans.get(' + JSON.stringify(zipId) + ').items', worker);
 response = await workerFetch('/__fc_zip/' + zipId);
 const zip = new Uint8Array(await response.arrayBuffer());
 assert.equal(response.headers.get('Content-Type'), 'application/zip');
@@ -412,6 +413,102 @@ assert.equal(Number(new DataView(zip.buffer, zip.length - 98).getBigUint64(24, t
 assert.equal(calls.filter(call => call.url.endsWith('/session')).length, restartSessions,
     'worker restart restores its page capability and decrypts ZIP without another master handshake');
 assert.equal((await workerFetch('/__fc_zip/' + zipId)).status, 403, 'download plan capability is consumed once');
+
+// Exercise admission through the real worker message handler. Eight abandoned
+// plans must expire without evicting any other valid plan or relaxing bounds.
+const zipCapability = vm.runInContext('[...capabilities.keys()][0]', worker);
+function queueZip(id, items = zipItems, sourceClient = client) {
+    let reply;
+    for (const listener of workerListeners.get('message') || []) {
+        listener({data: {type: 'fc-crypto-zip', token: zipCapability, download_token: id, items},
+            source: sourceClient, ports: [{postMessage(value) { reply = value; }}]});
+    }
+    return reply;
+}
+const planKeys = () => [...vm.runInContext('[...zipPlans.keys()]', worker)];
+const boundarySessions = calls.filter(call => call.url.endsWith('/session')).length;
+for (const invalidItems of [null, {}, Array(5001).fill(zipItems[0])]) {
+    assert(queueZip('invalid-plan', invalidItems).error, 'worker rejects malformed or oversized ZIP plans');
+    assert.equal(planKeys().length, 0);
+}
+const abandonedIds = Array.from({length: 8}, (_, index) => zipCapability + '-abandoned-' + index);
+for (const [index, id] of abandonedIds.entries()) {
+    assert.equal(queueZip(id, index === 0 ? Array(5000).fill(zipItems[0]) : zipItems).ok, true,
+        'the existing 5000-entry limit remains inclusive');
+}
+assert.deepEqual(planKeys(), abandonedIds);
+assert(queueZip('over-cap').error, 'eight live plans refuse a ninth plan');
+assert(queueZip(abandonedIds[0]).error, 'a full queue cannot overwrite another live plan');
+assert.equal(queueZip('another-client', zipItems, {id: 'other-browser-tab'}), undefined,
+    'another client cannot admit plans using this page capability');
+assert.deepEqual(planKeys(), abandonedIds);
+advance(120000);
+assert(queueZip('at-deadline').error, 'the exact expiry boundary retains the existing fetch validity');
+assert.deepEqual(planKeys(), abandonedIds, 'the capacity check must retain every still-valid plan');
+advance(1);
+const firstRecoveredId = zipCapability + '-after-expiry';
+assert.equal(queueZip(firstRecoveredId).ok, true, 'eight expired plans cannot permanently block new ZIP downloads');
+assert.deepEqual(planKeys(), [firstRecoveredId]);
+for (const id of abandonedIds) {
+    assert.equal((await workerFetch('/__fc_zip/' + id)).status, 403, 'an expired plan cannot be consumed later');
+}
+for (let index = 0; index < 6; index += 1) assert.equal(queueZip('older-' + index).ok, true);
+advance(60000);
+const survivorId = zipCapability + '-survivor';
+assert.equal(queueZip(survivorId).ok, true);
+const survivorDeadline = vm.runInContext('zipPlans.get(' + JSON.stringify(survivorId) + ').expires', worker);
+assert(queueZip('mixed-over-cap').error);
+advance(60001);
+const laterId = zipCapability + '-later';
+assert.equal(queueZip(laterId).ok, true);
+assert.deepEqual(planKeys(), [survivorId, laterId], 'a sweep removes only expired plans from a mixed queue');
+assert.equal(vm.runInContext('zipPlans.get(' + JSON.stringify(survivorId) + ').expires', worker), survivorDeadline,
+    'admitting another ZIP never extends an existing plan deadline');
+
+// A consumed archive is held by its stream, not the pending-plan queue. Reading
+// it may outlive the two-minute admission capability without a key renewal.
+const activeArchive = await workerFetch('/__fc_zip/' + survivorId);
+assert.equal(activeArchive.status, 200);
+const activeReader = activeArchive.body.getReader();
+const activeParts = [(await activeReader.read()).value];
+advance(120001);
+const currentId = zipCapability + '-current';
+assert.equal(queueZip(currentId).ok, true);
+assert.deepEqual(planKeys(), [currentId]);
+while (true) {
+    const part = await activeReader.read();
+    if (part.done) break;
+    activeParts.push(part.value);
+}
+const recoveredZip = new Uint8Array(await new Blob(activeParts).arrayBuffer());
+let recoveredCursor = 0;
+for (const [index, item] of zipItems.entries()) {
+    const header = new DataView(recoveredZip.buffer, recoveredCursor);
+    assert.equal(header.getUint32(0, true), 0x04034b50);
+    const nameLength = header.getUint16(26, true);
+    const extraLength = header.getUint16(28, true);
+    assert.equal(new TextDecoder().decode(recoveredZip.slice(recoveredCursor + 30, recoveredCursor + 30 + nameLength)), item.path);
+    const size = Number(header.getBigUint64(30 + nameLength + 4, true));
+    const start = recoveredCursor + 30 + nameLength + extraLength;
+    const body = recoveredZip.slice(start, start + size);
+    assert.deepEqual(body, index === 0 ? secondBytes : new TextEncoder().encode('plain legacy lyric'));
+    const descriptor = new DataView(recoveredZip.buffer, start + size);
+    assert.equal(descriptor.getUint32(0, true), 0x08074b50);
+    assert.equal(descriptor.getUint32(4, true), (page.FrontierMediaCrypto.crcUpdate(0xffffffff, body) ^ 0xffffffff) >>> 0);
+    assert.equal(Number(descriptor.getBigUint64(8, true)), size);
+    recoveredCursor = start + size + 24;
+}
+assert.equal(new DataView(recoveredZip.buffer, recoveredCursor).getUint32(0, true), 0x02014b50);
+assert.equal(new DataView(recoveredZip.buffer, recoveredZip.length - 98).getUint32(0, true), 0x06064b50);
+assert.equal(Number(new DataView(recoveredZip.buffer, recoveredZip.length - 98).getBigUint64(24, true)), zipItems.length);
+assert.equal((await workerFetch('/__fc_zip/' + survivorId)).status, 403, 'a consumed active archive remains one-shot');
+assert.equal((await workerFetch('/__fc_zip/' + laterId)).status, 403, 'swept plans cannot be revived');
+const currentArchive = await workerFetch('/__fc_zip/' + currentId);
+assert.deepEqual(new Uint8Array(await currentArchive.arrayBuffer()), recoveredZip,
+    'new admission after a full expired queue produces the same complete ZIP bytes');
+assert.equal((await workerFetch('/__fc_zip/' + currentId)).status, 403);
+assert.equal(calls.filter(call => call.url.endsWith('/session')).length, boundarySessions,
+    'ZIP queue expiry and a slow active stream cannot renew the fixed key session');
 
 await page.FrontierMediaCrypto.downloadPlan([{path: 'music/b.mp3', encryption: second.meta}]);
 assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),

@@ -65,10 +65,10 @@
     },
     {
       "file": "media-crypto-sw.js",
-      "source_sha256": "87aaa2de5fa3883d647342e2ed5d7788b82caf2c16b727f6fee6c002dd58f0c4",
-      "compiled_sha256": "cafcec191bedd23d80de303429ab22bfc03e1f1ac104066f241c6527c7921eb3",
-      "source_bytes": 17171,
-      "compiled_bytes": 21595
+      "source_sha256": "27e0dbacec6c7f98489945eaf4520c0c0c7d2e370cb3f42aae790f9c2beb2692",
+      "compiled_sha256": "7aa6fbc7d878e1bc2c677c7dde0a45c9964e398d1f6e496f35a57a715f3c97e8",
+      "source_bytes": 17178,
+      "compiled_bytes": 21961
     }
   ]
 }

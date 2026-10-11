@@ -79,9 +79,6 @@ func (s *Service) scan(ctx context.Context, scope string, h map[string]bool) ([]
 	if err := visit(scope); err != nil {
 		return nil, err
 	}
-	if err := s.treeEncryption(ctx, items); err != nil {
-		return nil, err
-	}
 	return items, nil
 }
 
@@ -123,6 +120,11 @@ func (s *Service) Search(ctx context.Context, query, scope string) (SearchResult
 			}
 			result.Items = append(result.Items, item)
 		}
+	}
+	// Only the matched, bounded response needs encryption descriptors. Scanning
+	// a large subtree must not query every nonmatching or truncated file.
+	if err := s.treeEncryption(ctx, result.Items); err != nil {
+		return SearchResult{}, err
 	}
 	return result, nil
 }

@@ -6,21 +6,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 )
 
-func (s *Service) globalTreeItem(ctx context.Context, row store.GlobalMedia, h map[string]bool) (TreeItem, error) {
+func globalTreeItem(row store.GlobalMedia, h map[string]bool) TreeItem {
 	size := row.Bytes
 	item := TreeItem{Name: path.Base(row.Path), Path: row.Path, Kind: "file", Size: &size, Hidden: hidden(row.Path, h), HiddenDirect: h[row.Path], Media: true, MediaID: row.ID, MemberID: row.MemberID, Transport: row.Transport, NodeHealth: row.Health}
-	if _, ok := s.repository.(store.EncryptionRepository); ok {
-		var err error
-		item.Encryption, err = s.Encryption(ctx, row.ID)
-		if err != nil {
-			return TreeItem{}, err
-		}
-	}
-	return item, nil
+	return item
 }
 func (s *Service) globalScan(ctx context.Context, scope string, h map[string]bool) ([]TreeItem, error) {
 	rows, err := s.pool.ManagementResources(ctx, scope, false)
@@ -30,10 +24,10 @@ func (s *Service) globalScan(ctx context.Context, scope string, h map[string]boo
 	items := make([]TreeItem, 0, len(rows))
 	byID := map[string]int{}
 	for _, row := range rows {
-		item, err := s.globalTreeItem(ctx, row, h)
-		if err != nil {
-			return nil, err
+		if !ownedObjectID.MatchString(row.ID) {
+			return nil, mediacrypto.ErrMetadata
 		}
+		item := globalTreeItem(row, h)
 		if row.State == "renaming" {
 			item.MutationState = "rename_pending"
 		}
@@ -54,10 +48,10 @@ func (s *Service) globalScan(ctx context.Context, scope string, h map[string]boo
 			if scope != "" && row.Path != scope && !strings.HasPrefix(row.Path, scope+"/") {
 				continue
 			}
-			item, err := s.globalTreeItem(ctx, row, h)
-			if err != nil {
-				return nil, err
+			if !ownedObjectID.MatchString(row.ID) {
+				return nil, mediacrypto.ErrMetadata
 			}
+			item := globalTreeItem(row, h)
 			item.MutationState, item.MutationID, item.RenameTarget = op.State, op.ID, op.New
 			if index, ok := byID[row.ID]; ok {
 				items[index] = item
@@ -106,6 +100,9 @@ func (s *Service) globalTree(ctx context.Context, scope string) (Tree, error) {
 	result := Tree{Path: scope, Items: []TreeItem{}}
 	for _, item := range found {
 		result.Items = append(result.Items, item)
+	}
+	if err := s.treeEncryption(ctx, result.Items); err != nil {
+		return Tree{}, err
 	}
 	fold := cases.Fold()
 	sort.Slice(result.Items, func(i, j int) bool {

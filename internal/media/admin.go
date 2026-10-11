@@ -167,7 +167,7 @@ func (s *Service) treeEncryption(ctx context.Context, items []TreeItem) error {
 	}
 	objects := []store.MediaObject{}
 	for _, item := range items {
-		if item.Kind != "file" || !managedObject(item.Path, false) {
+		if item.Kind != "file" || !managedObject(item.Path, false) || item.MediaID != "" {
 			continue
 		}
 		kind := "audio"
@@ -178,23 +178,33 @@ func (s *Service) treeEncryption(ctx context.Context, items []TreeItem) error {
 		}
 		objects = append(objects, store.MediaObject{Path: item.Path, Kind: kind})
 	}
-	if len(objects) == 0 {
-		return nil
+	ids := map[string]string{}
+	if len(objects) != 0 {
+		var err error
+		ids, err = s.repository.EnsureObjects(ctx, objects)
+		if err != nil {
+			return err
+		}
 	}
-	ids, err := s.repository.EnsureObjects(ctx, objects)
+	identifiers := make([]string, 0, len(items))
+	for i := range items {
+		if items[i].Kind != "file" || !managedObject(items[i].Path, false) {
+			continue
+		}
+		if items[i].MediaID == "" {
+			items[i].MediaID = ids[items[i].Path]
+		}
+		identifiers = append(identifiers, items[i].MediaID)
+	}
+	metadata, err := s.Encryptions(ctx, identifiers)
 	if err != nil {
 		return err
 	}
 	for i := range items {
-		id := ids[items[i].Path]
-		if id == "" {
+		if items[i].Kind != "file" || !managedObject(items[i].Path, false) {
 			continue
 		}
-		items[i].MediaID = id
-		items[i].Encryption, err = s.Encryption(ctx, id)
-		if err != nil {
-			return err
-		}
+		items[i].Encryption = metadata[items[i].MediaID]
 	}
 	return nil
 }

@@ -25,12 +25,13 @@ self.addEventListener('message', event => {
         for (const key of grants.keys()) if (key.startsWith(data.token + ':' + data.file_path + ':')) grants.delete(key);
     } else if (data.type === 'fc-crypto-zip'
         && capabilities.get(data.token)?.clientId === event.source.id) {
+        const now = common.monotonicNow();
+        for (const [id, plan] of zipPlans) if (plan.expires < now) zipPlans.delete(id);
         if (!Array.isArray(data.items) || data.items.length > 5000 || zipPlans.size >= 8) {
             event.ports[0]?.postMessage({error: '下载任务过多，请分批下载'});
             return;
         }
-        for (const [id, plan] of zipPlans) if (plan.expires < common.monotonicNow()) zipPlans.delete(id);
-        zipPlans.set(data.download_token, {token: data.token, items: data.items, expires: common.monotonicNow() + 120000});
+        zipPlans.set(data.download_token, {token: data.token, items: data.items, expires: now + 120000});
         event.ports[0]?.postMessage({ok: true});
     } else if (data.type === 'fc-crypto-revoke'
         && capabilities.get(data.token)?.clientId === event.source.id) {
