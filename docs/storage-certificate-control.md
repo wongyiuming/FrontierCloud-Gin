@@ -139,8 +139,8 @@ Expired certificates cannot be renewed through an untrusted/expired node HTTPS
 connection. Recover locally using the reviewed runtime's fixed Unix-socket client:
 
 ```bash
-docker compose exec certificate-agent /app/frontiercloud certificate-renew
-docker compose exec certificate-agent /app/frontiercloud certificate-status
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml exec certificate-agent /app/frontiercloud certificate-renew
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml exec certificate-agent /app/frontiercloud certificate-status
 ```
 
 The no-argument renewal command only submits the same bounded job; it never
