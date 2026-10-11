@@ -85,7 +85,7 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 
 Master node management can inspect storage certificates and control renewal
 after enabling the optional [Compose certificate service](docs/storage-certificate-control.md).
-It reuses an existing HTTP-01 entrypoint on a shared host; an explicit temporary
+A webroot overlay reuses a verified HTTP-01 entrypoint on a shared host; the default temporary
 mode opens port 80 only for validation and releases it afterwards. No host
 service, account or executable installation is required.
 Storage STUN uses UDP 3478 by default; browser probes visit all

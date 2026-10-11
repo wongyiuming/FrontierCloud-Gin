@@ -13,6 +13,7 @@
     let cancelPeer = null;
     let scheduled = null;
     let cancelReport = null;
+    let visibilityEpoch = 0;
 
     async function report(addresses, failure = null) {
         window.frontierCloudObservedAddresses = [...addresses].slice(0, 8);
@@ -72,20 +73,23 @@
     }
 
     async function sweep() {
+        if (stopped || document.hidden) return;
+        const epoch = visibilityEpoch;
         if (!urls.length) { await report([], 'disabled'); return; }
         if (typeof RTCPeerConnection !== 'function') { await report([], 'unsupported'); return; }
         const addresses = new Set();
         let failure = 'no_srflx';
         for (const url of urls) {
-            if (stopped || document.hidden) break;
+            if (stopped || document.hidden || epoch !== visibilityEpoch) return;
             failure = await probeOne(url, addresses);
+            if (stopped || document.hidden || epoch !== visibilityEpoch) return;
             // Yield between nodes; no simultaneous candidate gathering or rounds.
             if (!stopped) await new Promise(resolve => setTimeout(resolve, 250));
         }
-        if (!stopped) await report(addresses, addresses.size ? null : failure);
+        if (!stopped && !document.hidden && epoch === visibilityEpoch) await report(addresses, addresses.size ? null : failure);
     }
     async function probe() {
-        if (busy || stopped) return;
+        if (busy || stopped || document.hidden) return;
         busy = true;
         try {
             if (typeof navigator !== 'undefined' && navigator.locks) {
@@ -94,16 +98,36 @@
             } else { await sweep(); }
         } finally {
             busy = false;
-            if (!stopped) scheduled = setTimeout(probe, interval);
+            if (!stopped && !document.hidden) scheduled = setTimeout(probe, interval);
         }
     }
     if (window.addEventListener) {
         window.addEventListener('pagehide', () => {
+            visibilityEpoch++;
             stopped = true;
             if (scheduled) clearTimeout(scheduled);
             if (cancelPeer) cancelPeer();
             if (cancelReport) cancelReport();
-        }, {once: true});
+        });
+        window.addEventListener('pageshow', event => {
+            if (!event.persisted) return;
+            stopped = false;
+            if (scheduled) clearTimeout(scheduled);
+            // Resume only after a cooldown; an older cancelled sweep must finish first.
+            if (!busy) scheduled = setTimeout(probe, interval);
+        });
+    }
+    if (document.addEventListener) {
+        document.addEventListener('visibilitychange', () => {
+            visibilityEpoch++;
+            if (scheduled) clearTimeout(scheduled);
+            if (document.hidden) {
+                if (cancelPeer) cancelPeer();
+                if (cancelReport) cancelReport();
+            } else if (!stopped && !busy) {
+                scheduled = setTimeout(probe, interval);
+            }
+        });
     }
     probe();
 })();

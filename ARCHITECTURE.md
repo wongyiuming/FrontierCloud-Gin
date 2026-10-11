@@ -294,11 +294,13 @@ Optional certificate control is a Compose container using the same Go image,
 a five-percent CPU/128 MiB/no-swap limit, read-only rootfs and dropped capabilities.
 Its exiting initializer touches only explicit volume mount roots. No host PID,
 privileged mode, service-manager access, Docker socket or arbitrary commands exist.
-The default bridge-network mode reuses a delegated public HTTP-01 directory
-without a listener. An explicit Linux-only temporary-mode overlay uses host
-networking and only NET_BIND_SERVICE: no Docker 80 publication persists after
+The default Linux temporary mode uses host networking and only NET_BIND_SERVICE: no Docker 80 publication persists after
 the Go listener closes. Host networking shares only the network namespace; it
-does not authorize host process/filesystem/service management.
+does not authorize host process/filesystem/service management. A shared-host
+webroot overlay selects bridge networking without capabilities and requires an
+existing, verified public challenge directory; no unserved volume is a default.
+User-owned external CI/CD integration is outside the business product boundary
+and may use systemd; the business GUI does not manage those host services.
 Certificate TLS/control state uses project-scoped persistent Docker volumes;
 container recreation must not replace the volume directory mounted by Web.
 Container UID 0/GID 10001 can publish TLS for the Web's read-only group mount;

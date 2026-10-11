@@ -23,14 +23,14 @@ assert.match(readme, /https:\/\/github.com\/wongyiuming\/FrontierCloud-Gin\/wiki
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const urls = Array.from({length: 6}, (_, i) => `stun:storage-${i}.fixture.test:${3478+i}`);
-function harness(embedded, sharedLocks, stallReport = false) {
+function harness(embedded, sharedLocks, stallReport = false, hidden = false) {
     const peers = [], reports = [], timers = new Map(), events = new Map();
     let timerId = 0, live = 0, maximumLive = 0;
     const window = {dispatchEvent() {}, addEventListener(name, fn) {events.set(name, fn);}};
     if (!embedded) Object.assign(window, {frontierCloudStunUrls: [...urls, urls[0]], frontierCloudWebrtcIntervalMs: 45000});
     const context = {
         window, navigator: sharedLocks ? {locks: sharedLocks} : {},
-        document: {hidden: false, getElementById: () => embedded ? {textContent: JSON.stringify({stun_urls: [...urls, urls[0]], interval_ms: 45000})} : null},
+        document: {hidden, addEventListener(name, fn) {events.set(name, fn);}, getElementById: () => embedded ? {textContent: JSON.stringify({stun_urls: [...urls, urls[0]], interval_ms: 45000})} : null},
         CustomEvent: class {},
         AbortController,
         fetch(_url, options) {reports.push(JSON.parse(options.body)); return stallReport ? new Promise(() => {}) : Promise.resolve({});},
@@ -51,6 +51,27 @@ function harness(embedded, sharedLocks, stallReport = false) {
     vm.runInNewContext(script, context);
     return {context, peers, reports, timers, events, fire, maximum: () => maximumLive};
 }
+
+// Background starts and interrupted visibility rounds never persist partial observations.
+const background = harness(true, undefined, false, true);
+await flush();
+assert.equal(background.peers.length, 0);
+assert.equal(background.reports.length, 0);
+background.context.document.hidden = false;
+background.events.get('visibilitychange')();
+background.fire(45000); await flush();
+assert.equal(background.peers.length, 1);
+background.context.document.hidden = true;
+background.events.get('visibilitychange')(); await flush();
+assert.ok(background.peers[0].closed);
+assert.equal(background.reports.length, 0, 'hidden sweep cannot persist a partial or false observation');
+assert.equal(background.timers.size, 0);
+background.context.document.hidden = false;
+background.events.get('visibilitychange')();
+background.fire(45000); await flush();
+assert.equal(background.peers.length, 2);
+background.events.get('pagehide')(); await flush();
+
 for (const embedded of [true, false]) {
     const h = harness(embedded);
     await flush();
@@ -90,6 +111,20 @@ assert.equal(first.peers.length, 1); assert.equal(second.peers.length, 0);
 second.fire(45000); await flush(); assert.equal(second.peers.length, 0, 'repeat tick cannot bypass origin lease');
 first.events.get('pagehide')(); await flush(); second.fire(45000); await flush();
 assert.equal(second.peers.length, 1, 'lease releases after navigation'); second.events.get('pagehide')(); await flush();
+
+// A persisted page restores serial probing without duplicating timers or origin leases.
+const restored = harness(true, locks);
+await flush();
+restored.events.get('pagehide')();
+restored.events.get('pageshow')({persisted: true});
+await flush();
+assert.equal(restored.timers.size, 1);
+restored.fire(45000); await flush();
+assert.equal(restored.peers.length, 2);
+assert.equal(restored.maximum(), 1);
+restored.events.get('pagehide')(); await flush();
+assert.equal(restored.timers.size, 0);
+assert.equal(held, false);
 
 // Even a stalled fetch that ignores abort cannot retain the origin lease.
 for (const navigate of [false, true]) {

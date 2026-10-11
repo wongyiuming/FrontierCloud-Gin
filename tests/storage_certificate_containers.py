@@ -75,15 +75,21 @@ def run(work, project, revision):
                SSL_CERT_PATH=str(work / "cert.pem"), SSL_KEY_PATH=str(work / "key.pem"),
                DATA_DIRECTORY=str(work / "data"), PUBLIC_BIND_ADDRESS="127.0.0.1")
     fixture = work / "fixture.yaml"
+    public = work / "public"
+    public.mkdir(mode=0o755)
+    env["STORAGE_CERTIFICATE_HTTP01_DIRECTORY"] = str(public)
     fixture.write_text("services:\n  web:\n    cpus: 1\n    mem_limit: 256m\n    memswap_limit: 256m\n")
     files = [ROOT / "docker-compose.storage.yaml", ROOT / "docker-compose.storage-certificate.yaml", fixture]
     def compose(*args, temporary=False):
-        selected = files + ([ROOT / "docker-compose.storage-certificate-temporary.yaml"] if temporary else [])
+        selected = files + ([] if temporary else [ROOT / "docker-compose.storage-certificate-webroot.yaml"])
         command = ["docker", "compose", "--project-directory", str(ROOT)]
         for path in selected:
             command += ["-f", str(path)]
         return call(command + list(args), env=env)
     config = json.loads(compose("config", "--format", "json"))
+    default = json.loads(compose("config", "--format", "json", temporary=True))["services"]["certificate-agent"]
+    assert default["network_mode"] == "host" and default["cap_add"] == ["NET_BIND_SERVICE"]
+    assert "--http01-directory" not in default["command"] and not default.get("ports")
     volumes = {key: value["name"] for key, value in config["volumes"].items()}
     network_names = [value["name"] for value in config["networks"].values()]
     names = {key: project + "-" + key + "-1" for key in config["services"]}
@@ -107,7 +113,8 @@ def run(work, project, revision):
     assert host["NanoCpus"] == 50000000 and host["Memory"] == host["MemorySwap"] == 134217728
     assert host["PidsLimit"] == 24 and host["CapDrop"] == ["ALL"] and not host["CapAdd"]
     assert not host["Privileged"] and not host["PidMode"] and not host["PortBindings"]
-    assert all(m["Type"] == "volume" for m in agent["Mounts"] if m["Destination"] != "/tmp")
+    assert host["NetworkMode"] == "bridge"
+    assert next(m for m in agent["Mounts"] if m["Destination"] == "/run/frontiercloud-http01")["Source"] == str(public)
     assert status(names["certificate-agent"])["validation"] == "shared_http01"
     common = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--read-only", "--cpus=.05", "--memory=128m", "--memory-swap=128m", "--pids-limit=24", "--label", "frontiercloud.acceptance=" + project]
     call(["docker", "run", "-d", "--name", reader, "--network=none", "--user=10001:10001", *common,
@@ -120,7 +127,7 @@ def run(work, project, revision):
     assert inspect(names["certificate-agent"])["Id"] != old_id and status(reader)["managed"]
     print("PASS: bridged Compose certificate container; pre-existing reader survives agent recreation")
     compose("stop", "certificate-agent")
-    mounts = ["-v", volumes["certificate_state"] + ":/var/lib/frontiercloud-certificate", "-v", volumes["certificate_runtime"] + ":/run/frontiercloud-certificate", "-v", volumes["certificate_http01"] + ":/run/frontiercloud-http01", "-v", str(work / "certificate.test") + ":/certificate.test:ro"]
+    mounts = ["-v", volumes["certificate_state"] + ":/var/lib/frontiercloud-certificate", "-v", volumes["certificate_runtime"] + ":/run/frontiercloud-certificate", "-v", str(public) + ":/run/frontiercloud-http01", "-v", str(work / "certificate.test") + ":/certificate.test:ro"]
     result = call(["docker", "run", "--rm", "--name", tester, "--user=0:10001", *common, "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_VOLUMES=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerSharedVolumes|TestACMEV2OrderRealHTTPChallengeCSRAndCertificate"])
     print(result)
     assert "--- SKIP" not in result and "PASS" in result

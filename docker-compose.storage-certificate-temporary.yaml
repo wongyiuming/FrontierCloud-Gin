@@ -1,5 +1,5 @@
 # Linux-only explicit temporary listener, with no permanent Docker port mapping.
-# Combine after storage + certificate Compose; default shared mode stays bridged.
+# Explicit selection of the default Linux temporary mode (also after webroot).
 services:
   certificate-agent:
     network_mode: host

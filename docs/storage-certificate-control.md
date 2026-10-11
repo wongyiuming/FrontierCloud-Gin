@@ -50,21 +50,22 @@ The exiting `certificate-init` initializes only three mounted volume roots;
 it refuses to operate without those mounts. `certificate-agent` runs with a
 read-only rootfs, no-new-privileges, dropped capabilities, 0.05 CPU, 128 MiB,
 no swap and 24 PIDs. Container UID 0/GID 10001 is needed for temporary low-port
-binding; this creates no host user. In default shared mode it has no capabilities.
+binding; this creates no host user. The default Linux temporary mode grants only NET_BIND_SERVICE; the shared
+webroot overlay drops that capability and uses bridge networking.
 The private TLS/control volumes persist across agent recreation. Web mounts them
 read-only as UID/GID 10001; it can read the 0750/0640 complete TLS generation
 and connect to the 0660 socket through its 0710 directory. ACME `account.key`,
 job journal and lease remain 0600 and root-private. No PID namespace sharing,
 privileged container, Docker socket, shell or service-manager operation exists.
 
-## Shared HTTP-01 (default bridge mode)
+## Shared HTTP-01 (existing public route required)
 
-The default certificate service opens no HTTP listener. It writes only one
-public token into its project-scoped `certificate_http01` volume. An existing
-HTTP service can mount that volume read-only at a separate public-proof path
-and route the fixed storage hostname's `/.well-known/acme-challenge/` there.
-This does not add a storage Nginx or reserve another port. Keep TLS/account
-volumes separate from the public volume.
+The optional webroot overlay opens no HTTP listener. It selects bridge networking
+and writes only the exact CA token into an existing public challenge directory.
+That directory must already be served for the fixed storage hostname by the
+existing HTTP service. This is an explicit operator prerequisite; an unserved
+project volume is never selected as the default validation path. Keep TLS/account
+volumes separate from the public directory.
 
 When an existing HTTP service already has the desired public validation route,
 reuse its exact challenge directory with the optional webroot overlay:
@@ -88,22 +89,23 @@ only the owned proof. Restart reclaims only bytes matching the private journal;
 unknown/replaced files stay untouched. A crash-created empty proof is preserved
 for inspection. Other services are not stopped, scanned or pruned.
 
-## Temporary HTTP-01 (explicit Linux network exception)
+## Temporary HTTP-01 (default Linux network exception)
 
 An ordinary bridge container with `ports: 80:80` permanently reserves the host
-port even while its Go listener is closed. Therefore temporary mode uses an
-explicit host-network overlay, with only NET_BIND_SERVICE and no Docker port
+port even while its Go listener is closed. Therefore temporary mode uses
+default host networking, with only NET_BIND_SERVICE and no Docker port
 publication:
 
 ```bash
-docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml -f docker-compose.storage-certificate-temporary.yaml up -d --no-build
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml up -d --no-build
 ```
 
 This shares only the Linux network namespace; no host process/filesystem/service
 control is granted. The service binds only the fixed port during a bounded job,
 then closes it. An occupied port returns conflict; it never stops the existing
-owner. Nodes reports `temporary_port80`. Use the default bridge/shared mode on
-hosts that already serve HTTP. Host-network temporary mode requires native Linux
+owner. Nodes reports `temporary_port80`. Use the webroot overlay on hosts that already serve HTTP, after verifying
+their existing public challenge route. The optional temporary overlay explicitly
+reselects the default temporary mode. Host-network temporary mode requires native Linux
 Docker host networking; no host sysctl or systemd changes are made.
 
 ## Issuance and failure behavior
@@ -166,8 +168,9 @@ wait 250 ms between nodes and three seconds maximum per node, then wait at
 least 30 seconds before another round. Web Locks prevent same-origin tabs
 overlapping where supported; reports have a two-second deadline and navigation
 abort so a stalled request cannot retain that lease. The fallback remains serial
-per page. Hidden
-pages stop advancing; navigation cancels the peer. Diagnostics do not gate
+per page. Hidden pages cancel probing and omit incomplete reports; visibility recovery
+and back-forward cache restoration resume after the same cooldown. Navigation
+cancels the peer and report. Diagnostics do not gate
 playback and cap reports at eight IPs without truncating the node list.
 
 Media with equal priority keep deterministic path/ID order for every playback

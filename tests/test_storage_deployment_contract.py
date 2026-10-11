@@ -14,8 +14,14 @@ class StorageDeploymentContract(unittest.TestCase):
                       "cap_drop: [ALL]", "read_only: true", 'tmpfs: ["/tmp:size=16m,mode=1777"]',
                       "certificate_runtime:/run/frontiercloud-certificate:ro"):
             self.assertIn(value, text)
-        for forbidden in ("systemctl", "sysusers", "docker.sock", "privileged:", "pid: host", "ports:", "network_mode: host", "/etc/systemd", "/usr/local/libexec"):
+        for forbidden in ("systemctl", "sysusers", "docker.sock", "privileged:", "pid: host", "ports:", "/etc/systemd", "/usr/local/libexec"):
             self.assertNotIn(forbidden, text)
+        self.assertIn("network_mode: host", text)
+        self.assertIn("cap_add: [NET_BIND_SERVICE]", text)
+        self.assertNotIn("--http01-directory", text)
+        shared = (ROOT / "docker-compose.storage-certificate-webroot.yaml").read_text(encoding="utf-8")
+        for value in ("network_mode: bridge", "cap_add: !reset []", "--http01-directory", "create_host_path: false", "STORAGE_CERTIFICATE_HTTP01_DIRECTORY:?"):
+            self.assertIn(value, shared)
         temporary = (ROOT / "docker-compose.storage-certificate-temporary.yaml").read_text(encoding="utf-8")
         self.assertIn("network_mode: host", temporary)
         self.assertIn("cap_add: [NET_BIND_SERVICE]", temporary)

@@ -1,5 +1,5 @@
 # Optional certificate containers; combine with docker-compose.storage.yaml.
-# Shared HTTP-01 uses a project-scoped public proof volume, never a listener.
+# Linux temporary HTTP-01 binds host 80 only during validation; no port mapping.
 x-certificate-image: &certificate-image
   image: frontiercloud-go-web:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
   build:
@@ -28,12 +28,14 @@ services:
 
   certificate-agent:
     <<: *certificate-image
-    command: [certificate-agent, --container, --hostname, "${SERVER_NAME:?Set storage hostname}", --directory, /var/lib/frontiercloud-certificate, --socket, /run/frontiercloud-certificate/control.sock, --acme-directory, "${CERTIFICATE_ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}", --http01-directory, /run/frontiercloud-http01]
+    command: [certificate-agent, --container, --hostname, "${SERVER_NAME:?Set storage hostname}", --directory, /var/lib/frontiercloud-certificate, --socket, /run/frontiercloud-certificate/control.sock, --acme-directory, "${CERTIFICATE_ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}"]
     user: "0:10001"
     restart: unless-stopped
     read_only: true
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    network_mode: host
     cpus: 0.05
     mem_limit: 128m
     memswap_limit: 128m
