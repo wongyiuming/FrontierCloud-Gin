@@ -10,7 +10,7 @@ import (
 )
 
 func TestLRCParsingSharedBrowserVectors(t *testing.T) {
-	payload, err := os.ReadFile("../../tests/lrc_parsing_vectors.json")
+	payload, err := os.ReadFile("../../protocol/lrc_parsing_vectors.json")
 	if err != nil {
 		t.Fatal(err)
 	}

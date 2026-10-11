@@ -191,7 +191,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(common.parseLyrics('[offset:100]\n[00
     [{time: 1.3, text: '词'}, {time: 2.4, text: '词'}]);
 // These expectations are shared with the server's ParseLRC contract. The
 // compiled and source modules must preserve exactly the same valid grammar.
-const lyricVectors = JSON.parse(fs.readFileSync('tests/lrc_parsing_vectors.json', 'utf8'));
+const lyricVectors = JSON.parse(fs.readFileSync('protocol/lrc_parsing_vectors.json', 'utf8'));
 for (const vector of lyricVectors) {
     if (vector.error) assert.throws(() => common.parseLyrics(vector.input),
         error => error.message === vector.error, vector.name);

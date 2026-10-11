@@ -36,7 +36,6 @@ certs/
 app/
 main.py
 pyproject.toml
-tests/*
-!tests/lrc_parsing_vectors.json
+tests/
 scripts/
 docs/
