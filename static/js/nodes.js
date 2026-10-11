@@ -14,6 +14,7 @@
 
     let refreshTimer = null;
     let refreshQueue = Promise.resolve();
+    const certificateViews = new Map();
     const setStatus = text => { $('nodeOperationStatus').textContent = text || ''; };
     const visible = (id, show) => $(id).classList.toggle('hidden', !show);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -298,8 +299,54 @@
         header.append(title, badges);
         const grid = make('div', 'node-card-grid');
         grid.append(connectionPanel(relation, observed), storagePanel(member, observed), backupPanel(member, observed));
+        if (relation?.direction === 'downstream' && relation.state === 'active') grid.append(certificatePanel(relation));
         card.append(header, grid, controls(member, relation)); cell.append(card); row.append(cell);
         return row;
+    }
+
+    function certificatePanel(relation) {
+        const section = make('section', 'node-resource-panel');
+        const heading = make('div', 'node-resource-heading');
+        heading.append(make('strong', '', '存储节点证书'));
+        const observed = relation.summary?.certificate || {};
+        const queried = certificateViews.get(relation.relationship_id);
+        const facts = queried && Date.now() - queried.at < 15000 ? queried.value : observed;
+        const labels = {valid: '有效', renewal_due: '临近到期', expired: '已过期', unavailable: '未知', missing: '未签发'};
+        const job = facts.job || {};
+        const jobs = {idle: '未执行', running: '执行中', success: '成功', failed: '失败'};
+        const codes = {port80_busy: '80 端口被占用', issuance_failed: '签发失败', publication_failed: '证书校验或发布失败', timeout_or_shutdown: '超时或服务停止', interrupted: '上次任务中断', journal_io: '状态保存失败', agent_unavailable: '证书服务暂不可用'};
+        section.append(heading, kv([
+            ['状态', labels[facts.state] || '待查询'],
+            ['有效期至', localTime(facts.not_after)],
+            ['自动续期', facts.auto_renew ? '已开启' : '未开启'],
+            ['申请任务', `${jobs[job.state] || '未执行'}${job.code ? ` · ${codes[job.code] || '未知错误'}` : ''}`],
+            ['临时 80 端口', job.code === 'agent_unavailable' ? '暂不可确认' : job.port80_active ? '验证中' : '已释放'],
+        ]));
+        const buttons = make('div', 'node-card-controls');
+        const endpoint = `/${encodeURIComponent(relation.relationship_id)}/certificate`;
+        buttons.append(button('查询证书', async () => {
+            const state = await api(`/api/v1/media/admin/nodes${endpoint}`);
+            certificateViews.set(relation.relationship_id, {at: Date.now(), value: state});
+            relation.summary = {...relation.summary, certificate: state};
+            section.replaceWith(certificatePanel(relation));
+            return `证书${labels[state.state] || '未知'}，有效期至 ${localTime(state.not_after)}`;
+        }));
+        const renew = button('申请 / 续期', async () => {
+            const state = await post(endpoint, {action: 'renew'});
+            certificateViews.set(relation.relationship_id, {at: Date.now(), value: state});
+              return '已提交；请查询最终结果。已托管且有效期超过 30 天的证书无需续期。';
+        });
+        renew.disabled = job.state === 'running' || facts.managed === false;
+        buttons.append(renew);
+        const auto = button(facts.auto_renew ? '关闭自动续期' : '开启自动续期', async () => {
+            const state = await post(endpoint, {action: 'auto', enabled: !facts.auto_renew});
+            certificateViews.set(relation.relationship_id, {at: Date.now(), value: state});
+        });
+        auto.disabled = facts.managed === false;
+        buttons.append(auto);
+        section.append(buttons);
+        if (facts.managed === false) section.append(make('div', 'node-note', '尚未启用节点本机证书管理。现有证书继续使用；需要先安装受限证书服务。'));
+        return section;
     }
 
     function renderRows(node, observed) {

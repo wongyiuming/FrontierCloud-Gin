@@ -10,24 +10,31 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Service struct {
-	repo          store.NodeRepository
-	identity      *Identity
-	transport     ControlClient
-	pool          store.PoolRepository
-	volume        BusinessVolume
-	recordings    *os.Root
-	backupBuilder *backup.Builder
-	backups       store.BackupRepository
-	wakeup        chan struct{}
+	repo                store.NodeRepository
+	identity            *Identity
+	transport           ControlClient
+	pool                store.PoolRepository
+	volume              BusinessVolume
+	recordings          *os.Root
+	backupBuilder       *backup.Builder
+	backups             store.BackupRepository
+	wakeup              chan struct{}
+	certificateClient   certificate.Client
+	certificateStatus   func() certificate.View
+	certificateAudit    store.AdminRepository
+	certificateDispatch sync.Mutex
+	stunPort            int
 }
 
 var ErrAuthentication = errors.New("invalid relationship authentication")
@@ -261,6 +268,12 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 		}
 	}
 	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.BaselineCapabilities()}
+	if s.stunPort != 0 {
+		summary["stun_port"] = s.stunPort
+	}
+	if s.certificateStatus != nil {
+		summary["certificate"] = s.certificateStatus()
+	}
 	if relation.Direction == "upstream" {
 		total, free, err := s.volume.PhysicalCapacity(ctx)
 		if err != nil {

@@ -2,7 +2,6 @@ package media
 
 import (
 	"context"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -156,12 +155,7 @@ func (s *Service) cachedTracks(ctx context.Context, role, kind, name, session st
 		return catalogEntry{tracks: items}, err
 	})
 	if err == nil {
-		sort.SliceStable(entry.tracks, func(i, j int) bool {
-			if entry.tracks[i].Preference != entry.tracks[j].Preference {
-				return entry.tracks[i].Preference > entry.tracks[j].Preference
-			}
-			return randomKey(session, entry.tracks[i].MediaID) < randomKey(session, entry.tracks[j].MediaID)
-		})
+		sortTracks(entry.tracks)
 	}
 	return entry.tracks, err
 }

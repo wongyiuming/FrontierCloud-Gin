@@ -22,50 +22,52 @@ const (
 // Config is the Go deployment contract. Defaults preserve frontend behavior
 // while selecting SQLite unless DB_TYPE explicitly requests MySQL.
 type Config struct {
-	DeploymentMode         string
-	StorageEndpoint        string
-	StorageTLSCert         string
-	StorageTLSKey          string
-	DatabaseType           string
-	SQLitePath             string
-	MySQLHost              string
-	MySQLPort              int
-	MySQLDatabase          string
-	MySQLUser              string
-	MySQLPasswordFile      string
-	RedisURL               string
-	MediaCatalogCacheTTL   int
-	HTTPAddress            string
-	DataRoot               string
-	StaticRoot             string
-	SecretsDirectory       string
-	ServerName             string
-	PublicOrigin           string
-	TLSEnabled             bool
-	NginxMedia             bool
-	STUNPort               int
-	WebRTCCooldown         int
-	AdminSessionTTL        int
-	AdminFailedWindow      int
-	AdminMaxFailed         int
-	AdminCookieSameSite    string
-	AdminMaxUploadBytes    int64
-	AdminMaxTaskFiles      int
-	AdminMaxBatchFiles     int
-	AdminMaxDownloadItems  int
-	AdminMaxFilenameLength int
-	AdminUploadInactivity  int
-	TrustedProxyNetworks   []string
-	SecurityExemptNetworks []string
-	SecurityInvalidLimit   int
-	SecurityInvalidWindow  int
-	SecurityContact        string
-	LogLevel               string
-	LogFormat              string
-	GitHubAPIToken         string
-	ReleaseBranch          string
-	ReleaseSourceBranch    string
-	StagingCD              bool
+	DeploymentMode              string
+	StorageEndpoint             string
+	StorageTLSCert              string
+	StorageTLSKey               string
+	StorageCertificateDirectory string
+	StorageCertificateSocket    string
+	DatabaseType                string
+	SQLitePath                  string
+	MySQLHost                   string
+	MySQLPort                   int
+	MySQLDatabase               string
+	MySQLUser                   string
+	MySQLPasswordFile           string
+	RedisURL                    string
+	MediaCatalogCacheTTL        int
+	HTTPAddress                 string
+	DataRoot                    string
+	StaticRoot                  string
+	SecretsDirectory            string
+	ServerName                  string
+	PublicOrigin                string
+	TLSEnabled                  bool
+	NginxMedia                  bool
+	STUNPort                    int
+	WebRTCCooldown              int
+	AdminSessionTTL             int
+	AdminFailedWindow           int
+	AdminMaxFailed              int
+	AdminCookieSameSite         string
+	AdminMaxUploadBytes         int64
+	AdminMaxTaskFiles           int
+	AdminMaxBatchFiles          int
+	AdminMaxDownloadItems       int
+	AdminMaxFilenameLength      int
+	AdminUploadInactivity       int
+	TrustedProxyNetworks        []string
+	SecurityExemptNetworks      []string
+	SecurityInvalidLimit        int
+	SecurityInvalidWindow       int
+	SecurityContact             string
+	LogLevel                    string
+	LogFormat                   string
+	GitHubAPIToken              string
+	ReleaseBranch               string
+	ReleaseSourceBranch         string
+	StagingCD                   bool
 }
 
 // Load reads configuration from the process environment.
@@ -89,23 +91,25 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("MYSQL_PORT must be an integer from 1 to 65535")
 	}
 	value := Config{
-		DeploymentMode:    normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
-		StorageEndpoint:   strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
-		StorageTLSCert:    fallback(getenv("STORAGE_TLS_CERT"), "/run/frontiercloud-tls/fullchain.pem"),
-		StorageTLSKey:     fallback(getenv("STORAGE_TLS_KEY"), "/run/frontiercloud-tls/privkey.pem"),
-		DatabaseType:      normalized(getenv("DB_TYPE"), DatabaseSQLite),
-		SQLitePath:        fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
-		MySQLHost:         fallback(getenv("MYSQL_HOST"), "mysql"),
-		MySQLPort:         port,
-		MySQLDatabase:     fallback(getenv("MYSQL_DATABASE"), "office_automation"),
-		MySQLUser:         fallback(getenv("MYSQL_USER"), "media_admin"),
-		MySQLPasswordFile: fallback(getenv("MYSQL_PASSWORD_FILE"), "/run/frontiercloud-secrets/mysql_password"),
-		RedisURL:          fallback(getenv("REDIS_URL"), "redis://redis:6379/0"),
-		HTTPAddress:       fallback(getenv("HTTP_ADDR"), ":8000"),
-		DataRoot:          fallback(getenv("DATA_ROOT"), "/app/data"),
-		StaticRoot:        fallback(getenv("STATIC_ROOT"), "/app/static"),
-		SecretsDirectory:  fallback(getenv("SECRETS_DIR"), "/run/frontiercloud-secrets"),
-		ServerName:        fallback(getenv("SERVER_NAME"), "localhost"),
+		DeploymentMode:              normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
+		StorageEndpoint:             strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
+		StorageTLSCert:              fallback(getenv("STORAGE_TLS_CERT"), "/run/frontiercloud-tls/fullchain.pem"),
+		StorageTLSKey:               fallback(getenv("STORAGE_TLS_KEY"), "/run/frontiercloud-tls/privkey.pem"),
+		StorageCertificateDirectory: strings.TrimSpace(getenv("STORAGE_CERTIFICATE_DIRECTORY")),
+		StorageCertificateSocket:    strings.TrimSpace(getenv("STORAGE_CERTIFICATE_SOCKET")),
+		DatabaseType:                normalized(getenv("DB_TYPE"), DatabaseSQLite),
+		SQLitePath:                  fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
+		MySQLHost:                   fallback(getenv("MYSQL_HOST"), "mysql"),
+		MySQLPort:                   port,
+		MySQLDatabase:               fallback(getenv("MYSQL_DATABASE"), "office_automation"),
+		MySQLUser:                   fallback(getenv("MYSQL_USER"), "media_admin"),
+		MySQLPasswordFile:           fallback(getenv("MYSQL_PASSWORD_FILE"), "/run/frontiercloud-secrets/mysql_password"),
+		RedisURL:                    fallback(getenv("REDIS_URL"), "redis://redis:6379/0"),
+		HTTPAddress:                 fallback(getenv("HTTP_ADDR"), ":8000"),
+		DataRoot:                    fallback(getenv("DATA_ROOT"), "/app/data"),
+		StaticRoot:                  fallback(getenv("STATIC_ROOT"), "/app/static"),
+		SecretsDirectory:            fallback(getenv("SECRETS_DIR"), "/run/frontiercloud-secrets"),
+		ServerName:                  fallback(getenv("SERVER_NAME"), "localhost"),
 	}
 	value.SecurityExemptNetworks = strings.Split(fallback(getenv("SECURITY_EXEMPT_NETWORKS"), "127.0.0.0/8,::1/128"), ",")
 	value.SecurityContact = strings.TrimSpace(getenv("SECURITY_CONTACT"))
@@ -241,6 +245,9 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("DEPLOYMENT_MODE must be business or only_stroge")
 	}
 	if value.DeploymentMode == DeploymentStorage {
+		if (value.StorageCertificateDirectory == "") != (value.StorageCertificateSocket == "") || value.StorageCertificateDirectory != "" && (!filepath.IsAbs(value.StorageCertificateDirectory) || !filepath.IsAbs(value.StorageCertificateSocket)) {
+			return Config{}, errors.New("storage certificate directory and socket must be configured together as absolute paths")
+		}
 		if value.DatabaseType != DatabaseSQLite || !value.TLSEnabled || value.NginxMedia {
 			return Config{}, errors.New("only_stroge requires embedded SQLite, TLS_ENABLED=true and NGINX_MEDIA_ACCEL=false")
 		}

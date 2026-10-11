@@ -1,0 +1,10 @@
+# Optional host certificate agent. No host TCP 80 Docker mapping is created.
+# Preserve the existing bootstrap TLS mounts until a managed pair is issued.
+services:
+  web:
+    environment:
+      STORAGE_CERTIFICATE_DIRECTORY: /run/frontiercloud-certificate/tls
+      STORAGE_CERTIFICATE_SOCKET: /run/frontiercloud-certificate/control.sock
+    volumes:
+      - ${STORAGE_CERTIFICATE_STATE:-/opt/frontiercloud-storage/certificate-state}:/run/frontiercloud-certificate/tls:ro
+      - ${STORAGE_CERTIFICATE_RUNTIME:-/run/frontiercloud-certificate}:/run/frontiercloud-certificate:ro

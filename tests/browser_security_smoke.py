@@ -1,5 +1,6 @@
 """Real Chromium against an isolated loopback Gin/Nginx HTTPS fixture only."""
 import argparse
+import json
 import os
 import urllib.parse
 
@@ -99,6 +100,57 @@ def main():
         assert page.evaluate('window.cspViolations') == []
         assert errors == [], errors
         assert 'h2' in protocols, protocols
+        # Exercise the certificate panel in real Chromium with bounded node facts.
+        # Native signed ownership and the real Unix/TLS lifecycle have separate tests.
+        operations = []
+        facts = {'hostname': 'storage.fixture.test', 'state': 'renewal_due',
+                 'not_after': 1900000000, 'managed': True, 'auto_renew': False,
+                 'job': {'state': 'idle', 'port80_active': False}}
+        member = {'member_id': 'storage-fixture', 'member_kind': 'Follower', 'transport': 'Direct',
+                  'storage_enabled': True, 'allocated_bytes': 1073741824}
+        relation = {'relationship_id': 'certificate-fixture', 'peer_id': 'storage-fixture',
+                    'peer_endpoint': 'https://storage.fixture.test:8443', 'direction': 'downstream',
+                    'state': 'active', 'status': 'online', 'mode': 'Direct',
+                    'summary': {'certificate': facts}}
+        def certificate_route(route):
+            path = urllib.parse.urlsplit(route.request.url).path
+            if path.endswith('/certificate'):
+                if route.request.method == 'POST':
+                    assert route.request.headers.get('x-csrf-token'), 'certificate GUI omitted CSRF'
+                    value = route.request.post_data_json
+                    operations.append(value)
+                    if value['action'] == 'renew':
+                        facts['job'] = {'state': 'failed', 'code': 'port80_busy', 'port80_active': False}
+                    elif value['action'] == 'auto':
+                        facts['auto_renew'] = value['enabled']
+                    else:
+                        raise AssertionError(value)
+                route.fulfill(status=202 if route.request.method == 'POST' else 200,
+                              content_type='application/json', body=json.dumps(facts))
+            elif path.endswith('/observability'):
+                route.fulfill(content_type='application/json', body=json.dumps({'members': []}))
+            elif path.endswith('/nodes'):
+                route.fulfill(content_type='application/json', body=json.dumps({
+                    'role': 'Master', 'node_id': 'master-fixture', 'app_version': 'fixture', 'protocol': 2,
+                    'relationships': [relation], 'storage_pool': {'members': [member]}}))
+            else:
+                route.continue_()
+        page.route('**/api/v1/media/admin/nodes**', certificate_route)
+        page.locator('#nodesPanel .module-heading').click()
+        panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
+        panel.get_by_role('button', name='查询证书', exact=True).click()
+        panel.get_by_role('button', name='申请 / 续期', exact=True).click()
+        panel.get_by_text('80 端口被占用', exact=False).wait_for(state='visible')
+        panel.get_by_role('button', name='开启自动续期', exact=True).click()
+        panel.get_by_role('button', name='关闭自动续期', exact=True).wait_for(state='visible')
+        assert operations == [{'action': 'renew'}, {'action': 'auto', 'enabled': True}], operations
+        for width in (1280, 390):
+            page.set_viewport_size({'width': width, 'height': 900})
+            assert panel.is_visible()
+            assert panel.evaluate('(e) => e.scrollWidth <= e.clientWidth + 2'), 'certificate panel overflow'
+        assert page.evaluate('window.cspViolations') == []
+        assert errors == [], errors
+        print('PASS: Chromium certificate status/renew/policy controls, CSRF, port conflict text and desktop/mobile layout')
         print('PASS: real HTTP/2, home/category/player/Admin/karaoke CSP; click playback; malicious inline JS blocked; microphone scope preserved')
         browser.close()
 

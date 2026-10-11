@@ -23,6 +23,9 @@ import (
 )
 
 func nativeHTTPFixture(t *testing.T) *gin.Engine {
+	return nativeHTTPFixtureMode(t, config.DeploymentBusiness)
+}
+func nativeHTTPFixtureMode(t *testing.T, mode string) *gin.Engine {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -42,6 +45,10 @@ func nativeHTTPFixture(t *testing.T) *gin.Engine {
 		t.Fatal(err)
 	}
 	settings.NginxMedia = false
+	settings.DeploymentMode = mode
+	if mode == config.DeploymentStorage {
+		settings.TLSEnabled = true
+	}
 	for _, name := range []string{"media/music/artist", "media/vido", "media/lyrics", "recordings", "secrets"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0700); err != nil {
 			t.Fatal(err)
@@ -126,6 +133,20 @@ func TestProductionHTTPRegistrationCoversEffectiveReferenceInventory(t *testing.
 	available := map[string]bool{}
 	for _, r := range router.Routes() {
 		available[r.Method+" "+pathShape(r.Path)] = true
+	}
+	if available["POST /internal/v1/certificate"] {
+		t.Fatal("storage certificate endpoint exposed on business deployment")
+	}
+	storageRouter := nativeHTTPFixtureMode(t, config.DeploymentStorage)
+	storageCertificate := false
+	for _, r := range storageRouter.Routes() {
+		available[r.Method+" "+pathShape(r.Path)] = true
+		if r.Method == "POST" && r.Path == "/internal/v1/certificate" {
+			storageCertificate = true
+		}
+	}
+	if !storageCertificate {
+		t.Fatal("native storage certificate endpoint missing")
 	}
 	b, err := os.ReadFile("../../protocol/v2/http-routes.json")
 	if err != nil {

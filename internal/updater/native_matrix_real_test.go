@@ -532,6 +532,46 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		time.Sleep(time.Second)
 	}
 	t.Log("real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed", kind, "2 Direct / 2 Relay")
+	// Diagnostics are sequential and cannot replace media or heartbeat health.
+	for i, follower := range sites[1:] {
+		facts := perform(master, "GET", "/nodes/"+relations[i]+"/certificate", nil)
+		if facts["hostname"] != "site"+big.NewInt(int64(i+1)).String()+".fleet.invalid" || facts["state"] != "renewal_due" || facts["managed"] != false {
+			t.Fatal("served storage certificate status mismatch", facts)
+		}
+		u, _ := url.Parse(follower.origin)
+		conn, err := net.DialTimeout("udp", net.JoinHostPort(u.Hostname(), "3478"), time.Second)
+		if err != nil {
+			t.Fatal("native storage STUN unreachable", err)
+		}
+		request := make([]byte, 20)
+		request[1] = 1
+		copy(request[4:], []byte{0x21, 0x12, 0xa4, 0x42})
+		copy(request[8:], "fleetbinding")
+		conn.SetDeadline(time.Now().Add(2 * time.Second))
+		_, err = conn.Write(request)
+		var response [80]byte
+		n, readErr := conn.Read(response[:])
+		conn.Close()
+		if err != nil || readErr != nil || n != 40 || response[0] != 1 || response[1] != 1 || !bytes.Equal(response[8:20], request[8:20]) {
+			t.Fatal("native sequential STUN binding failed", i, n, err, readErr)
+		}
+	}
+	request, _ := http.NewRequestWithContext(ctx, "GET", master.origin+"/api/v1/media/music/category?path=music", nil)
+	page, err := master.client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, err := io.ReadAll(io.LimitReader(page.Body, 2<<20))
+	page.Body.Close()
+	if err != nil || page.StatusCode != 200 {
+		t.Fatal("player network configuration unavailable", err)
+	}
+	for i := 0; i < fleetNodeCount; i++ {
+		if !bytes.Contains(html, []byte("stun:site"+big.NewInt(int64(i)).String()+".fleet.invalid:3478")) {
+			t.Fatal("player omitted paired STUN node", i)
+		}
+	}
+	t.Log("real native five-node certificate observation and sequential UDP STUN passed", kind)
 	// Exercise both native database profiles, including private key/credential
 	// rotation and durable revocation receipt before an independent new pair.
 	for _, index := range []int{1, 2} {
@@ -1012,4 +1052,80 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 	}
 	t.Log("real native matrix all-owner media deletion and catalog invalidation passed", kind)
+	fleetIdleCPU(t, ctx, e, sites)
+}
+
+// Measure actual cgroup CPU after business work and before owned fixture cleanup.
+func fleetIdleCPU(t *testing.T, parent context.Context, e *Engine, sites []*fleetSite) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	type stats struct {
+		CPU struct {
+			Usage struct {
+				Total uint64 `json:"total_usage"`
+			} `json:"cpu_usage"`
+			System uint64 `json:"system_cpu_usage"`
+			CPUs   int    `json:"online_cpus"`
+		} `json:"cpu_stats"`
+	}
+	read := func() ([]stats, error) {
+		values := make([]stats, len(sites))
+		for i, s := range sites {
+			if err := e.call(ctx, "GET", "/containers/"+s.web+"/stats?stream=false&one-shot=true", nil, &values[i]); err != nil {
+				return nil, err
+			}
+		}
+		return values, nil
+	}
+	stopFailed := func() {
+		shutdown, close := context.WithTimeout(context.Background(), 30*time.Second)
+		defer close()
+		for _, s := range sites {
+			_ = e.Stop(shutdown, s.web)
+		}
+	}
+	previous, err := read()
+	if err != nil {
+		stopFailed()
+		t.Fatal("fleet CPU baseline unavailable", err)
+	}
+	consecutive := 0
+	for {
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			stopFailed()
+			t.Fatal("five Web services did not recover idle CPU within 30 seconds")
+		case <-timer.C:
+		}
+		current, err := read()
+		if err != nil {
+			stopFailed()
+			t.Fatal("fleet CPU observation failed", err)
+		}
+		below := true
+		percent := make([]float64, len(sites))
+		for i, v := range current {
+			p := previous[i]
+			if v.CPU.CPUs < 1 || v.CPU.System <= p.CPU.System || v.CPU.Usage.Total < p.CPU.Usage.Total {
+				stopFailed()
+				t.Fatal("invalid monotonic fleet CPU counters")
+			}
+			percent[i] = float64(v.CPU.Usage.Total-p.CPU.Usage.Total) / float64(v.CPU.System-p.CPU.System) * float64(v.CPU.CPUs) * 100
+			below = below && percent[i] < 20
+		}
+		t.Logf("five Web idle CPU (one-core percent): %.3f", percent)
+		previous = current
+		if below {
+			consecutive++
+		} else {
+			consecutive = 0
+		}
+		if consecutive == 5 {
+			t.Log("five Web services passed five consecutive one-second idle CPU samples below 20 percent")
+			return
+		}
+	}
 }

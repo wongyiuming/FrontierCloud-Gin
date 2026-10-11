@@ -4,7 +4,6 @@ package media
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io/fs"
@@ -448,18 +447,21 @@ func (s *Service) localCatalog(ctx context.Context, kind, name, session string, 
 			return nil, err
 		}
 	}
+	sortTracks(items)
+	return items, nil
+}
+
+// Equal preferences have one order across sessions, cache hits and storage paths.
+func sortTracks(items []Track) {
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Preference != items[j].Preference {
 			return items[i].Preference > items[j].Preference
 		}
-		return randomKey(session, items[i].MediaID) < randomKey(session, items[j].MediaID)
+		if items[i].MediaPath != items[j].MediaPath {
+			return items[i].MediaPath < items[j].MediaPath
+		}
+		return items[i].MediaID < items[j].MediaID
 	})
-	return items, nil
-}
-
-func randomKey(session, id string) string {
-	sum := sha256.Sum256([]byte(session + ":" + id))
-	return hex.EncodeToString(sum[:])
 }
 func QuotePath(name string) string {
 	parts := strings.Split(name, "/")

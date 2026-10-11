@@ -27,6 +27,7 @@ x-storage-env: &storage-env
   STORAGE_TLS_KEY: /run/frontiercloud-tls/privkey.pem
   RELEASE_BRANCH: main
   RELEASE_SOURCE_BRANCH: dev
+  WEBRTC_STUN_PORT: ${WEBRTC_STUN_PORT:-3478}
 
 services:
   secrets-init:
@@ -67,6 +68,7 @@ services:
     cap_drop: [ALL]
     ports:
       - "${PUBLIC_BIND_ADDRESS:-0.0.0.0}:${STORAGE_PORT:-8443}:8443"
+      - "${PUBLIC_BIND_ADDRESS:-0.0.0.0}:${WEBRTC_STUN_PORT:-3478}:${WEBRTC_STUN_PORT:-3478}/udp"
     depends_on:
       secrets-init: {condition: service_completed_successfully}
       media-init: {condition: service_completed_successfully}

@@ -22,6 +22,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -33,6 +34,7 @@ type Public struct {
 	brand              *brand.Service
 	crypto             *mediacrypto.Manager
 	cryptoSessionLimit cryptoSessionAdmission
+	control            *node.Service
 }
 
 func assetURL(name string, content []byte) string {
@@ -416,7 +418,7 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 		return
 	}
 	values := map[string]string{
-		"STUN_URLS_JSON":             jsonString([]string{"stun:" + p.settings.ServerName + ":" + strconv.Itoa(p.settings.STUNPort)}),
+		"STUN_URLS_JSON":             jsonString(p.stunURLs(c)),
 		"WEBRTC_INTERVAL_MS":         strconv.Itoa(p.settings.WebRTCCooldown * 1000),
 		"NETWORK_OBSERVATION_JS_URL": html.EscapeString(p.assets["js/network-observation.js"]),
 		"PLAYER_JS_URL":              html.EscapeString(p.assets["js/player.js"]), "PLAYER_CSS_URL": html.EscapeString(p.assets["css/player.css"]),
@@ -566,7 +568,7 @@ func (p *Public) karaokePage(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	values := map[string]string{"KARAOKE_CSS_URL": p.assets["css/karaoke.css"], "KARAOKE_JS_URL": p.assets["js/karaoke.js"], "NETWORK_OBSERVATION_JS_URL": p.assets["js/network-observation.js"], "STUN_URLS": jsonString([]string{"stun:" + p.settings.ServerName + ":" + strconv.Itoa(p.settings.STUNPort)}), "WEBRTC_INTERVAL_MS": strconv.Itoa(p.settings.WebRTCCooldown * 1000)}
+	values := map[string]string{"KARAOKE_CSS_URL": p.assets["css/karaoke.css"], "KARAOKE_JS_URL": p.assets["js/karaoke.js"], "NETWORK_OBSERVATION_JS_URL": p.assets["js/network-observation.js"], "STUN_URLS": jsonString(p.stunURLs(c)), "WEBRTC_INTERVAL_MS": strconv.Itoa(p.settings.WebRTCCooldown * 1000)}
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}

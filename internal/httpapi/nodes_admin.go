@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"unicode/utf8"
@@ -47,6 +48,32 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 		c.JSON(200, result)
 	})
 	writes := group.Group("", mutate)
+	group.GET("/:identifier/certificate", func(c *gin.Context) {
+		v, err := service.Certificate(c.Request.Context(), c.Param("identifier"), certificate.Request{Action: "status"}, audit(c))
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(200, v)
+	})
+	writes.POST("/:identifier/certificate", func(c *gin.Context) {
+		var request certificate.Request
+		if !decodeNodeAdmin(c, &request) {
+			return
+		}
+		if request.Action != "renew" && request.Action != "auto" {
+			invalid(c, "body", "action")
+			return
+		}
+		v, err := service.Certificate(c.Request.Context(), c.Param("identifier"), request, audit(c))
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(202, v)
+	})
 	writes.POST("/promote", func(c *gin.Context) {
 		var body struct {
 			Role     string `json:"role"`

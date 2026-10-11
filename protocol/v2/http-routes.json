@@ -871,5 +871,20 @@
       "GET"
     ],
     "handler": "main.karaoke_page"
+  },
+  {
+    "path": "/internal/v1/certificate",
+    "methods": [
+      "POST"
+    ],
+    "handler": "native.storage.certificate"
+  },
+  {
+    "path": "/api/v1/media/admin/nodes/{identifier}/certificate",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "native.admin.nodes.certificate"
   }
 ]

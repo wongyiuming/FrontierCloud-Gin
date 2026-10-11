@@ -32,14 +32,16 @@ security publisher or business-backup builder.
 5. Master Admin sets Direct/Relay, storage enablement/capacity and backup
    enablement. They are not selected on the appliance.
 
-The only published port defaults to 8443. `STORAGE_PORT` and the explicit port
+The HTTPS port defaults to 8443; the native bounded STUN binding responder also
+publishes UDP 3478 (`WEBRTC_STUN_PORT`). `STORAGE_PORT` and the explicit port
 in `STORAGE_ENDPOINT` must agree and must be in 1024–65535. HTTP/HTTPS host
 ports 80/443 are prohibited for this mode. No HTTP redirect listener is added.
 For a new unpaired node, startup also emits a package. If it expires, run
 `docker compose -f docker-compose.storage.yaml exec -T web /app/frontiercloud storage-pair`.
 Restarting a paired node preserves its identity and does not emit another
-package. Restart after certificate rotation; the running listener does not
-watch certificate files.
+package. The optional [host certificate service](storage-certificate-control.md)
+publishes complete TLS pairs for hot loading without restarting media service.
+External/bootstrap certificate rotation still requires a restart.
 
 ## Existing data: do not use fresh installation as migration
 

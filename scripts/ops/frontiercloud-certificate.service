@@ -1,0 +1,33 @@
+[Unit]
+Description=FrontierCloud private storage certificate control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=10001
+Group=10001
+RuntimeDirectory=frontiercloud-certificate
+RuntimeDirectoryMode=0700
+EnvironmentFile=/etc/frontiercloud-certificate.env
+Environment=GOMAXPROCS=1 GOMEMLIMIT=64MiB GOGC=50
+ExecStart=/usr/local/libexec/frontiercloud certificate-agent --hostname ${CERTIFICATE_HOSTNAME} --directory /opt/frontiercloud-storage/certificate-state --socket /run/frontiercloud-certificate/control.sock --acme-directory ${CERTIFICATE_ACME_DIRECTORY}
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=10
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/frontiercloud-storage/certificate-state /run/frontiercloud-certificate
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=128M
+MemorySwapMax=0
+CPUQuota=5%
+TasksMax=24
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

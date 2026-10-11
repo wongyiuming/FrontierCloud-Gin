@@ -83,6 +83,12 @@ For HTTPS, copy the relevant switches from `.env.example`, enable TLS, set `SERV
 
 Fresh storage deployments use `.env.storage.example` and `docker-compose.storage.yaml` alone. Run `bash scripts/deploy-storage.sh`; one Go HTTPS container remains running and prints a five-minute pairing package. Ports 80/443, business GUIs, database containers and storage updaters are absent. Master controls Direct/Relay and allocations. See [storage appliance operations](docs/storage-appliance.md) before touching an existing owned disk.
 
+Master node management can inspect storage certificates and control renewal
+after the optional [host certificate service](docs/storage-certificate-control.md)
+is provisioned. It opens port 80 only for HTTP-01 validation and releases it
+afterwards. Storage STUN uses UDP 3478 by default; browser probes visit all
+paired storage nodes serially.
+
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
 The dedicated preproduction Master has its own state.

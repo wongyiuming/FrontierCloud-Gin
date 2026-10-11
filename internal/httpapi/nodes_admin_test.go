@@ -126,6 +126,9 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		if w := perform("POST", "/elevate", "token="+url.QueryEscape(key), false, true); w.Code != 200 {
 			t.Fatal(w.Code, w.Body.String())
 		}
+		if w := perform("POST", "/nodes/member/certificate", `{"action":"renew"}`, false, true); w.Code != 403 {
+			t.Fatal("certificate mutation without CSRF", w.Code)
+		}
 		for _, path := range []string{"/docs", "/redoc", "/openapi.json"} {
 			r := httptest.NewRequest("GET", origin+path, nil)
 			for _, cookie := range cookies {

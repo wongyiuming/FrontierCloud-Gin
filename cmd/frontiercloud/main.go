@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
@@ -26,6 +27,7 @@ import (
 	storecontract "github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/stun"
 	"path/filepath"
 )
 
@@ -73,6 +75,8 @@ func command(arguments []string) error {
 		return guardedCommand(settings, func(ctx context.Context) error { return bootstrap.InitializeMediaContext(ctx, settings.DataRoot) })
 	case "healthcheck":
 		return healthcheck()
+	case "certificate-agent":
+		return certificateAgentCommand(arguments[1:])
 	case "storage-pair":
 		if len(arguments) != 1 {
 			return errors.New("storage-pair accepts no arguments")
@@ -249,6 +253,44 @@ func serve() error {
 			return err
 		}
 	}
+	var storageTLS *certificate.TLS
+	if settings.DeploymentMode == config.DeploymentStorage {
+		storageTLS, err = certificate.NewTLS(settings.ServerName, settings.StorageCertificateDirectory, settings.StorageTLSCert, settings.StorageTLSKey)
+		if err != nil {
+			return err
+		}
+		var client certificate.Client
+		if settings.StorageCertificateSocket != "" {
+			client = certificate.UnixClient{Socket: settings.StorageCertificateSocket, Hostname: settings.ServerName}
+		}
+		monitor := certificate.NewMonitor(storageTLS, client)
+		certificateDone := make(chan struct{})
+		go func() { defer close(certificateDone); monitor.Run(shutdown) }()
+		defer func() { stop(); <-certificateDone }()
+		if client != nil {
+			client = monitor
+		}
+		controlService.ConfigureNetwork(settings.STUNPort, client, monitor.Status, database.Admin())
+		address, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", settings.STUNPort))
+		if err != nil {
+			return err
+		}
+		conn, err := net.ListenUDP("udp", address)
+		if err != nil {
+			slog.Warn("storage STUN unavailable; HTTPS remains independent")
+		} else {
+			stunDone := make(chan struct{})
+			go func() {
+				defer close(stunDone)
+				if stun.Serve(shutdown, conn) != nil && shutdown.Err() == nil {
+					slog.Warn("storage STUN stopped; HTTPS remains independent")
+				}
+			}()
+			defer func() { stop(); conn.Close(); <-stunDone }()
+		}
+	} else {
+		controlService.ConfigureNetwork(0, nil, nil, database.Admin())
+	}
 	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
 	if err != nil {
 		return err
@@ -315,10 +357,8 @@ func serve() error {
 	}
 	defer listener.Close()
 	if settings.DeploymentMode == config.DeploymentStorage {
-		if _, err := tls.LoadX509KeyPair(settings.StorageTLSCert, settings.StorageTLSKey); err != nil {
-			return err
-		}
-		go func() { errorsChannel <- server.ServeTLS(listener, settings.StorageTLSCert, settings.StorageTLSKey) }()
+		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: storageTLS.GetCertificate}
+		go func() { errorsChannel <- server.ServeTLS(listener, "", "") }()
 		// Valid certificate material is checked by ServeTLS. No private signing
 		// key/Admin Key is printed, only the five-minute one-use signed package.
 		if err := printStoragePair(initialization, controlService, database.Nodes(), os.Stdout); err != nil {

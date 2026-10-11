@@ -173,12 +173,7 @@ func (s *Service) globalCatalog(ctx context.Context, kind, name, session string,
 		item.HasLyrics = &has
 		items = append(items, item)
 	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Preference != items[j].Preference {
-			return items[i].Preference > items[j].Preference
-		}
-		return randomKey(session, items[i].MediaID) < randomKey(session, items[j].MediaID)
-	})
+	sortTracks(items)
 	return items, nil
 }
 

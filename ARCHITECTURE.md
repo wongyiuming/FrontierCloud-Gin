@@ -106,6 +106,10 @@ Folders are first-class sorting objects. Directory priority is distinct from med
 
 Public category/subcategory ordering is `directory priority descending -> name`. Priority state is stored as managed metadata and must migrate with a successful folder rename.
 
+Media catalog ordering is `file priority descending -> managed path -> stable media ID`.
+Equal priorities must keep the same order across page loads, playback sessions,
+Local/Master catalogs and cache hits. Session IDs never seed a shuffle.
+
 Catalog ordering is cached server-side. A cache hit must not cause a new MySQL sort query; changing priority or a directory name must invalidate the catalog generation.
 
 ## 7. Lyrics
@@ -138,7 +142,7 @@ An accepted lyric upload is successful only after the file and its managed-objec
 
 Bounded process-local catalog generations cache expensive scans/catalog queries. Browser/API cache headers must not make mutable directory structure remain stale after a successful Admin mutation.
 
-For mutable catalog APIs, the HTTP client revalidates while a single-process cache avoids repeated catalog work. All domain handles from one selected Store share a SQL commit generation; successful writes conservatively invalidate it, rolled-back writes do not. Managed filesystem mutation fences also clear the cache, including ambiguous/failing mutations. A fill racing a commit is not published. Scope keys separate role, media type, path and hidden visibility; caller-specific ordering is applied to copied results rather than creating per-session entries. Cache hits never bypass readiness, role checks or stream authorization.
+For mutable catalog APIs, the HTTP client revalidates while a single-process cache avoids repeated catalog work. All domain handles from one selected Store share a SQL commit generation; successful writes conservatively invalidate it, rolled-back writes do not. Managed filesystem mutation fences also clear the cache, including ambiguous/failing mutations. A fill racing a commit is not published. Scope keys separate role, media type, path and hidden visibility; deterministic ordering is applied to copied results without per-session entries. Cache hits never bypass readiness, role checks or stream authorization.
 
 `MEDIA_CATALOG_CACHE_TTL` defaults to 300 seconds, accepts 0 to disable, and is bounded by 86400. Admission is capped at 64 entries / 8 MiB accounted payload; entries above 1 MiB bypass caching. Errors are not cached, waiting readers honor cancellation, and restart drops all cache state. Stores without an invalidation contract bypass caching. This is not cross-process cache coherence: maintenance/offline writers must close the native runtime fence first; live direct SQL or filesystem edits remain prohibited.
 
@@ -268,7 +272,36 @@ A regression may not be weakened merely to accommodate a new feature. Architectu
 container. Initializers exit; no Nginx, Redis, MySQL, updater, coturn, Admin GUI
 or player is deployed on storage. SQL payload backups are files, not online
 replicas or SQL BLOB copies. Master controls transport and allocations.
-Ports 80/443 are prohibited; the default explicit HTTPS port is 8443.
+Permanent storage HTTP/HTTPS publications on 80/443 are prohibited; the default
+explicit HTTPS port is 8443. UDP STUN defaults to 3478 and runs inside the
+existing Go process: one packet loop, a 513-byte receive buffer, a small kernel
+queue, at most ten datagrams/second including malformed requests. Binding only;
+no TURN, relay forwarding or per-packet goroutines. Diagnostic failure must not
+stop or degrade the successful HTTPS/media/heartbeat service.
+
+Master supplies its own STUN address and every active, paired downstream storage
+hostname, with custom UDP ports from signed heartbeat facts (legacy default
+3478). Browser ICE diagnostics are strictly serial: one node/one live peer at a
+time, close before advancing, three-second timeout, 250 ms inter-node yield,
+and a cooldown of at least 30 seconds after the complete round. Same-origin
+tabs share a non-queued Web Lock where supported; older browsers serialize per
+page. No fan-out, overlapping timers, four-node truncation or parallel probe
+workers. Reports retain the existing maximum eight observed addresses.
+
+An optional host-native certificate control service is the sole temporary port
+80 exception. It is not a storage business service. It has a fixed local
+hostname/approved ACME CA, a private Unix socket, no Docker socket, arbitrary
+commands or remote paths, and a five-percent CPU/128 MiB systemd boundary.
+The active upstream Master can request status/renewal/automatic-renewal policy
+through authenticated HTTPS and the existing Admin session/CSRF/audit contract.
+Private ACME and TLS keys never leave the storage host. HTTP-01 listens only
+during validation, with one accepted connection, a three-minute job deadline,
+one job at a time and a one-hour retry cooldown. Success, failure, timeout,
+process stop and restart cannot leave a permanent HTTP listener. An occupied
+port returns conflict without stopping another service. Complete certificate
+pairs publish atomically and hot-load; failure retains the previous valid pair.
+Certificate-agent observation is independent of heartbeat and media. See
+[certificate control contract](docs/storage-certificate-control.md).
 
 The persisted role discriminator `Follower` remains in protocol-v2/SQL to
 preserve node IDs, references and transactional recovery. It is not a supported
