@@ -69,6 +69,7 @@ type Manager struct {
 	cancel            context.CancelFunc
 	release           func()
 	cache             *certmagic.Cache
+	storage           *controlledStorage
 	cfg               *certmagic.Config
 	issuer            *boundedIssuer
 	journal           journal
@@ -127,6 +128,9 @@ func open(parent context.Context, opt options) (*Manager, error) {
 	defer func() {
 		if !ok {
 			cancel()
+			if m.storage != nil {
+				m.storage.close()
+			}
 			release()
 		}
 	}()
@@ -163,7 +167,8 @@ func open(parent context.Context, opt options) (*Manager, error) {
 	}
 	logger := zap.NewNop() // ACME logs can contain full filesystem paths and CSR data.
 	m.cache = certmagic.NewCache(certmagic.CacheOptions{GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) { return m.cfg, nil }, Capacity: 1, RenewCheckInterval: time.Hour, Logger: logger})
-	m.cfg = certmagic.New(m.cache, certmagic.Config{DefaultServerName: opt.host, Storage: &certmagic.FileStorage{Path: filepath.Join(opt.private, "cache")}, OnEvent: m.event, Logger: logger, KeySource: certmagic.StandardKeyGenerator{KeyType: certmagic.P256}})
+	m.storage = &controlledStorage{backend: &certmagic.FileStorage{Path: filepath.Join(opt.private, "cache")}}
+	m.cfg = certmagic.New(m.cache, certmagic.Config{DefaultServerName: opt.host, Storage: m.storage, OnEvent: m.event, Logger: logger, KeySource: certmagic.StandardKeyGenerator{KeyType: certmagic.P256}})
 	issue := opt.issuer
 	if issue == nil {
 		issue = func(cfg *certmagic.Config) *certmagic.ACMEIssuer {
@@ -340,6 +345,9 @@ func (m *Manager) endChallenge() {
 	}
 }
 func (m *Manager) event(ctx context.Context, name string, data map[string]any) error {
+	if m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
 	switch name {
 	case "cert_obtaining":
 		m.mu.Lock()
@@ -416,6 +424,9 @@ func classify(e error) string {
 func (m *Manager) failed(code string, renewal bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.ctx.Err() != nil {
+		return
+	}
 	m.journal.Error = code
 	m.journal.RetryAt = time.Now().Add(5 * time.Minute).Unix()
 	m.journal.CompletedAt = time.Now().Unix()
@@ -433,13 +444,16 @@ func (m *Manager) failed(code string, renewal bool) {
 	slog.Warn("automatic TLS operation failed", "domain", m.opt.host, "code", m.journal.Error)
 }
 func (m *Manager) saveLocked() error {
+	if m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
 	b, _ := json.Marshal(m.journal)
 	return atomic(filepath.Join(m.opt.private, "lifecycle.json"), b, 0600)
 }
 func (m *Manager) updateView() {
 	v := &m.view
 	v.Enabled = m.opt.enabled
-	v.ControllerRunning = true
+	v.ControllerRunning = m.ctx.Err() == nil
 	v.Hostname = m.opt.host
 	v.Mode = "automatic"
 	v.Managed = m.opt.enabled
@@ -678,6 +692,12 @@ func (m *Manager) Close() {
 			m.cache.Stop()
 		}
 		m.wg.Wait()
+		if m.storage != nil {
+			m.storage.close()
+		}
+		// Join any callback already persisting the journal under this mutex.
+		m.mu.Lock()
+		m.mu.Unlock()
 		m.release()
 	})
 }
