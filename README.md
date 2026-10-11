@@ -31,10 +31,10 @@ For a fresh HTTPS node, create `.env` with only these five host-specific values
 
 ```dotenv
 TLS_ENABLED=true
-SERVER_NAME=ml.520mall.cc
-SSL_CERT_PATH=/etc/letsencrypt/live/ml.520mall.cc/fullchain.pem
-SSL_KEY_PATH=/etc/letsencrypt/live/ml.520mall.cc/privkey.pem
-ACME_WEBROOT=/root/FrontierCloud/certs/acme
+SERVER_NAME=4399.com
+SSL_CERT_PATH=/etc/letsencrypt/live/4399.com/fullchain.pem
+SSL_KEY_PATH=/etc/letsencrypt/live/4399.com/privkey.pem
+ACME_WEBROOT=/var/www/certbot
 ```
 
 ```bash
@@ -85,7 +85,7 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
-RN preproduction at `www4399.sbs` is a separate Master with its own state.
+The dedicated preproduction Master has its own state.
 Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
 from a default-`main` trusted workflow after successful exact-`dev` test CI and
 all three public image proofs. Publication itself also executes immutable main
