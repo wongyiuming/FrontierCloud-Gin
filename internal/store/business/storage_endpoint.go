@@ -15,8 +15,11 @@ func validStorageEndpoint(value string) bool {
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || len(value) > 512 {
 		return false
 	}
+	if u.Port() == "" {
+		return true // Canonical Direct HTTPS uses the fixed default port 443.
+	}
 	port, err := strconv.Atoi(u.Port())
-	return err == nil && port >= 1024 && port <= 65535
+	return err == nil && (port == 443 || port >= 1024 && port <= 65535)
 }
 
 func endpointIdle(ctx context.Context, q queryer) error {

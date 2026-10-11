@@ -39,7 +39,7 @@ func TestOfflineStorageEndpointPreservesIdentityAndOwnership(t *testing.T) {
 	writer := db.Nodes().(interface {
 		MoveStorageEndpoint(context.Context, string, string, string) error
 	})
-	for _, next := range []string{"https://disk.test", "https://disk.test:443", "http://disk.test:8443", "https://user:pass@disk.test:8443", "https://disk.test:8443/path", "https://disk.test:8443?q=1"} {
+	for _, next := range []string{"https://disk.test:80", "https://disk.test:444", "https://disk.test:65536", "http://disk.test:8443", "https://user:pass@disk.test:8443", "https://disk.test:8443/path", "https://disk.test:8443?q=1"} {
 		if err := writer.MoveStorageEndpoint(ctx, id, before.Endpoint, next); err == nil {
 			t.Fatal("unsafe endpoint accepted", next)
 		}
@@ -72,6 +72,17 @@ func TestOfflineStorageEndpointPreservesIdentityAndOwnership(t *testing.T) {
 	if err != nil || actual != before {
 		t.Fatal("identity rotated", err)
 	}
+	// The actual legacy Direct migration is high port -> canonical 443.
+	for _, endpoint := range []string{"https://disk.test:443", "https://disk.test"} {
+		if err := writer.MoveStorageEndpoint(ctx, id, before.Endpoint, endpoint); err != nil {
+			t.Fatal("Direct handover rejected", err)
+		}
+		before.Endpoint = endpoint
+		actual, err = db.Nodes().ReadIdentity(ctx)
+		if err != nil || actual != before {
+			t.Fatal("Direct handover rotated identity", err)
+		}
+	}
 	object, err := db.Media().ObjectByID(ctx, objects["music/retained.mp3"])
 	if err != nil || object.Path != "music/retained.mp3" {
 		t.Fatal("owned object lost", err)
@@ -93,7 +104,7 @@ func TestOfflineMasterStorageRebindGuardsAndPreservesRelationship(t *testing.T) 
 	} else if identity.Role != "Master" {
 		t.Fatal("fixture has non-Master identity")
 	}
-	rel := store.Relationship{ID: "de" + strings.Repeat("b", 30), PeerID: "de" + strings.Repeat("c", 30), Endpoint: "https://disk.test", PublicKey: strings.Repeat("A", 43), Credential: "retained-encrypted-secret", Direction: "downstream", Mode: "Relay", State: "pending", Protocol: 2, CreatedAt: time.Now().Unix()}
+	rel := store.Relationship{ID: "de" + strings.Repeat("b", 30), PeerID: "de" + strings.Repeat("c", 30), Endpoint: "https://disk.test:8443", PublicKey: strings.Repeat("A", 43), Credential: "retained-encrypted-secret", Direction: "downstream", Mode: "Relay", State: "pending", Protocol: 2, CreatedAt: time.Now().Unix()}
 	t.Cleanup(func() {
 		raw.Exec("DELETE FROM node_relationships WHERE relationship_id=?", rel.ID)
 		raw.Exec("DELETE FROM cluster_storage_members WHERE member_id=?", rel.PeerID)
@@ -104,6 +115,9 @@ func TestOfflineMasterStorageRebindGuardsAndPreservesRelationship(t *testing.T) 
 	if err := db.Nodes().ActivateRelationship(ctx, rel.ID, store.NodeAudit{}); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Nodes().SetRelationshipMode(ctx, rel.ID, "Direct", false, store.NodeAudit{}); err != nil {
+		t.Fatal(err)
+	}
 	rel, err = db.Nodes().Relationship(ctx, rel.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +125,7 @@ func TestOfflineMasterStorageRebindGuardsAndPreservesRelationship(t *testing.T) 
 	writer := db.Nodes().(interface {
 		RebindStorageEndpoint(context.Context, string, store.Relationship, string) error
 	})
-	next := "https://disk.test:8443"
+	next := "https://disk.test"
 	wrong := rel
 	wrong.PublicKey = strings.Repeat("B", 43)
 	if err := writer.RebindStorageEndpoint(ctx, identity.ID, wrong, next); !errors.Is(err, store.ErrNodeState) {
