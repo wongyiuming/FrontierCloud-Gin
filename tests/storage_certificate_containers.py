@@ -100,6 +100,9 @@ def run(work, project, revision):
     mem_limit: 256m
     memswap_limit: 256m
     ports: !reset []
+    networks:
+      default:
+        aliases: [{"business-web.fixture.test" if profile == "business" else "storage.fixture.test"}]
     volumes:
       - {case / 'ca.pem'}:/etc/ssl/certs/ca-certificates.crt:ro
 """
@@ -107,6 +110,9 @@ def run(work, project, revision):
             agent_override += f"""  nginx:
     image: frontiercloud-go-nginx:{revision}
     ports: !reset []
+    networks:
+      default:
+        aliases: [business.fixture.test]
     volumes:
       - {case / 'ca.pem'}:/etc/ssl/certs/ca-certificates.crt:ro
   stun:

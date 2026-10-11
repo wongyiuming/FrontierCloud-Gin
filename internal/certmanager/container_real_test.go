@@ -30,15 +30,16 @@ func TestAutomaticTLSContainerLifecycle(t *testing.T) {
 		t.Fatal("fixture controller identity mismatch")
 	}
 	host := "storage.fixture.test"
-	serving := "web:443"
 	challenge := "localhost:80"
 	if profile == Business {
 		host = "business.fixture.test"
-		serving = "nginx:443"
 		challenge = "nginx:80"
 	}
+	// This private test network resolves the advertised identity at its fixed
+	// HTTPS port, as an isolated substitute for the public DNS entrance.
+	serving := host + ":443"
 	if profile == Relay {
-		serving = "web:8443"
+		serving = host + ":8443"
 	}
 	ca := newCA(t, host, challenge)
 	if err := os.WriteFile("/fixture/ca.pem", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.root.Raw}), 0644); err != nil {

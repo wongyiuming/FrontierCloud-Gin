@@ -46,7 +46,13 @@ func (e *Edge) Ready(ctx context.Context) error {
 	if e.Enabled {
 		port = "443"
 	}
-	return e.readyAt(ctx, net.JoinHostPort("127.0.0.1", port))
+	if err := e.readyAt(ctx, net.JoinHostPort("127.0.0.1", port)); err != nil {
+		return err
+	}
+	if e.Enabled {
+		return e.readyAt(ctx, net.JoinHostPort(e.Host, port))
+	}
+	return nil
 }
 func (e *Edge) readyAt(ctx context.Context, address string) error {
 	dialer := &net.Dialer{Timeout: 2 * time.Second}

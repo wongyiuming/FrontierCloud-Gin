@@ -84,12 +84,11 @@ type Manager struct {
 // New has no certificate-path, CA-path or insecure configuration surface.
 // Directory paths and the approved public CA are fixed program internals.
 func New(ctx context.Context, host string, enabled bool, profile Profile, relayPort int) (*Manager, error) {
-	serving := "localhost:443"
-	if profile == Business {
-		serving = "nginx:443"
-	}
+	// Verify the advertised DNS entrance, including any external proxy, rather
+	// than treating a successful private-loopback handshake as public proof.
+	serving := net.JoinHostPort(host, "443")
 	if profile == Relay {
-		serving = net.JoinHostPort("localhost", strconv.Itoa(relayPort))
+		serving = net.JoinHostPort(host, strconv.Itoa(relayPort))
 	}
 	opt := options{host: host, enabled: enabled, profile: profile, private: PrivateDirectory, published: PublishedDirectory, runtime: RuntimeDirectory, challenge: ":80", serving: serving, ca: certmagic.LetsEncryptProductionCA, lookup: net.DefaultResolver.LookupIPAddr}
 	if profile == Business {
