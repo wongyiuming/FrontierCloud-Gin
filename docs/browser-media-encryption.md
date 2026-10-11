@@ -1,0 +1,188 @@
+# Browser media encryption contract
+
+Every file or folder selection requires a new explicit `plain` or `encrypted`
+decision. Closing the choice cancels that selection. Missing modes, changed
+descriptors and invalid preparation tokens are rejected by the server. Crypto
+errors never select plaintext, and previously selected modes are not persisted.
+
+## Data and key paths
+
+The browser encrypts each complete upload into private temporary ciphertext
+storage before reserving its storage destination. It reads at most one 1 MiB
+plaintext chunk at a time; the temporary file is removed after completion or
+failure. Master and storage receive ciphertext. Master-managed lyrics use the
+same format without moving lyric relations to storage nodes. Existing plaintext
+objects remain plaintext.
+
+The configured single-file upload limit applies to plaintext size in both
+modes. Encrypted transport allows the bounded GCM tag overhead above that
+limit; preparation and upload enforce the same descriptor and size rules.
+
+Version 1 uses AES-256-GCM with independent 1 MiB chunks and 128-bit tags. A file
+descriptor contains a random 128-bit `file_id`, random 64-bit `nonce_prefix`,
+plaintext size, ciphertext size, chunk size, version and algorithm. Chunk IVs
+are `nonce_prefix || uint32_be(chunk_index)`; additional authenticated data is
+`frontiercloud:chunk:v1:<file_id>:<plaintext_size>:<chunk_index>`. Ciphertext size
+is `plaintext_size + 16 * ceil(plaintext_size / 1048576)`. Descriptors are checked
+at every persistence, signed capability and restore boundary.
+
+Each file key is HMAC-SHA-256 of an independently generated persistent 256-bit
+premaster, with message `frontiercloud:file-key:v1:<file_id>`. Unique file IDs
+and retained small tombstones prevent reusing a key/nonce pair after canceled
+or deleted uploads. A storage retry may resume the same authorized object and
+identical descriptor; it cannot attach that descriptor to a different object.
+
+A browser and Master establish ephemeral P-256 ECDH once per authorization
+session. HKDF-SHA-256 uses a random 32-byte salt and
+`frontiercloud:browser-wrap:v1:<session_id>` to derive an AES-256 wrapping key.
+Master returns each authorized file key as an AES-GCM envelope with random
+96-bit IV and AAD `frontiercloud:key-envelope:v1:<session_id>:<file_id>`.
+Master computes these small envelopes, permissions and byte hashes; it does
+not encrypt, decrypt, transcode or compress ordinary media content.
+
+Algorithms and nonce requirements follow
+[Web Cryptography](https://www.w3.org/TR/WebCryptoAPI/) and
+[NIST SP 800-38D](https://csrc.nist.gov/pubs/sp/800/38/d/final).
+[Build-time obfuscation](browser-crypto-assets.md) adds bounded reading effort
+without replacing those algorithms or adding expensive playback transformations.
+
+## Authorization consumption and expiration
+
+An authorization is bound to either the authenticated Admin session or an
+HttpOnly same-site browser cookie. Key endpoints require same-origin requests
+and HTTPS, with a loopback-only development exception. Public authorization
+rechecks current visibility and object ownership for each envelope. A public session
+cannot grant Admin access, grant hidden content, or transfer to another cookie.
+
+Public lyric key and ciphertext requests also require a current relation to at
+least one visible, available audio source. An orphan lyric or one referenced
+only by hidden sources is refused. A shared lyric remains accessible through
+a visible source; the hidden source itself still cannot authorize playback or
+a new recording snapshot. These checks run again for each request.
+
+The session has a fixed 15-minute lifetime. Multiple files, Range requests,
+seeks and continuous playback reuse its wrapping key; file requests do not
+extend its deadline. The server returns a conservative `expires_in` of 1–900
+seconds. Page and service worker use a shared monotonic countdown starting
+before the handshake request, so client clock offsets and wall-clock changes
+cannot renew authorization. Envelopes retain the original server `expires_at`.
+“One-time” means one ephemeral handshake and one bounded
+authorization session, not one file or one HTTP request. The server bounds its
+in-memory session registry to 4096 entries: up to 3584 public authorizations and
+512 separately reserved Admin authorizations. One cookie or Admin binding may
+hold at most 16 unexpired authorizations, allowing independent browser tabs.
+Public handshakes additionally allow at most 8 creations per browser cookie and
+64 per client IP in a fixed one-minute creation window. Client IPs come from the
+configured trusted-proxy resolver. The bounded window cache holds at most 8192
+entries and reclaims expired windows. Admission failures return HTTP 429 with
+`Retry-After: 60`; playback stops with a retryable user-visible failure instead
+of repeatedly creating sessions. These limits never evict or renew existing
+authorizations, and file-key/Range requests do not consume creation windows.
+Master process restart, explicit server
+revocation through `/api/v1/media/crypto/revoke`,
+Admin logout or timeout invalidates further envelope issuance. Upload preparation
+tokens are independently signed, bound to the Admin session and descriptor, and
+expire after 15 minutes; reservations still follow the upload lifecycle.
+
+The browser keeps non-extractable CryptoKey objects in memory and obtains a new
+authorization when needed after expiration. A restarted worker re-registers the
+live page and retrieves its still-valid in-memory keys without another ECDH
+handshake or an extended deadline. A non-persisted page exit clears that page's
+key caches and revokes its worker capability; it does not clear other pages'
+worker access or call the server revocation endpoint. Decryption tag
+failure or identity mismatch is terminal: no plaintext fallback or unverified
+chunk is delivered. This controls this application's behavior. An authorized
+browser user can preserve keys or plaintext; revocation cannot erase already
+received bytes and this feature provides no DRM guarantee.
+
+## Playback, downloads and durable lifecycle
+
+A same-origin service-worker URL represents plaintext. It maps plaintext HTTP
+Range requests to whole ciphertext chunks, authenticates before exposing each
+chunk, trims the requested range and returns plaintext-sized headers. Native
+video and the existing continuous MP3 MediaSource path use the same adapter.
+Interrupted network reads retry from the delivered offset. Local, Direct and
+Relay storage still transport opaque ciphertext through existing capabilities.
+
+Single-file downloads decrypt in the browser. Mixed folders use a bounded
+download plan and browser-streamed ZIP64 with CRC32, including plaintext and
+encrypted objects. ZIP entries retain full managed paths even when their
+attachment basenames match. An encrypted or mixed download plan records one
+canonical Admin download audit before it is returned; an audit failure refuses
+the plan. Subsequent chunk/Range requests do not add per-file download audits.
+Plaintext entries in those plans bind the issued durable media ID and a small
+digest of source identity/version, rather than reopening an unqualified path.
+A renamed/deleted/replaced source fails closed; equal byte counts do not permit
+substitution. Local reads retain a mutation lease through the pinned descriptor
+stream. Direct/Relay grants still bind the immutable storage object ID. Pure
+plaintext attachments retain their existing download audit and delivery path.
+The 5000-file browser plan limit applies to encrypted or mixed selections.
+The server checks the complete selection in metadata batches before choosing
+the download path; all-plaintext selections retain the existing uncapped ZIP
+path, including directories larger than that browser limit. Invalid metadata
+or a later encrypted entry cannot trigger plaintext fallback.
+Plaintext is not cached by the worker. Renames preserve file
+identity and descriptors; delete/recovery journals and backup validation include
+the metadata. Admin trees and search results carry the same descriptor, so
+encrypted media and lyrics retain their status after rename.
+
+Virtual encrypted downloads and ZIP downloads use attachment navigation and the
+worker's `Content-Disposition` filename. They omit the link's `download`
+attribute so Chromium dispatches the worker fetch; the live page remains open
+to provide its existing keys.
+
+Encrypted lyrics use the same LRC parsing and normalization contract as server
+`ParseLRC`, including millisecond `.`/`:` fractions, second bounds, offsets,
+Unicode line boundaries, trimming and deduplication. Shared regression vectors
+cover both implementations; invalid UTF-8 and invalid timelines fail closed.
+
+Karaoke decrypts lyrics in the browser. Saving an account recording with
+encrypted source lyrics creates an independent encrypted snapshot of its lyric
+entries. The browser encrypts their JSON with a fresh file ID, key and nonce;
+the ticket, recording footer, SQL metadata and storage receipts contain only
+the descriptor and ciphertext. The preparation token is account-, browser-
+and source-bound and is never persisted in the footer or database. Plaintext
+lyric entries cannot replace a reserved encrypted snapshot.
+Preparation and ticket issuance recheck the original source's current
+visibility and its lyric relation, even when another visible source shares
+the same lyric.
+
+Snapshots are limited to 1400 KiB of plaintext JSON within the existing 2 MiB
+recording-metadata limit. Direct and Relay signed upload capabilities carry
+only the descriptor and canonical metadata SHA-256; the recording footer
+transports the ciphertext. Storage validates that footer against the durable
+reservation before publication. Snapshot file IDs share the global uniqueness
+registry with media file IDs, using a separate `recording_lyric` object namespace.
+Cancel and delete retain consumed IDs as tombstones.
+
+History replay obtains the snapshot key only for the current authenticated
+recording owner, reusing the existing fixed-lifetime browser authorization.
+It remains available after the original lyric is renamed or deleted. Guest
+recordings keep encrypted-source lyric entries only in browser memory until
+account save; their audio preview and download do not embed plaintext lyrics.
+Ordinary plaintext lyric snapshots retain the existing server-authoritative
+behavior.
+
+The premaster lives at `DATA_ROOT/media-keys/media-premaster.key`, separate from
+node signing credentials, and requires regular-file ownership/permissions.
+It must be backed up independently into operator-controlled offline recovery
+material. Business backups sent to storage contain metadata, not this secret;
+encrypted recovery requires a separate key proof. Missing key material with
+encrypted objects fails startup instead of generating a replacement. A durable,
+domain-separated public key fingerprint in SQL is included in business backups;
+startup rejects a different valid-length key, a missing registered key, and
+encrypted metadata without that fingerprint. Storage nodes do not load the
+Master premaster or issue browser key envelopes. Losing
+the premaster makes existing encrypted media unrecoverable.
+
+The public verifier is stored in `media_crypto_keys`. A Master restored from a
+business backup must restore and prove the original premaster before starting
+its browser key service. An existing Standalone promoted to Master continues
+using its existing verified premaster.
+
+Schema generation 3 stores the descriptors and is forward-only from generation
+2. The first schema-3 runtime switch requires operator maintenance, independent
+backups and stopping database/filesystem writers. See
+[release migration boundaries](master-self-release.md#browser-encryption-and-schema-generation-3)
+and [abandoned-upload recovery](upload-lifecycle.md). Production Master upgrades
+remain manual.

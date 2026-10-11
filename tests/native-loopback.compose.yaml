@@ -1,6 +1,9 @@
 # Test-only: bind random host ports to loopback while the private container
 # retains the supported IPv4 Nginx listener selection. No deployed project.
 services:
+  web:
+    environment:
+      TRUSTED_PROXY_NETWORKS: ${FRONTIERCLOUD_TEST_TRUSTED_PROXY_NETWORKS:-172.16.0.0/12}
   nginx:
     environment:
       PUBLIC_BIND_ADDRESS: 0.0.0.0

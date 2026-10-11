@@ -318,7 +318,7 @@ func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recor
 		return store.RecordingReceipt{}, e
 	}
 	if receipt, e := s.Stat(ctx, relationship, v.UserID, v.ID); e == nil {
-		if receipt.Bytes != v.Bytes {
+		if receipt.Bytes != v.Bytes || !store.RecordingReceiptMetadataMatches(v, receipt.Metadata) {
 			return store.RecordingReceipt{}, store.ErrRecordingState
 		}
 		if n.Role == "Follower" {
@@ -362,6 +362,17 @@ func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recor
 			s.fence()
 		}
 		return store.RecordingReceipt{}, e
+	}
+	stagedFile, metadataErr := s.root.Open(stage)
+	if metadataErr != nil {
+		s.remove(stage)
+		return store.RecordingReceipt{}, metadataErr
+	}
+	metadata := Metadata(stagedFile, bytes)
+	metadataErr = stagedFile.Close()
+	if metadataErr != nil || !store.RecordingReceiptMetadataMatches(v, metadata) {
+		s.remove(stage)
+		return store.RecordingReceipt{}, store.ErrRecordingState
 	}
 	receipt := store.RecordingReceipt{ID: v.ID, Bytes: bytes, SHA256: hex.EncodeToString(digest.Sum(nil))}
 	release, e = s.acquire(ctx, true)
@@ -468,7 +479,7 @@ func (s *Storage) finishUpload(ctx context.Context, j journal) error {
 	if e != nil {
 		return e
 	}
-	if receipt.SHA256 != j.Receipt.SHA256 || receipt.Bytes != j.Receipt.Bytes {
+	if receipt.SHA256 != j.Receipt.SHA256 || receipt.Bytes != j.Receipt.Bytes || !store.RecordingReceiptMetadataMatches(v, receipt.Metadata) || !store.RecordingReceiptMetadataMatches(*current, receipt.Metadata) {
 		return ErrRecovery
 	}
 	// Nginx has the volume's read-only media group, never the application UID.

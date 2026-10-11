@@ -51,6 +51,13 @@ func TestNativeImageBuildHasCPUAndNoAdditionalSwapBudget(t *testing.T) {
 	e := engineFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/build") {
 			called = true
+			var labels map[string]string
+			if err := json.Unmarshal([]byte(r.URL.Query().Get("labels")), &labels); err != nil {
+				t.Fatal("invalid build labels", err)
+			}
+			if _, overridden := labels["frontiercloud.schema-generation"]; overridden {
+				t.Error("build must preserve the archived Dockerfile schema generation")
+			}
 			for key, want := range map[string]string{"memory": "1073741824", "memswap": "1073741824", "cpuperiod": "100000", "cpuquota": "100000", "version": "1"} {
 				if r.URL.Query().Get(key) != want {
 					t.Error("unbounded native build", key)

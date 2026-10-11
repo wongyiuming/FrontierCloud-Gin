@@ -9,7 +9,7 @@ flock -w 300 9
 cd "$root/repo"
 test "$(git remote get-url origin)" = https://github.com/wongyiuming/FrontierCloud-Gin.git
 export COMPOSE_PROJECT_NAME=frontiercloud-staging
-export STAGING_CD=true SERVER_NAME=ml.520mall.cc TLS_ENABLED=true
+export STAGING_CD=true SERVER_NAME=www4399.sbs TLS_ENABLED=true
 export DATA_DIRECTORY="$root/data"
 # The stable active project's existing image is used to request a verified
 # update. Source is fetched/archived by the native updater, never reset by CD.

@@ -33,7 +33,7 @@ func stagingReleaseCommand(output io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if identity.Role != "Master" || identity.Endpoint != "https://ml.520mall.cc" {
+		if identity.Role != "Master" || identity.Endpoint != "https://www4399.sbs" {
 			return store.ErrNodeState
 		}
 		agent := release.SocketAgent{}

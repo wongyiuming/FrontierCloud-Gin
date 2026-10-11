@@ -41,6 +41,36 @@ renew them. An admitted long upload still holds its storage stage lease.
 Server-relayed transfers hold the Master session lease. Timeout cannot race
 these live writers. No unload beacon is trusted as physical cleanup proof.
 
+## Browser refresh and storage upgrade boundary
+
+Refreshing or closing a browser does not by itself prove an incomplete upload
+safe to discard. The Master investigates after the original 30-minute deadline,
+with at most 50 items per sweep and a full 30-second cooldown after completion.
+Capacity is released transactionally only after local leases and absence checks,
+or a signed remote `upload-absence` durable generation fence, establish safety.
+Offline storage, interrupted checks, timeouts, unknown bytes and publication
+journals retain the reservation for later investigation.
+
+An admitted transfer remains protected by its real upload lease across expiry.
+Local publication can finish normally. A Direct or Relay transfer that finishes
+after ordinary finalize expires is repaired by subsequent complete-object,
+length and SHA-256 receipt verification. Recovery preserves committed bytes and
+never refunds unverified capacity to a new upload.
+
+Older storage without `upload-absence` can repair complete objects but cannot
+prove missing uploads safe to release. Upgrading only the Master cannot enable
+automatic release on those nodes. Operators must manually upgrade each affected
+storage appliance while preserving media, database, identity, keys and
+`.storage-abort-*` / `.storage-legacy-fence-*` metadata. Recovery never falls back
+to the old deletion endpoint, and production storage is never auto-upgraded.
+
+Actual blocked body-reader regressions cover plain and encrypted Local, Direct
+and Relay transfers crossing expiry, protecting reservations and quota until
+publication or verified recovery. An encrypted abandoned-upload regression
+also retains the consumed file-key/nonce tombstone while allowing a fresh
+same-path selection. Added tests are not deployment evidence; executed results
+are recorded separately in the current validation evidence.
+
 ## Atomic absence and storage upgrade boundary
 
 An old `stat -> delete -> refund` sequence was unsafe: a direct PUT could commit

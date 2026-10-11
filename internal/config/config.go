@@ -155,8 +155,8 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("TLS_ENABLED: %w", err)
 	}
 	value.StagingCD, err = boolean(getenv("STAGING_CD"), false)
-	if err != nil || value.StagingCD && (value.DeploymentMode != DeploymentBusiness || !value.TLSEnabled || value.ServerName != "ml.520mall.cc") {
-		return Config{}, errors.New("STAGING_CD requires the isolated TLS business site ml.520mall.cc")
+	if err != nil || value.StagingCD && (value.DeploymentMode != DeploymentBusiness || !value.TLSEnabled || value.ServerName != "www4399.sbs") {
+		return Config{}, errors.New("STAGING_CD requires the isolated TLS business site www4399.sbs")
 	}
 	value.NginxMedia, err = boolean(getenv("NGINX_MEDIA_ACCEL"), true)
 	if err != nil {

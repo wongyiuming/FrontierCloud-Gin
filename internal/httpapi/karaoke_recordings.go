@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"net/http"
 	"strings"
 	"unicode/utf8"
 )
@@ -35,14 +36,21 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 		info := accounts.info(c)
 		return store.KaraokeAudit{UserID: user(c).ID, IP: info.IP, RequestID: info.RequestID, TraceID: info.TraceID}
 	}
+	g.POST("/crypto/prepare", func(c *gin.Context) { accounts.public.recordingCryptoPrepare(c, user(c)) })
+	g.POST("/:recording/lyrics-key", func(c *gin.Context) { accounts.public.recordingCryptoKey(c, user(c)) })
 	g.POST("/ticket", func(c *gin.Context) {
 		var value struct {
-			Bytes       int64   `json:"size_bytes"`
-			ContentType string  `json:"content_type"`
-			Media       *string `json:"media"`
-			Title       *string `json:"title"`
+			Bytes           int64                           `json:"size_bytes"`
+			ContentType     string                          `json:"content_type"`
+			Media           *string                         `json:"media"`
+			Title           *string                         `json:"title"`
+			Lyrics          *[]store.RecordingLyric         `json:"lyrics"`
+			EncryptedLyrics *store.RecordingEncryptedLyrics `json:"encrypted_lyrics"`
+			Preparation     string                          `json:"preparation_token"`
 		}
-		if !decodeAdmin(c, &value) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, store.MaxRecordingMetadata+8192)
+		if err := c.ShouldBindJSON(&value); err != nil {
+			invalid(c, "body", "payload")
 			return
 		}
 		ct := strings.ToLower(strings.Split(value.ContentType, ";")[0])
@@ -65,9 +73,44 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 				return
 			}
 			metadata = resolved
+			if metadata.EncryptedLyricPath != "" {
+				if value.EncryptedLyrics == nil || value.Lyrics != nil && len(*value.Lyrics) != 0 || !store.ValidRecordingEncryptedLyrics(*value.EncryptedLyrics) {
+					detail(c, 400, "加密歌词必须提供浏览器加密的录音快照")
+					return
+				}
+				if !accounts.public.cryptoTransport(c) || !cryptoSameOrigin(c) {
+					return
+				}
+				_, sourceID, ok := accounts.public.recordingLyricSource(c, *value.Media)
+				if !ok {
+					return
+				}
+				browser, e := accounts.public.browserBinding(c, false)
+				if e != nil {
+					cryptoError(c, e)
+					return
+				}
+				if e = accounts.public.crypto.VerifyPreparation(recordingLyricBinding(user(c).ID, browser, *value.Media, sourceID), value.Preparation, value.EncryptedLyrics.Encryption); e != nil {
+					cryptoError(c, e)
+					return
+				}
+				metadata.Lyrics = []store.RecordingLyric{}
+				metadata.EncryptedLyrics = value.EncryptedLyrics
+				metadata.EncryptedLyricPath = ""
+			} else if value.EncryptedLyrics != nil || value.Preparation != "" {
+				detail(c, 400, "明文歌词不能使用加密快照授权")
+				return
+			}
 			if value.Title != nil && strings.TrimSpace(*value.Title) != "" {
 				metadata.Title = strings.TrimSpace(*value.Title)
 			}
+		} else if value.EncryptedLyrics != nil || value.Preparation != "" {
+			detail(c, 400, "加密快照需要媒体关联")
+			return
+		}
+		if !store.ValidRecordingMetadata(metadata) {
+			invalid(c, "body", "lyrics")
+			return
 		}
 		ticket, e := manager.Ticket(c.Request.Context(), *user(c), value.Bytes, ct, metadata, audit(c))
 		if e != nil {

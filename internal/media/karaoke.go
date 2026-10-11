@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"errors"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"os"
 	"path"
@@ -28,6 +29,14 @@ func (s *Service) ResolveKaraoke(ctx context.Context, token string) (KaraokeMedi
 	if role == "Follower" || kind == "global" && role != "Master" {
 		return KaraokeMedia{}, os.ErrNotExist
 	}
+	release, e := s.acquire(ctx, false)
+	if e != nil {
+		return KaraokeMedia{}, e
+	}
+	defer release()
+	if e = s.ready(); e != nil {
+		return KaraokeMedia{}, e
+	}
 	var name, typ string
 	if kind == "global" {
 		row, _, e := s.resolveGlobal(ctx, id, "")
@@ -36,14 +45,6 @@ func (s *Service) ResolveKaraoke(ctx context.Context, token string) (KaraokeMedi
 		}
 		name, typ = row.Path, row.Kind
 	} else {
-		release, e := s.acquire(ctx, false)
-		if e != nil {
-			return KaraokeMedia{}, e
-		}
-		defer release()
-		if e = s.ready(); e != nil {
-			return KaraokeMedia{}, e
-		}
 		row, e := s.repository.ObjectByID(ctx, id)
 		if e != nil {
 			return KaraokeMedia{}, e
@@ -62,19 +63,26 @@ func (s *Service) ResolveKaraoke(ctx context.Context, token string) (KaraokeMedi
 	}
 	result := KaraokeMedia{Kind: kind, ID: id, Path: name, Type: typ}
 	if typ == "audio" {
-		if kind == "global" {
-			entries, e := s.LyricsResource(ctx, "", id)
-			if e != nil {
-				return KaraokeMedia{}, e
-			}
-			result.HasLyrics = len(entries) > 0
-		} else {
-			linked, e := s.repository.LyricPath(ctx, id)
-			if e != nil {
-				return KaraokeMedia{}, e
-			}
-			result.HasLyrics = linked != ""
+		linked, e := s.repository.LyricPath(ctx, id)
+		if e != nil {
+			return KaraokeMedia{}, e
 		}
+		if !s.validLyric(linked) {
+			if kind == "global" {
+				if e = s.ensureDefaultLyric(); e == nil {
+					e = s.pool.BindGlobalLyric(ctx, id, store.MediaObject{Kind: "lyric", Path: defaultLyric})
+				}
+				linked = defaultLyric
+			} else {
+				linked, e = s.lyricFor(ctx, store.MediaObject{ID: id, Path: name, Kind: typ})
+			}
+			if e != nil {
+				return KaraokeMedia{}, e
+			}
+		}
+		// Default lyrics are part of the original Karaoke contract. Resolving
+		// the relation is sufficient; ciphertext is parsed only by browsers.
+		result.HasLyrics = s.validLyric(linked)
 	}
 	return result, nil
 }
@@ -92,6 +100,14 @@ func (s *Service) KaraokeMetadata(ctx context.Context, token string) (store.Reco
 	metadata := store.RecordingMetadata{Title: strings.TrimSuffix(path.Base(v.Path), path.Ext(v.Path)), Lyrics: []store.RecordingLyric{}}
 	if v.HasLyrics {
 		entries, e := s.KaraokeLyrics(ctx, v)
+		if errors.Is(e, ErrEncryptedLyric) {
+			linked, err := s.repository.LyricPath(ctx, v.ID)
+			if err != nil {
+				return metadata, err
+			}
+			metadata.EncryptedLyricPath = linked
+			return metadata, nil
+		}
 		if e != nil {
 			return metadata, e
 		}

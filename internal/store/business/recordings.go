@@ -3,7 +3,6 @@ package business
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"sort"
 	"time"
@@ -17,7 +16,7 @@ func scanRecording(row rowScanner) (v store.Recording, err error) {
 	var lyrics []byte
 	err = row.Scan(&v.ID, &v.UserID, &v.MemberID, &v.Filename, &v.ContentType, &v.Bytes, &v.SHA256, &v.State, &v.Title, &lyrics, &v.CreatedAt, &v.UpdatedAt)
 	if err == nil {
-		err = json.Unmarshal(lyrics, &v.Lyrics)
+		err = store.DecodeRecordingReservation(lyrics, &v)
 		if v.Lyrics == nil {
 			v.Lyrics = []store.RecordingLyric{}
 		}
@@ -61,13 +60,13 @@ func (r *Repository) ListRecordings(ctx context.Context, user, state string, lim
 	return values, rows.Err()
 }
 func validRecording(v store.Recording) bool {
-	return nodeIDPattern.MatchString(v.ID) && nodeIDPattern.MatchString(v.UserID) && v.Bytes > 0 && v.Bytes <= store.MaxRecordingBytes && store.ValidRecordingFilename(v.Filename) && store.RecordingContentType(v.ContentType) && store.ValidRecordingMetadata(store.RecordingMetadata{Title: v.Title, Lyrics: v.Lyrics})
+	return nodeIDPattern.MatchString(v.ID) && nodeIDPattern.MatchString(v.UserID) && v.Bytes > 0 && v.Bytes <= store.MaxRecordingBytes && store.ValidRecordingFilename(v.Filename) && store.RecordingContentType(v.ContentType) && store.ValidRecordingReservation(v)
 }
 func insertRecording(ctx context.Context, q queryer, v store.Recording) error {
 	if v.Lyrics == nil {
 		v.Lyrics = []store.RecordingLyric{}
 	}
-	lyrics, err := json.Marshal(v.Lyrics)
+	lyrics, err := store.EncodeRecordingReservation(v)
 	if err != nil {
 		return err
 	}
@@ -159,6 +158,11 @@ func (r *Repository) ReserveRecording(ctx context.Context, v store.Recording, fr
 		result.State = "pending"
 		result.SHA256 = nil
 		result.CreatedAt, result.UpdatedAt = now, now
+		if result.EncryptedLyrics != nil {
+			if e = r.putEncryptionFor(ctx, q, "recording_lyric", result.ID, &result.EncryptedLyrics.Encryption); e != nil {
+				return e
+			}
+		}
 		if e = insertRecording(ctx, q, result); e != nil {
 			return e
 		}
@@ -175,7 +179,22 @@ func (r *Repository) ReserveRecording(ctx context.Context, v store.Recording, fr
 	return
 }
 func validRecordingReceipt(v store.RecordingReceipt) bool {
-	return nodeIDPattern.MatchString(v.ID) && v.Bytes > 0 && v.Bytes <= store.MaxRecordingBytes && nodeHashPattern.MatchString(v.SHA256) && (v.Metadata == nil || store.ValidRecordingMetadata(*v.Metadata))
+	return nodeIDPattern.MatchString(v.ID) && v.Bytes > 0 && v.Bytes <= store.MaxRecordingBytes && nodeHashPattern.MatchString(v.SHA256) && (v.Metadata == nil || store.ValidRecordingMetadata(*v.Metadata) && store.RecordingEncryptedLyricsFit(*v.Metadata, v.Bytes))
+}
+
+func checkRecordingSnapshotEncryption(ctx context.Context, q queryer, v store.Recording, lock string) error {
+	expected := v.ExpectedEncryptedLyrics
+	if v.EncryptedLyrics != nil {
+		expected = &v.EncryptedLyrics.Encryption
+	}
+	actual, err := readEncryptionFor(ctx, q, "recording_lyric", v.ID, lock)
+	if err != nil {
+		return err
+	}
+	if (actual == nil) != (expected == nil) || actual != nil && *actual != *expected {
+		return store.ErrRecordingState
+	}
+	return nil
 }
 func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, receipt store.RecordingReceipt, a store.KaraokeAudit) error {
 	if id != receipt.ID || !validRecordingReceipt(receipt) {
@@ -202,6 +221,12 @@ func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, rec
 		if v.UserID != user {
 			return store.ErrRecordingMissing
 		}
+		if e = checkRecordingSnapshotEncryption(ctx, q, v, r.lock()); e != nil {
+			return e
+		}
+		if !store.RecordingReceiptMetadataMatches(v, receipt.Metadata) {
+			return store.ErrRecordingState
+		}
 		if v.State == "ready" {
 			if v.Bytes != receipt.Bytes || v.SHA256 == nil || *v.SHA256 != receipt.SHA256 {
 				return store.ErrRecordingState
@@ -219,7 +244,7 @@ func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, rec
 			return store.ErrRecordingState
 		}
 		now := time.Now().Unix()
-		if receipt.Metadata != nil {
+		if receipt.Metadata != nil && v.EncryptedLyrics == nil {
 			if receipt.Metadata.Title != "" {
 				v.Title = receipt.Metadata.Title
 			}
@@ -230,7 +255,7 @@ func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, rec
 		if v.Lyrics == nil {
 			v.Lyrics = []store.RecordingLyric{}
 		}
-		lyrics, e := json.Marshal(v.Lyrics)
+		lyrics, e := store.EncodeRecordingReservation(v)
 		if e != nil {
 			return e
 		}
@@ -327,6 +352,9 @@ func (r *Repository) CompleteRecordingDeletion(ctx context.Context, user, id str
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "UPDATE karaoke_users SET used_bytes=used_bytes-?,updated_at=? WHERE user_id=?", v.Bytes, now, user); e != nil {
+			return e
+		}
+		if e = retireEncryptionFor(ctx, q, "recording_lyric", id); e != nil {
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "DELETE FROM karaoke_recordings WHERE recording_id=?", id); e != nil {

@@ -1,12 +1,12 @@
-# EVOXT preproduction and CD
+# RN preproduction and CD
 
-`ml.520mall.cc` is a separate business Master, not the production storage
+`www4399.sbs` on RN (`23.238.8.233`) is a separate business Master, not the production storage
 identity. Use project `frontiercloud-staging`, data `/opt/frontiercloud-staging/data`,
 an independent secrets volume, Redis and updater socket. Production storage
 uses its own high-port project; never share state between these instances.
 
 Bootstrap a reviewed fixed native revision and configure TLS, `STAGING_CD=true`,
-`SERVER_NAME=ml.520mall.cc`, `RELEASE_BRANCH=main`, `RELEASE_SOURCE_BRANCH=dev`.
+`SERVER_NAME=www4399.sbs`, `RELEASE_BRANCH=main`, `RELEASE_SOURCE_BRANCH=dev`.
 Keep the clean new-repository checkout at `/opt/frontiercloud-staging/repo`,
 its environment outside source at `/opt/frontiercloud-staging/.env`, and the
 initial full SHA at `/opt/frontiercloud-staging/current-revision`.
@@ -148,8 +148,21 @@ in the main-restricted `staging-cd-main` Environment's `STAGING_CD_SECRET` and i
 the trigger account). Place the site's TLS certificate and private key in the
 same restricted directory and maintain them through the certificate renewal hook.
 Install `scripts/ops/staging-certificate-deploy.sh` as an executable Certbot
-deploy hook on EVOXT only; set that domain's ACME webroot to
-`/opt/frontiercloud-staging/certs/acme`, not the retired project directory.
+deploy hook on RN only; set that domain's ACME webroot to
+`/var/www/certbot`, retaining the existing RN certificate renewal webroot.
+Bind that webroot into the staging Nginx ACME location. The staging deploy hook
+updates only staging Nginx and the receiver; it never restarts production storage.
+RN storage remains on `https://www4399.sbs:8443`, with its existing identity,
+data and secrets. Staging uses 80/443 and its separate Compose project.
+The signed notification destination is
+`https://www4399.sbs:9443/staging-ci-success`.
+
+The EVOXT retirement removes staging business data, project volumes, controller,
+receiver and old staging task files after RN verification. EVOXT's production
+storage and Cloudreve still use `ml.520mall.cc`; relocate their shared certificate
+mounts and ACME webroot outside `/opt/frontiercloud-staging` before deleting that
+directory. Preserve their certificate renewal and high-port services. Do not copy
+old staging business databases, media, Admin keys or premaster keys into RN.
 The receiver uses HTTPS port **9443**, only authenticates wakeups, and can write
 only its dedicated state directory. GitHub receives no SSH key, AdminKey or
 Docker access. Never print the signing secret in logs.

@@ -18,6 +18,8 @@ use an exact reviewed release; bootstrap history alone is not release proof.
 - Karaoke entry from media playback, guest preview, account recordings, and storage quota.
 - Master/storage storage placement using Local, Direct, or Relay transport.
 - Transactional upload, visibility, priority, same-parent folder rename, and recovery-aware deletion.
+- [Browser media encryption](docs/browser-media-encryption.md), explicit per-selection
+  storage modes, session-scoped key envelopes and authenticated streaming decryption.
 - [Abandoned-upload recovery](docs/upload-lifecycle.md): expiry triggers physical
   reconciliation, never blind deletion; live streams and complete files are protected.
 - Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed Master-only releases.
@@ -42,6 +44,18 @@ for the normal image-first deployment path.
 
 Open `http://localhost`. The startup initializer creates the managed media tree under `data/media` and the persistent runtime secrets required by the stack.
 
+For first Admin access, read the existing key from the running deployment:
+
+```bash
+# Run in this deployment's Compose directory.
+docker compose exec -T web cat /run/frontiercloud-secrets/admin_key
+```
+
+For preproduction, this works from any directory:
+`docker exec frontiercloud-staging-web-1 cat /run/frontiercloud-secrets/admin_key`.
+See [existing keys and exact staging Compose commands](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration#%E6%9F%A5%E7%9C%8B%E7%8E%B0%E6%9C%89%E5%AF%86%E9%92%A5%E5%90%AB%E9%A2%84%E5%8F%91%E5%B8%83)
+for the metrics token, persistent recovery keys and their separate purposes.
+
 The two supported `.env` deployment selections are documented in
 [Native deployment](protocol/v2/native-deployment.md). Changing the runtime or
 database selection does not migrate existing state. Historical Python cluster
@@ -59,7 +73,7 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
-EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
+RN preproduction at `www4399.sbs` is a separate Master with its own state.
 Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
 from a default-`main` trusted workflow after successful exact-`dev` test CI and
 all three public image proofs. Publication itself also executes immutable main

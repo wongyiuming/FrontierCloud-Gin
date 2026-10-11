@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -46,14 +47,15 @@ type Category struct {
 	URL  string `json:"url"`
 }
 type Track struct {
-	MediaPath  string `json:"media_path"`
-	Title      string `json:"title"`
-	Artist     string `json:"artist"`
-	Type       string `json:"type"`
-	URL        string `json:"url"`
-	Cover      string `json:"cover"`
-	MediaID    string `json:"media_id"`
-	ResourceID string `json:"resource_id,omitempty"`
+	MediaPath  string                `json:"media_path"`
+	Title      string                `json:"title"`
+	Artist     string                `json:"artist"`
+	Type       string                `json:"type"`
+	URL        string                `json:"url"`
+	Cover      string                `json:"cover"`
+	MediaID    string                `json:"media_id"`
+	ResourceID string                `json:"resource_id,omitempty"`
+	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
 	store.PlaybackStats
 	HasLyrics *bool  `json:"has_lyrics,omitempty"`
 	KaraokeID string `json:"karaoke_id"`
@@ -476,6 +478,7 @@ type Stream struct {
 	ObjectID   string
 	OwnerID    string
 	ResourceID string
+	Encryption *mediacrypto.Metadata
 }
 
 func (s *Service) Stream(ctx context.Context, name string) (*Stream, error) {
@@ -511,7 +514,18 @@ func (s *Service) Stream(ctx context.Context, name string) (*Stream, error) {
 		f.Close()
 		return nil, err
 	}
-	return &Stream{f, info, o.Path, id, identity.ID, node.ResourceID(identity.ID, id)}, nil
+	var encryption *mediacrypto.Metadata
+	if repository, ok := s.repository.(store.EncryptionRepository); ok {
+		encryption, err = repository.Encryption(ctx, id)
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+	}
+	// Capture byte classification before releasing the mutation lease. An open
+	// file can outlive deletion of its descriptor on Unix filesystems.
+	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: id, OwnerID: identity.ID,
+		ResourceID: node.ResourceID(identity.ID, id), Encryption: encryption}, nil
 }
 
 func (s *Service) Playback(ctx context.Context, name, session string, played, duration float64) (store.PlaybackResult, error) {

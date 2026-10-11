@@ -28,6 +28,9 @@ func (s *Service) RecordingCapability(ctx context.Context, v store.Recording, m 
 	if e != nil {
 		return "", ErrCapability
 	}
+	if v.EncryptedLyrics != nil {
+		return protocol.RecordingTokenWithSnapshot(credential, rel.ID, row.ID, v.UserID, v.ID, operation, time.Now().Unix(), v.Bytes, v.ContentType, v.Filename, &v.EncryptedLyrics.Encryption, store.RecordingMetadataSHA256(store.RecordingMetadataFor(v)))
+	}
 	return protocol.RecordingToken(credential, rel.ID, row.ID, v.UserID, v.ID, operation, time.Now().Unix(), v.Bytes, v.ContentType, v.Filename)
 }
 func (s *Service) VerifyOwnedRecording(ctx context.Context, token, id, operation string) (store.Relationship, map[string]any, error) {

@@ -3,14 +3,116 @@ package media
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
+
+type pausedRecoveryUploadReader struct {
+	ctx     context.Context
+	reader  io.Reader
+	started chan struct{}
+	resume  chan struct{}
+	paused  bool
+}
+
+func (r *pausedRecoveryUploadReader) Read(bytes []byte) (int, error) {
+	if !r.paused {
+		r.paused = true
+		close(r.started)
+		select {
+		case <-r.resume:
+		case <-r.ctx.Done():
+			return 0, r.ctx.Err()
+		}
+	}
+	return r.reader.Read(bytes)
+}
+
+func TestExpiredUploadRecoveryPreservesAdmittedLocalTransferUntilCompletion(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		name := "plain"
+		if encrypted {
+			name = "encrypted"
+		}
+		t.Run(name, func(t *testing.T) { testExpiredLocalTransfer(t, encrypted) })
+	}
+}
+
+func testExpiredLocalTransfer(t *testing.T, encrypted bool) {
+	_, db, svc := masterFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	payload := "ID3payload"
+	var metadata *mediacrypto.Metadata
+	if encrypted {
+		value, err := mediacrypto.NewMetadata(int64(len(payload)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata = &value
+		// Recovery treats ciphertext as opaque bytes. Client authentication and
+		// decryption have independent real-WebCrypto regression coverage.
+		payload = strings.Repeat("x", int(value.CiphertextSize))
+	}
+	size := int64(len(payload))
+	v, err := svc.ReserveMasterEncryptedUpload(ctx, "song.mp3", "music/LiveRecovery", "", "primary", size, 255, store.AdminAudit{}, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &pausedRecoveryUploadReader{ctx: ctx, reader: strings.NewReader(payload), started: make(chan struct{}), resume: make(chan struct{})}
+	done := make(chan error, 1)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		_, err := svc.UploadMasterBytes(ctx, v.ID, reader, store.AdminAudit{})
+		done <- err
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-finished
+	})
+	select {
+	case <-reader.started:
+	case <-ctx.Done():
+		t.Fatal("upload did not enter the live body transfer", ctx.Err())
+	}
+	if _, err := db.Database().Exec("UPDATE cluster_upload_sessions SET expires_at=? WHERE upload_id=?", time.Now().Unix()-1, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RetryExpiredUploads(ctx); err != nil {
+		t.Fatal(err)
+	}
+	current, err := db.Pool().Upload(ctx, v.ID)
+	if err != nil || current.State != "reserved" {
+		t.Fatal("expiry released an admitted live upload", current, err)
+	}
+	masterFunds(t, db, 0, size)
+	close(reader.resume)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("admitted local upload could not complete after expiry", err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	current, err = db.Pool().Upload(ctx, v.ID)
+	if err != nil || current.State != "complete" {
+		t.Fatal("completed live upload was lost", current, err)
+	}
+	masterFunds(t, db, size, 0)
+	actual, err := svc.Encryption(ctx, v.MediaID)
+	if err != nil || (actual == nil) != (metadata == nil) || actual != nil && *actual != *metadata {
+		t.Fatal("completion lost or changed the encryption descriptor", actual, err)
+	}
+}
 
 func TestExpiredUploadRecoveryReleasesAbandonedButPreservesLiveUnknownAndComplete(t *testing.T) {
 	for _, scenario := range []string{"abandoned", "live", "unknown", "complete", "unexpired", "audit-failure"} {
@@ -120,4 +222,48 @@ func TestVideoDestinationRejectsMP3BeforeCapacityReservation(t *testing.T) {
 		t.Fatal("audio routed into video category", err)
 	}
 	masterFunds(t, db, 0, 0)
+}
+
+func TestAbandonedEncryptedUploadRecoveryRetiresDescriptorAndRequiresFreshFileKey(t *testing.T) {
+	_, db, svc := masterFixture(t)
+	ctx := context.Background()
+	metadata, err := mediacrypto.NewMetadata(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := svc.ReserveMasterEncryptedUpload(ctx, "song.mp3", "music/EncryptedRefresh", "", "primary", metadata.CiphertextSize, 255, store.AdminAudit{}, &metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Database().Exec("UPDATE cluster_upload_sessions SET expires_at=? WHERE upload_id=?", time.Now().Unix()-1, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RetryExpiredUploads(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool().Upload(ctx, v.ID); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("abandoned encrypted reservation remains", err)
+	}
+	masterFunds(t, db, 0, 0)
+	actual, err := svc.Encryption(ctx, v.MediaID)
+	if err != nil || actual != nil {
+		t.Fatal("released reservation still exposes its descriptor", actual, err)
+	}
+	repository := db.Pool().(store.EncryptionRepository)
+	used, err := repository.EncryptionUsed(ctx, metadata.FileID)
+	if err != nil || !used {
+		t.Fatal("cleanup discarded the file-key/nonce reuse tombstone", used, err)
+	}
+	if _, err := svc.ReserveMasterEncryptedUpload(ctx, "song.mp3", "music/EncryptedRefresh", "", "primary", metadata.CiphertextSize, 255, store.AdminAudit{}, &metadata); err == nil {
+		t.Fatal("refresh retry reused an already consumed file key and nonce space")
+	}
+	masterFunds(t, db, 0, 0)
+	fresh, err := mediacrypto.NewMetadata(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReserveMasterEncryptedUpload(ctx, "song.mp3", "music/EncryptedRefresh", "", "primary", fresh.CiphertextSize, 255, store.AdminAudit{}, &fresh); err != nil {
+		t.Fatal("fresh encryption selection could not retry the same path", err)
+	}
+	masterFunds(t, db, 0, fresh.CiphertextSize)
 }

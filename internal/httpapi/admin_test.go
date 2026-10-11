@@ -153,6 +153,7 @@ func TestAdminHTTPRedisContract(t *testing.T) {
 	} {
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
+		writer.WriteField("storage_mode", "plain")
 		file, err := writer.CreateFormFile("file", test.filename)
 		if err != nil {
 			t.Fatal(err)

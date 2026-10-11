@@ -10,6 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StagingEventPolicyTests(unittest.TestCase):
+    def test_rn_cutover_keeps_shared_production_storage_outside_cd_and_cert_hook(self):
+        controller = (ROOT / 'scripts/ops/staging-cd.sh').read_text()
+        hook = (ROOT / 'scripts/ops/staging-certificate-deploy.sh').read_text()
+        self.assertIn('SERVER_NAME=www4399.sbs', controller)
+        self.assertIn('lineage=/etc/letsencrypt/live/www4399.sbs', hook)
+        self.assertIn('racknerd-2ee08ce', hook)
+        self.assertNotIn('/opt/frontiercloud-storage', hook)
+        self.assertNotIn('frontiercloud-storage-web-1', hook)
+        self.assertNotIn('ml.520mall.cc', controller + hook)
+
     def test_only_completed_successful_same_repo_dev_push_can_notify(self):
         publisher = (ROOT / '.github/workflows/publish-images.yml').read_text()
         self.assertFalse((ROOT / '.github/workflows/staging-cd.yml').exists())

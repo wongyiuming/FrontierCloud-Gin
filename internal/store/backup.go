@@ -47,7 +47,7 @@ type BackupRepository interface {
 // Return a new slice so consumers cannot mutate the protocol for other callers.
 func BusinessBackupTables() []string {
 	return []string{
-		"media_visibility", "media_objects", "media_playback_stats", "media_playback_events",
+		"media_visibility", "media_objects", "media_encryption", "media_crypto_keys", "media_playback_stats", "media_playback_events",
 		"media_lyric_links", "global_media_objects", "cluster_storage_members",
 		"cluster_compute_members", "cluster_worker_jobs", "cluster_backup_members",
 		"karaoke_users", "karaoke_recordings", "karaoke_registration_daily", "karaoke_audit_log",

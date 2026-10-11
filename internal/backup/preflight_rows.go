@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -153,6 +154,9 @@ func checkBackupRow(table string, r map[string]any) error {
 	// IDs used for ownership or cross-record references cannot be arbitrary
 	// display text. Historical audit details are deliberately not current links.
 	for field, length := range map[string]int{"media_id": 64, "lyric_id": 64, "object_id": 64, "path_locator": 64, "user_id": 32, "recording_id": 32, "storage_member_id": 32, "member_id": 32, "relationship_id": 32, "job_id": 32, "audit_id": 32} {
+		if table == "media_encryption" && field == "object_id" && text("object_kind") == "recording_lyric" {
+			length = 32
+		}
 		if v, exists := r[field]; exists && v != nil && !hexID(text(field), length) {
 			return bad
 		}
@@ -178,7 +182,7 @@ func checkBackupRow(table string, r map[string]any) error {
 			return bad
 		}
 	}
-	if _, exists := r["object_kind"]; exists {
+	if _, exists := r["object_kind"]; exists && table != "media_encryption" {
 		kind, name := text("object_kind"), text("media_path")
 		if kind != "audio" && kind != "video" && kind != "lyric" && kind != "directory" {
 			return bad
@@ -192,6 +196,23 @@ func checkBackupRow(table string, r map[string]any) error {
 		}
 	}
 	switch table {
+	case "media_crypto_keys":
+		if num("singleton") != 1 || !hexID(text("key_id"), 64) || num("created_at") <= 0 {
+			return bad
+		}
+	case "media_encryption":
+		if text("object_kind") != "media" && text("object_kind") != "recording_lyric" {
+			return bad
+		}
+		if !hexID(text("file_id"), 32) {
+			return bad
+		}
+		if r["descriptor_json"] != nil {
+			var meta mediacrypto.Metadata
+			if json.Unmarshal([]byte(text("descriptor_json")), &meta) != nil || meta.Validate() != nil || meta.FileID != text("file_id") {
+				return bad
+			}
+		}
 	case "global_media_objects":
 		if text("state") != "active" || num("size_bytes") <= 0 || (text("object_kind") != "audio" && text("object_kind") != "video") {
 			return bad
@@ -229,10 +250,9 @@ func checkBackupRow(table string, r map[string]any) error {
 		if r["sha256"] != nil && !hexID(text("sha256"), 64) {
 			return bad
 		}
-		var lyrics []store.RecordingLyric
-		d := json.NewDecoder(strings.NewReader(text("lyrics")))
-		d.DisallowUnknownFields()
-		if err := d.Decode(&lyrics); err != nil || lyrics == nil || !store.ValidRecordingMetadata(store.RecordingMetadata{Title: text("title"), Lyrics: lyrics}) {
+		lyrics, encrypted, err := store.DecodeRecordingLyrics([]byte(text("lyrics")))
+		metadata := store.RecordingMetadata{Title: text("title"), Lyrics: lyrics, EncryptedLyrics: encrypted}
+		if err != nil || strings.TrimSpace(text("lyrics")) == "null" || lyrics == nil || !store.ValidRecordingMetadata(metadata) || !store.RecordingEncryptedLyricsFit(metadata, num("size_bytes")) {
 			return bad
 		}
 	case "webrtc_observation_summary":
@@ -291,6 +311,8 @@ func checkBackupReferences(ctx context.Context, tx *sql.Tx) error {
 	// evidence, not ownership. Do not invent active relationships from any ID.
 	checks := []struct{ name, query string }{
 		{"placement-owner", "SELECT EXISTS(SELECT 1 FROM global_media_objects g LEFT JOIN cluster_storage_members s ON s.member_id=g.storage_member_id WHERE s.member_id IS NULL)"},
+		{"encryption-identity", "SELECT EXISTS(SELECT 1 FROM media_encryption e LEFT JOIN media_objects o ON o.media_id=e.object_id LEFT JOIN global_media_objects g ON g.media_id=e.object_id LEFT JOIN karaoke_recordings r ON r.recording_id=e.object_id WHERE e.descriptor_json IS NOT NULL AND ((e.object_kind='media' AND o.media_id IS NULL AND g.media_id IS NULL) OR (e.object_kind='recording_lyric' AND r.recording_id IS NULL)))"},
+		{"encryption-key-identity", "SELECT EXISTS(SELECT 1 FROM media_encryption WHERE descriptor_json IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM media_crypto_keys WHERE singleton=1)"},
 		{"placement-identity", "SELECT EXISTS(SELECT 1 FROM global_media_objects g JOIN media_objects o ON o.media_id=g.media_id OR o.path_locator=g.path_locator WHERE o.media_id<>g.media_id OR o.media_path<>g.media_path OR o.object_kind<>g.object_kind)"},
 		{"playback-identity", "SELECT EXISTS(SELECT 1 FROM media_playback_stats p LEFT JOIN media_objects o ON o.media_id=p.media_id LEFT JOIN global_media_objects g ON g.media_id=p.media_id WHERE COALESCE(g.media_path,o.media_path,'')<>p.media_path)"},
 		{"playback-event", "SELECT EXISTS(SELECT 1 FROM media_playback_events p LEFT JOIN media_objects o ON o.media_id=p.media_id LEFT JOIN global_media_objects g ON g.media_id=p.media_id WHERE o.media_id IS NULL AND g.media_id IS NULL)"},
@@ -315,5 +337,32 @@ func checkBackupReferences(ctx context.Context, tx *sql.Tx) error {
 			return fmt.Errorf("%w: %s", store.ErrBackupState, check.name)
 		}
 	}
-	return nil
+	rows, err := tx.QueryContext(ctx, "SELECT r.title,r.lyrics,e.file_id,e.descriptor_json FROM karaoke_recordings r LEFT JOIN media_encryption e ON e.object_kind='recording_lyric' AND e.object_id=r.recording_id")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var title string
+		var raw []byte
+		var fileID, descriptor sql.NullString
+		if err := rows.Scan(&title, &raw, &fileID, &descriptor); err != nil {
+			return err
+		}
+		_, encrypted, err := store.DecodeRecordingLyrics(raw)
+		if err != nil {
+			return store.ErrBackupState
+		}
+		if encrypted == nil {
+			if descriptor.Valid {
+				return store.ErrBackupState
+			}
+			continue
+		}
+		var meta mediacrypto.Metadata
+		if !descriptor.Valid || !fileID.Valid || fileID.String != encrypted.Encryption.FileID || json.Unmarshal([]byte(descriptor.String), &meta) != nil || meta != encrypted.Encryption {
+			return store.ErrBackupState
+		}
+	}
+	return rows.Err()
 }

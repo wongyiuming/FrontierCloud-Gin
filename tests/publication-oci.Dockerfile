@@ -2,7 +2,7 @@
 FROM scratch
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="2" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="3" \
       frontiercloud.release-manifest-version="1" \
       org.opencontainers.image.source="https://github.com/wongyiuming/FrontierCloud-Gin" \
       org.opencontainers.image.revision=$REVISION

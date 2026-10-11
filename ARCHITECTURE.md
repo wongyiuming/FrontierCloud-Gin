@@ -50,6 +50,19 @@ Compute Worker is **retired**. Worker slots, leased compute scheduling, worker U
 
 ## 4. Heartbeat and Backup
 
+### Browser encryption boundary
+
+Every upload selection explicitly chooses plaintext or encrypted storage; neither
+remembered choices nor crypto-error fallback can silently choose plaintext.
+Browser AES-GCM chunks preserve bounded Range playback and one complete object
+per storage owner. The Master owns durable encryption metadata and permissions
+and wraps small file keys through session-scoped asymmetric handshakes; ordinary
+media encryption/decryption runs only in the browser. Fixed authorization expiry
+covers multiple files without per-request ECDH. Obfuscation does not replace
+standard cryptography or prevent authorized users retaining keys or plaintext.
+Premaster recovery is independent of storage-node business backups. See the
+[browser encryption contract](docs/browser-media-encryption.md).
+
 Heartbeat is node-health control traffic. Backup is asynchronous recovery work. They are independent failure domains:
 
 - a successful heartbeat stays successful even if Backup subsequently fails;
@@ -235,7 +248,7 @@ still precedes merging; the normal main-only signing boundary is unchanged.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
-The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
+The dedicated RN preproduction Master at `www4399.sbs` has separate data,
 identity, secrets and updater control from any production storage appliance on
 the same host. Its local CD follows the newest successful exact `dev` push,
 never substitutes that evidence for reviewed production `main` publication.
@@ -263,6 +276,6 @@ independent business deployment or another business authority. Do not globally
 rewrite persisted roles or reinitialize an owned disk to rename the product.
 See [storage appliance operations](docs/storage-appliance.md).
 
-EVOXT's production storage and preproduction Master (`ml.520mall.cc`) are
+RN's production storage and preproduction Master (`www4399.sbs`) are
 separate security/data/Compose projects. Only the staging Master uses 80/443.
 No production operation is automated in this change.

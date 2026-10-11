@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"io"
 	"math"
 	"os"
@@ -108,6 +109,10 @@ func (s *Service) requireMaster(ctx context.Context) error {
 	return nil
 }
 func (s *Service) ReserveMasterUpload(ctx context.Context, filename, target, relative, site string, size int64, maxName int, a store.AdminAudit) (UploadTicket, error) {
+	return s.ReserveMasterEncryptedUpload(ctx, filename, target, relative, site, size, maxName, a, nil)
+}
+
+func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, target, relative, site string, size int64, maxName int, a store.AdminAudit, encryption *mediacrypto.Metadata) (UploadTicket, error) {
 	if err := s.requireMaster(ctx); err != nil {
 		return UploadTicket{}, err
 	}
@@ -127,7 +132,16 @@ func (s *Service) ReserveMasterUpload(ctx context.Context, filename, target, rel
 	if err != nil {
 		return UploadTicket{}, err
 	}
-	v, err := s.pool.ReserveUpload(ctx, o.Path, site, size, free, a)
+	var v store.UploadReservation
+	if encryption == nil {
+		v, err = s.pool.ReserveUpload(ctx, o.Path, site, size, free, a)
+	} else {
+		repository, ok := s.pool.(store.EncryptionRepository)
+		if !ok {
+			return UploadTicket{}, mediacrypto.ErrMetadata
+		}
+		v, err = repository.ReserveEncryptedUpload(ctx, o.Path, site, size, free, a, encryption)
+	}
 	if err != nil {
 		return UploadTicket{}, err
 	}
@@ -237,7 +251,7 @@ func (s *Service) UploadMasterBytes(ctx context.Context, id string, reader io.Re
 	if stage.Bytes != v.ExpectedBytes {
 		return UploadResult{}, io.ErrUnexpectedEOF
 	}
-	if !signature(strings.ToLower(path.Ext(v.Path)), stage.Head) {
+	if v.Encryption == nil && !signature(strings.ToLower(path.Ext(v.Path)), stage.Head) {
 		return UploadResult{}, ErrSignature
 	}
 	volumeRelease, err := s.acquire(ctx, true)
@@ -254,6 +268,7 @@ func (s *Service) UploadMasterBytes(ctx context.Context, id string, reader io.Re
 		return UploadResult{}, err
 	}
 	journal := uploadJournal{Format: "frontiercloud-master-upload", Version: 1, ID: stage.id, UploadSessionID: v.ID, Object: store.MediaObject{ID: v.MediaID, Path: v.Path, Kind: v.Kind}, Bytes: stage.Bytes, SHA256: stage.Digest, Audit: a}
+	journal.Object.Encryption = v.Encryption
 	stage.retain = true
 	if err = s.writeUploadJournal(journal); err == nil {
 		err = s.finishUpload(ctx, journal)

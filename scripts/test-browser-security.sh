@@ -6,10 +6,40 @@ revision=${FRONTIERCLOUD_REVISION:?Exact locally committed candidate SHA require
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
 work=$(mktemp -d /tmp/fc-browser-security-XXXXXXXX)
 project="fc-browser-security-$(cat /proc/sys/kernel/random/uuid)"
+printf 'Browser fixture ownership: project=%s work=%s\n' "$project" "$work"
+compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml -f tests/browser-tls.compose.yaml "$@"; }
+cleanup_failed() {
+  printf 'Browser fixture cleanup failed: %s; preserving project=%s work=%s\n' "$1" "$project" "$work" >&2
+  exit 1
+}
 cleanup() {
-  if [[ "$project" == fc-browser-security-* && "$work" == /tmp/fc-browser-security-* ]]; then
-    compose down --volumes --remove-orphans >/dev/null || true
+  local resolved remaining ids sources source
+  local -a container_ids
+  [[ "$project" =~ ^fc-browser-security-[a-f0-9-]{36}$ ]] || cleanup_failed 'unexpected project identity'
+  [[ -d "$work" && ! -L "$work" ]] || cleanup_failed 'work is missing or a symlink'
+  resolved=$(readlink -f -- "$work") || cleanup_failed 'work cannot be resolved'
+  [[ "$resolved" = "$work" && "$resolved" =~ ^/tmp/fc-browser-security-[a-zA-Z0-9]{8}$ ]] || cleanup_failed 'work is outside its exact temporary directory'
+  compose down --volumes --remove-orphans >/dev/null || cleanup_failed 'project down did not complete'
+  remaining=$(docker ps -aq --filter "label=com.docker.compose.project=$project") || cleanup_failed 'container inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project containers remain'
+  remaining=$(docker network ls -q --filter "label=com.docker.compose.project=$project") || cleanup_failed 'network inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project networks remain'
+  remaining=$(docker volume ls -q --filter "label=com.docker.compose.project=$project") || cleanup_failed 'volume inventory failed'
+  [[ -z "$remaining" ]] || cleanup_failed 'project volumes remain'
+  # Include stopped containers: their bind mounts still refer to retained data.
+  ids=$(docker ps -aq) || cleanup_failed 'mount owner inventory failed'
+  if [[ -n "$ids" ]]; then
+    readarray -t container_ids <<< "$ids"
+    sources=$(docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "${container_ids[@]}") || cleanup_failed 'mount inspection failed'
+    while IFS= read -r source; do
+      [[ -z "$source" ]] && continue
+      source=$(readlink -m -- "$source") || cleanup_failed 'mount cannot be resolved'
+      [[ "$source" != "$resolved" && "$source" != "$resolved/"* && "$resolved" != "${source%/}/"* ]] || cleanup_failed 'a container still references work'
+    done <<< "$sources"
   fi
+  rm -rf -- "$resolved" || cleanup_failed 'work removal failed'
+  [[ ! -e "$resolved" ]] || cleanup_failed 'work still exists'
+  printf 'Browser fixture cleanup verified: project=%s work=%s removed\n' "$project" "$resolved"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -22,8 +52,20 @@ export SECURITY_CONTACT=https://reports.example.test/security
 export PUBLIC_ORIGIN=
 export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev STAGING_CD=false
 mkdir -p "$work/acme" "$work/data/media/music/security-fixture"
+mkdir -p "$work/crypto/encrypted-fixture" "$work/crypto/encrypted-video" "$work/crypto-results"
+command -v ffmpeg >/dev/null
+for spec in '01-first:90' '02-second:8'; do
+  name=${spec%:*}; duration=${spec#*:}
+  ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=$duration" \
+    -c:a libmp3lame -b:a 128k -y "$work/crypto/encrypted-fixture/$name.mp3"
+done
+ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:sample_rate=16000:duration=1' \
+  -c:a pcm_s16le -y "$work/crypto/plain.wav"
+ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=10' \
+  -an -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart -y "$work/crypto/encrypted-video/clip.mp4"
+printf '[00:00.10]浏览器解密歌词\n[00:01.00]会话复用多个文件\n' > "$work/crypto/crypto-lyrics.lrc"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
-  -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1 >/dev/null 2>&1
+  -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1,DNS:nginx >/dev/null 2>&1
 chmod 600 "$SSL_KEY_PATH"
 python3 - "$work/data/media/music/security-fixture" <<'PY'
 import math,pathlib,struct,sys,wave
@@ -33,17 +75,38 @@ for name in ('01-first.wav','02-second.wav'):
     with wave.open(str(root/name),'wb') as out:
         out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(data)
 PY
-compose() { docker compose --env-file /dev/null -p "$project" -f docker-compose.yaml -f tests/native-loopback.compose.yaml "$@"; }
+assert_web_cpu() {
+  local web_id resources
+  web_id=$(compose ps -q web)
+  test -n "$web_id"
+  resources=$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$web_id")
+  test "$resources" = 1000000000
+  printf 'Verified browser fixture Web %s: NanoCpus=%s (1 CPU)\n' "${web_id:0:12}" "$resources"
+}
 FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 compose up -d --no-build --wait --wait-timeout 180
+assert_web_cpu
 compose exec -T nginx nginx -t
 address=$(compose port nginx 443)
 base="https://$address"
 # Docker allocated the public port after Web initialization. Configure its
-# canonical origin explicitly, then test the actual discovery documents too.
+# canonical origin and exact private Nginx peer explicitly. Docker can choose
+# a bridge outside the application's default trusted-proxy network range.
 export PUBLIC_ORIGIN="$base"
+nginx_id=$(compose ps -q nginx)
+proxy=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")
+[[ "$proxy" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+export FRONTIERCLOUD_TEST_TRUSTED_PROXY_NETWORKS="$proxy/32"
 compose up -d --no-build --no-deps --wait --wait-timeout 90 web
+assert_web_cpu
+test "$(compose ps -q nginx)" = "$nginx_id"
+test "$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")" = "$proxy"
 curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
+for asset in media-crypto-common.js media-crypto.js media-crypto-sw.js; do
+  test "$(curl --silent --show-error --cacert "$SSL_CERT_PATH" -o /dev/null -w '%{http_code}' "$base/static/js/$asset")" = 404
+  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/static/js/compiled/$asset" -o "$work/$asset"
+  cmp "static/js/compiled/$asset" "$work/$asset"
+done
 for protocol in 1.2 1.3; do
   curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" --tlsv1."${protocol#1.}" --tls-max "$protocol" "$base/health/ready" >/dev/null
 done
@@ -77,6 +140,7 @@ export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$browser"
 ADMIN_KEY=$(compose exec -T web sh -c 'cat /run/frontiercloud-secrets/admin_key')
 export ADMIN_KEY
 "$work/tools/bin/python" tests/browser_security_smoke.py --base-url "$base"
+"$work/tools/bin/python" tests/media_crypto_browser.py --base-url "$base" --fixtures "$work/crypto" --output "$work/crypto-results"
 unset ADMIN_KEY
 volume="${project}_maintenance_state"
 test "$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "$volume")" = "$project"

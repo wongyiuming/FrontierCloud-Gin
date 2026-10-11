@@ -112,7 +112,7 @@ func (f *jointSourceFixture) publish(t *testing.T, version string) *release.Mani
 		args = append(args, "-p", f.current.Artifacts["main"].CommitSHA)
 	}
 	reference := f.git(t, args...)
-	m := &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 2, Artifacts: map[string]release.Artifact{}}
+	m := &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 3, Artifacts: map[string]release.Artifact{}}
 	for branch, commit := range map[string]string{"main": reference, "gin_main": target} {
 		policy, _ := release.PolicyForBranch(branch)
 		sourceArgs := []string{"commit-tree", tree, "-m", "private reviewed " + policy.Source + " " + version}

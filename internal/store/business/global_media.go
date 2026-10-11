@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"path"
 	"sort"
 	"strings"
@@ -105,6 +106,9 @@ func (r *Repository) Upload(ctx context.Context, id string) (v store.UploadReser
 		return
 	}
 	v.Member, err = scanMember(r.db.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?", v.MemberID))
+	if err == nil {
+		v.Encryption, err = r.Encryption(ctx, v.MediaID)
+	}
 	return
 }
 func memberSite(v store.StorageMember) string {
@@ -129,6 +133,13 @@ func capacity(v store.StorageMember) int64 {
 	return min(max(0, v.Allocation-v.Used-v.Reserved), max(0, v.PhysicalFree-store.PhysicalReserve-v.Reserved))
 }
 func (r *Repository) ReserveUpload(ctx context.Context, name, site string, size, localPhysicalFree int64, a store.AdminAudit) (result store.UploadReservation, err error) {
+	return r.ReserveEncryptedUpload(ctx, name, site, size, localPhysicalFree, a, nil)
+}
+
+func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site string, size, localPhysicalFree int64, a store.AdminAudit, encryption *mediacrypto.Metadata) (result store.UploadReservation, err error) {
+	if encryption != nil && (encryption.Validate() != nil || encryption.CiphertextSize != size) {
+		return result, mediacrypto.ErrMetadata
+	}
 	kind := "audio"
 	if strings.HasPrefix(name, "vido/") {
 		kind = "video"
@@ -272,6 +283,10 @@ func (r *Repository) ReserveUpload(ctx context.Context, name, site string, size,
 			return err
 		}
 		result = store.UploadReservation{ID: id, MemberID: member.ID, MediaID: mediaID, Path: name, Kind: kind, ExpectedBytes: size, State: "reserved", ExpiresAt: now + 1800, CreatedAt: now, UpdatedAt: now, Member: member}
+		if err = r.putEncryption(ctx, q, mediaID, encryption); err != nil {
+			return err
+		}
+		result.Encryption = encryption
 		detail, _ := json.Marshal(map[string]any{"upload_id": id, "media_id": mediaID, "member_id": member.ID, "site_type": site, "expected_bytes": size})
 		a.Action = "upload-reserved"
 		a.Detail = string(detail)
@@ -417,6 +432,9 @@ func (r *Repository) ReleaseCleanedUpload(ctx context.Context, id string, a stor
 			return err
 		}
 		if _, err = q.ExecContext(ctx, "DELETE FROM cluster_upload_sessions WHERE upload_id=?", id); err != nil {
+			return err
+		}
+		if err = retireEncryption(ctx, q, v.MediaID); err != nil {
 			return err
 		}
 		a.Action = "upload-reservation-cleaned"

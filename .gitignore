@@ -80,3 +80,6 @@ certs/*.pem
 
 # Precompiled CI binaries are build inputs, never source-controlled files.
 /.ci-out/
+
+# Browser asset build tools never belong in runtime images.
+/node_modules/

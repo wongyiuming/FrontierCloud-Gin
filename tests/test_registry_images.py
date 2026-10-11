@@ -22,7 +22,7 @@ def response(value, digest=None):
 def publication_fixture(component='web', configuration=None):
     config = configuration or {'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': {
         'frontiercloud.revision': SHA, 'frontiercloud.component': component,
-        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '2',
+        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '3',
         'frontiercloud.release-manifest-version': '1', 'org.opencontainers.image.source': SOURCE,
         'org.opencontainers.image.revision': SHA}}}
     raw = json.dumps(config).encode()
@@ -135,6 +135,10 @@ class RegistryImagesTests(unittest.TestCase):
             changed['config']['Labels'][field] = 'wrong'
             with self.assertRaises(ValueError):
                 publication_probe(SHA, 'web', publication_fixture(configuration=changed)[0])
+        changed = json.loads(raw)
+        changed['config']['Labels']['frontiercloud.schema-generation'] = '2'
+        with self.assertRaises(ValueError):
+            publication_probe(SHA, 'web', publication_fixture(configuration=changed)[0])
 
     def test_publication_only_exact_manifest_unknown_allows_new_bytes(self):
         with self.assertRaises(ManifestUnknown):

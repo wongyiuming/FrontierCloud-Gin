@@ -247,6 +247,9 @@ func (r *Repository) ObjectByID(ctx context.Context, id string) (*store.MediaObj
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+	if err == nil {
+		o.Encryption, err = r.Encryption(ctx, id)
+	}
 	return &o, err
 }
 

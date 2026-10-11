@@ -210,6 +210,9 @@ func (r *Repository) completeGlobalDelete(ctx context.Context, q queryer, id str
 	if _, err := q.ExecContext(ctx, "DELETE FROM global_media_objects WHERE media_id=?", id); err != nil {
 		return err
 	}
+	if err := retireEncryption(ctx, q, id); err != nil {
+		return err
+	}
 	if _, err := q.ExecContext(ctx, "UPDATE cluster_storage_members SET used_bytes=used_bytes-?,updated_at=? WHERE member_id=?", v.Bytes, time.Now().Unix(), v.MemberID); err != nil {
 		return err
 	}

@@ -204,7 +204,8 @@ assert.equal(operations.filter(v => v === 'remove').length, 1, 'queued duplicate
 // A slow Direct transfer must deliver partial batches while its next read is
 // pending, without consuming that read twice or changing byte order.
 context.currentMediaList = [{type: 'audio', media_path: 'music/direct/song.mp3', url: '/fixture'}];
-context.art = {_syncTime() {}, _syncBuffered() {}, video: {buffered: {length: 0}}};
+context.currentIndex = 0;
+context.art = {_syncTime() {}, _syncBuffered() {}, notice: {}, video: {buffered: {length: 0}}};
 function transferCandidate(reader, total) {
     const candidate = Object.create(windowObject.__ContinuousAudioSession.prototype);
     let appended = 0;
@@ -288,6 +289,17 @@ assert.equal(broken.candidate.closed, false, 'runtime failure must hold the same
 assert.equal(broken.candidate.blockedError.name, 'InvalidStateError');
 assert.equal(context.currentMediaList[0].continuous_stream_runtime_skip, undefined);
 assert.doesNotMatch(source, /markRuntimeSkip|连续流读取中断|将提前进入下一首/);
+
+// Authorization can fail before any authenticated audio reaches MSE. Keep that
+// failure terminal instead of creating a second native playback attempt.
+const unauthorized = transferCandidate({read: async () => ({done: true}), cancel: async () => {}}, 0);
+context.currentMediaList[0].encryption = {version: 1};
+unauthorized.candidate.fail(Object.assign(new Error('temporary authorization expired'), {status: 403}));
+assert.equal(unauthorized.candidate.closed, false);
+assert.equal(unauthorized.candidate.blockedError.message, 'temporary authorization expired');
+assert.equal(context.art.notice.show, 'temporary authorization expired');
+assert.equal(unauthorized.candidate.fetchController.signal.aborted, false);
+delete context.currentMediaList[0].encryption;
 
 const stopController = new AbortController();
 const stopping = Object.create(windowObject.__ContinuousAudioSession.prototype);

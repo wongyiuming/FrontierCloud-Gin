@@ -25,7 +25,7 @@ func TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials(t *testi
 	t.Cleanup(func() {
 		raw.Exec("DELETE FROM media_delete_operations WHERE operation_id=?", id)
 		raw.Exec("DELETE FROM cluster_business_backups WHERE master_id=?", id)
-		raw.Exec("UPDATE frontiercloud_schema SET generation=2 WHERE singleton=1")
+		raw.Exec("UPDATE frontiercloud_schema SET generation=3 WHERE singleton=1")
 	})
 	if _, err := raw.Exec("INSERT INTO media_delete_operations(operation_id,state,manifest,created_at) VALUES (?,'rename_pending','{}','2026-10-02 01:02:03.000000')", id); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials(t *testi
 	if err := raw.QueryRow("SELECT state FROM cluster_business_backups WHERE master_id=?", id).Scan(&state); err != nil || state != "receiving" {
 		t.Fatal("inspection discarded an intent", state, err)
 	}
-	if _, err := raw.Exec("UPDATE frontiercloud_schema SET generation=3 WHERE singleton=1"); err != nil {
+	if _, err := raw.Exec("UPDATE frontiercloud_schema SET generation=4 WHERE singleton=1"); err != nil {
 		t.Fatal(err)
 	}
 	if result, err := db.Maintenance().InspectMaintenance(ctx); !errors.Is(err, store.ErrBackupState) || result.LogicalIdle {

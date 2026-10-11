@@ -248,6 +248,13 @@ func Preflight(ctx context.Context, reader io.Reader, expected Expectation, dire
 	if err := checkBackupReferences(ctx, tx); err != nil {
 		return Report{}, err
 	}
+	var encrypted bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM media_crypto_keys) OR EXISTS(SELECT 1 FROM media_encryption WHERE descriptor_json IS NOT NULL)").Scan(&encrypted); err != nil {
+		return Report{}, err
+	}
+	if encrypted {
+		report.PendingGates = append(report.PendingGates, "media-premaster-key-proof")
+	}
 	if err := tx.Commit(); err != nil {
 		return Report{}, err
 	}

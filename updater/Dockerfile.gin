@@ -18,7 +18,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="updater" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="2" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="3" \
       frontiercloud.release-manifest-version="1"
 COPY --from=build /out/frontiercloud-updater /app/frontiercloud-updater
 WORKDIR /workspace

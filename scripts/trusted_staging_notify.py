@@ -22,7 +22,7 @@ else:
 
 REPOSITORY = 'wongyiuming/FrontierCloud-Gin'
 WORKFLOW_REFERENCE = REPOSITORY + '/.github/workflows/publish-images.yml@refs/heads/main'
-NOTIFICATION_URL = 'https://ml.520mall.cc:9443/staging-ci-success'
+NOTIFICATION_URL = 'https://www4399.sbs:9443/staging-ci-success'
 COMPONENTS = ('web', 'updater', 'nginx')
 PUBLISH_NAME = 'Publish native images'
 SOURCE_NAME = 'Build and Test Docker Compose'

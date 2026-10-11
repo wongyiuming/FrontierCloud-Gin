@@ -72,7 +72,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 				t.Fatal(err)
 			}
 		}
-		body, _ := json.Marshal(map[string]any{"site_type": site, "target_dir": "music/Upload-" + site, "filename": "song.mp3", "size_bytes": 10})
+		body, _ := json.Marshal(map[string]any{"storage_mode": "plain", "site_type": site, "target_dir": "music/Upload-" + site, "filename": "song.mp3", "size_bytes": 10})
 		w := perform("POST", "/api/v1/media/admin/upload/session", string(body))
 		var ticket media.UploadTicket
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil || ticket.Site != site {
@@ -109,7 +109,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 			t.Fatal("cancel removed completed catalog", err)
 		}
 	}
-	body := `{"site_type":"relay","target_dir":"music/CancelRemote","filename":"cancel.mp3","size_bytes":10}`
+	body := `{"storage_mode":"plain","site_type":"relay","target_dir":"music/CancelRemote","filename":"cancel.mp3","size_bytes":10}`
 	w := perform("POST", "/api/v1/media/admin/upload/session", body)
 	var ticket media.UploadTicket
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil {

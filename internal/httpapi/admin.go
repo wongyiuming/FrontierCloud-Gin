@@ -35,6 +35,11 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.GET("/", a.page)
 	protected.GET("/status", a.status)
 	protected.POST("/logout", a.logout)
+	protected.POST("/crypto/session", a.cryptoSession)
+	protected.POST("/crypto/prepare", a.cryptoPrepare)
+	protected.POST("/crypto/key", a.cryptoKey)
+	protected.GET("/crypto/bytes", a.cryptoBytes)
+	protected.HEAD("/crypto/bytes", a.cryptoBytes)
 	protected.POST("/key/temporary", a.temporary)
 	protected.POST("/key/rotate", a.rotate)
 	protected.GET("/brand", a.brandStatus)
@@ -47,6 +52,9 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.POST("/hide", a.hide)
 	protected.POST("/delete", a.delete)
 	protected.GET("/download", a.download)
+	protected.GET("/download/plan", a.downloadPlan)
+	protected.GET("/download/bytes", a.downloadPlanBytes)
+	protected.HEAD("/download/bytes", a.downloadPlanBytes)
 	protected.POST("/upload/item", func(c *gin.Context) { a.upload(c, false) })
 	protected.POST("/upload/lyric", func(c *gin.Context) { a.upload(c, true) })
 	protected.GET("/storage-pool", a.storagePool)
@@ -151,6 +159,9 @@ func (a *Admin) logout(c *gin.Context) {
 	if err := a.auth.Logout(c.Request.Context(), session(c), a.info(c)); err != nil {
 		authError(c, err)
 		return
+	}
+	if a.public.crypto != nil {
+		a.public.crypto.RevokeBinding("admin:" + session(c).Hash)
 	}
 	for _, name := range []string{a.settings.AdminCookieName(), a.settings.CSRFCookieName()} {
 		http.SetCookie(c.Writer, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, Secure: a.settings.TLSEnabled})

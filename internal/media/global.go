@@ -276,6 +276,11 @@ func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID str
 		result.Stream = local
 		return result, nil
 	}
+	return s.remoteDelivery(ctx, row, relation, requestID, traceID, nginx)
+}
+
+func (s *Service) remoteDelivery(ctx context.Context, row store.GlobalMedia, relation *store.Relationship, requestID, traceID string, nginx bool) (Delivery, error) {
+	result := Delivery{ResourceID: row.ID, OwnerID: row.MemberID, ObjectID: row.ObjectID}
 	token, err := s.control.MediaCapability(ctx, relation.ID, row.MemberID, row.ObjectID, row.ID, requestID, traceID)
 	if err != nil {
 		return Delivery{}, err
@@ -342,7 +347,8 @@ func (s *Service) OwnedStream(ctx context.Context, id string) (*Stream, error) {
 		f.Close()
 		return nil, err
 	}
-	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: o.ID, OwnerID: identity.ID, ResourceID: node.ResourceID(identity.ID, o.ID)}, nil
+	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: o.ID, OwnerID: identity.ID,
+		ResourceID: node.ResourceID(identity.ID, o.ID), Encryption: o.Encryption}, nil
 }
 
 func (s *Service) GlobalPlayback(ctx context.Context, name, id, session string, played, duration float64) (store.PlaybackResult, error) {
@@ -414,6 +420,11 @@ func (s *Service) LyricsResource(ctx context.Context, name, id string) ([]LyricE
 			return nil, err
 		}
 		lyric = defaultLyric
+	}
+	if encrypted, err := s.lyricEncryption(ctx, lyric); err != nil {
+		return nil, err
+	} else if encrypted {
+		return nil, ErrEncryptedLyric
 	}
 	f, err := s.root.Open(lyric)
 	if err != nil {

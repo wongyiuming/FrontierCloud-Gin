@@ -11,6 +11,10 @@ import (
 )
 
 const restrictiveCSP = "default-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+
+// The root media worker imports same-origin crypto code and fetches ciphertext
+// from the public origin or an authorized HTTPS storage node.
+const mediaCryptoWorkerCSP = "default-src 'none'; script-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'none'"
 const htmlNonceKey = "frontiercloud_html_nonce"
 
 // Keep the direct Go surface (including storage) protected without Nginx.

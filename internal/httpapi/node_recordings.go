@@ -6,8 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"net/http"
@@ -17,6 +19,8 @@ import (
 
 func recordingError(c *gin.Context, e error) {
 	switch {
+	case errors.Is(e, mediacrypto.ErrMetadata):
+		detail(c, 400, "加密录音快照无效或授权已被使用")
 	case errors.Is(e, store.ErrRecordingMissing):
 		detail(c, 404, e.Error())
 	case errors.Is(e, store.ErrUserMissing):
@@ -180,7 +184,12 @@ func RegisterNodeRecordings(router *gin.Engine, settings config.Config, resolver
 		}
 		defer unlock()
 		defer boundedRecordingBody(c, settings, size)()
-		receipt, e := volume.Upload(c.Request.Context(), rel.ID, store.Recording{ID: c.Param("recording"), UserID: user, Filename: filename, ContentType: ct, Bytes: size}, c.Request.Body, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		meta, snapshotHash, e := protocol.RecordingSnapshotFromToken(value)
+		if e != nil {
+			detail(c, 401, "Invalid recording snapshot capability")
+			return
+		}
+		receipt, e := volume.Upload(c.Request.Context(), rel.ID, store.Recording{ID: c.Param("recording"), UserID: user, Filename: filename, ContentType: ct, Bytes: size, ExpectedEncryptedLyrics: meta, EncryptedLyricsSHA256: snapshotHash}, c.Request.Body, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
 		if e != nil {
 			recordingError(c, e)
 			return

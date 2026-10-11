@@ -103,7 +103,7 @@ func TestWholeManifestTraversesActualControlSocketWithPrivateArtifactSelection(t
 }
 
 func nativeManifest(version, target string) *release.Manifest {
-	return &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 2, Artifacts: map[string]release.Artifact{
+	return &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 3, Artifacts: map[string]release.Artifact{
 		"main":     {Kind: "git-archive", CommitSHA: strings.Repeat("3", 40), SourceSHA: strings.Repeat("4", 40), TreeSHA: strings.Repeat("5", 40)},
 		"gin_main": {Kind: "git-archive", CommitSHA: target, SourceSHA: strings.Repeat("6", 40), TreeSHA: strings.Repeat("7", 40)},
 	}}

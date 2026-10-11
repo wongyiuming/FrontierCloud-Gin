@@ -96,6 +96,12 @@ no retry-count limit that automatically skips the track. Already buffered audio
 may continue until it runs out; then playback waits in place. Finite buffering
 cannot guarantee uninterrupted audio during an arbitrarily long outage.
 
+This retry adapter covers GET requests without Range or with a valid open-ended
+`bytes=N-` Range. Finite and suffix ranges, malformed ranges and HEAD requests
+retain the native response boundaries and headers. Request headers and abort
+signals are inherited unless explicitly overridden; HTTP 416 terminates a
+resumable request instead of retrying an invalid offset.
+
 A network or decoder failure must never finalize a partial segment, set a
 runtime-skip catalog flag, display a yellow interruption row, or append a later
 track as a substitute. Decoder/state errors are diagnosed separately and hold the

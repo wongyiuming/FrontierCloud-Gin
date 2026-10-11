@@ -44,7 +44,7 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 	}
 	control := http.NewResponseController(c.Writer)
 	defer control.SetReadDeadline(time.Time{})
-	limit := maximum
+	limit := encryptedUploadLimit(maximum)
 	if limit <= math.MaxInt64-65536 {
 		limit += 65536
 	}
@@ -84,7 +84,7 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 				return
 			}
 			filename = part.FileName()
-			staged, err = a.public.media.Stage(c.Request.Context(), part, maximum)
+			staged, err = a.public.media.Stage(c.Request.Context(), part, encryptedUploadLimit(maximum))
 			if err != nil {
 				c.Request.Body.Close()
 				uploadError(c, err)
@@ -120,11 +120,19 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 		invalid(c, "body", "file")
 		return
 	}
+	meta, ok := a.uploadEncryption(c, fields["storage_mode"], fields["encryption"], fields["preparation_token"])
+	if !ok {
+		return
+	}
+	if meta == nil && staged.Bytes > maximum || meta != nil && (meta.PlaintextSize > maximum || staged.Bytes != meta.CiphertextSize) {
+		detail(c, 413, "文件超过单文件上传限制或密文大小不一致")
+		return
+	}
 	action := "upload_item"
 	if lyric {
 		action = "upload_lyric"
 	}
-	name, err := a.public.media.Publish(c.Request.Context(), staged, filename, fields["target_dir"], fields["relative_path"], lyric, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, action, []string{filename}))
+	name, err := a.public.media.PublishEncrypted(c.Request.Context(), staged, filename, fields["target_dir"], fields["relative_path"], lyric, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, action, []string{filename}), meta)
 	if err != nil {
 		uploadError(c, err)
 		return

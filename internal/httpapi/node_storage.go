@@ -12,6 +12,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -217,6 +218,11 @@ func RegisterNodeStorage(router *gin.Engine, settings config.Config, resolver *n
 		object, err := media.ValidateStorageObject(c.Param("object"), name, size)
 		if !ok || sizeErr != nil || err != nil {
 			detail(c, 401, "Storage capability invalid or expired")
+			return
+		}
+		object.Encryption, err = protocol.StorageEncryption(value)
+		if err != nil {
+			detail(c, 401, "Storage encryption capability invalid")
 			return
 		}
 		if !storageCORS(c, relation) {

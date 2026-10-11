@@ -26,10 +26,10 @@ func (r *Repository) CheckLocalRecordingUpload(ctx context.Context, v store.Reco
 		if e != nil {
 			return e
 		}
-		if current.UserID != v.UserID || current.MemberID != v.MemberID || current.Bytes != v.Bytes || current.Filename != v.Filename || current.ContentType != v.ContentType || (current.State != "pending" && current.State != "ready") {
+		if current.UserID != v.UserID || current.MemberID != v.MemberID || current.Bytes != v.Bytes || current.Filename != v.Filename || current.ContentType != v.ContentType || !sameRecordingSnapshot(current, v) || (current.State != "pending" && current.State != "ready") {
 			return store.ErrRecordingState
 		}
-		return nil
+		return checkRecordingSnapshotEncryption(ctx, q, current, r.lock())
 	})
 }
 func (r *Repository) StageOwnedRecordingDeletion(ctx context.Context, relationship, user, id string) (result *store.Recording, err error) {
@@ -94,10 +94,10 @@ func (r *Repository) ReserveOwnedRecording(ctx context.Context, relationship str
 			return e
 		}
 		if old != nil {
-			if old.MemberID != n.ID || old.UserID != v.UserID || old.Bytes != v.Bytes || old.Filename != v.Filename || old.ContentType != v.ContentType || (old.State != "pending" && old.State != "ready") {
+			if old.MemberID != n.ID || old.UserID != v.UserID || old.Bytes != v.Bytes || old.Filename != v.Filename || old.ContentType != v.ContentType || !sameRecordingSnapshot(*old, v) || (old.State != "pending" && old.State != "ready") {
 				return store.ErrRecordingState
 			}
-			return nil
+			return checkRecordingSnapshotEncryption(ctx, q, *old, r.lock())
 		}
 		m, e := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), n.ID))
 		if e != nil {
@@ -110,6 +110,15 @@ func (r *Repository) ReserveOwnedRecording(ctx context.Context, relationship str
 		v.MemberID = n.ID
 		v.CreatedAt = time.Now().Unix()
 		v.UpdatedAt = v.CreatedAt
+		meta := v.ExpectedEncryptedLyrics
+		if v.EncryptedLyrics != nil {
+			meta = &v.EncryptedLyrics.Encryption
+		}
+		if meta != nil {
+			if e = r.putEncryptionFor(ctx, q, "recording_lyric", v.ID, meta); e != nil {
+				return e
+			}
+		}
 		if e = insertRecording(ctx, q, v); e != nil {
 			return e
 		}
@@ -187,8 +196,11 @@ func (r *Repository) CompleteOwnedRecording(ctx context.Context, relationship st
 		if e != nil {
 			return e
 		}
-		if v.MemberID != n.ID || v.Bytes != receipt.Bytes {
+		if v.MemberID != n.ID || v.Bytes != receipt.Bytes || !store.RecordingReceiptMetadataMatches(v, receipt.Metadata) {
 			return store.ErrRecordingState
+		}
+		if e = checkRecordingSnapshotEncryption(ctx, q, v, r.lock()); e != nil {
+			return e
 		}
 		if v.State == "ready" {
 			if v.SHA256 == nil || *v.SHA256 != receipt.SHA256 {
@@ -207,7 +219,15 @@ func (r *Repository) CompleteOwnedRecording(ctx context.Context, relationship st
 			return store.ErrRecordingState
 		}
 		now := time.Now().Unix()
-		if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='ready',sha256=?,updated_at=? WHERE recording_id=?", receipt.SHA256, now, v.ID); e != nil {
+		if v.ExpectedEncryptedLyrics != nil {
+			v.Title, v.Lyrics, v.EncryptedLyrics = receipt.Metadata.Title, receipt.Metadata.Lyrics, receipt.Metadata.EncryptedLyrics
+			v.ExpectedEncryptedLyrics, v.EncryptedLyricsSHA256 = nil, ""
+		}
+		lyrics, e := store.EncodeRecordingReservation(v)
+		if e != nil {
+			return e
+		}
+		if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='ready',sha256=?,title=?,lyrics=?,updated_at=? WHERE recording_id=?", receipt.SHA256, v.Title, string(lyrics), now, v.ID); e != nil {
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes-?,used_bytes=used_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", v.Bytes, v.Bytes, free, now, n.ID); e != nil {
@@ -260,9 +280,29 @@ func (r *Repository) CompleteOwnedRecordingDeletion(ctx context.Context, relatio
 		}
 		// Keep an ownership tombstone. A still-valid upload capability must not
 		// recreate a recording whose physical deletion was already acknowledged.
-		if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='deleted',updated_at=? WHERE recording_id=?", now, id); e != nil {
+		if e = retireEncryptionFor(ctx, q, "recording_lyric", id); e != nil {
+			return e
+		}
+		if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='deleted',lyrics='[]',updated_at=? WHERE recording_id=?", now, id); e != nil {
 			return e
 		}
 		return r.nodeAudit(ctx, q, "recording-deleted", relationship, map[string]any{"recording_id": id, "user_id": user, "size_bytes": v.Bytes}, a)
 	})
 }
+
+func sameRecordingSnapshot(a, b store.Recording) bool {
+	if a.EncryptedLyrics == nil && a.ExpectedEncryptedLyrics == nil {
+		return b.EncryptedLyrics == nil && b.ExpectedEncryptedLyrics == nil
+	}
+	if b.EncryptedLyrics != nil {
+		return store.RecordingReceiptMetadataMatches(a, ptrMetadata(store.RecordingMetadataFor(b)))
+	}
+	if b.ExpectedEncryptedLyrics != nil {
+		if a.EncryptedLyrics != nil {
+			return a.EncryptedLyrics.Encryption == *b.ExpectedEncryptedLyrics && store.RecordingMetadataSHA256(store.RecordingMetadataFor(a)) == b.EncryptedLyricsSHA256
+		}
+		return a.ExpectedEncryptedLyrics != nil && *a.ExpectedEncryptedLyrics == *b.ExpectedEncryptedLyrics && a.EncryptedLyricsSHA256 == b.EncryptedLyricsSHA256
+	}
+	return false
+}
+func ptrMetadata(v store.RecordingMetadata) *store.RecordingMetadata { return &v }

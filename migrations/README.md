@@ -1,10 +1,10 @@
 # Shared database schema
 
-Schema generation 2 has one logical model and two reviewed physical snapshots:
+Schema generation 3 has one logical model and two reviewed physical snapshots:
 
-- `mysql/0002-schema.json`: existing InnoDB DDL, including binary media paths,
+- `mysql/0003-schema.json`: existing InnoDB DDL, including binary media paths,
   generated active-ban uniqueness, indexes, and preference constraints.
-- `sqlite/0002-schema.json`: corresponding SQLite DDL and indexes. Audit keys
+- `sqlite/0003-schema.json`: corresponding SQLite DDL and indexes. Audit keys
   use `INTEGER PRIMARY KEY`, dates use UTC ISO text, and backup chunks use BLOB.
 
 Each JSON array entry is one SQL statement. There is no runtime SQL translation.
@@ -20,6 +20,15 @@ generation/journal update. Both reject future generations, incomplete schemas,
 and nonempty databases without a generation marker.
 
 Changing `DB_TYPE` selects a database; it does not copy or migrate business data.
+Generation 2 -> 3 creates `media_encryption`, whose immutable descriptors follow
+stable media identities through upload, rename and crash recovery. Deletion or
+abandoned-upload cleanup retains a small file-ID tombstone, preventing reuse of
+a prepared AES key/nonce pair. Historical plaintext objects have no descriptor.
+The `media_crypto_keys` singleton preserves a public premaster fingerprint. The
+persistent premaster is a separately protected secret and must accompany data
+recovery; business backup artifacts contain descriptors and the verifier, never
+that secret. Startup rejects a missing verifier for encrypted data and a restored
+key that does not match it.
 SQLite databases belong to a single host and must not be shared over NFS.
 
 ## Native validation

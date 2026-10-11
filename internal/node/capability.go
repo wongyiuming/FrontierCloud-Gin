@@ -99,6 +99,9 @@ func (s *Service) StorageCapability(ctx context.Context, v store.UploadReservati
 		return "", ErrCapability
 	}
 	if operation == "upload" {
+		if v.Encryption != nil {
+			return protocol.EncryptedStorageUploadToken(credential, relation.ID, row.ID, v.MemberID, v.MediaID, v.MediaID, v.Path, v.ID, v.ExpectedBytes, time.Now().Unix(), *v.Encryption)
+		}
 		return protocol.StorageUploadToken(credential, relation.ID, row.ID, v.MemberID, v.MediaID, v.MediaID, v.Path, v.ID, v.ExpectedBytes, time.Now().Unix())
 	}
 	return protocol.StorageToken(credential, relation.ID, row.ID, v.MemberID, v.MediaID, v.MediaID, operation, v.Path, v.ExpectedBytes, time.Now().Unix())
@@ -124,7 +127,8 @@ func (s *Service) VerifyOwnedStorage(ctx context.Context, token, objectID, opera
 		return store.Relationship{}, nil, ErrCapability
 	}
 	v, err := protocol.VerifyStorageToken(credential, token, time.Now().Unix())
-	if err != nil || row.Role != "Follower" || relation.State != "active" || relation.Direction != "upstream" || relation.Protocol != protocol.Version || textField(v, "n") != row.ID || textField(v, "i") != objectID || textField(v, "m") != relation.PeerID || textField(v, "r") != relation.ID || textField(v, "op") != operation {
+	operationOK := textField(v, "op") == operation || operation == "upload" && textField(v, "op") == "upload-encrypted"
+	if err != nil || row.Role != "Follower" || relation.State != "active" || relation.Direction != "upstream" || relation.Protocol != protocol.Version || textField(v, "n") != row.ID || textField(v, "i") != objectID || textField(v, "m") != relation.PeerID || textField(v, "r") != relation.ID || !operationOK {
 		return store.Relationship{}, nil, ErrCapability
 	}
 	return relation, v, nil

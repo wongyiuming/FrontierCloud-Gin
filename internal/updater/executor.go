@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 type DockerExecutor struct {
@@ -165,7 +167,7 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		if e = engine.Stop(ctx, web.ID); e != nil {
 			return Outcome{}, e
 		}
-		if e = x.helper(ctx, engine, private, &journal, "prepare", web, webImage, []string{"prepare-release", "--confirm-generation", "2"}); e != nil {
+		if e = x.helper(ctx, engine, private, &journal, "prepare", web, webImage, []string{"prepare-release", "--confirm-generation", strconv.Itoa(migrations.Generation)}); e != nil {
 			return Outcome{}, e
 		}
 		if e = x.helper(ctx, engine, private, &journal, "resume", web, webImage, []string{"maintenance", "resume", "--wait-seconds", "300"}); e != nil {
@@ -332,7 +334,7 @@ func (x *DockerExecutor) restore(ctx context.Context, e *Engine, s *privateStore
 	}
 	web := j.Snapshots["web"]
 	// Drain a partially started replacement with its native helper. No reverse
-	// schema migration is attempted; only exact shared generation 2 is admitted.
+	// schema migration is attempted; only the exact current generation is admitted.
 	if err := x.helper(ctx, e, s, &j, "recovery-enter", web, web.Image, []string{"maintenance", "enter", "--wait-seconds", "300"}); err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 )
 
 var ErrStorageCapacity = errors.New("storage lacks writable capacity")
@@ -124,15 +125,16 @@ type GlobalMedia struct {
 	HasLyrics bool `json:"has_lyrics"`
 }
 type UploadReservation struct {
-	ID            string        `json:"upload_id"`
-	MemberID      string        `json:"storage_member_id"`
-	MediaID       string        `json:"media_id"`
-	Path          string        `json:"media_path"`
-	Kind          string        `json:"object_kind"`
-	ExpectedBytes int64         `json:"expected_bytes"`
-	State         string        `json:"state"`
-	ExpiresAt     int64         `json:"expires_at"`
-	CreatedAt     int64         `json:"created_at"`
-	UpdatedAt     int64         `json:"updated_at"`
-	Member        StorageMember `json:"member"`
+	Encryption    *mediacrypto.Metadata `json:"encryption,omitempty"`
+	ID            string                `json:"upload_id"`
+	MemberID      string                `json:"storage_member_id"`
+	MediaID       string                `json:"media_id"`
+	Path          string                `json:"media_path"`
+	Kind          string                `json:"object_kind"`
+	ExpectedBytes int64                 `json:"expected_bytes"`
+	State         string                `json:"state"`
+	ExpiresAt     int64                 `json:"expires_at"`
+	CreatedAt     int64                 `json:"created_at"`
+	UpdatedAt     int64                 `json:"updated_at"`
+	Member        StorageMember         `json:"member"`
 }

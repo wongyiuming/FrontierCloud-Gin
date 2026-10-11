@@ -36,7 +36,7 @@ longer test CI or a background test workaround.
    or execute candidate code. The signing key is restricted to `staging-cd-main`,
    with its own main-only Branch rule, and is never shared with compilation.
 6. The receiver keeps the **original test CI** run identity for replay ordering.
-   EVOXT independently verifies exact current dev HEAD/test CI, performs native
+   RN independently verifies exact current dev HEAD/test CI, performs native
    deployment and must pass live acceptance before opening/merging dev -> main.
 7. A main merge verifies identical reviewed source tree/provenance, passes its
    source CI and publishes its own exact-merge-SHA images. Production remains a
@@ -97,7 +97,7 @@ retired source-only notifier. PR source-head metadata and the workflow's PR
 merge snapshot are separate proof fields, not interchangeable SHAs.
 
 After actual public image verification, a separately authorized operator wakeup
-must preserve the EVOXT receiver's HMAC/replay/current-source/image gates and
+must preserve the RN receiver's HMAC/replay/current-source/image gates and
 live acceptance before merging PR #5. The label does not deploy staging or
 production. Once PR #5 closes/merges, this entry cannot run for another PR.
 Source tests alone are not evidence that this first CI publication has succeeded;

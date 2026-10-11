@@ -11,6 +11,11 @@ data
 !internal/search/data/**
 scripts/auto_download
 
+# Obfuscation is a development build step; only generated browser assets ship.
+node_modules/
+package.json
+package-lock.json
+
 # Exclude Python bytecode.
 __pycache__
 *.pyc

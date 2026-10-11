@@ -62,7 +62,7 @@ def oci_payload(component='web', revision=REVISION, mutate=None):
     labels = {'org.opencontainers.image.source': publisher.registry_images.SOURCE,
               'org.opencontainers.image.revision': revision, 'frontiercloud.revision': revision,
               'frontiercloud.component': component, 'frontiercloud.runtime': 'go',
-              'frontiercloud.schema-generation': '2', 'frontiercloud.release-manifest-version': '1'}
+              'frontiercloud.schema-generation': '3', 'frontiercloud.release-manifest-version': '1'}
     configuration = {'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': labels}}
     if mutate: mutate(configuration)
     config = encoded(configuration)
@@ -171,6 +171,7 @@ class TrustedNativePublishTests(unittest.TestCase):
         for mutation in (lambda conf: conf.update(os='windows'), lambda conf: conf.update(architecture='arm64'),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.revision': 'e'*40}),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.component': 'updater'}),
+                         lambda conf: conf['config']['Labels'].update({'frontiercloud.schema-generation': '2'}),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.release-manifest-version': '0'})):
             entries, _digest = oci_payload(mutate=mutation)
             with tempfile.TemporaryDirectory() as directory, self.assertRaises(publisher.PublicationRejected):

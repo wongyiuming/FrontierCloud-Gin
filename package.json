@@ -1,0 +1,13 @@
+{
+  "name": "frontiercloud-browser-assets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build-only deterministic obfuscation for browser media encryption assets",
+  "scripts": {
+    "build:media-crypto": "node scripts/obfuscate-media-crypto.mjs",
+    "check:media-crypto": "node scripts/obfuscate-media-crypto.mjs --check"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "5.9.0"
+  }
+}

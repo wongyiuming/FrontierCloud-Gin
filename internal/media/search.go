@@ -121,6 +121,11 @@ func (s *Service) Search(ctx context.Context, query, scope string) (SearchResult
 			result.Items = append(result.Items, item)
 		}
 	}
+	// Only the matched, bounded response needs encryption descriptors. Scanning
+	// a large subtree must not query every nonmatching or truncated file.
+	if err := s.treeEncryption(ctx, result.Items); err != nil {
+		return SearchResult{}, err
+	}
 	return result, nil
 }
 

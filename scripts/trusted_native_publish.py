@@ -254,7 +254,7 @@ def verify_oci(path, revision, component):
         configuration = document(config_name)
         expected = {'org.opencontainers.image.source': registry_images.SOURCE, 'org.opencontainers.image.revision': revision,
                     'frontiercloud.revision': revision, 'frontiercloud.component': component,
-                    'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '2'}
+                    'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': registry_images.SCHEMA_GENERATION}
         labels = configuration.get('config', {}).get('Labels', {})
         require(configuration.get('os') == 'linux' and configuration.get('architecture') == 'amd64' and
                 all(labels.get(key) == value for key, value in expected.items()) and

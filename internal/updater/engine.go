@@ -21,6 +21,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 var ErrNotFound = errors.New("Docker object not found")
@@ -464,7 +465,10 @@ func (e *Engine) Build(ctx context.Context, source Source, target, component, do
 	}
 	defer archive.Close()
 	tag := releaseImageTag(e.Project, target, component)
-	labels, _ := json.Marshal(map[string]string{"frontiercloud.revision": target, "frontiercloud.component": component, "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.project": e.Project})
+	// The archived Dockerfile owns its schema label. Overriding it with this
+	// updater's generation would relabel an incompatible historical binary as
+	// current; the post-build Image check must reject that older label instead.
+	labels, _ := json.Marshal(map[string]string{"frontiercloud.revision": target, "frontiercloud.component": component, "frontiercloud.runtime": "go", "frontiercloud.project": e.Project})
 	args, _ := json.Marshal(map[string]string{"REVISION": target, "FRONTIERCLOUD_RUNTIME": "go"})
 	query := url.Values{"dockerfile": {dockerfile}, "t": {tag}, "rm": {"true"}, "forcerm": {"true"}, "labels": {string(labels)}, "buildargs": {string(args)}, "version": {"1"},
 		"memory": {"1073741824"}, "memswap": {"1073741824"}, "cpuperiod": {"100000"}, "cpuquota": {"100000"}}
@@ -576,7 +580,7 @@ func (e *Engine) Image(ctx context.Context, ref, target, component string) (Imag
 		return image, err
 	}
 	labels := image.Config.Labels
-	if !dockerID.MatchString(strings.TrimPrefix(image.ID, "sha256:")) || labels["frontiercloud.revision"] != target || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.schema-generation"] != "2" {
+	if !dockerID.MatchString(strings.TrimPrefix(image.ID, "sha256:")) || labels["frontiercloud.revision"] != target || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.schema-generation"] != strconv.Itoa(migrations.Generation) {
 		return image, errors.New("release image provenance or schema mismatch")
 	}
 	return image, nil

@@ -1,10 +1,46 @@
 package media
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestLRCParsingSharedBrowserVectors(t *testing.T) {
+	payload, err := os.ReadFile("../../protocol/lrc_parsing_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors []struct {
+		Name    string       `json:"name"`
+		Input   string       `json:"input"`
+		Entries []LyricEntry `json:"entries"`
+		Error   string       `json:"error"`
+	}
+	if err := json.Unmarshal(payload, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	if len(vectors) == 0 {
+		t.Fatal("empty shared LRC contract")
+	}
+	for _, vector := range vectors {
+		t.Run(vector.Name, func(t *testing.T) {
+			actual, err := ParseLRC([]byte(vector.Input))
+			if vector.Error != "" {
+				if err == nil || err.Error() != vector.Error {
+					t.Fatal("error parity mismatch", err, vector.Error)
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(actual, vector.Entries) {
+				t.Fatal("lyric parity mismatch", actual, vector.Entries, err)
+			}
+		})
+	}
+}
 
 func TestLRCParsingContract(t *testing.T) {
 	entries, err := ParseLRC([]byte("\ufeff[offset:-100]\n[00:01.25][00:02:003]音乐\n[00:01.25]音乐\n[00:00.02]开始\n[ar:artist]\n[00:03.001] 结束 "))

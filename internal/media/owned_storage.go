@@ -79,6 +79,9 @@ func (s *Service) ownedUpload(ctx context.Context, relationship string, object s
 	if err != nil || validated.Kind != object.Kind {
 		return StorageReceipt{}, ErrPath
 	}
+	if object.Encryption != nil && (object.Encryption.Validate() != nil || object.Encryption.CiphertextSize != expected) {
+		return StorageReceipt{}, ErrPath
+	}
 	// A lost response can be retried without replacing or charging the original
 	// file. Its current digest, not the caller's alleged receipt, is authoritative.
 	existing, err := s.repository.ObjectByID(ctx, object.ID)
@@ -88,6 +91,9 @@ func (s *Service) ownedUpload(ctx context.Context, relationship string, object s
 	if existing != nil {
 		if existing.Path != object.Path || existing.Kind != object.Kind {
 			return StorageReceipt{}, os.ErrExist
+		}
+		if (existing.Encryption == nil) != (object.Encryption == nil) || existing.Encryption != nil && *existing.Encryption != *object.Encryption {
+			return StorageReceipt{}, ErrPath
 		}
 		receipt, err := s.StorageStat(ctx, object.ID, object.Path)
 		if err == nil && receipt.Bytes != expected {
@@ -137,7 +143,7 @@ func (s *Service) ownedUpload(ctx context.Context, relationship string, object s
 		s.cleanupOwnedReservation(operation)
 		return StorageReceipt{}, io.ErrUnexpectedEOF
 	}
-	if !signature(strings.ToLower(path.Ext(object.Path)), stage.Head) {
+	if object.Encryption == nil && !signature(strings.ToLower(path.Ext(object.Path)), stage.Head) {
 		stage.Close()
 		s.cleanupOwnedReservation(operation)
 		return StorageReceipt{}, ErrSignature

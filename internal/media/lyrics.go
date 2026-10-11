@@ -24,6 +24,8 @@ const maxLyricBytes = 5 * 1024 * 1024
 var timeTag = regexp.MustCompile(`\[(\d{1,3}):([0-5]\d)(?:[\.:](\d{1,3}))?\]`)
 var offsetTag = regexp.MustCompile(`(?i)\[offset:([+-]?\d+)\]`)
 
+var ErrEncryptedLyric = errors.New("加密歌词必须在浏览器解密后解析")
+
 type LyricEntry struct {
 	Time float64 `json:"time"`
 	Text string  `json:"text"`
@@ -177,6 +179,11 @@ func (s *Service) Lyrics(ctx context.Context, name string) ([]LyricEntry, error)
 	lyric, err := s.lyricFor(ctx, track)
 	if err != nil {
 		return nil, err
+	}
+	if encrypted, err := s.lyricEncryption(ctx, lyric); err != nil {
+		return nil, err
+	} else if encrypted {
+		return nil, ErrEncryptedLyric
 	}
 	f, err := s.root.Open(lyric)
 	if err != nil {

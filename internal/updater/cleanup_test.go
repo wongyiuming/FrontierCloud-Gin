@@ -35,7 +35,7 @@ func TestCleanupOnlyExactOwnObsoleteTagsNeverForceOrPrune(t *testing.T) {
 			t.Fatal("inspected unrelated tag")
 		}
 		i := Image{ID: "sha256:" + strings.Repeat("a", 64)}
-		i.Config.Labels = map[string]string{"frontiercloud.revision": match[2], "frontiercloud.component": match[1], "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.project": "native-test"}
+		i.Config.Labels = map[string]string{"frontiercloud.revision": match[2], "frontiercloud.component": match[1], "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "frontiercloud.project": "native-test"}
 		if match[1] == "nginx" {
 			i.Config.Labels["frontiercloud.project"] = "other-stack"
 		}
@@ -82,7 +82,7 @@ func TestProjectImageTagsStayBoundedAndCleanupCannotCrossNamespaces(t *testing.T
 		image := Image{ID: "sha256:" + strings.Repeat("a", 64)}
 		// Even a forged matching owner label on the foreign namespace must not
 		// authorize its lookup/removal. The tag namespace is checked first.
-		image.Config.Labels = map[string]string{"frontiercloud.revision": stale, "frontiercloud.component": "web", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.project": project}
+		image.Config.Labels = map[string]string{"frontiercloud.revision": stale, "frontiercloud.component": "web", "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "frontiercloud.project": project}
 		_ = json.NewEncoder(w).Encode(image)
 	})
 	e.Project = project
@@ -117,7 +117,7 @@ func TestNativeFixtureRetirementRequiresNamespaceAndFullImmutableOwner(t *testin
 		}
 		match := releaseTag.FindStringSubmatch(ref)
 		image := Image{ID: "sha256:" + strings.Repeat("b", 64)}
-		image.Config.Labels = map[string]string{"frontiercloud.revision": match[2], "frontiercloud.component": match[1], "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "2", "frontiercloud.project": project}
+		image.Config.Labels = map[string]string{"frontiercloud.revision": match[2], "frontiercloud.component": match[1], "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "frontiercloud.project": project}
 		if ref == wrongOwner {
 			image.Config.Labels["frontiercloud.project"] = "other-project"
 		}
