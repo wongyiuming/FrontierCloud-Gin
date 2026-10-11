@@ -15,11 +15,14 @@ import (
 )
 
 func (s *Service) ConfigureNetwork(port int, client certificate.Client, status func() certificate.View, audit store.AdminRepository) {
-	s.stunPort = port
+	s.SetSTUNPort(port)
 	s.certificateClient = client
 	s.certificateStatus = status
 	s.certificateAudit = audit
 }
+
+// Zero is an explicit unavailable responder, not an old peer's absent field.
+func (s *Service) SetSTUNPort(port int) { s.stunPort.Store(int64(port)) }
 func (s *Service) Certificate(ctx context.Context, id string, request certificate.Request, audit store.NodeAudit) (map[string]any, error) {
 	if request.Action != "status" && request.Action != "renew" && request.Action != "auto" {
 		return nil, store.ErrNodeState
@@ -119,7 +122,11 @@ func (s *Service) STUNURLs(ctx context.Context, master string, port int) ([]stri
 		}
 		u, _ := url.Parse(origin)
 		p := 3478
-		if n, ok := intField(r.Summary, "stun_port"); ok && n > 0 && n <= 65535 {
+		if _, known := r.Summary["stun_port"]; known {
+			n, ok := intField(r.Summary, "stun_port")
+			if !ok || n <= 0 || n > 65535 {
+				continue
+			}
 			p = int(n)
 		}
 		value := "stun:" + net.JoinHostPort(u.Hostname(), strconv.Itoa(p))

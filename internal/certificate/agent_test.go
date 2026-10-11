@@ -155,6 +155,50 @@ func port(t *testing.T) string {
 	l.Close()
 	return v
 }
+
+func TestContainerTLSGroupCannotReadPrivateAccountOrJournal(t *testing.T) {
+	dir := t.TempDir()
+	if e := os.Chmod(dir, 0750); e != nil {
+		t.Fatal(e)
+	}
+	issuer := func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error) {
+		return nil, nil, errors.New("unused")
+	}
+	if a, e := Open(context.Background(), "storage.fixture.test", dir, port(t), issuer); e == nil {
+		a.Close()
+		t.Fatal("private mode accepted a shared directory")
+	}
+	a, e := OpenContainer(context.Background(), "storage.fixture.test", dir, port(t), issuer)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer a.Close()
+	if _, e := accountKey(dir); e != nil {
+		t.Fatal(e)
+	}
+	cert, key := testPair(t, "storage.fixture.test", 90)
+	if e = a.publish(cert, key); e != nil {
+		t.Fatal(e)
+	}
+	p, e := manifest(dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for path, mode := range map[string]os.FileMode{
+		"account.key": 0600, "state.json": 0600, "agent.lock": 0600,
+		"current.json": 0640, p.Generation: 0750,
+		filepath.Join(p.Generation, "fullchain.pem"): 0640,
+		filepath.Join(p.Generation, "privkey.pem"):   0640,
+	} {
+		info, err := os.Stat(filepath.Join(dir, path))
+		if err != nil || info.Mode().Perm() != mode {
+			t.Fatal("invalid container sharing mode", path, err)
+		}
+	}
+	if _, e = loadPair("storage.fixture.test", filepath.Join(dir, p.Generation, "fullchain.pem"), filepath.Join(dir, p.Generation, "privkey.pem")); e != nil {
+		t.Fatal(e)
+	}
+}
 func waitJob(t *testing.T, a *Agent) View {
 	t.Helper()
 	end := time.Now().Add(3 * time.Second)

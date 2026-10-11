@@ -1,3 +1,0 @@
-# Fixed host identity matches the storage container's private file ownership.
-g frontiercloud-certificate 10001
-u frontiercloud-certificate 10001 "FrontierCloud certificate control" /nonexistent /usr/sbin/nologin

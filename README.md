@@ -84,9 +84,10 @@ For HTTPS, copy the relevant switches from `.env.example`, enable TLS, set `SERV
 Fresh storage deployments use `.env.storage.example` and `docker-compose.storage.yaml` alone. Run `bash scripts/deploy-storage.sh`; one Go HTTPS container remains running and prints a five-minute pairing package. Ports 80/443, business GUIs, database containers and storage updaters are absent. Master controls Direct/Relay and allocations. See [storage appliance operations](docs/storage-appliance.md) before touching an existing owned disk.
 
 Master node management can inspect storage certificates and control renewal
-after the optional [host certificate service](docs/storage-certificate-control.md)
-is provisioned. It opens port 80 only for HTTP-01 validation and releases it
-afterwards, or reuses an existing HTTP-01 entrypoint on a shared host.
+after enabling the optional [Compose certificate service](docs/storage-certificate-control.md).
+It reuses an existing HTTP-01 entrypoint on a shared host; an explicit temporary
+mode opens port 80 only for validation and releases it afterwards. No host
+service, account or executable installation is required.
 Storage STUN uses UDP 3478 by default; browser probes visit all
 paired storage nodes serially.
 

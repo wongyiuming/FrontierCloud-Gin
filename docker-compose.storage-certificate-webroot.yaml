@@ -1,0 +1,9 @@
+# Optional reuse of an existing business HTTP-01 directory, without a new route.
+# Local Compose selects this public-proof-only path; network callers cannot.
+services:
+  certificate-agent:
+    volumes:
+      - type: bind
+        source: ${STORAGE_CERTIFICATE_HTTP01_DIRECTORY:?Set the existing public challenge directory}
+        target: /run/frontiercloud-http01
+        bind: {create_host_path: false}

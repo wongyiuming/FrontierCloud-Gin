@@ -39,7 +39,7 @@ ports 80/443 are prohibited for this mode. No HTTP redirect listener is added.
 For a new unpaired node, startup also emits a package. If it expires, run
 `docker compose -f docker-compose.storage.yaml exec -T web /app/frontiercloud storage-pair`.
 Restarting a paired node preserves its identity and does not emit another
-package. The optional [host certificate service](storage-certificate-control.md)
+package. The optional [Compose certificate service](storage-certificate-control.md)
 publishes complete TLS pairs for hot loading without restarting media service.
 External/bootstrap certificate rotation still requires a restart.
 

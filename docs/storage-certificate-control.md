@@ -25,95 +25,86 @@ metadata. A background local monitor polls every 15 seconds, with a two-second
 deadline, separately from heartbeats. Agent outage does not affect HTTPS
 readiness, media or successful heartbeat observations.
 
-## Optional host provision (reviewed release only)
+## Optional Compose certificate control
 
-Bridge-mode Docker cannot free a permanently published port 80 by merely
-closing an in-container listener. Therefore this optional control service runs
-the same static native binary directly on the host. The business container
-retains one Go process and receives read-only TLS/control-directory mounts.
-No Docker API, shell execution, privileged container or additional permanent
-HTTP proxy is needed. Initial pairing still requires an existing, valid trusted certificate.
+All product components stay in Docker/Compose. Do not copy executables onto the
+host, create host accounts, install systemd units or invoke systemctl. The
+optional certificate container uses the same reviewed exact Go Web image/build,
+no separate unreviewed artifact or installer. Existing storage stays one business
+process; optional certificate control is a separate bounded container.
 
-1. Install the **same reviewed exact-release** `/app/frontiercloud` binary as
-   `/usr/local/libexec/frontiercloud` on the storage host. Copy it from the
-   verified Web image using operator tools; never build on production. Make
-   the installed file root-owned and executable, mode 0755.
-2. Provision the dedicated host account before starting systemd; a numeric
-   container UID alone is not a registered host user. Install
-   `scripts/ops/frontiercloud-certificate.sysusers` in `/etc/sysusers.d/`, then:
+Prepare reviewed exact images through the bounded build/pull path, then enable
+the storage and certificate Compose files together:
 
-   ```bash
-   systemd-sysusers /etc/sysusers.d/frontiercloud-certificate.sysusers
-   test "$(id -u frontiercloud-certificate)" = 10001
-   test "$(id -g frontiercloud-certificate)" = 10001
-   ```
+```bash
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml up -d --no-build
+```
 
-   If UID/GID 10001 belongs to an unrelated host account, stop installation;
-   do not reassign or delete that account. The registered identity and the
-   container's UID/GID must match before any private state is provisioned.
-   Create `/opt/frontiercloud-storage/certificate-state`, owned by that
-   UID/GID, mode 0700. Do not put this state on a shared/NFS volume. Preserve
-   this private directory in node recovery backups; it includes the ACME account.
-3. Create root-owned `/etc/frontiercloud-certificate.env`, mode 0600:
+For production, prepare the reviewed exact images through the bounded build/pull
+path before `up --no-build`; never compile on production or replace node identity.
+Initial pairing still needs an existing valid trusted bootstrap certificate.
+Preserve the existing data/secrets/bootstrap mounts; never use `down -v` on an
+owned node. No new CA/hostname is selected through the network API.
 
-   ```dotenv
-   CERTIFICATE_HOSTNAME=storage.4399.com
-   CERTIFICATE_ACME_DIRECTORY=https://acme-v02.api.letsencrypt.org/directory
-   ```
+The exiting `certificate-init` initializes only three mounted volume roots;
+it refuses to operate without those mounts. `certificate-agent` runs with a
+read-only rootfs, no-new-privileges, dropped capabilities, 0.05 CPU, 128 MiB,
+no swap and 24 PIDs. Container UID 0/GID 10001 is needed for temporary low-port
+binding; this creates no host user. In default shared mode it has no capabilities.
+The private TLS/control volumes persist across agent recreation. Web mounts them
+read-only as UID/GID 10001; it can read the 0750/0640 complete TLS generation
+and connect to the 0660 socket through its 0710 directory. ACME `account.key`,
+job journal and lease remain 0600 and root-private. No PID namespace sharing,
+privileged container, Docker socket, shell or service-manager operation exists.
 
-   For an initial CA validation rehearsal, use the approved Let's Encrypt
-   staging directory `https://acme-staging-v02.api.letsencrypt.org/directory` on
-   an isolated fixture. Staging CA certificates are not publicly trusted and
-   must never replace a production certificate. The hostname and directory
-   are fixed locally; API callers cannot alter them. The hostname must match
-   storage `SERVER_NAME` and `STORAGE_ENDPOINT`.
-4. Install `scripts/ops/frontiercloud-certificate.service` to
-   `/etc/systemd/system/`, reload systemd, and enable/start this service. It
-   runs as 10001 with only `CAP_NET_BIND_SERVICE`, one Go scheduler, 5% CPU,
-   128 MiB memory and no swap. Its private socket is
-   `/run/frontiercloud-certificate/control.sock`; no TCP control listener exists.
-5. Add `docker-compose.storage-certificate.yaml` to the storage Compose files
-   while retaining existing data/secrets/bootstrap-certificate mounts. Its
-   defaults mount the state directory and socket directory read-only, matching
-   the supplied unit. Start the storage project normally; do not use `down -v`
-   or regenerate identity. In Master Nodes, query the certificate before
-   enabling automatic renewal or requesting the first managed certificate.
+## Shared HTTP-01 (default bridge mode)
 
-The optional override configures `STORAGE_CERTIFICATE_DIRECTORY` and
-`STORAGE_CERTIFICATE_SOCKET` together as absolute container paths. Empty
-defaults leave existing deployments working with status-only observation.
-Custom `STORAGE_CERTIFICATE_STATE`/`STORAGE_CERTIFICATE_RUNTIME` host paths
-require a matching operator-reviewed systemd unit. Do not give Web write access
-to TLS state. Compose publishes HTTPS and UDP STUN, never TCP 80/443 for storage.
+The default certificate service opens no HTTP listener. It writes only one
+public token into its project-scoped `certificate_http01` volume. An existing
+HTTP service can mount that volume read-only at a separate public-proof path
+and route the fixed storage hostname's `/.well-known/acme-challenge/` there.
+This does not add a storage Nginx or reserve another port. Keep TLS/account
+volumes separate from the public volume.
 
-## Shared host HTTP-01 delegation
+When an existing HTTP service already has the desired public validation route,
+reuse its exact challenge directory with the optional webroot overlay:
 
-When another business already owns 80, use its existing HTTP-01 route. No
-additional listener or storage port publication is introduced. Provision
-`/opt/frontiercloud-http01/.well-known/acme-challenge` as a public-proof-only
-directory, owned by root/group 10001, mode 2775. Configure the existing web
-server's **fixed storage hostname** to serve this directory only at
-`/.well-known/acme-challenge/`. Keep private TLS/account state elsewhere.
-If reusing an existing webroot at another location, adapt both literal paths
-in the operator-owned drop-in; do not change other domains' certificate routes.
+```bash
+# Only public proof files belong here; never point this at private TLS state.
+export STORAGE_CERTIFICATE_HTTP01_DIRECTORY=/opt/existing-acme/.well-known/acme-challenge
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml -f docker-compose.storage-certificate-webroot.yaml up -d --no-build
+```
 
-Install `scripts/ops/frontiercloud-certificate-webroot.conf` as
-`/etc/systemd/system/frontiercloud-certificate.service.d/webroot.conf`, then
-reload/restart the agent. It adds one fixed writable public directory and
-`--http01-directory`; network requests cannot select or change that path.
-First verify a harmless sentinel through the public hostname's HTTP-01 route
-and remove it, then query Master Nodes: validation must be `shared_http01`.
-Renewal/policy control works through the same authenticated Master API.
+The existing directory must already exist and be writable by container UID 0
+or GID 10001; Compose refuses to silently create it. It mounts only this directory,
+not host root, service-manager paths or Docker state. This is a fixed operator
+configuration; network calls cannot select paths. Existing server/other-domain
+routes and other issuers remain unchanged. Verify and remove a harmless public
+sentinel before requesting issuance. Nodes must report `shared_http01`.
 
-Only one exact CA token is published, at most 512 bytes, mode 0644 even under
-the private service umask. Existing tokens/symlinks are never replaced. Success,
-failure and cancellation remove only the owned proof. Restart reclaims a
-proof only when its bytes match the private ownership journal; replaced or
-unknown files are preserved. An empty file from a crash between creation and
-write is preserved conservatively for local inspection. The existing server,
-other domains and other issuers are never stopped, scanned or pruned.
-Nodes shows the validation method and whether this agent owns a temporary
-listener. A shared host's business may continue listening on 80 throughout.
+Only the exact CA token is created, at most 512 bytes, mode 0644. Existing files
+and symlinks are never overwritten. Success, failure and cancellation remove
+only the owned proof. Restart reclaims only bytes matching the private journal;
+unknown/replaced files stay untouched. A crash-created empty proof is preserved
+for inspection. Other services are not stopped, scanned or pruned.
+
+## Temporary HTTP-01 (explicit Linux network exception)
+
+An ordinary bridge container with `ports: 80:80` permanently reserves the host
+port even while its Go listener is closed. Therefore temporary mode uses an
+explicit host-network overlay, with only NET_BIND_SERVICE and no Docker port
+publication:
+
+```bash
+docker compose -f docker-compose.storage.yaml -f docker-compose.storage-certificate.yaml -f docker-compose.storage-certificate-temporary.yaml up -d --no-build
+```
+
+This shares only the Linux network namespace; no host process/filesystem/service
+control is granted. The service binds only the fixed port during a bounded job,
+then closes it. An occupied port returns conflict; it never stops the existing
+owner. Nodes reports `temporary_port80`. Use the default bridge/shared mode on
+hosts that already serve HTTP. Host-network temporary mode requires native Linux
+Docker host networking; no host sysctl or systemd changes are made.
 
 ## Issuance and failure behavior
 
@@ -146,7 +137,8 @@ Expired certificates cannot be renewed through an untrusted/expired node HTTPS
 connection: recover the certificate locally, retaining TLS verification.
 
 New pairs are checked for matching key, exact hostname and current validity,
-written as private complete generation directories, fsynced, then committed by
+written as complete generation directories with read-only storage-group access,
+fsynced, then committed by
 an atomic `current.json` pointer. Keep current plus one preceding complete pair.
 Web refreshes this pointer at most once per five seconds; existing connections
 continue. Invalid or partial generations retain the last valid served pair;
@@ -157,7 +149,8 @@ not merely an issuer's successful response. No media restart is required.
 
 All active paired downstream nodes are included after Master's own address,
 ordered by stable node ID. Signed heartbeat `stun_port` supports shared hosts
-with a custom UDP port; old nodes use 3478. Revoked/pending/upstream relations
+with a custom UDP port; old nodes use 3478. An explicit zero indicates a failed
+or stopped responder and is excluded until binding recovers. Revoked/pending/upstream relations
 are excluded. If a staging Master already owns UDP 3478 on a shared host,
 configure storage `WEBRTC_STUN_PORT` to a distinct available port, such as 3480,
 and allow that UDP port through the firewall. Existing installations must be
@@ -171,7 +164,9 @@ Its failure does not terminate business HTTPS. Browser probes likewise run
 serially with exactly one ICE peer and one STUN URL, close before advancing,
 wait 250 ms between nodes and three seconds maximum per node, then wait at
 least 30 seconds before another round. Web Locks prevent same-origin tabs
-overlapping where supported; the fallback remains serial per page. Hidden
+overlapping where supported; reports have a two-second deadline and navigation
+abort so a stalled request cannot retain that lease. The fallback remains serial
+per page. Hidden
 pages stop advancing; navigation cancels the peer. Diagnostics do not gate
 playback and cap reports at eight IPs without truncating the node list.
 

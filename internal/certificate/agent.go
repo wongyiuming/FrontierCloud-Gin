@@ -49,6 +49,7 @@ type Agent struct {
 	cancel                   context.CancelFunc
 	release                  func()
 	httpRoot                 *os.Root
+	sharedGroup              bool
 }
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
@@ -57,6 +58,16 @@ func Hostname(s string) bool {
 	return hostnamePattern.MatchString(s) && strings.Contains(s, ".") && !strings.Contains(s, "..") && net.ParseIP(s) == nil
 }
 func Open(ctx context.Context, host, directory, address string, issue Issuer) (*Agent, error) {
+	return open(ctx, host, directory, address, issue, false)
+}
+
+// OpenContainer grants the storage container's group read-only TLS access.
+// The ACME account and journal stay root-private; no host account is required.
+func OpenContainer(ctx context.Context, host, directory, address string, issue Issuer) (*Agent, error) {
+	return open(ctx, host, directory, address, issue, true)
+}
+
+func open(ctx context.Context, host, directory, address string, issue Issuer, shared bool) (*Agent, error) {
 	if !Hostname(host) || !filepath.IsAbs(directory) || issue == nil {
 		return nil, errors.New("invalid certificate agent configuration")
 	}
@@ -64,7 +75,11 @@ func Open(ctx context.Context, host, directory, address string, issue Issuer) (*
 		return nil, e
 	}
 	info, e := os.Lstat(directory)
-	if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
+	forbidden := os.FileMode(0077)
+	if shared {
+		forbidden = 0027
+	} // Group can read/traverse, never write.
+	if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&forbidden != 0 {
 		return nil, errors.New("private certificate state directory required")
 	}
 	lock, e := os.OpenFile(filepath.Join(directory, "agent.lock"), os.O_CREATE|os.O_RDWR, 0600)
@@ -83,7 +98,7 @@ func Open(ctx context.Context, host, directory, address string, issue Issuer) (*
 			release()
 		}
 	}()
-	a := &Agent{host: host, directory: directory, address: address, issue: issue, ctx: ctx, cancel: cancel, release: release, state: persisted{Job: Job{State: "idle"}}}
+	a := &Agent{host: host, directory: directory, address: address, issue: issue, ctx: ctx, cancel: cancel, release: release, sharedGroup: shared, state: persisted{Job: Job{State: "idle"}}}
 	if b, e := os.ReadFile(filepath.Join(directory, "state.json")); e == nil {
 		if len(b) > 4096 || json.Unmarshal(b, &a.state) != nil {
 			return nil, errors.New("invalid certificate agent journal")
@@ -162,6 +177,10 @@ func atomicFile(path string, b []byte, mode os.FileMode) error {
 		return e
 	}
 	defer os.Remove(tmp)
+	if e = f.Chmod(mode); e != nil {
+		_ = f.Close()
+		return e
+	}
 	if _, e = f.Write(b); e == nil {
 		e = f.Sync()
 	}
@@ -425,7 +444,15 @@ func (a *Agent) publish(cert, key []byte) error {
 	}
 	generation := hex.EncodeToString(r)
 	dir := filepath.Join(a.directory, generation)
-	if e := os.Mkdir(dir, 0700); e != nil {
+	dirMode, fileMode := os.FileMode(0700), os.FileMode(0600)
+	if a.sharedGroup {
+		dirMode, fileMode = 0750, 0640
+	}
+	if e := os.Mkdir(dir, dirMode); e != nil {
+		return e
+	}
+	if e := os.Chmod(dir, dirMode); e != nil {
+		_ = os.Remove(dir)
 		return e
 	}
 	committed := false
@@ -439,17 +466,17 @@ func (a *Agent) publish(cert, key []byte) error {
 			}
 		}
 	}()
-	if e := atomicFile(filepath.Join(dir, "fullchain.pem"), cert, 0600); e != nil {
+	if e := atomicFile(filepath.Join(dir, "fullchain.pem"), cert, fileMode); e != nil {
 		return e
 	}
-	if e := atomicFile(filepath.Join(dir, "privkey.pem"), key, 0600); e != nil {
+	if e := atomicFile(filepath.Join(dir, "privkey.pem"), key, fileMode); e != nil {
 		return e
 	}
 	if _, e := loadPair(a.host, filepath.Join(dir, "fullchain.pem"), filepath.Join(dir, "privkey.pem")); e != nil {
 		return e
 	}
 	b, _ := json.Marshal(Pair{generation})
-	if e := atomicFile(filepath.Join(a.directory, "current.json"), b, 0600); e != nil {
+	if e := atomicFile(filepath.Join(a.directory, "current.json"), b, fileMode); e != nil {
 		return e
 	}
 	committed = true
@@ -491,7 +518,11 @@ func (a *Agent) Serve(socket string) error {
 	}
 	defer listener.Close()
 	defer os.Remove(socket)
-	if e = os.Chmod(socket, 0600); e != nil {
+	socketMode := os.FileMode(0600)
+	if a.sharedGroup {
+		socketMode = 0660
+	}
+	if e = os.Chmod(socket, socketMode); e != nil {
 		return e
 	}
 	server := &http.Server{ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

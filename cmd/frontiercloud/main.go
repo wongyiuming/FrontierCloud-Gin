@@ -77,6 +77,18 @@ func command(arguments []string) error {
 		return healthcheck()
 	case "certificate-agent":
 		return certificateAgentCommand(arguments[1:])
+	case "init-certificate":
+		return initializeCertificateVolumes(arguments[1:])
+	case "certificate-healthcheck":
+		if len(arguments) != 1 {
+			return errors.New("certificate-healthcheck accepts no arguments")
+		}
+		return certificateHealthcheck()
+	case "certificate-status":
+		if len(arguments) != 1 {
+			return errors.New("certificate-status accepts no arguments")
+		}
+		return certificateContainerStatus(os.Stdout)
 	case "storage-pair":
 		if len(arguments) != 1 {
 			return errors.New("storage-pair accepts no arguments")
@@ -270,7 +282,7 @@ func serve() error {
 		if client != nil {
 			client = monitor
 		}
-		controlService.ConfigureNetwork(settings.STUNPort, client, monitor.Status, database.Admin())
+		controlService.ConfigureNetwork(0, client, monitor.Status, database.Admin())
 		address, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", settings.STUNPort))
 		if err != nil {
 			return err
@@ -279,9 +291,11 @@ func serve() error {
 		if err != nil {
 			slog.Warn("storage STUN unavailable; HTTPS remains independent")
 		} else {
+			controlService.SetSTUNPort(settings.STUNPort)
 			stunDone := make(chan struct{})
 			go func() {
 				defer close(stunDone)
+				defer controlService.SetSTUNPort(0)
 				if stun.Serve(shutdown, conn) != nil && shutdown.Err() == nil {
 					slog.Warn("storage STUN stopped; HTTPS remains independent")
 				}

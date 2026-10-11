@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
@@ -34,7 +35,7 @@ type Service struct {
 	certificateStatus   func() certificate.View
 	certificateAudit    store.AdminRepository
 	certificateDispatch sync.Mutex
-	stunPort            int
+	stunPort            atomic.Int64
 }
 
 var ErrAuthentication = errors.New("invalid relationship authentication")
@@ -268,9 +269,7 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 		}
 	}
 	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.BaselineCapabilities()}
-	if s.stunPort != 0 {
-		summary["stun_port"] = s.stunPort
-	}
+	summary["stun_port"] = s.stunPort.Load()
 	if s.certificateStatus != nil {
 		summary["certificate"] = s.certificateStatus()
 	}

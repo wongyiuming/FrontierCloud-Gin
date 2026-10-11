@@ -7,6 +7,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StorageDeploymentContract(unittest.TestCase):
+    def test_certificate_services_are_compose_only_with_persistent_socket_volume(self):
+        text = (ROOT / "docker-compose.storage-certificate.yaml").read_text(encoding="utf-8")
+        for value in ("certificate-init:", "certificate-agent:", "command: [init-certificate]",
+                      "build:", "cpus: 0.05", "mem_limit: 128m", "memswap_limit: 128m",
+                      "cap_drop: [ALL]", "read_only: true", "certificate_runtime:/run/frontiercloud-certificate:ro"):
+            self.assertIn(value, text)
+        for forbidden in ("systemctl", "sysusers", "docker.sock", "privileged:", "pid: host", "ports:", "network_mode: host", "/etc/systemd", "/usr/local/libexec"):
+            self.assertNotIn(forbidden, text)
+        temporary = (ROOT / "docker-compose.storage-certificate-temporary.yaml").read_text(encoding="utf-8")
+        self.assertIn("network_mode: host", temporary)
+        self.assertIn("cap_add: [NET_BIND_SERVICE]", temporary)
+        self.assertNotIn("ports:", temporary)
+        self.assertNotIn("--http01-directory", temporary)
+        for path in (ROOT / "scripts/ops").glob("frontiercloud-certificate*"):
+            self.fail(f"retired host certificate provision returned: {path}")
+        code = (ROOT / "cmd/frontiercloud/certificate.go").read_text(encoding="utf-8")
+        self.assertIn("requireCertificateVolumes()", code)
+        self.assertNotIn('"os/exec"', code)
+
     def test_native_http_fixture_uses_the_new_repository_release_pair(self):
         text = (ROOT / "tests/test_gin_http.py").read_text(encoding="utf-8")
         self.assertIn('RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev"', text)

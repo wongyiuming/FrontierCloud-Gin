@@ -189,4 +189,28 @@ func TestSTUNIncludesAllActiveStorageAndSignedCustomPort(t *testing.T) {
 	if e != nil || len(after) != 6 {
 		t.Fatal("revoked STUN retained", after, e)
 	}
+	relations, _ = master.repo.Relationships(ctx, false)
+	for _, r := range relations {
+		if r.State != "active" {
+			continue
+		}
+		follower := wire.nodes[r.Endpoint]
+		follower.SetSTUNPort(0)
+		if e = master.Tick(ctx, r); e != nil {
+			t.Fatal(e)
+		}
+		unavailable, e := master.STUNURLs(ctx, "master.fixture.test", 3478)
+		if e != nil || len(unavailable) != 5 {
+			t.Fatal("unbound responder fell back to legacy port", unavailable, e)
+		}
+		follower.SetSTUNPort(3480)
+		if e = master.Tick(ctx, r); e != nil {
+			t.Fatal(e)
+		}
+		recovered, e := master.STUNURLs(ctx, "master.fixture.test", 3478)
+		if e != nil || len(recovered) != 6 {
+			t.Fatal("rebound responder missing", recovered, e)
+		}
+		break
+	}
 }

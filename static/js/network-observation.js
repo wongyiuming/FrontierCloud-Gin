@@ -12,16 +12,24 @@
     let stopped = false;
     let cancelPeer = null;
     let scheduled = null;
+    let cancelReport = null;
 
     async function report(addresses, failure = null) {
         window.frontierCloudObservedAddresses = [...addresses].slice(0, 8);
         window.dispatchEvent(new CustomEvent('frontiercloud-network-observation', {detail: {addresses: window.frontierCloudObservedAddresses, failure}}));
+        const controller = new AbortController();
+        let finish;
+        const deadline = new Promise(resolve => { finish = resolve; });
+        const abort = () => { controller.abort(); finish(); };
+        cancelReport = abort;
+        const timer = setTimeout(abort, 2000);
         try {
-            await fetch('/api/v1/media/network-observation', {
+            await Promise.race([fetch('/api/v1/media/network-observation', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({addresses: [...addresses].slice(0, 8), failure}), keepalive: true,
-            });
+                body: JSON.stringify({addresses: [...addresses].slice(0, 8), failure}), signal: controller.signal,
+            }), deadline]);
         } catch (_error) { /* Observation never blocks playback. */ }
+        finally { clearTimeout(timer); cancelReport = null; }
     }
 
     function probeOne(url, addresses) {
@@ -94,6 +102,7 @@
             stopped = true;
             if (scheduled) clearTimeout(scheduled);
             if (cancelPeer) cancelPeer();
+            if (cancelReport) cancelReport();
         }, {once: true});
     }
     probe();

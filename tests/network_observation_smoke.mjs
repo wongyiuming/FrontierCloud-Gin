@@ -23,7 +23,7 @@ assert.match(readme, /https:\/\/github.com\/wongyiuming\/FrontierCloud-Gin\/wiki
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const urls = Array.from({length: 6}, (_, i) => `stun:storage-${i}.fixture.test:${3478+i}`);
-function harness(embedded, sharedLocks) {
+function harness(embedded, sharedLocks, stallReport = false) {
     const peers = [], reports = [], timers = new Map(), events = new Map();
     let timerId = 0, live = 0, maximumLive = 0;
     const window = {dispatchEvent() {}, addEventListener(name, fn) {events.set(name, fn);}};
@@ -32,7 +32,8 @@ function harness(embedded, sharedLocks) {
         window, navigator: sharedLocks ? {locks: sharedLocks} : {},
         document: {hidden: false, getElementById: () => embedded ? {textContent: JSON.stringify({stun_urls: [...urls, urls[0]], interval_ms: 45000})} : null},
         CustomEvent: class {},
-        fetch(_url, options) {reports.push(JSON.parse(options.body)); return Promise.resolve({});},
+        AbortController,
+        fetch(_url, options) {reports.push(JSON.parse(options.body)); return stallReport ? new Promise(() => {}) : Promise.resolve({});},
         RTCPeerConnection: class {
             constructor(config) {this.config = config; this.listeners = new Map(); this.closed = false; peers.push(this); live++; maximumLive = Math.max(maximumLive, live);}
             createDataChannel() {}
@@ -89,6 +90,21 @@ assert.equal(first.peers.length, 1); assert.equal(second.peers.length, 0);
 second.fire(45000); await flush(); assert.equal(second.peers.length, 0, 'repeat tick cannot bypass origin lease');
 first.events.get('pagehide')(); await flush(); second.fire(45000); await flush();
 assert.equal(second.peers.length, 1, 'lease releases after navigation'); second.events.get('pagehide')(); await flush();
+
+// Even a stalled fetch that ignores abort cannot retain the origin lease.
+for (const navigate of [false, true]) {
+    const stalled = harness(true, locks, true);
+    await flush();
+    for (let i = 0; i < urls.length; i++) {
+        stalled.peers[i].complete(); await flush(); stalled.fire(250); await flush();
+    }
+    assert.equal(held, true);
+    if (navigate) stalled.events.get('pagehide')(); else stalled.fire(2000);
+    await flush();
+    assert.equal(held, false, 'bounded report releases the origin lease');
+    assert.equal(stalled.timers.size, navigate ? 0 : 1);
+    if (!navigate) stalled.events.get('pagehide')();
+}
 
 await import('./audio_continuous_fetch_retry_smoke.mjs');
 await import('./audio_continuous_stream_smoke.mjs');

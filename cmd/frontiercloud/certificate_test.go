@@ -80,3 +80,12 @@ func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
 		t.Fatal("expired bootstrap unexpectedly ready")
 	}
 }
+
+func TestCertificateInitializerRefusesHostAndArbitraryArguments(t *testing.T) {
+	if e := initializeCertificateVolumes([]string{"/etc/systemd/system"}); e == nil {
+		t.Fatal("initializer accepted caller paths")
+	}
+	if e := requireCertificateVolumes(); e == nil {
+		t.Fatal("unit process unexpectedly has all three container volume mounts")
+	}
+}
