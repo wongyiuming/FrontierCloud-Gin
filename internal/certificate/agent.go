@@ -262,6 +262,9 @@ func (a *Agent) SetAutoRenew(enabled bool) (View, error) {
 		a.state.AutoRenew = previous
 	}
 	a.mu.Unlock()
+	if e == nil && enabled && !previous {
+		_, _ = a.Start()
+	}
 	return a.Status(), e
 }
 func (a *Agent) run() {

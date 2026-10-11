@@ -123,7 +123,9 @@ same state directory or resetting another live job.
 One job runs per host; repeated requests coalesce while it is running. A
 managed valid certificate with more than 30 days left is a no-op. Other attempts
 respect a durable one-hour cooldown. Auto-renew defaults **off**, persists when
-changed from Master, checks immediately after container startup, then every six hours. The first managed issuance may
+changed from Master, checks immediately when enabled and after container startup,
+then every six hours. Each check retains the same validity, coalescing and cooldown
+guards; repeatedly setting an already-enabled policy does not start another job. The first managed issuance may
 replace a still-valid bootstrap certificate because it establishes this
 agent's ownership; no implicit import of externally managed private keys occurs.
 

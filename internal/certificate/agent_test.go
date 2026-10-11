@@ -550,7 +550,8 @@ func TestPersistedAutoRenewChecksImmediatelyOnRestart(t *testing.T) {
 					t.Fatal(e)
 				}
 			}
-			if _, e = first.SetAutoRenew(test.enabled); e != nil {
+			first.state.AutoRenew = test.enabled
+			if e = first.save(); e != nil {
 				t.Fatal(e)
 			}
 			if test.cooldown {
@@ -584,6 +585,70 @@ func TestPersistedAutoRenewChecksImmediatelyOnRestart(t *testing.T) {
 				if test.wantIssue {
 					t.Fatal("persisted renewal waited for the six-hour ticker")
 				}
+			}
+		})
+	}
+}
+
+func TestEnableAutoRenewChecksImmediatelyWithValidityAndCooldownGuards(t *testing.T) {
+	for _, test := range []struct {
+		name                string
+		days                int
+		cooldown, wantIssue bool
+	}{
+		{"missing", 0, false, true},
+		{"near-expiry", 1, false, true},
+		{"valid", 90, false, false},
+		{"cooldown", 0, true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var calls atomic.Int32
+			issued := make(chan struct{}, 1)
+			cert, key := testPair(t, "storage.fixture.test", 90)
+			a := openTest(t, port(t), func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error) {
+				calls.Add(1)
+				issued <- struct{}{}
+				return cert, key, nil
+			})
+			if test.days != 0 {
+				oldCert, oldKey := testPair(t, a.host, test.days)
+				if e := a.publish(oldCert, oldKey); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if test.cooldown {
+				a.state.Job.StartedAt = time.Now().Unix()
+				if e := a.save(); e != nil {
+					t.Fatal(e)
+				}
+			}
+			view, e := a.SetAutoRenew(true)
+			if e != nil || !view.AutoRenew {
+				t.Fatal(view, e)
+			}
+			select {
+			case <-issued:
+				if !test.wantIssue {
+					t.Fatal("policy enable bypassed validity or cooldown")
+				}
+				if view = waitJob(t, a); view.Job.State != "success" {
+					t.Fatal(view)
+				}
+			case <-time.After(500 * time.Millisecond):
+				if test.wantIssue {
+					t.Fatal("enabling policy waited for the periodic ticker")
+				}
+			}
+			if _, e = a.SetAutoRenew(true); e != nil {
+				t.Fatal(e)
+			}
+			time.Sleep(20 * time.Millisecond)
+			want := int32(0)
+			if test.wantIssue {
+				want = 1
+			}
+			if calls.Load() != want {
+				t.Fatal("repeated enable duplicated issuance", calls.Load())
 			}
 		})
 	}
