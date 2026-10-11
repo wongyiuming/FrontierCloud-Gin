@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
@@ -120,15 +121,17 @@ func storageStatusCommand(output io.Writer) error {
 
 // Health is local transport readiness, not a public control-plane exception.
 func storageHealthClient(settings config.Config) (*http.Client, error) {
-	// Pin the configured local certificate for loopback readiness only. Remote
+	// Pin the current complete local pair for loopback readiness only. Remote
 	// control clients continue normal CA verification; no InsecureSkipVerify.
-	pem, err := os.ReadFile(settings.StorageTLSCert)
+	manager, err := certificate.NewTLS(settings.ServerName, settings.StorageCertificateDirectory, settings.StorageTLSCert, settings.StorageTLSKey)
+	if err != nil {
+		return nil, err
+	}
+	pair, err := manager.GetCertificate(nil)
 	if err != nil {
 		return nil, err
 	}
 	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(pem) {
-		return nil, errors.New("invalid storage TLS certificate")
-	}
+	pool.AddCert(pair.Leaf)
 	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: settings.ServerName, MinVersion: tls.VersionTLS12}}}, nil
 }
