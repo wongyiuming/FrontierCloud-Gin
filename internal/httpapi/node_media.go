@@ -94,11 +94,7 @@ func RegisterNodeMedia(router *gin.Engine, settings config.Config, resolver *net
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		meta, err := volume.Encryption(c.Request.Context(), stream.ObjectID)
-		if err != nil {
-			internalError(c, err)
-			return
-		}
+		meta := stream.Encryption
 		if meta != nil {
 			contentType = "application/octet-stream"
 			noStore(c)
