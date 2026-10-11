@@ -86,10 +86,10 @@ consistent logical export; never hot-copy its data directory. InnoDB
 `mysqldump --single-transaction` requires avoiding concurrent schema changes.
 Do not start a database container on storage merely to hold a backup file.
 
-## EVOXT dual-purpose host
+## RN dual-purpose host
 
 Production storage uses high-port HTTPS and its own Compose project, data
-directory and secrets volume. The preproduction Master at `ml.520mall.cc`
+directory and secrets volume. The preproduction Master at `www4399.sbs`
 uses 80/443 and separate business Compose state. Never share SQLite files,
 media roots, Redis, identity secrets or updater sockets between these two
 instances. DNS/certificates must match each endpoint. Public staging tests

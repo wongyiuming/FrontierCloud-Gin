@@ -53,7 +53,7 @@ docker compose exec -T web cat /run/frontiercloud-secrets/admin_key
 
 For preproduction, this works from any directory:
 `docker exec frontiercloud-staging-web-1 cat /run/frontiercloud-secrets/admin_key`.
-See [existing keys and exact staging Compose commands](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration#查看现有密钥含预发布)
+See [existing keys and exact staging Compose commands](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration#%E6%9F%A5%E7%9C%8B%E7%8E%B0%E6%9C%89%E5%AF%86%E9%92%A5%E5%90%AB%E9%A2%84%E5%8F%91%E5%B8%83)
 for the metrics token, persistent recovery keys and their separate purposes.
 
 The two supported `.env` deployment selections are documented in
@@ -73,7 +73,7 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
-EVOXT preproduction at `ml.520mall.cc` is a separate Master with its own state.
+RN preproduction at `www4399.sbs` is a separate Master with its own state.
 Its [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
 from a default-`main` trusted workflow after successful exact-`dev` test CI and
 all three public image proofs. Publication itself also executes immutable main

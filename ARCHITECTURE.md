@@ -248,7 +248,7 @@ still precedes merging; the normal main-only signing boundary is unchanged.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
-The dedicated EVOXT preproduction Master at `ml.520mall.cc` has separate data,
+The dedicated RN preproduction Master at `www4399.sbs` has separate data,
 identity, secrets and updater control from any production storage appliance on
 the same host. Its local CD follows the newest successful exact `dev` push,
 never substitutes that evidence for reviewed production `main` publication.
@@ -276,6 +276,6 @@ independent business deployment or another business authority. Do not globally
 rewrite persisted roles or reinitialize an owned disk to rename the product.
 See [storage appliance operations](docs/storage-appliance.md).
 
-EVOXT's production storage and preproduction Master (`ml.520mall.cc`) are
+RN's production storage and preproduction Master (`www4399.sbs`) are
 separate security/data/Compose projects. Only the staging Master uses 80/443.
 No production operation is automated in this change.

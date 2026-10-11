@@ -69,6 +69,10 @@ class Fixture:
 
 
 class TrustedStagingNotifyTests(unittest.TestCase):
+    def test_notification_uses_fixed_rn_https_receiver(self):
+        self.assertEqual(notify.NOTIFICATION_URL,
+                         'https://www4399.sbs:9443/staging-ci-success')
+
     def test_same_trusted_run_verifies_images_and_retains_original_source_ci_identity(self):
         fixture = Fixture()
         payload = fixture.verify()
