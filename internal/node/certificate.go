@@ -118,7 +118,7 @@ func (s *Service) ReceiveCertificate(ctx context.Context, r store.Relationship, 
 }
 
 // Only established storage hostnames may become browser ICE endpoints. The port
-// comes from signed heartbeat facts; older peers use the existing 3478 default.
+// comes from signed heartbeat facts; unadvertised legacy listeners are omitted.
 func (s *Service) STUNURLs(ctx context.Context, master string, port int) ([]string, error) {
 	result := []string{"stun:" + net.JoinHostPort(master, strconv.Itoa(port))}
 	row, e := s.repo.ReadIdentity(ctx)
@@ -143,15 +143,11 @@ func (s *Service) STUNURLs(ctx context.Context, master string, port int) ([]stri
 			continue
 		}
 		u, _ := url.Parse(origin)
-		p := 3478
-		if _, known := r.Summary["stun_port"]; known {
-			n, ok := intField(r.Summary, "stun_port")
-			if !ok || n <= 0 || n > 65535 {
-				continue
-			}
-			p = int(n)
+		n, ok := intField(r.Summary, "stun_port")
+		if !ok || n <= 0 || n > 65535 {
+			continue
 		}
-		value := "stun:" + net.JoinHostPort(u.Hostname(), strconv.Itoa(p))
+		value := "stun:" + net.JoinHostPort(u.Hostname(), strconv.Itoa(int(n)))
 		if !seen[value] {
 			seen[value] = true
 			result = append(result, value)

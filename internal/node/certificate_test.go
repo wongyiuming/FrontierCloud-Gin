@@ -217,6 +217,18 @@ func TestSTUNIncludesAllActiveStorageAndSignedCustomPort(t *testing.T) {
 		if e != nil || len(recovered) != 6 {
 			t.Fatal("rebound responder missing", recovered, e)
 		}
+		current, e := master.repo.Relationship(ctx, r.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		delete(current.Summary, "stun_port")
+		if e = master.repo.RecordHeartbeat(ctx, r.ID, true, 1, current.Summary, time.Now().Unix()); e != nil {
+			t.Fatal(e)
+		}
+		legacy, e := master.STUNURLs(ctx, "master.fixture.test", 3478)
+		if e != nil || len(legacy) != 5 {
+			t.Fatal("legacy peer without a signed listener gained a dead probe", legacy, e)
+		}
 		break
 	}
 }

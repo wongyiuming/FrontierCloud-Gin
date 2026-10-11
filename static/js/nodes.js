@@ -334,13 +334,15 @@
         ]));
         const buttons = make('div', 'node-card-controls');
         const endpoint = `/${encodeURIComponent(relation.relationship_id)}/certificate`;
-        buttons.append(button('查询证书', async () => {
+        const query = button('查询证书', async () => {
             const state = await api(`/api/v1/media/admin/nodes${endpoint}`);
             certificateViews.set(relation.relationship_id, {at: Date.now(), value: state});
             relation.summary = {...relation.summary, certificate: state};
             section.replaceWith(certificatePanel(relation));
             return `证书${labels[state.state] || '待查询'}，有效期至 ${localTime(state.not_after)}`;
-        }));
+        });
+        query.disabled = !observed.state;
+        buttons.append(query);
         const download = button('下载证书及私钥', () => downloadCertificate(endpoint, facts));
         download.disabled = !facts.enabled || !facts.https_ready || !facts.serving_matches;
         buttons.append(download);

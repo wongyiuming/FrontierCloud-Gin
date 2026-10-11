@@ -59,6 +59,7 @@ def main():
         page.goto(base + '/api/v1/media/music/category?path=music%2Fsecurity-fixture', wait_until='networkidle')
         page.locator('#mediaList .media-item').nth(1).wait_for(state='visible')
         assert page.evaluate('window.cspViolations') == []
+
         page.locator('#mediaList .media-item').nth(1).click()
         page.wait_for_function('() => currentIndex === 1 && art && art.currentTime > 0.1')
         assert page.evaluate("(document.permissionsPolicy||document.featurePolicy).allowsFeature('microphone')") is False
@@ -144,6 +145,14 @@ def main():
             assert panel.is_visible()
             assert panel.evaluate('(e) => e.scrollWidth <= e.clientWidth + 2'), 'certificate panel overflow'
         assert page.evaluate('window.cspViolations') == []
+        # Older peers have no signed certificate capability. Do not dispatch
+        # queries or downloads to routes that those peers never implemented.
+        relation['summary'] = {}
+        page.reload()
+        page.locator('#nodesPanel .module-heading').click()
+        panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
+        assert panel.get_by_role('button', name='查询证书', exact=True).is_disabled()
+        assert panel.get_by_role('button', name='下载证书及私钥', exact=True).is_disabled()
         assert errors == [], errors
         print('PASS: Chromium read-only certificate facts, no manual management, inactive export disabled, port conflict text and desktop/mobile layout')
         print('PASS: real HTTP/2, home/category/player/Admin/karaoke CSP; click playback; malicious inline JS blocked; microphone scope preserved')
