@@ -1,11 +1,33 @@
 # Test-only certificate trust for normal Master promotion through private TLS.
 services:
+  certificate-init:
+    volumes:
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/private:/var/lib/frontiercloud-certificate
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/published:/run/frontiercloud-tls
+  certificate-agent:
+    entrypoint: [/certificate.test]
+    command: ['-test.run=^TestCertificateFleetObserver$', '-test.timeout=30m']
+    environment:
+      FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_HOST: business.fixture.localhost
+      FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_PROFILE: business
+      FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_SERVING: nginx:443
+    volumes:
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/private:/var/lib/frontiercloud-certificate
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/published:/run/frontiercloud-tls
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/certificate.test:/certificate.test:ro
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/ca.pem:/certs/ca.pem:ro
   web:
     cpus: "1.0"
     environment:
       SSL_CERT_FILE: /run/frontiercloud-browser-root.pem
     volumes:
-      - ${SSL_CERT_PATH}:/run/frontiercloud-browser-root.pem:ro
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/ca.pem:/run/frontiercloud-browser-root.pem:ro
   nginx:
     environment:
-      SERVER_NAME: "127.0.0.1 nginx"
+      SSL_CERT_FILE: /run/frontiercloud-browser-root.pem
+    volumes:
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/published:/run/frontiercloud-tls:ro
+      - ${FRONTIERCLOUD_TEST_TLS_WORK}/ca.pem:/run/frontiercloud-browser-root.pem:ro
+    ports: !override
+      - 127.0.0.1:80:80
+      - 127.0.0.1:443:443

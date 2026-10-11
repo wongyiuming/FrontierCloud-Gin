@@ -19,6 +19,7 @@ func TestStorageHandoverRequiresClosedGateAndNeverBootstrapsMissingData(t *testi
 	t.Setenv("DB_TYPE", "sqlite")
 	t.Setenv("SQLITE_PATH", database)
 	t.Setenv("DEPLOYMENT_MODE", "only_stroge")
+	t.Setenv("STORAGE_TRANSPORT", "relay")
 	t.Setenv("TLS_ENABLED", "true")
 	t.Setenv("SERVER_NAME", "disk.test")
 	t.Setenv("STORAGE_ENDPOINT", "https://disk.test:8443")

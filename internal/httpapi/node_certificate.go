@@ -50,7 +50,7 @@ func RegisterNodeCertificate(router *gin.Engine, settings config.Config, resolve
 		}
 		v, e := control.ReceiveCertificate(ctx, r, request)
 		if e != nil {
-			detail(c, 409, "Certificate operation unavailable; inspect node agent and retry cooldown")
+			detail(c, 409, "Certificate status or download unavailable; inspect automatic TLS readiness")
 			return
 		}
 		c.Header("Cache-Control", "no-store")

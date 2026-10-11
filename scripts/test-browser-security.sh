@@ -30,7 +30,16 @@ cleanup() {
   ids=$(docker ps -aq) || cleanup_failed 'mount owner inventory failed'
   if [[ -n "$ids" ]]; then
     readarray -t container_ids <<< "$ids"
-    sources=$(docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "${container_ids[@]}") || cleanup_failed 'mount inspection failed'
+    sources=
+    for item in "${container_ids[@]}"; do
+      if snapshot=$(docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$item" 2>"$work/inspect-error"); then
+        sources+="$snapshot"$'\n'
+      elif grep -qi 'no such object' "$work/inspect-error" && ! docker inspect "$item" >/dev/null 2>&1; then
+        continue
+      else
+        cleanup_failed 'mount inspection failed'
+      fi
+    done
     while IFS= read -r source; do
       [[ -z "$source" ]] && continue
       source=$(readlink -m -- "$source") || cleanup_failed 'mount cannot be resolved'
@@ -45,13 +54,13 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 export COMPOSE_PROJECT_NAME="$project" FRONTIERCLOUD_REVISION="$revision"
-export DATA_DIRECTORY="$work/data" DB_TYPE=sqlite TLS_ENABLED=true SERVER_NAME=127.0.0.1
-export PUBLIC_BIND_ADDRESS=127.0.0.1 HTTP_PORT=0 HTTPS_PORT=0 WEBRTC_STUN_PORT=0
-export SSL_CERT_PATH="$work/cert.pem" SSL_KEY_PATH="$work/key.pem" ACME_WEBROOT="$work/acme"
+export DATA_DIRECTORY="$work/data" DB_TYPE=sqlite TLS_ENABLED=true SERVER_NAME=business.fixture.localhost
+export PUBLIC_BIND_ADDRESS=127.0.0.1 WEBRTC_STUN_PORT=0
+export FRONTIERCLOUD_TEST_TLS_WORK="$work"
 export SECURITY_CONTACT=https://reports.example.test/security
 export PUBLIC_ORIGIN=
 export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev STAGING_CD=false
-mkdir -p "$work/acme" "$work/data/media/music/security-fixture"
+mkdir -p "$work/private" "$work/published" "$work/data/media/music/security-fixture"
 mkdir -p "$work/crypto/encrypted-fixture" "$work/crypto/encrypted-video" "$work/crypto-results"
 command -v ffmpeg >/dev/null
 for spec in '01-first:90' '02-second:8'; do
@@ -64,9 +73,25 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:sample_rate=
 ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=10' \
   -an -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart -y "$work/crypto/encrypted-video/clip.mp4"
 printf '[00:00.10]浏览器解密歌词\n[00:01.00]会话复用多个文件\n' > "$work/crypto/crypto-lyrics.lrc"
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
-  -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj /CN=127.0.0.1 -addext subjectAltName=IP:127.0.0.1,DNS:nginx >/dev/null 2>&1
-chmod 600 "$SSL_KEY_PATH"
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 \
+  -keyout "$work/ca.key" -out "$work/ca.pem" -subj '/CN=Disposable browser fixture CA' \
+  -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign >/dev/null 2>&1
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+  -keyout "$work/key.pem" -out "$work/request.pem" -subj /CN=business.fixture.localhost >/dev/null 2>&1
+printf '%s\n' 'subjectAltName=DNS:business.fixture.localhost,DNS:nginx' 'basicConstraints=critical,CA:FALSE' 'keyUsage=critical,digitalSignature' 'extendedKeyUsage=serverAuth' > "$work/extensions"
+openssl x509 -req -in "$work/request.pem" -CA "$work/ca.pem" -CAkey "$work/ca.key" -CAcreateserial \
+  -days 1 -extfile "$work/extensions" -out "$work/cert.pem" >/dev/null 2>&1
+chmod 600 "$work/ca.key" "$work/key.pem"
+python3 - "$work" <<'PY'
+import json,os,pathlib,sys,uuid
+root=pathlib.Path(sys.argv[1]); generation=uuid.uuid4().hex
+for name in ('private','published'):
+    directory=root/name;directory.chmod(0o750);os.chown(directory,0,10001)
+    target=directory/generation;target.mkdir(mode=0o750);os.chown(target,0,10001)
+    for source,dest in (('cert.pem','fullchain.pem'),('key.pem','privkey.pem')):
+        path=target/dest;path.write_bytes((root/source).read_bytes());path.chmod(0o640);os.chown(path,0,10001)
+    pointer=directory/'current.json';pointer.write_text(json.dumps({'generation':generation}));pointer.chmod(0o640);os.chown(pointer,0,10001)
+PY
 python3 - "$work/data/media/music/security-fixture" <<'PY'
 import math,pathlib,struct,sys,wave
 root=pathlib.Path(sys.argv[1])
@@ -84,13 +109,21 @@ assert_web_cpu() {
   printf 'Verified browser fixture Web %s: NanoCpus=%s (1 CPU)\n' "${web_id:0:12}" "$resources"
 }
 FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
+docker run --rm --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e CGO_ENABLED=0 \
+  -v /root/frontiercloud-dev/tools/go:/usr/local/go:ro -v "$PWD:/src:ro" -v /root/go/pkg/mod:/go/pkg/mod \
+  -v "$work:/out" -w /src golang:1.26-bookworm go test -c -p=1 -o /out/certificate.test ./internal/certmanager
+chmod 755 "$work/certificate.test"
 compose up -d --no-build --wait --wait-timeout 180
+# This isolated certificate has an extra private SAN for the existing real
+# Master-promotion test. Add its private DNS alias to fixture Nginx only; normal
+# product SERVER_NAME remains a single automatically managed hostname.
+compose exec -T nginx sh -c 'for file in /etc/nginx/nginx.conf /etc/nginx/runtime/extra-servers.conf /etc/nginx/runtime/business.conf.automatic-template /etc/nginx/runtime/extra-servers.conf.automatic-template; do sed -i "s/server_name business.fixture.localhost;/server_name business.fixture.localhost nginx;/g" "$file"; done; nginx -t && nginx -s reload'
 assert_web_cpu
 compose exec -T nginx nginx -t
-address=$(compose port nginx 443)
-base="https://$address"
-# Docker allocated the public port after Web initialization. Configure its
-# canonical origin and exact private Nginx peer explicitly. Docker can choose
+test "$(compose port nginx 443)" = 127.0.0.1:443
+base=https://business.fixture.localhost
+address=business.fixture.localhost:443
+# Configure the canonical origin and exact private Nginx peer. Docker can choose
 # a bridge outside the application's default trusted-proxy network range.
 export PUBLIC_ORIGIN="$base"
 nginx_id=$(compose ps -q nginx)
@@ -101,30 +134,30 @@ compose up -d --no-build --no-deps --wait --wait-timeout 90 web
 assert_web_cpu
 test "$(compose ps -q nginx)" = "$nginx_id"
 test "$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id")" = "$proxy"
-curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
+curl --fail --silent --show-error --cacert "$work/ca.pem" "$base/health/ready" >/dev/null
 for asset in media-crypto-common.js media-crypto.js media-crypto-sw.js; do
-  test "$(curl --silent --show-error --cacert "$SSL_CERT_PATH" -o /dev/null -w '%{http_code}' "$base/static/js/$asset")" = 404
-  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/static/js/compiled/$asset" -o "$work/$asset"
+  test "$(curl --silent --show-error --cacert "$work/ca.pem" -o /dev/null -w '%{http_code}' "$base/static/js/$asset")" = 404
+  curl --fail --silent --show-error --cacert "$work/ca.pem" "$base/static/js/compiled/$asset" -o "$work/$asset"
   cmp "static/js/compiled/$asset" "$work/$asset"
 done
 for protocol in 1.2 1.3; do
-  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" --tlsv1."${protocol#1.}" --tls-max "$protocol" "$base/health/ready" >/dev/null
+  curl --fail --silent --show-error --cacert "$work/ca.pem" --tlsv1."${protocol#1.}" --tls-max "$protocol" "$base/health/ready" >/dev/null
 done
 for old in tls1 tls1_1; do
   timeout 10 openssl s_client -connect "$address" -servername 127.0.0.1 -"$old" -cipher 'ALL:@SECLEVEL=0' </dev/null > "$work/$old.log" 2>&1 || true
   grep -q 'alert protocol version' "$work/$old.log"
 done
-curl --silent --show-error --cacert "$SSL_CERT_PATH" --http2 -D "$work/headers" -o /dev/null "$base/api/v1/media"
+curl --silent --show-error --cacert "$work/ca.pem" --http2 -D "$work/headers" -o /dev/null "$base/api/v1/media"
 grep -q '^HTTP/2 200' "$work/headers"
 ! grep -qi 'server: nginx/' "$work/headers"
 test "$(grep -ci '^content-security-policy:' "$work/headers")" = 1
 for route in /api/v1/media/music /api/v1/media/video /karaoke/; do
-  curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" -D "$work/public-headers" -o /dev/null "$base$route"
+  curl --fail --silent --show-error --cacert "$work/ca.pem" -D "$work/public-headers" -o /dev/null "$base$route"
   for header in content-security-policy x-content-type-options x-frame-options referrer-policy permissions-policy strict-transport-security; do
     test "$(grep -ci "^$header:" "$work/public-headers")" = 1
   done
 done
-curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" -H 'Range: bytes=0-43' -D "$work/range-headers" \
+curl --fail --silent --show-error --cacert "$work/ca.pem" -H 'Range: bytes=0-43' -D "$work/range-headers" \
   "$base/api/v1/media/stream?file_path=music%2Fsecurity-fixture%2F01-first.wav" -o "$work/range-body"
 grep -q ' 206' "$work/range-headers"
 test "$(wc -c < "$work/range-body")" = 44
@@ -149,5 +182,5 @@ test "$gate" = "/var/lib/docker/volumes/$volume/_data"
 touch "$gate/enabled"
 "$work/tools/bin/python" tests/browser_security_smoke.py --base-url "$base" --maintenance-only
 rm -- "$gate/enabled"
-curl --fail --silent --show-error --cacert "$SSL_CERT_PATH" "$base/health/ready" >/dev/null
+curl --fail --silent --show-error --cacert "$work/ca.pem" "$base/health/ready" >/dev/null
 printf '%s\n' 'PASS: real TLS 1.2/1.3, HTTP/2, old TLS rejected, single CSP, no version banner, Range and maintenance recovery'

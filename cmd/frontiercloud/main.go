@@ -17,6 +17,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
@@ -89,6 +90,18 @@ func command(arguments []string) error {
 			return errors.New("certificate-status accepts no arguments")
 		}
 		return certificateContainerStatus(os.Stdout)
+	case "certificate-ready":
+		if len(arguments) != 1 {
+			return errors.New("certificate-ready accepts no arguments")
+		}
+		v, err := queryCertificateContainerStatus()
+		if err != nil {
+			return err
+		}
+		if !v.ControllerRunning || v.Enabled && (!v.HTTPSReady || !v.ServingMatches) {
+			return errors.New("automatic TLS has not verified the serving certificate")
+		}
+		return nil
 	case "certificate-renew":
 		if len(arguments) != 1 {
 			return errors.New("certificate-renew accepts no arguments")
@@ -270,24 +283,19 @@ func serve() error {
 			return err
 		}
 	}
-	var storageTLS *certificate.TLS
+	var storageTLS *certmanager.Serving
+	var certificateMonitor *certificate.AutomaticMonitor
+	client := certificate.UnixClient{Socket: certmanager.ControlSocket, Hostname: settings.ServerName}
+	certificateMonitor = certificate.NewAutomaticMonitor(client, settings.ServerName, settings.TLSEnabled)
+	certificateDone := make(chan struct{})
+	go func() { defer close(certificateDone); certificateMonitor.Run(shutdown) }()
+	defer func() { stop(); <-certificateDone }()
+	controlService.ConfigureNetwork(0, certificateMonitor, certificateMonitor.Status, database.Admin())
 	if settings.DeploymentMode == config.DeploymentStorage {
-		storageTLS, err = certificate.NewTLS(settings.ServerName, settings.StorageCertificateDirectory, settings.StorageTLSCert, settings.StorageTLSKey)
-		if err != nil {
+		storageTLS = certmanager.NewServing(settings.ServerName)
+		if err = controlService.ConfigureStorageTransport(settings.StorageTransport); err != nil {
 			return err
 		}
-		var client certificate.Client
-		if settings.StorageCertificateSocket != "" {
-			client = certificate.UnixClient{Socket: settings.StorageCertificateSocket, Hostname: settings.ServerName}
-		}
-		monitor := certificate.NewMonitor(storageTLS, client)
-		certificateDone := make(chan struct{})
-		go func() { defer close(certificateDone); monitor.Run(shutdown) }()
-		defer func() { stop(); <-certificateDone }()
-		if client != nil {
-			client = monitor
-		}
-		controlService.ConfigureNetwork(0, client, monitor.Status, database.Admin())
 		address, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", settings.STUNPort))
 		if err != nil {
 			return err
@@ -307,8 +315,6 @@ func serve() error {
 			}()
 			defer func() { stop(); conn.Close(); <-stunDone }()
 		}
-	} else {
-		controlService.ConfigureNetwork(0, nil, nil, database.Admin())
 	}
 	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
 	if err != nil {
@@ -378,11 +384,33 @@ func serve() error {
 	if settings.DeploymentMode == config.DeploymentStorage {
 		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: storageTLS.GetCertificate}
 		go func() { errorsChannel <- server.ServeTLS(listener, "", "") }()
-		// Valid certificate material is checked by ServeTLS. No private signing
-		// key/Admin Key is printed, only the five-minute one-use signed package.
-		if err := printStoragePair(initialization, controlService, database.Nodes(), os.Stdout); err != nil {
-			return err
-		}
+		// Pair lifetime begins only after the serving certificate has passed
+		// a real handshake. Issuance delay never consumes its five-minute TTL.
+		pairingDone := make(chan struct{})
+		go func() {
+			defer close(pairingDone)
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-shutdown.Done():
+					return
+				case <-ticker.C:
+					if !certificateMonitor.Status().HTTPSReady {
+						continue
+					}
+					ctx, cancel := context.WithTimeout(shutdown, 5*time.Second)
+					err := printStoragePair(ctx, controlService, database.Nodes(), os.Stdout)
+					cancel()
+					if err != nil {
+						slog.Warn("storage pairing package generation failed; retrying after HTTPS readiness")
+						continue
+					}
+					return
+				}
+			}
+		}()
+		defer func() { stop(); <-pairingDone }()
 	} else {
 		go func() { errorsChannel <- server.Serve(listener) }()
 	}
@@ -416,6 +444,11 @@ func runtimeIdentityTransport(settings config.Config, identity *node.Identity) e
 		}
 		if _, err := node.Endpoint(identity.Endpoint); err != nil {
 			return err
+		}
+		if identity.Role == "Master" {
+			if _, err := node.MasterEndpoint(identity.Endpoint); err != nil {
+				return err
+			}
 		}
 		return nil
 	default:

@@ -4,7 +4,7 @@ import re
 
 
 HEAVY = re.compile(
-    r"test-(?:mixed-runtime|mixed-release|native-matrix|native-release|native-api|go-business|go-updater|native-default|five-parameter-startup|store-interop|go-deployment|publication-oci)\.sh"
+    r"test-(?:mixed-runtime|mixed-release|native-matrix|native-release|native-api|go-business|go-updater|native-default|two-parameter-startup|five-parameter-startup|store-interop|go-deployment|publication-oci|storage-certificate-containers|certificate-browser|browser-security)\.sh"
     r"|docker\s+(?:build|buildx|compose\s+up)|federation_stack\.py|browser_ui_regression\.py"
     r"|runs-on:\s*.*self-hosted|\bnohup\b"
 )

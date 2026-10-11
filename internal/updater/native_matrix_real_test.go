@@ -140,7 +140,7 @@ func (s *fleetSite) request(ctx context.Context, method, path string, value any,
 	return response.StatusCode, out, nil
 }
 
-func fleetCertificates(t *testing.T, directory string, extraDNS ...string) *x509.CertPool {
+func fleetCertificates(t *testing.T, directory string) (*x509.CertPool, *x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -159,38 +159,13 @@ func fleetCertificates(t *testing.T, directory string, extraDNS ...string) *x509
 	if err != nil {
 		t.Fatal(err)
 	}
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leaf := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "*.fleet.invalid"}, DNSNames: []string{"*.fleet.invalid"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(24 * time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
-	leaf.DNSNames = append(leaf.DNSNames, extraDNS...)
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, ca, &leafKey.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	private, err := x509.MarshalPKCS8PrivateKey(leafKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
-	for name, raw := range map[string][]byte{"ca.pem": caPEM, "fullchain.pem": append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), caPEM...), "privkey.pem": pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private})} {
-		mode := os.FileMode(0644)
-		if name == "privkey.pem" {
-			mode = 0600
-		}
-		if err := os.WriteFile(filepath.Join(directory, name), raw, mode); err != nil {
-			t.Fatal(err)
-		}
-		if name == "privkey.pem" {
-			if err := os.Chown(filepath.Join(directory, name), 10001, 10001); err != nil {
-				t.Fatal(err)
-			}
-		}
+	if err := os.WriteFile(filepath.Join(directory, "ca.pem"), caPEM, 0644); err != nil {
+		t.Fatal(err)
 	}
 	roots := x509.NewCertPool()
 	roots.AppendCertsFromPEM(caPEM)
-	return roots
+	return roots, ca, key
 }
 
 // This fleet exercises real private-CA processes, control, media, recordings and
@@ -243,9 +218,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	if err := os.Mkdir(certs, 0755); err != nil {
 		t.Fatal(err)
 	}
-	var extraDNS []string
-
-	roots := fleetCertificates(t, certs, extraDNS...)
+	roots, ca, caKey := fleetCertificates(t, certs)
 
 	var containers, networks []string
 	defer func() {
@@ -316,8 +289,18 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if strings.HasSuffix(service, "-web") {
 			host["NanoCpus"] = int64(1_000_000_000)
 		}
+		if strings.HasSuffix(service, "-certificate-agent") {
+			host["NanoCpus"] = int64(50_000_000)
+			host["Memory"] = int64(128 << 20)
+		}
+		if strings.HasSuffix(service, "-web") {
+			host["Sysctls"] = map[string]string{"net.ipv4.ip_unprivileged_port_start": "0"}
+		}
 
 		body := map[string]any{"Image": image, "Cmd": cmd, "User": user, "Env": env, "HostConfig": host, "Labels": map[string]string{"com.docker.compose.project": owner, "com.docker.compose.service": canonical}, "NetworkingConfig": map[string]any{"EndpointsConfig": endpoints}}
+		if strings.HasSuffix(service, "-certificate-agent") {
+			body["Entrypoint"] = []string{"/certificate.test"}
+		}
 		if health != nil {
 			body["Healthcheck"] = map[string]any{"Test": health, "Interval": int64(time.Second), "Timeout": int64(5 * time.Second), "Retries": 90, "StartPeriod": int64(30 * time.Second)}
 		}
@@ -373,7 +356,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if err := os.Mkdir(folder, 0755); err != nil {
 			t.Fatal(err)
 		}
-		for _, child := range []string{"data", "secrets", "maintenance", "updater-control"} {
+		for _, child := range []string{"data", "secrets", "maintenance", "updater-control", "certificate-state", "certificate-runtime", "certificate-published"} {
 			if err := os.Mkdir(filepath.Join(folder, child), 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -393,7 +376,15 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			create(label+"-updater", agent, []string{"serve"}, []string{"UPDATER_PROJECT=" + project, "RELEASE_BRANCH=main", "UPDATER_DATA_DIRECTORY=/data"}, []string{control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
 			binds = append(binds, control+":/run/frontiercloud-updater:ro")
 		} else {
-			env = append(env, "DEPLOYMENT_MODE=only_stroge", "STORAGE_PORT=8443", "HTTP_ADDR=:8443", "STORAGE_ENDPOINT=https://"+domain+":8443", "STORAGE_TLS_CERT=/certs/fullchain.pem", "STORAGE_TLS_KEY=/certs/privkey.pem", "NGINX_MEDIA_ACCEL=false")
+			port, profile := "8443", "relay"
+			if i <= 2 {
+				port, profile = "443", "direct"
+			}
+			endpoint := "https://" + domain
+			if port != "443" {
+				endpoint += ":" + port
+			}
+			env = append(env, "DEPLOYMENT_MODE=only_stroge", "STORAGE_TRANSPORT="+profile, "STORAGE_PORT="+port, "HTTP_ADDR=:"+port, "STORAGE_ENDPOINT="+endpoint, "NGINX_MEDIA_ACCEL=false")
 		}
 
 		for _, command := range []string{"init-secrets", "init-media"} {
@@ -406,6 +397,58 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if err := os.WriteFile(filepath.Join(folder, "secrets", "mysql_password"), password, 0600); err != nil {
 			t.Fatal(err)
 		}
+		private, runtimeDir, published := filepath.Join(folder, "certificate-state"), filepath.Join(folder, "certificate-runtime"), filepath.Join(folder, "certificate-published")
+		mounts := []string{private + ":/var/lib/frontiercloud-certificate", runtimeDir + ":/run/frontiercloud-certificate", published + ":/run/frontiercloud-tls"}
+		initializer := create(label+"-certificate-init", native, []string{"init-certificate"}, env, mounts, "0:10001", sharedEndpoint(label+"-certificate-init"), nil)
+		if err := e.Wait(ctx, initializer.ID); err != nil {
+			t.Fatal("certificate fixture volumes", err)
+		}
+		leafPrivate, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(int64(i + 10)), Subject: pkix.Name{CommonName: domain}, DNSNames: []string{domain}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(24 * time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+		der, err := x509.CreateCertificate(rand.Reader, leaf, ca, &leafPrivate.PublicKey, caKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := x509.MarshalPKCS8PrivateKey(leafPrivate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		generation := strings.Repeat("a", 31) + big.NewInt(int64(i+1)).Text(16)
+		path := filepath.Join(private, generation)
+		if err = os.Mkdir(path, 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Chown(path, 0, 10001); err != nil {
+			t.Fatal(err)
+		}
+		for name, bytes := range map[string][]byte{"fullchain.pem": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), "privkey.pem": pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: raw})} {
+			file := filepath.Join(path, name)
+			if err = os.WriteFile(file, bytes, 0640); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Chown(file, 0, 10001); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err = os.WriteFile(filepath.Join(private, "current.json"), []byte(`{"generation":"`+generation+`"}`), 0640); err != nil {
+			t.Fatal(err)
+		}
+		profile, serving := "business", "nginx:443"
+		if i > 0 {
+			profile, serving = "relay", "web:8443"
+			if i <= 2 {
+				profile, serving = "direct", "web:443"
+			}
+		}
+		controllerEnv := append(append([]string{}, env...), "FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_HOST="+domain, "FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_PROFILE="+profile, "FRONTIERCLOUD_TEST_CERTIFICATE_FLEET_SERVING="+serving)
+		controllerBinds := append(append([]string{}, mounts...), certs+":/certs:ro", filepath.Join(base, "certificate.test")+":/certificate.test:ro")
+		controllerEndpoints := sharedEndpoint(label + "-certificate-agent")
+		controllerEndpoints[privateName] = map[string]any{"Aliases": []string{"certificate-agent"}}
+		create(label+"-certificate-agent", native, []string{"-test.v", "-test.timeout=50m", "-test.run=^TestCertificateFleetObserver$"}, controllerEnv, controllerBinds, "0:10001", controllerEndpoints, nil)
+		binds = append(binds, published+":/run/frontiercloud-tls:ro", runtimeDir+":/run/frontiercloud-certificate:ro")
 		image, command, health := native, []string{"serve"}, []string{"CMD", "/app/frontiercloud", "healthcheck"}
 		webAlias := label + "-web"
 		if i > 0 {
@@ -432,14 +475,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if i == 0 {
 			edgeEndpoints := sharedEndpoint(domain)
 			edgeImage := edge
-			edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge"}}
-			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", certs + ":/etc/nginx/certs:ro", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
+			edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge", "nginx"}}
+			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", filepath.Join(folder, "certificate-published") + ":/run/frontiercloud-tls:ro", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
 		}
 
 		jar, _ := cookiejar.New(nil)
 		client := &http.Client{Jar: jar, Timeout: 15 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		sites[i] = &fleetSite{root: folder, project: privateName, origin: "https://" + domain + func() string {
-			if i > 0 {
+			if i > 2 {
 				return ":8443"
 			}
 			return ""
@@ -535,7 +578,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	// Diagnostics are sequential and cannot replace media or heartbeat health.
 	for i, follower := range sites[1:] {
 		facts := perform(master, "GET", "/nodes/"+relations[i]+"/certificate", nil)
-		if facts["hostname"] != "site"+big.NewInt(int64(i+1)).String()+".fleet.invalid" || facts["state"] != "renewal_due" || facts["managed"] != false {
+		if facts["hostname"] != "site"+big.NewInt(int64(i+1)).String()+".fleet.invalid" || facts["state"] != "ACTIVE" || facts["managed"] != true || facts["https_ready"] != true || facts["serving_matches"] != true || facts["controller_running"] != true || facts["fingerprint"] != facts["serving_fingerprint"] {
 			t.Fatal("served storage certificate status mismatch", facts)
 		}
 		u, _ := url.Parse(follower.origin)

@@ -237,6 +237,9 @@ func (e *Engine) Service(ctx context.Context, project, service string) (Containe
 	if err != nil {
 		return Container{}, err
 	}
+	if len(rows) == 0 {
+		return Container{}, ErrNotFound
+	}
 	if len(rows) != 1 {
 		return Container{}, errors.New("expected exactly one project service container")
 	}
@@ -417,6 +420,20 @@ func (e *Engine) NginxReady(parent context.Context, id string) error {
 		select {
 		case <-ctx.Done():
 			return errors.New("Nginx release readiness deadline reached")
+		case <-time.After(time.Second):
+		}
+	}
+}
+func (e *Engine) AutomaticTLSReady(parent context.Context, id string) error {
+	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
+	defer cancel()
+	for {
+		if e.Exec(ctx, id, []string{"/app/frontiercloud", "certificate-ready"}) == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("automatic TLS serving certificate proof did not become ready")
 		case <-time.After(time.Second):
 		}
 	}

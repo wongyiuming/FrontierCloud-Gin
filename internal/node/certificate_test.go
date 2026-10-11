@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -71,9 +72,9 @@ func (f *fakeCertificate) Control(ctx context.Context, r certificate.Request) (c
 	if f.fail {
 		return certificate.View{}, errors.New("unavailable agent")
 	}
-	return certificate.View{Hostname: "storage.fixture.test", Managed: true, AutoRenew: r.Enabled, Job: certificate.Job{State: "running"}}, nil
+	return certificate.View{Hostname: "storage.fixture.test", Managed: true, AutoRenew: true, State: "ACTIVE", NotAfter: 12345, Download: &certificate.DownloadEnvelope{Ciphertext: "opaque-fixture"}}, nil
 }
-func TestMasterSignedCertificateControlRolesSerialAndAudit(t *testing.T) {
+func TestMasterSignedCertificateDownloadRolesSerialAndAudit(t *testing.T) {
 	ctx := context.Background()
 	wire := &certificateWire{localControl: localControl{nodes: map[string]*Service{}}}
 	master, masterDB := testNode(t, "Master", "https://master.fixture.test", wire)
@@ -90,23 +91,23 @@ func TestMasterSignedCertificateControlRolesSerialAndAudit(t *testing.T) {
 	}
 	agent := &fakeCertificate{}
 	facts := func() certificate.View {
-		return certificate.View{Hostname: "storage.fixture.test", State: "valid", NotAfter: 12345}
+		return certificate.View{Hostname: "storage.fixture.test", State: "ACTIVE", NotAfter: 12345}
 	}
 	master.ConfigureNetwork(0, nil, nil, masterDB.Admin())
 	follower.ConfigureNetwork(3480, agent, facts, nil)
-	v, e := master.Certificate(ctx, id, certificate.Request{Action: "auto", Enabled: true}, store.NodeAudit{Actor: "session-hash", RequestID: "certificate-control-test"})
+	v, e := master.Certificate(ctx, id, certificate.Request{Action: "download", BrowserPublicKey: "opaque-browser-key", BrowserNonce: strings.Repeat("a", 43)}, store.NodeAudit{Actor: "session-hash", RequestID: "certificate-control-test"})
 	if e != nil || v["auto_renew"] != true || v["not_after"] != float64(12345) {
 		t.Fatal("signed control lost served TLS facts", v, e)
 	}
 	var count int
-	if e = masterDB.Database().QueryRow("SELECT count(*) FROM admin_audit_log WHERE action='node_certificate_auto'").Scan(&count); e != nil || count != 1 {
+	if e = masterDB.Database().QueryRow("SELECT count(*) FROM admin_audit_log WHERE action='node_certificate_download'").Scan(&count); e != nil || count != 1 {
 		t.Fatal("missing before-dispatch audit", count, e)
 	}
 	agent.entered = make(chan struct{})
 	agent.release = make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		_, e := master.Certificate(ctx, id, certificate.Request{Action: "renew"}, store.NodeAudit{})
+		_, e := master.Certificate(ctx, id, certificate.Request{Action: "download", BrowserPublicKey: "opaque-browser-key", BrowserNonce: strings.Repeat("a", 43)}, store.NodeAudit{})
 		done <- e
 	}()
 	<-agent.entered
@@ -120,17 +121,22 @@ func TestMasterSignedCertificateControlRolesSerialAndAudit(t *testing.T) {
 	agent.entered = nil
 	agent.fail = true
 	v, e = master.Certificate(ctx, id, certificate.Request{Action: "status"}, store.NodeAudit{})
-	if e != nil || v["state"] != "valid" {
+	if e != nil || v["state"] != "ACTIVE" {
 		t.Fatal("agent outage poisoned existing TLS observation", v, e)
 	}
+	for _, action := range []string{"renew", "auto", "upload", "export-private-path"} {
+		if _, e = master.Certificate(ctx, id, certificate.Request{Action: action}, store.NodeAudit{}); e == nil {
+			t.Fatal("manual certificate management returned", action)
+		}
+	}
 	before := agent.calls.Load()
-	if _, e = follower.Certificate(ctx, id, certificate.Request{Action: "renew"}, store.NodeAudit{}); e == nil {
+	if _, e = follower.Certificate(ctx, id, certificate.Request{Action: "download", BrowserPublicKey: "opaque-browser-key", BrowserNonce: strings.Repeat("a", 43)}, store.NodeAudit{}); e == nil {
 		t.Fatal("Follower gained Master authority")
 	}
 	if e = master.Revoke(ctx, id, store.NodeAudit{}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = master.Certificate(ctx, id, certificate.Request{Action: "renew"}, store.NodeAudit{}); e == nil || agent.calls.Load() != before {
+	if _, e = master.Certificate(ctx, id, certificate.Request{Action: "download", BrowserPublicKey: "opaque-browser-key", BrowserNonce: strings.Repeat("a", 43)}, store.NodeAudit{}); e == nil || agent.calls.Load() != before {
 		t.Fatal("revoked relationship reached agent", e)
 	}
 }

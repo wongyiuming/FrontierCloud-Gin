@@ -92,7 +92,7 @@ same release on one Engine. The full project label and exact revision/component
 provenance remain mandatory; the short namespace is not authorization by itself.
 Existing unsuffixed bootstrap images remain admissible by immutable image proof.
 Cleanup ignores foreign namespaces even if their labels claim the local owner.
-Python updater sources are non-executable syntax references only. The native updater alone enforces namespace-scoped, bounded, non-forced tag cleanup; it never prunes shared parents. An inventory failure retains images and skips optional cleanup without turning a healthy committed generation into failure.
+Python updater application and display sources are removed; Python is reserved for scripts and tests. The native updater alone enforces namespace-scoped, bounded, non-forced tag cleanup; it never prunes shared parents. An inventory failure retains images and skips optional cleanup without turning a healthy committed generation into failure.
 
 Native image compilation bounds package parallelism to one and compiler runtime
 parallelism to two (`-p=1`, build-command-only `GOMAXPROCS=2`). These limits are

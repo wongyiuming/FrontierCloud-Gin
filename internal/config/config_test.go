@@ -2,32 +2,37 @@ package config
 
 import "testing"
 
-func TestConfiguredPublicOriginsPreservePublishedPorts(t *testing.T) {
+func TestConfiguredPublicOriginsUseOnlyStandardPorts(t *testing.T) {
 	for _, test := range []struct {
 		values map[string]string
 		want   string
 	}{
 		{nil, "http://localhost"},
-		{map[string]string{"HTTP_PORT": "0"}, ""},
-		{map[string]string{"HTTP_PORT": "9080"}, "http://localhost:9080"},
+		{map[string]string{"HTTP_PORT": "80"}, "http://localhost"},
 		{map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true"}, "https://example.test"},
-		{map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true", "HTTPS_PORT": "8443"}, "https://example.test:8443"},
-		{map[string]string{"SERVER_NAME": "::1", "HTTP_PORT": "9080"}, "http://[::1]:9080"},
-		{map[string]string{"SERVER_NAME": "example.test", "HTTPS_PORT": "0", "PUBLIC_ORIGIN": "https://example.test:49152/"}, "https://example.test:49152"},
+		{map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true", "HTTPS_PORT": "443"}, "https://example.test"},
+		{map[string]string{"SERVER_NAME": "::1"}, "http://[::1]"},
 	} {
 		got, err := LoadFrom(environment(test.values))
 		if err != nil || got.PublicOrigin != test.want {
 			t.Fatal(test.values, got.PublicOrigin, test.want, err)
 		}
 	}
-	for _, raw := range []string{"https://attacker.test", "https://user@example.test", "https://example.test/path", "https://example.test?query=1", "https://example.test#fragment", "https://example.test:0", "https://example.test:65536", "javascript:alert(1)", "https://example.test\nInjected: true"} {
-		if _, err := LoadFrom(environment(map[string]string{"SERVER_NAME": "example.test", "PUBLIC_ORIGIN": raw})); err == nil {
+	for _, key := range []string{"HTTP_PORT", "HTTPS_PORT"} {
+		for _, raw := range []string{"0", "-1", "8080", "8443", "65536", "invalid"} {
+			if _, err := LoadFrom(environment(map[string]string{key: raw})); err == nil {
+				t.Fatal("retired nonstandard public port accepted", key, raw)
+			}
+		}
+	}
+	for _, raw := range []string{"https://attacker.test", "https://user@example.test", "https://example.test/path", "https://example.test?query=1", "https://example.test#fragment", "https://example.test:0", "https://example.test:65536", "https://example.test:8443", "http://example.test:8080", "http://example.test:80", "javascript:alert(1)", "https://example.test\nInjected: true"} {
+		if _, err := LoadFrom(environment(map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true", "PUBLIC_ORIGIN": raw})); err == nil {
 			t.Fatal("invalid configured public origin accepted", raw)
 		}
 	}
-	for _, raw := range []string{"-1", "65536", "invalid"} {
-		if _, err := LoadFrom(environment(map[string]string{"HTTP_PORT": raw})); err == nil {
-			t.Fatal("invalid published port accepted", raw)
+	for _, raw := range []string{"https://example.test", "https://example.test:443/"} {
+		if _, err := LoadFrom(environment(map[string]string{"SERVER_NAME": "example.test", "TLS_ENABLED": "true", "PUBLIC_ORIGIN": raw})); err != nil {
+			t.Fatal(raw, err)
 		}
 	}
 }

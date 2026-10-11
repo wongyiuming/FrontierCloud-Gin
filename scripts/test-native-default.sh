@@ -29,7 +29,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 export FRONTIERCLOUD_REVISION="$revision"
-export PUBLIC_BIND_ADDRESS=127.0.0.1 HTTP_PORT=0 HTTPS_PORT=0 WEBRTC_STUN_PORT=0
+export PUBLIC_BIND_ADDRESS=127.0.0.1 WEBRTC_STUN_PORT=0
 export TLS_ENABLED=false SERVER_NAME=localhost DB_TYPE=sqlite
 export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev
 for database in sqlite mysql; do
@@ -50,7 +50,8 @@ for database in sqlite mysql; do
   compose exec -T web sh -c 'test "$(id -u)" = 10001; test "$(readlink /proc/1/exe)" = /app/frontiercloud; ! command -v python; ! command -v python3; ! command -v mysql'
   compose exec -T updater sh -c 'test "$(readlink /proc/1/exe)" = /app/frontiercloud-updater; ! command -v python; ! command -v python3; ! command -v docker'
   compose exec -T web /app/frontiercloud updater-status | grep -q "\"updater_runtime_sha\":\"$revision\""
-  address=$(compose port nginx 80)
+  nginx_id=$(compose ps -q nginx)
+  address=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id"):80
   curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 "http://$address/health/ready" >/dev/null
   curl --fail --silent --show-error --location --max-redirs 1 "http://$address/" | grep -q '前沿娱乐'
   test -f "$DATA_DIRECTORY/.native-runtime"

@@ -1,5 +1,8 @@
 # Historical reconstruction evidence — superseded on 2026-10-07
 
+As of 2026-10-11, the retired Python application/display references have been
+removed. Statements below describe the dated audit, not current source policy.
+
 This is a dated engineering history, not current deployment/testing guidance.
 The Python/mixed-runtime and ten-node commands below are retired and must not
 be executed. Current policy allows only Gin/SQLite and Gin/MySQL, uses five

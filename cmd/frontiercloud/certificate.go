@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"io"
 	"os"
 	"os/signal"
@@ -13,50 +12,38 @@ import (
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 )
 
 // Compose runs this bounded certificate process in its own container.
 // It has no business database, Docker access, shell or host service control.
 func certificateAgentCommand(args []string) error {
-	f := flag.NewFlagSet("certificate-agent", flag.ContinueOnError)
-	f.SetOutput(io.Discard)
-	host := f.String("hostname", "", "fixed storage hostname")
-	directory := f.String("directory", "", "private persistent TLS state directory")
-	socket := f.String("socket", "", "private Unix control socket")
-	ca := f.String("acme-directory", certificate.ProductionDirectory, "approved production or staging ACME directory")
-	email := f.String("email", "", "ACME contact email")
-	httpDirectory := f.String("http01-directory", "", "fixed existing public HTTP-01 challenge directory")
-	container := f.Bool("container", false, "share TLS with read-only storage group")
-	if f.Parse(args) != nil || f.NArg() != 0 {
-		return errors.New("invalid certificate agent options")
+	if len(args) != 0 {
+		return errors.New("certificate-agent accepts no options; TLS_ENABLED controls automatic TLS")
+	}
+	settings, e := config.Load()
+	if e != nil {
+		return e
+	}
+	if os.Geteuid() != 0 || os.Getegid() != 10001 {
+		return errors.New("certificate controller requires root with group 10001")
+	}
+	if e = requireCertificateVolumes(); e != nil {
+		return e
+	}
+	profile := certmanager.Business
+	if settings.DeploymentMode == config.DeploymentStorage {
+		profile = certmanager.Profile(settings.StorageTransport)
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	issue, e := certificate.ACME(*host, *directory, *ca, *email)
+	manager, e := certmanager.New(ctx, settings.ServerName, settings.TLSEnabled, profile, settings.StoragePort)
 	if e != nil {
 		return e
 	}
-	open := certificate.Open
-	if *container {
-		if os.Geteuid() != 0 || os.Getegid() != 10001 {
-			return errors.New("certificate container requires root with storage group 10001")
-		}
-		if e := requireCertificateVolumes(); e != nil {
-			return e
-		}
-		open = certificate.OpenContainer
-	}
-	agent, e := open(ctx, *host, *directory, ":80", issue)
-	if e != nil {
-		return e
-	}
-	defer agent.Close()
-	if *httpDirectory != "" {
-		if e = agent.UseHTTP01Directory(*httpDirectory); e != nil {
-			return e
-		}
-	}
-	return agent.Serve(*socket)
+	defer manager.Close()
+	return manager.Serve()
 }
 
 // The exiting initializer only owns these explicitly mounted Docker volumes.
@@ -71,9 +58,9 @@ func initializeCertificateVolumes(args []string) error {
 		path string
 		mode os.FileMode
 	}{
-		{"/var/lib/frontiercloud-certificate", 0750},
-		{"/run/frontiercloud-certificate", 0710},
-		{"/run/frontiercloud-http01", 0755},
+		{certmanager.PrivateDirectory, 0700},
+		{certmanager.RuntimeDirectory, 0710},
+		{certmanager.PublishedDirectory, 0750},
 	} {
 		if e := os.MkdirAll(entry.path, entry.mode); e != nil {
 			return e
@@ -97,7 +84,7 @@ func requireCertificateVolumes() error {
 	if e != nil {
 		return errors.New("certificate command requires Linux container volumes")
 	}
-	for _, path := range []string{"/var/lib/frontiercloud-certificate", "/run/frontiercloud-certificate", "/run/frontiercloud-http01"} {
+	for _, path := range []string{certmanager.PrivateDirectory, certmanager.PublishedDirectory, certmanager.RuntimeDirectory} {
 		found := false
 		for _, line := range strings.Split(string(b), "\n") {
 			fields := strings.Fields(line)
@@ -114,7 +101,10 @@ func requireCertificateVolumes() error {
 }
 
 func certificateHealthcheck() error {
-	_, e := queryCertificateContainerStatus()
+	v, e := queryCertificateContainerStatus()
+	if e == nil && !v.ControllerRunning {
+		return errors.New("certificate controller not running")
+	}
 	return e
 }
 
@@ -123,7 +113,7 @@ func certificateContainerStatus(output io.Writer) error {
 }
 
 func certificateContainerRenew(output io.Writer) error {
-	return certificateContainerAction("renew", output)
+	return errors.New("manual renewal is retired; TLS_ENABLED enables automatic renewal")
 }
 
 func certificateContainerAction(action string, output io.Writer) error {
@@ -139,11 +129,15 @@ func queryCertificateContainerStatus() (certificate.View, error) {
 }
 
 func queryCertificateContainer(action string) (certificate.View, error) {
-	host := os.Getenv("SERVER_NAME")
-	if !certificate.Hostname(host) {
+	settings, e := config.Load()
+	if e != nil {
+		return certificate.View{}, e
+	}
+	host := settings.ServerName
+	if settings.TLSEnabled && !certificate.Hostname(host) {
 		return certificate.View{}, errors.New("invalid certificate container hostname")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return (certificate.UnixClient{Socket: "/run/frontiercloud-certificate/control.sock", Hostname: host}).Control(ctx, certificate.Request{Action: action})
+	return (certificate.UnixClient{Socket: certmanager.ControlSocket, Hostname: host}).Control(ctx, certificate.Request{Action: action})
 }

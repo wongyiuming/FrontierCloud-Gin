@@ -12,8 +12,10 @@ import (
 )
 
 type Request struct {
-	Action  string `json:"action"`
-	Enabled bool   `json:"enabled,omitempty"`
+	Action           string `json:"action"`
+	Enabled          bool   `json:"enabled,omitempty"`
+	BrowserPublicKey string `json:"browser_public_key,omitempty"`
+	BrowserNonce     string `json:"browser_nonce,omitempty"`
 }
 type Client interface {
 	Control(context.Context, Request) (View, error)
@@ -41,8 +43,12 @@ func (c UnixClient) Control(ctx context.Context, value Request) (View, error) {
 		return result, errors.New("certificate agent unavailable")
 	}
 	defer response.Body.Close()
-	b, e = io.ReadAll(io.LimitReader(response.Body, 8193))
-	if e != nil || len(b) > 8192 || json.Unmarshal(b, &result) != nil || result.Hostname != c.Hostname {
+	limit := int64(8192)
+	if value.Action == "download" {
+		limit = 131072
+	}
+	b, e = io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if e != nil || int64(len(b)) > limit || json.Unmarshal(b, &result) != nil || result.Hostname != c.Hostname {
 		return View{}, errors.New("certificate agent response mismatch")
 	}
 	if response.StatusCode != 200 {

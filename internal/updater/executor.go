@@ -106,6 +106,22 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		}
 		journal.Snapshots[service] = c
 	}
+	for _, service := range []string{"certificate-init", "certificate-agent"} {
+		c, e := engine.Service(ctx, x.Project, service)
+		if errors.Is(e, ErrNotFound) {
+			continue
+		}
+		if e != nil {
+			return Outcome{}, e
+		}
+		if _, e = engine.Image(ctx, c.Image, before.CurrentSHA, "web"); e != nil {
+			return Outcome{}, e
+		}
+		journal.Snapshots[service] = c
+	}
+	if len(journal.Snapshots) != 5 && len(journal.Snapshots) != 7 {
+		return Outcome{}, errors.New("automatic TLS Compose topology is incomplete")
+	}
 	previous := previousFor(request, before)
 	web := journal.Snapshots["web"]
 	if request.Target == before.CurrentSHA && (request.Manifest != nil || before.CurrentManifest != nil || before.PreviousManifest != nil) {
@@ -132,6 +148,18 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		nginxImage, e := engine.Build(ctx, x.Source, request.Target, "nginx", "nginx/Dockerfile")
 		if e != nil {
 			return Outcome{}, e
+		}
+		targetImage, e := engine.Image(ctx, webImage, request.Target, "web")
+		if e != nil {
+			return Outcome{}, e
+		}
+		automatic := targetImage.Config.Labels["frontiercloud.automatic-tls"] == "1"
+		if automatic {
+			if e = automaticTLSTopology(journal.Snapshots); e != nil {
+				return Outcome{}, e
+			}
+		} else if len(journal.Snapshots) == 7 {
+			return Outcome{}, errors.New("rollback crosses automatic TLS deployment boundary; restore the independently backed-up Compose topology in maintenance")
 		}
 		if _, e = engine.Build(ctx, x.Source, request.Target, "updater", "updater/Dockerfile.gin"); e != nil {
 			return Outcome{}, e
@@ -173,12 +201,25 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		if e = x.helper(ctx, engine, private, &journal, "resume", web, webImage, []string{"maintenance", "resume", "--wait-seconds", "300"}); e != nil {
 			return Outcome{}, e
 		}
-		for _, service := range []string{"secrets-init", "media-init"} {
+		initializers := []string{"secrets-init", "media-init"}
+		if automatic {
+			initializers = append(initializers, "certificate-init")
+		}
+		for _, service := range initializers {
 			value, e := engine.Replace(ctx, journal.Snapshots[service], webImage, request.Target)
 			if e != nil {
 				return Outcome{}, e
 			}
 			if e = engine.Wait(ctx, value.ID); e != nil {
+				return Outcome{}, e
+			}
+		}
+		if automatic {
+			controller, e := engine.Replace(ctx, journal.Snapshots["certificate-agent"], webImage, request.Target)
+			if e != nil {
+				return Outcome{}, e
+			}
+			if e = engine.Healthy(ctx, controller.ID); e != nil {
 				return Outcome{}, e
 			}
 		}
@@ -198,6 +239,11 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 		}
 		if e = engine.NginxReady(ctx, nginx.ID); e != nil {
 			return Outcome{}, e
+		}
+		if automatic {
+			if e = engine.AutomaticTLSReady(ctx, web.ID); e != nil {
+				return Outcome{}, e
+			}
 		}
 		// Commit local generation before distribution. A later remote outage
 		// cannot roll back already healthy local services or their business data.
@@ -221,6 +267,20 @@ func (x *DockerExecutor) Execute(parent context.Context, request Request, before
 	}
 	if err = engine.NginxReady(ctx, currentNginx.ID); err != nil {
 		return Outcome{}, err
+	}
+	currentImage, err := engine.Image(ctx, web.Image, request.Target, "web")
+	if err != nil {
+		return Outcome{}, err
+	}
+	if currentImage.Config.Labels["frontiercloud.automatic-tls"] == "1" {
+		if request.Target == before.CurrentSHA {
+			if err = automaticTLSTopology(journal.Snapshots); err != nil {
+				return Outcome{}, err
+			}
+		}
+		if err = engine.AutomaticTLSReady(ctx, web.ID); err != nil {
+			return Outcome{}, err
+		}
 	}
 	if request.Target == before.CurrentSHA && request.Manifest != nil {
 		// A joint release can change only another profile. Publish local whole
@@ -309,16 +369,20 @@ func (x *DockerExecutor) retireHelpers(ctx context.Context, e *Engine, j replace
 	return nil
 }
 func (x *DockerExecutor) restore(ctx context.Context, e *Engine, s *privateStore, j replacement) error {
-	if !release.ValidSHA(j.Target) || !release.ValidSHA(j.Old) || len(j.Snapshots) != 5 {
+	if !release.ValidSHA(j.Target) || !release.ValidSHA(j.Old) || len(j.Snapshots) != 5 && len(j.Snapshots) != 7 {
 		return ErrState
 	}
-	for _, service := range []string{"web", "nginx", "updater", "secrets-init", "media-init"} {
+	services := []string{"web", "nginx", "updater", "secrets-init", "media-init"}
+	if len(j.Snapshots) == 7 {
+		services = append(services, "certificate-init", "certificate-agent")
+	}
+	for _, service := range services {
 		c := j.Snapshots[service]
 		if !c.valid() || c.label("com.docker.compose.project") != x.Project || c.label("com.docker.compose.service") != service {
 			return ErrState
 		}
 		component := service
-		if service == "secrets-init" || service == "media-init" {
+		if service == "secrets-init" || service == "media-init" || service == "certificate-init" || service == "certificate-agent" {
 			component = "web"
 		}
 		revision := j.Old
@@ -351,12 +415,17 @@ func (x *DockerExecutor) restore(ctx context.Context, e *Engine, s *privateStore
 	if err := x.helper(ctx, e, s, &j, "recovery-resume", web, web.Image, []string{"maintenance", "resume", "--wait-seconds", "300"}); err != nil {
 		return err
 	}
-	for _, service := range []string{"secrets-init", "media-init", "web", "nginx"} {
+	replacements := []string{"secrets-init", "media-init"}
+	if len(j.Snapshots) == 7 {
+		replacements = append(replacements, "certificate-init", "certificate-agent")
+	}
+	replacements = append(replacements, "web", "nginx")
+	for _, service := range replacements {
 		c, err := e.Replace(ctx, j.Snapshots[service], j.Snapshots[service].Image, j.Target)
 		if err != nil {
 			return err
 		}
-		if service == "web" {
+		if service == "web" || service == "certificate-agent" {
 			health, cancel := context.WithTimeout(ctx, 4*time.Minute)
 			err = e.Healthy(health, c.ID)
 			cancel()
@@ -462,6 +531,8 @@ func (x *DockerExecutor) Recover(ctx context.Context, status Status) (result err
 		if x.Runtime != status.CurrentSHA || (status.State == "restarting" && x.Runtime != status.TargetSHA) {
 			return ErrState
 		}
+		verified := map[string]Container{}
+		automatic := false
 		for _, service := range []string{"web", "nginx", "updater"} {
 			stage = service + "-service"
 			c, err := e.Service(ctx, x.Project, service)
@@ -472,6 +543,10 @@ func (x *DockerExecutor) Recover(ctx context.Context, status Status) (result err
 			image, imageErr := e.Image(ctx, c.Image, status.CurrentSHA, service)
 			if imageErr != nil {
 				return imageErr
+			}
+			verified[service] = c
+			if service == "web" {
+				automatic = image.Config.Labels["frontiercloud.automatic-tls"] == "1"
 			}
 			if manifestState(status) && service != "nginx" && image.Config.Labels["frontiercloud.release-manifest-version"] != "1" {
 				return release.ErrManifest
@@ -491,6 +566,34 @@ func (x *DockerExecutor) Recover(ctx context.Context, status Status) (result err
 			stage = "updater-state"
 			if service == "updater" && c.State.Status != "running" {
 				return ErrState
+			}
+		}
+		if automatic {
+			for _, service := range []string{"secrets-init", "media-init", "certificate-init", "certificate-agent"} {
+				stage = service + "-service"
+				c, err := e.Service(ctx, x.Project, service)
+				if err != nil {
+					return err
+				}
+				verified[service] = c
+				stage = service + "-image"
+				if _, err = e.Image(ctx, c.Image, status.CurrentSHA, "web"); err != nil {
+					return err
+				}
+				if service == "certificate-agent" {
+					stage = "certificate-controller-health"
+					if err = e.Healthy(ctx, c.ID); err != nil {
+						return err
+					}
+				}
+			}
+			stage = "certificate-topology"
+			if err = automaticTLSTopology(verified); err != nil {
+				return err
+			}
+			stage = "certificate-serving-proof"
+			if err = e.AutomaticTLSReady(ctx, verified["web"].ID); err != nil {
+				return err
 			}
 		}
 		stage = "handoff-journal"

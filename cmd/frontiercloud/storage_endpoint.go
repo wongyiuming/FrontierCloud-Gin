@@ -24,7 +24,7 @@ func storageEndpointCommand(name string, arguments []string, output io.Writer) e
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	id := flags.String("confirm-node-id", "", "exact local identity to preserve")
 	previous := flags.String("previous-endpoint", "", "exact stored old storage endpoint")
-	next := flags.String("endpoint", "", "new explicit high-port HTTPS storage endpoint")
+	next := flags.String("endpoint", "", "new certificate-verified storage endpoint matching its transport profile")
 	relationship := flags.String("relationship", "", "Master's active downstream relationship; required for storage-rebind")
 	if err := flags.Parse(arguments); err != nil {
 		return err

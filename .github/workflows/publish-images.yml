@@ -199,7 +199,8 @@ jobs:
 
   notify-staging:
     needs: [plan, publish]
-    if: needs.plan.outputs.branch == 'dev'
+    # User-owned CD is opt-in. RN preproduction was decommissioned by its owner.
+    if: needs.plan.outputs.branch == 'dev' && vars.STAGING_CD_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     environment: staging-cd-main

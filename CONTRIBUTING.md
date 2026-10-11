@@ -22,6 +22,13 @@ The repository can fail an invalid PR topology, but repository-local code cannot
 5. Run the bounded source CI checks and native acceptance on the development host. A narrow unit test is not release evidence; heavyweight acceptance must never be added to hosted CI.
 6. Await successful dev CI, event-triggered preproduction CD completion, matching live revisions and relevant staging behavior before opening the authorized release PR. Use the fixed dev-to-main promotion pair and configured GitHub automatic review within existing quota. Merge requires owner authorization and successful exact-source validation; production upgrade is a separate maintainer action.
 
+On 2026-10-11 the owner retired the RN preproduction deployment and its external
+CD receiver until a separate preproduction IP is available. During this explicit
+exception, `STAGING_CD_ENABLED=false` disables notification and no live staging
+acceptance can be claimed. Exact-source development-host acceptance and successful
+dev CI remain required; report the missing staging gate in the PR. This exception
+does not authorize merging a PR or upgrading the production Master.
+
 ## Documentation ownership
 
 Keep top-level documentation intentionally separated:
@@ -92,7 +99,7 @@ actual bootstrap CI completion and public image proofs before claiming initial
 activation; do not direct-write main or merge before staging acceptance to
 sidestep that bootstrap boundary.
 
-Run native unit/race, actual SQLite/MySQL business/API, deployment and updater tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Reference app/ and updater/server.py are illustrative only and must not be deployed. Keep syntax examples aligned when relevant; runnable Python compatibility is not a product requirement.
+Run native unit/race, actual SQLite/MySQL business/API, deployment and updater tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
 
 The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers both database combinations; Master-only upgrade/rollback must leave storage versions and identities unchanged; whole-fleet release synchronization is retired. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
 
@@ -110,11 +117,12 @@ The complete local baseline and CI composition are maintained in the separate [E
 
 ### Startup-default regression gate
 
-Preserve the five-value HTTPS fresh-start baseline in ARCHITECTURE.md. Render
-real Compose with only those five values and also with empty optional values;
+Preserve the two-value automatic HTTPS fresh-start baseline in ARCHITECTURE.md. Render
+real Compose with only those two values and also with empty optional values;
 verify default public latest images, no builds, SQLite, persistent initialization,
 ports and project identity. Run a fresh HTTPS startup on the development host
-with one CPU and isolated ports/volumes; fixture image aliases may stand in for
+with one CPU and isolated networks/IPs/volumes using ports 80/443; no random
+public port override may bypass startup validation. Fixture image aliases may stand in for
 unreleased main/latest bytes, but that is not evidence that remote latest exists.
 Verify trusted latest promotion rejects dev, stale main, incomplete publisher
 jobs, digest drift and partial proof before writes. Only main publication after

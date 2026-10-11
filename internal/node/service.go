@@ -36,6 +36,7 @@ type Service struct {
 	certificateAudit    store.AdminRepository
 	certificateDispatch sync.Mutex
 	stunPort            atomic.Int64
+	storageTransport    string
 }
 
 var ErrAuthentication = errors.New("invalid relationship authentication")
@@ -79,7 +80,13 @@ func (s *Service) Confirm(ctx context.Context, relation store.Relationship) erro
 	if row.Role != "Follower" || relation.Direction != "upstream" {
 		return store.ErrNodeState
 	}
-	return s.repo.ActivateRelationship(ctx, relation.ID, store.NodeAudit{Actor: relation.PeerID})
+	if err = s.repo.ActivateRelationship(ctx, relation.ID, store.NodeAudit{Actor: relation.PeerID}); err != nil {
+		return err
+	}
+	if s.storageTransport == "direct" {
+		return s.repo.SetRelationshipMode(ctx, relation.ID, "Direct", true, store.NodeAudit{Actor: relation.PeerID})
+	}
+	return nil
 }
 
 func (s *Service) ReceiveRevocation(ctx context.Context, relation store.Relationship) error {
@@ -176,6 +183,9 @@ func (s *Service) Promote(ctx context.Context, role, origin string, allocation i
 		return store.NodeIdentity{}, errors.New("Master requires a Local Storage Allocation of at least 1 GiB")
 	}
 	endpoint, err := Endpoint(origin)
+	if role == "Master" {
+		endpoint, err = MasterEndpoint(origin)
+	}
 	if err != nil {
 		return store.NodeIdentity{}, err
 	}
@@ -246,6 +256,9 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 		if !ok || relation.Direction != "upstream" || (mode != "Relay" && mode != "Direct") {
 			return nil, errors.New("invalid relationship mode")
 		}
+		if s.storageTransport != "" && strings.ToLower(mode) != s.storageTransport {
+			return nil, errors.New("relationship mode conflicts with the storage network deployment profile")
+		}
 		if mode != relation.Mode {
 			if err := s.repo.SetRelationshipMode(ctx, relation.ID, mode, true, store.NodeAudit{Actor: relation.PeerID}); err != nil {
 				return nil, err
@@ -270,6 +283,9 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 	}
 	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.BaselineCapabilities()}
 	summary["stun_port"] = s.stunPort.Load()
+	if s.storageTransport != "" {
+		summary["storage_transport"] = s.storageTransport
+	}
 	if s.certificateStatus != nil {
 		summary["certificate"] = s.certificateStatus()
 	}
@@ -307,7 +323,11 @@ func (s *Service) SignedIdentity(ctx context.Context, challenge string) (Envelop
 	if err != nil {
 		return Envelope{}, err
 	}
-	return s.identity.signed(row, map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": protocol.BaselineCapabilities()})
+	payload := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": protocol.BaselineCapabilities()}
+	if s.storageTransport != "" {
+		payload["storage_transport"] = s.storageTransport
+	}
+	return s.identity.signed(row, payload)
 }
 func newCredential() (string, error) {
 	value := make([]byte, 48)
@@ -337,7 +357,11 @@ func (s *Service) CreatePair(ctx context.Context, a store.NodeAudit) (Envelope, 
 	if err != nil {
 		return Envelope{}, err
 	}
-	return s.identity.signed(row, map[string]any{"node_id": row.ID, "endpoint": row.Endpoint, "public_key": public, "token": token, "nonce": nonce, "expires_at": p.ExpiresAt, "protocol": protocol.Version})
+	payload := map[string]any{"node_id": row.ID, "endpoint": row.Endpoint, "public_key": public, "token": token, "nonce": nonce, "expires_at": p.ExpiresAt, "protocol": protocol.Version}
+	if s.storageTransport != "" {
+		payload["storage_transport"] = s.storageTransport
+	}
+	return s.identity.signed(row, payload)
 }
 func checkedPackage(signed Envelope, now int64) (Peer, store.PairPackage, error) {
 	v := signed.Payload
@@ -353,7 +377,11 @@ func checkedPackage(signed Envelope, now int64) (Peer, store.PairPackage, error)
 	if err != nil {
 		return Peer{}, store.PairPackage{}, err
 	}
-	return Peer{ID: textField(v, "node_id"), Endpoint: origin, PublicKey: public, Role: "Follower"}, store.PairPackage{Nonce: textField(v, "nonce"), TokenHash: tokenDigest(token), ExpiresAt: expires}, nil
+	transport := textField(v, "storage_transport")
+	if err = validateStorageTransport(transport, origin); err != nil {
+		return Peer{}, store.PairPackage{}, err
+	}
+	return Peer{ID: textField(v, "node_id"), Endpoint: origin, PublicKey: public, Role: "Follower", StorageTransport: transport}, store.PairPackage{Nonce: textField(v, "nonce"), TokenHash: tokenDigest(token), ExpiresAt: expires}, nil
 }
 func (s *Service) relation(identifier string, peer Peer, credential, direction string) (store.Relationship, error) {
 	sealed, err := s.identity.vault.Seal(credential)
@@ -377,6 +405,9 @@ func (s *Service) ImportPair(ctx context.Context, signed Envelope, a store.NodeA
 	peer, err := s.transport.Identity(ctx, hint.Endpoint, hint.ID, hint.PublicKey, "Follower")
 	if err != nil {
 		return "", err
+	}
+	if hint.StorageTransport != peer.StorageTransport {
+		return "", errors.New("pairing network deployment profile changed")
 	}
 	// Unacknowledged tombstones retain encrypted credentials for safe peer notice.
 	old, err := s.repo.Relationships(ctx, true)
@@ -421,6 +452,11 @@ func (s *Service) ImportPair(ctx context.Context, signed Envelope, a store.NodeA
 	}
 	if err = s.repo.ActivateRelationship(ctx, identifier, a); err != nil {
 		return "", err
+	}
+	if peer.StorageTransport == "direct" {
+		if err = s.repo.SetRelationshipMode(ctx, identifier, "Direct", false, a); err != nil {
+			return "", err
+		}
 	}
 	return identifier, nil
 }
@@ -529,5 +565,9 @@ func (s *Service) Status(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "protocol": protocol.Version, "app_version": AppVersion, "relationships": relations}, nil
+	result := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "protocol": protocol.Version, "app_version": AppVersion, "relationships": relations}
+	if s.certificateStatus != nil {
+		result["certificate"] = s.certificateStatus()
+	}
+	return result, nil
 }

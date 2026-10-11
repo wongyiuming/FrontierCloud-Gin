@@ -27,12 +27,16 @@ type engineContract struct {
 	fault                string
 	removed              []string
 	cancelMutation       context.CancelFunc
+	automatic            bool
 }
 
 func (f *engineContract) image(ref, revision, component string) Image {
 	f.next++
 	i := Image{ID: "sha256:" + fmt.Sprintf("%064x", f.next), RepoTags: []string{ref}}
 	i.Config.Labels = map[string]string{"frontiercloud.revision": revision, "frontiercloud.component": component, "frontiercloud.runtime": "go", "frontiercloud.schema-generation": "3", "frontiercloud.project": f.project}
+	if f.automatic {
+		i.Config.Labels["frontiercloud.automatic-tls"] = "1"
+	}
 	if f.fault != "manifest-incompatible" || revision != f.target {
 		i.Config.Labels["frontiercloud.release-manifest-version"] = "1"
 	}

@@ -1,5 +1,15 @@
 # RN preproduction and CD
 
+**Retired on 2026-10-11 at the owner's request.** RN preproduction containers,
+volumes, checkout, external CD receiver and its runner were removed. Production
+Storage and unrelated applications were preserved. STAGING_CD_ENABLED=false
+disables the notification in the new workflow; no live staging acceptance is
+available until the owner provisions a new independent IP. The procedures below
+are historical recovery notes, not instructions to recreate RN preproduction.
+The currently trusted main publisher may still fail its old notify step until
+the reviewed workflow change reaches main; published-image proof and dev source
+CI must be reported separately from that retired CD gate.
+
 `www4399.sbs` on RN (`23.238.8.233`) is a separate business Master, not the production storage
 identity. Use project `frontiercloud-staging`, data `/opt/frontiercloud-staging/data`,
 an independent secrets volume, Redis and updater socket. Production storage

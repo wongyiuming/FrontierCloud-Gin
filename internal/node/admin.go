@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"strings"
 )
 
 func (s *Service) IdentityState(ctx context.Context) (store.NodeIdentity, error) {
@@ -19,6 +20,13 @@ func (s *Service) Wake() {
 	}
 }
 func (s *Service) SetMode(ctx context.Context, id, mode string, a store.NodeAudit) error {
+	relation, e := s.repo.Relationship(ctx, id)
+	if e != nil {
+		return e
+	}
+	if profile, known := relation.Summary["storage_transport"].(string); known && profile != "" && strings.ToLower(mode) != profile {
+		return store.ErrNodeState
+	}
 	if err := s.repo.SetRelationshipMode(ctx, id, mode, false, a); err != nil {
 		return err
 	}

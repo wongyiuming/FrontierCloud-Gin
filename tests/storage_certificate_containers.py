@@ -42,7 +42,7 @@ def cleanup(work):
         found = subprocess.run(["docker", "inspect", name], capture_output=True, text=True)
         if found.returncode == 0:
             item = json.loads(found.stdout)[0]
-            assert item["Config"]["Labels"].get("frontiercloud.acceptance") == project or item["Config"]["Labels"].get("com.docker.compose.project") == project
+            assert item["Config"]["Labels"].get("frontiercloud.acceptance") == project or item["Config"]["Labels"].get("com.docker.compose.project") in {project + "-" + profile for profile in ("business", "direct", "relay")}
             subprocess.run(["docker", "stop", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
             subprocess.run(["docker", "rm", "-v", name], stdout=subprocess.DEVNULL, check=True)
     for name in resources["networks"]:
@@ -61,151 +61,113 @@ def cleanup(work):
 def run(work, project, revision):
     assert re.fullmatch(r"fc-certificate-[a-f0-9-]{36}", project)
     assert re.fullmatch(r"[a-f0-9]{40}", revision)
-    image = "frontiercloud-go-web:" + revision
-    labels = json.loads(call(["docker", "image", "inspect", image]))[0]["Config"]["Labels"]
-    assert labels["frontiercloud.revision"] == revision and labels["frontiercloud.component"] == "web"
-    # Test bootstrap certificate only; no public CA or production path is used.
-    subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "2", "-subj", "/CN=storage.fixture.test", "-addext", "subjectAltName=DNS:storage.fixture.test", "-keyout", str(work / "key.pem"), "-out", str(work / "cert.pem")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-    os.chown(work / "key.pem", 0, 10001)
-    (work / "key.pem").chmod(0o640)
-    http_port, stun_port = available_port(socket.SOCK_STREAM), available_port(socket.SOCK_DGRAM)
-    env = dict(os.environ, COMPOSE_PROJECT_NAME=project, FRONTIERCLOUD_REVISION=revision,
-               SERVER_NAME="storage.fixture.test", STORAGE_ENDPOINT=f"https://storage.fixture.test:{http_port}",
-               STORAGE_PORT=str(http_port), WEBRTC_STUN_PORT=str(stun_port),
-               SSL_CERT_PATH=str(work / "cert.pem"), SSL_KEY_PATH=str(work / "key.pem"),
-               DATA_DIRECTORY=str(work / "data"), PUBLIC_BIND_ADDRESS="127.0.0.1")
-    fixture = work / "fixture.yaml"
-    public = work / "public"
-    public.mkdir(mode=0o755)
-    env["STORAGE_CERTIFICATE_HTTP01_DIRECTORY"] = str(public)
-    fixture.write_text("services:\n  web:\n    cpus: 1\n    mem_limit: 256m\n    memswap_limit: 256m\n")
-    files = [ROOT / "docker-compose.storage.yaml", ROOT / "docker-compose.storage-certificate.yaml", fixture]
-    def compose(*args, temporary=False):
-        selected = files + ([] if temporary else [ROOT / "docker-compose.storage-certificate-webroot.yaml"])
-        command = ["docker", "compose", "--project-directory", str(ROOT)]
-        for path in selected:
-            command += ["-f", str(path)]
-        return call(command + list(args), env=env)
-    config = json.loads(compose("config", "--format", "json"))
-    default = json.loads(compose("config", "--format", "json", temporary=True))["services"]["certificate-agent"]
-    assert default["network_mode"] == "host" and default["cap_add"] == ["NET_BIND_SERVICE"]
-    assert "--http01-directory" not in default["command"] and not default.get("ports")
-    volumes = {key: value["name"] for key, value in config["volumes"].items()}
-    network_names = [value["name"] for value in config["networks"].values()]
-    names = {key: project + "-" + key + "-1" for key in config["services"]}
-    reader, tester = project + "-reader", project + "-tester"
-    resources = {"project": project, "containers": [names["web"], reader, tester, *[v for k, v in names.items() if k != "web"]], "volumes": list(volumes.values()), "networks": network_names}
+    resources = {"project": project, "containers": [], "volumes": [], "networks": []}
     (work / "resources.json").write_text(json.dumps(resources))
-    def wait_agent():
-        for _ in range(60):
-            result = subprocess.run(["docker", "exec", names["certificate-agent"], "/app/frontiercloud", "certificate-healthcheck"], capture_output=True)
-            if result.returncode == 0:
-                return
-            time.sleep(0.5)
-        raise AssertionError("certificate container never ready")
-    def status(container):
-        return json.loads(call(["docker", "exec", container, "/app/frontiercloud", "certificate-status"]))
-    compose("up", "-d", "--no-build", "certificate-agent")
-    wait_agent()
-    agent = inspect(names["certificate-agent"])
-    host = agent["HostConfig"]
-    assert agent["Config"]["User"] == "0:10001" and host["ReadonlyRootfs"]
-    assert host["NanoCpus"] == 50000000 and host["Memory"] == host["MemorySwap"] == 134217728
-    assert host["PidsLimit"] == 24 and host["CapDrop"] == ["ALL"] and not host["CapAdd"]
-    assert not host["Privileged"] and not host["PidMode"] and not host["PortBindings"]
-    assert host["NetworkMode"] == "bridge"
-    assert next(m for m in agent["Mounts"] if m["Destination"] == "/run/frontiercloud-http01")["Source"] == str(public)
-    assert status(names["certificate-agent"])["validation"] == "shared_http01"
-    common = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--read-only", "--cpus=.05", "--memory=128m", "--memory-swap=128m", "--pids-limit=24", "--label", "frontiercloud.acceptance=" + project]
-    call(["docker", "run", "-d", "--name", reader, "--network=none", "--user=10001:10001", *common,
-          "-e", "SERVER_NAME=storage.fixture.test", "-v", volumes["certificate_runtime"] + ":/run/frontiercloud-certificate:ro",
-          "-v", volumes["certificate_state"] + ":/var/lib/frontiercloud-certificate:ro", "--entrypoint", "/bin/sleep", image, "infinity"])
-    assert status(reader)["managed"]
-    old_id = agent["Id"]
-    compose("up", "-d", "--force-recreate", "--no-deps", "certificate-agent")
-    wait_agent()
-    assert inspect(names["certificate-agent"])["Id"] != old_id and status(reader)["managed"]
-    print("PASS: bridged Compose certificate container; pre-existing reader survives agent recreation")
-    compose("stop", "certificate-agent")
-    mounts = ["-v", volumes["certificate_state"] + ":/var/lib/frontiercloud-certificate", "-v", volumes["certificate_runtime"] + ":/run/frontiercloud-certificate", "-v", str(public) + ":/run/frontiercloud-http01", "-v", str(work / "certificate.test") + ":/certificate.test:ro"]
-    result = call(["docker", "run", "--rm", "--name", tester, "--user=0:10001", *common, "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_VOLUMES=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerSharedVolumes|TestCertificateContainerLocalExpiredRenewal|TestACMEV2OrderRealHTTPChallengeCSRAndCertificate"])
-    print(result)
-    assert "--- SKIP" not in result and "PASS" in result
-    compose("up", "-d", "--no-build", "certificate-agent")
-    wait_agent()
-    facts = status(reader)
-    assert facts["state"] == "valid" and facts["auto_renew"] and facts["job"]["state"] == "success"
-    for private in ["state.json", "account.key"]:
-        assert subprocess.run(["docker", "exec", reader, "/bin/cat", "/var/lib/frontiercloud-certificate/" + private], capture_output=True).returncode != 0
-    compose("up", "-d", "--no-build", "--wait", "web")
-    web = inspect(names["web"])
-    assert web["HostConfig"]["NanoCpus"] == 1000000000
-    pointer = json.loads(call(["docker", "exec", names["certificate-agent"], "/bin/cat", "/var/lib/frontiercloud-certificate/current.json"]))
-    public_cert = call(["docker", "exec", names["certificate-agent"], "/bin/cat", "/var/lib/frontiercloud-certificate/" + pointer["generation"] + "/fullchain.pem"])
-    context = ssl.create_default_context(cadata=public_cert)
-    with socket.create_connection(("127.0.0.1", http_port), timeout=5) as raw:
-        with context.wrap_socket(raw, server_hostname="storage.fixture.test") as connection:
-            served = hashlib.sha256(connection.getpeercert(binary_form=True)).hexdigest()
-    assert served == facts["fingerprint"]
-    compose("up", "-d", "--force-recreate", "--no-deps", "certificate-agent")
-    wait_agent()
-    assert inspect(names["web"])["Id"] == web["Id"] and status(reader)["auto_renew"]
-    call(["docker", "exec", names["web"], "/app/frontiercloud", "healthcheck"])
-    print("PASS: group-readable managed TLS actually served; private account/journal denied; Web and reader survive agent recreation")
-    compose("stop", "certificate-agent")
-    # Port 80 is used only on the development host after an explicit ownership check.
-    with socket.socket() as probe:
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind(("0.0.0.0", 80))
-        probe.listen(1)
-    result = call(["docker", "run", "--rm", "--name", tester, "--network=host", "--user=0:10001", *common,
-                   "--cap-add", "NET_BIND_SERVICE", "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_PORT80=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerTemporaryPort80"])
-    print(result)
-    assert "--- SKIP" not in result and "PASS" in result
-    compose("up", "-d", "--no-build", "--no-deps", "certificate-agent", temporary=True)
-    wait_agent()
-    temporary = inspect(names["certificate-agent"])
-    assert temporary["HostConfig"]["NetworkMode"] == "host" and not temporary["HostConfig"]["PortBindings"]
-    capabilities = temporary["HostConfig"]["CapAdd"] or []
-    assert [value.removeprefix("CAP_") for value in capabilities] == ["NET_BIND_SERVICE"], capabilities
-    facts = status(reader)
-    assert facts["validation"] == "temporary_port80" and not facts["job"]["port80_active"]
-    with socket.socket() as probe:
-        # Closed challenge connections may retain TIME_WAIT; a new listener
-        # must still be possible, without allowing concurrent listener reuse.
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind(("0.0.0.0", 80))
-        probe.listen(1)
-    print("PASS: actual host-network container owns 80 only during challenge; busy/failure/cancel release; idle 80 available")
-    class EngineConnection(http.client.HTTPConnection):
-        def connect(self):
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.settimeout(self.timeout)
-            self.sock.connect("/var/run/docker.sock")
-    def cpu_stats():
-        connection = EngineConnection("localhost", timeout=3)
-        try:
-            connection.request("GET", f"/containers/{web['Id']}/stats?stream=false&one-shot=true")
-            response = connection.getresponse()
-            assert response.status == 200
-            return json.load(response)["cpu_stats"]
-        finally:
-            connection.close()
-    started = time.monotonic()
-    previous = cpu_stats()
-    samples = []
-    for _ in range(5):
-        time.sleep(1)
-        raw = cpu_stats()
-        elapsed_cpu = raw["cpu_usage"]["total_usage"] - previous["cpu_usage"]["total_usage"]
-        elapsed_system = raw["system_cpu_usage"] - previous["system_cpu_usage"]
-        assert elapsed_system > 0
-        value = 100 * elapsed_cpu / elapsed_system * raw["online_cpus"]
-        assert 0 <= value < 20
-        samples.append(value)
-        previous = raw
-    assert time.monotonic() - started <= 30
-    print(json.dumps({"status": "passed", "revision": revision, "cpu_percent": samples, "utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}))
+    for profile in ("business", "direct", "relay"):
+        case = work / profile
+        case.mkdir(mode=0o755)
+        domain = ("business" if profile == "business" else "storage") + ".fixture.test"
+        environment = dict(os.environ, COMPOSE_PROJECT_NAME=project + "-" + profile,
+                           FRONTIERCLOUD_REVISION=revision, TLS_ENABLED="true",
+                           SERVER_NAME=domain, STORAGE_TRANSPORT=profile,
+                           STORAGE_PORT="8443" if profile == "relay" else "443",
+                           STORAGE_ENDPOINT="https://" + domain + (":8443" if profile == "relay" else ""),
+                           DATA_DIRECTORY=str(case / "data"))
+        base = ROOT / ("docker-compose.yaml" if profile == "business" else "docker-compose.storage.yaml")
+        native = "frontiercloud-go-web:" + revision
+        agent_override = f"""services:
+  certificate-init:
+    image: {native}
+  secrets-init:
+    image: {native}
+  media-init:
+    image: {native}
+  certificate-agent:
+    image: {native}
+    entrypoint: [/certificate.test]
+    command: [-test.v, -test.timeout=5m, -test.run=^TestAutomaticTLSContainerLifecycle$]
+    restart: "no"
+    network_mode: !reset null
+    networks: [default]
+    environment:
+      FRONTIERCLOUD_TEST_AUTOMATIC_TLS_PROFILE: {profile}
+    volumes:
+      - {work / 'certificate.test'}:/certificate.test:ro
+      - {case}:/fixture
+  web:
+    image: {native}
+    cpus: 1
+    mem_limit: 256m
+    memswap_limit: 256m
+    ports: !reset []
+    volumes:
+      - {case / 'ca.pem'}:/etc/ssl/certs/ca-certificates.crt:ro
+"""
+        if profile == "business":
+            agent_override += f"""  nginx:
+    image: frontiercloud-go-nginx:{revision}
+    ports: !reset []
+    volumes:
+      - {case / 'ca.pem'}:/etc/ssl/certs/ca-certificates.crt:ro
+  stun:
+    ports: !reset []
+  updater:
+    image: frontiercloud-go-updater:{revision}
+"""
+        overlay = case / "fixture.yaml"
+        overlay.write_text(agent_override)
+        def compose(*args):
+            return call(["docker", "compose", "--project-directory", str(ROOT), "-f", str(base), "-f", str(overlay), *args], env=environment)
+        rendered = json.loads(compose("config", "--format", "json"))
+        assert not any(service.get("ports") for service in rendered["services"].values())
+        names = {name: rendered["name"] + "-" + name + "-1" for name in rendered["services"]}
+        resources["containers"] += [names["web"], *[name for key, name in names.items() if key != "web"]]
+        resources["volumes"] += [value["name"] for value in rendered["volumes"].values()]
+        resources["networks"] += [value["name"] for value in rendered.get("networks", {}).values()]
+        (work / "resources.json").write_text(json.dumps(resources))
+        compose("up", "-d", "--no-build", "certificate-agent")
+        def wait_file(name):
+            end = time.monotonic() + 100
+            while time.monotonic() < end:
+                if (case / name).is_file():
+                    return
+                if inspect(names["certificate-agent"])["State"]["Status"] != "running":
+                    raise AssertionError(call(["docker", "logs", names["certificate-agent"]])[-4096:])
+                time.sleep(0.25)
+            raise AssertionError("certificate fixture timed out: " + name)
+        wait_file("ca-ready")
+        targets = ["web", "nginx"] if profile == "business" else ["web"]
+        compose("up", "-d", "--no-build", *targets)
+        (case / "serving-started").write_text("ready")
+        wait_file("active")
+        call(["docker", "exec", names["web"], "/app/frontiercloud", "healthcheck"])
+        if profile != "business":
+            pair = json.loads(call(["docker", "exec", names["web"], "/app/frontiercloud", "storage-pair"]))["payload"]
+            assert pair["endpoint"] == environment["STORAGE_ENDPOINT"]
+            # Do not print one-time credentials to the acceptance log.
+            assert pair["storage_transport"] == profile
+            assert time.time() + 280 < pair["expires_at"] <= time.time() + 301
+        before = {name: inspect(names[name])["Id"] for name in targets}
+        compose("up", "-d", "--no-build", "--force-recreate", "--no-deps", *targets)
+        assert all(inspect(names[name])["Id"] != before[name] for name in targets)
+        (case / "serving-recreated").write_text("ready")
+        wait_file("renewed")
+        call(["docker", "exec", names["web"], "/app/frontiercloud", "healthcheck"])
+        (case / "verified").write_text("ready")
+        code = json.loads(call(["docker", "wait", names["certificate-agent"]]))
+        assert code == 0, call(["docker", "logs", names["certificate-agent"]])[-4096:]
+        logs = call(["docker", "logs", names["certificate-agent"]])
+        assert "--- SKIP" not in logs and "PASS: actual local-CA issuance" in logs
+        samples = []
+        for _ in range(5):
+            raw = call(["docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}", names["web"]])
+            value = float(raw.rstrip("%"))
+            assert 0 <= value < 20, (profile, value)
+            samples.append(value)
+        print(json.dumps({"profile": profile, "web_cpu_percent": samples}))
+        print("PASS: automatic TLS Compose lifecycle " + profile, flush=True)
+        compose("down", "-v")
+    print("PASS: all profiles used local CA; no production CA, host ports or services touched")
 
 
 if __name__ == "__main__":

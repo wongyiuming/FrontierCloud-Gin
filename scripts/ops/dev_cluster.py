@@ -42,6 +42,10 @@ def compose(name, *args, database="sqlite"):
 
 
 def main():
+    # Preserve this historical operator script without provisioning its retired
+    # manual-TLS/high-port/whole-fleet topology against the automatic TLS runtime.
+    if (Path(__file__).resolve().parents[2] / "internal/certmanager").is_dir():
+        raise RuntimeError("Legacy persistent fixture provisioning is retired; use scripts/test-native-matrix.sh for the current private-CA five-node fleet")
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("/root/frontiercloud-dev"))
     parser.add_argument("--address", required=True)

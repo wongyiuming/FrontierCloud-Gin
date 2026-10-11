@@ -14,11 +14,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 )
 
-func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
+func TestStorageHealthPinsValidPairAndRejectsExpiredOrWrongIdentity(t *testing.T) {
 	host := "storage.fixture.test"
 	dir := t.TempDir()
 	write := func(directory string, serial int64, expiry time.Time) (string, string) {
@@ -46,7 +44,7 @@ func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
 		}
 		return cf, kf
 	}
-	bootstrapCert, bootstrapKey := write(filepath.Join(dir, "bootstrap"), 1, time.Now().Add(-time.Hour))
+	expiredCert, expiredKey := write(filepath.Join(dir, "expired"), 1, time.Now().Add(-time.Hour))
 	managed := filepath.Join(dir, "managed")
 	generation := "0123456789abcdef0123456789abcdef"
 	cert, key := write(filepath.Join(managed, generation), 2, time.Now().Add(24*time.Hour))
@@ -61,8 +59,7 @@ func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
 	server.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}}
 	server.StartTLS()
 	defer server.Close()
-	settings := config.Config{ServerName: host, StorageTLSCert: bootstrapCert, StorageTLSKey: bootstrapKey, StorageCertificateDirectory: managed}
-	client, e := storageHealthClient(settings)
+	client, e := storageHealthClientForPair(host, &pair)
 	if e != nil {
 		t.Fatal("managed readiness used expired bootstrap", e)
 	}
@@ -75,9 +72,15 @@ func TestStorageHealthPinsManagedPairAfterExpiredBootstrap(t *testing.T) {
 	if response.StatusCode != 200 {
 		t.Fatal(response.Status)
 	}
-	settings.StorageCertificateDirectory = ""
-	if _, e = storageHealthClient(settings); e == nil {
-		t.Fatal("expired bootstrap unexpectedly ready")
+	expired, e := tls.LoadX509KeyPair(expiredCert, expiredKey)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = storageHealthClientForPair(host, &expired); e == nil {
+		t.Fatal("expired certificate unexpectedly ready")
+	}
+	if _, e = storageHealthClientForPair("other.fixture.test", &pair); e == nil {
+		t.Fatal("wrong certificate identity unexpectedly ready")
 	}
 }
 

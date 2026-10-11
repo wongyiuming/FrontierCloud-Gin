@@ -40,7 +40,7 @@ func (l *localControl) Identity(ctx context.Context, origin, id, key, role strin
 	if (id != "" && row.ID != id) || (key != "" && key != public) || (role != "" && role != row.Role) {
 		return Peer{}, errors.New("identity mismatch")
 	}
-	return Peer{row.ID, row.Endpoint, public, row.Role, AppVersion}, nil
+	return Peer{ID: row.ID, Endpoint: row.Endpoint, PublicKey: public, Role: row.Role, AppVersion: AppVersion, StorageTransport: s.storageTransport}, nil
 }
 func (l *localControl) Request(ctx context.Context, origin, route, method string, value any, relationship, credential string) (map[string]any, error) {
 	s := l.nodes[origin]

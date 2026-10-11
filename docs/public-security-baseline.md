@@ -17,7 +17,7 @@ checked against source and read-only public responses/DNS on 2026-10-09.
 | Error pages lost headers | Add the complete edge headers on the maintenance location. Allow only hashes of its fixed trusted inline script/style, including upstream-generated 503 redirects. |
 | Karaoke duplicated security headers in staging | A child `proxy_hide_header Cache-Control` replaced the parent's entire hide list. All local hide lists now include the shared security/audit response filter; real tests assert each security header occurs once, including karaoke. Recording relays also ignore upstream internal-redirect instructions, as media relays already did. |
 | Admin canonical redirect lost a mapped HTTPS port | Found in the real loopback browser gate, not the third-party scan. Use a relative 308 so the actual public port survives; normal production port 443 is unaffected. The browser follows the original login destination rather than bypassing this hop. |
-| Discovery URLs omitted non-default ports | GitHub automatic review caught this in the new implementation before merge. Canonical URLs now derive from configured HTTP_PORT/HTTPS_PORT, or a validated PUBLIC_ORIGIN matching SERVER_NAME for external proxies/dynamic ports; never from request Host. Real random-port TLS tests assert sitemap, robots and security.txt URLs. |
+| Discovery URLs omitted non-default ports | The original fix was reviewed against mapped-port fixtures. The current automatic TLS baseline fixes public HTTP/HTTPS at 80/443 and rejects other configured public ports; canonical URLs derive from SERVER_NAME and the TLS mode, never request Host. Real fixed-port TLS tests assert sitemap, robots and security.txt URLs. |
 | HSTS scored as weak | Keep the existing one-year HTTPS-only policy. Do not add `includeSubDomains` or preload without auditing all current/future subdomains. |
 | Missing discovery files | Publish robots rules and a sitemap of only three public landing pages, never media filenames, resource IDs, recordings or Admin URLs. These are crawler hints, not access controls. |
 | Missing `security.txt` | Publish RFC 9116 contact/expiry/canonical fields only when `SECURITY_CONTACT` names a real monitored HTTPS form or mailbox. Without a supplied contact the endpoint intentionally returns 404, not a fabricated address. |
@@ -72,11 +72,11 @@ container replacement preserves existing environment; setting this optional
 new value requires explicitly recreating the affected web service with the
 current pinned image/config, not merely pressing the version upgrade button.
 
-Discovery URLs use the configured TLS mode and published HTTP_PORT/HTTPS_PORT.
-For an external proxy or dynamically allocated port, set PUBLIC_ORIGIN to the
-real HTTP(S) origin matching SERVER_NAME. Unknown dynamic ports disable the
-discovery documents with 503 until configured, rather than advertising a wrong
-80/443 URL; other business routes remain available. Request Host is not trusted.
+Discovery URLs use the configured TLS mode, SERVER_NAME and fixed public HTTP
+80 / HTTPS 443. HTTP_PORT and HTTPS_PORT are retired; nonstandard values fail
+startup. An optional PUBLIC_ORIGIN must match the TLS mode, configured hostname
+and standard port. Request Host is not trusted. Certificates are automatically
+managed; no operator certificate paths or dynamic public port overrides remain.
 
 ## Verification and promotion
 

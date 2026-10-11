@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,7 @@ type testCertificateAgent struct{ calls int }
 
 func (a *testCertificateAgent) Control(context.Context, certificate.Request) (certificate.View, error) {
 	a.calls++
-	return certificate.View{Hostname: "storage.fixture.test", Managed: true, Job: certificate.Job{State: "running"}}, nil
+	return certificate.View{Hostname: "storage.fixture.test", Managed: true, Fingerprint: "public-fingerprint", Download: &certificate.DownloadEnvelope{Ciphertext: "opaque-fixture"}}, nil
 }
 func TestStorageCertificateHTTPUsesSignedOwnerAndStrictBody(t *testing.T) {
 	ctx := context.Background()
@@ -49,11 +50,11 @@ func TestStorageCertificateHTTPUsesSignedOwnerAndStrictBody(t *testing.T) {
 	if w := request(router, "POST", "https://storage.fixture.test/internal/v1/certificate", `{"action":"renew"}`); w.Code != 401 {
 		t.Fatal("anonymous reached certificate control", w.Code)
 	}
-	result, e := master.Certificate(ctx, id, certificate.Request{Action: "renew"}, store.NodeAudit{Actor: "admin"})
+	result, e := master.Certificate(ctx, id, certificate.Request{Action: "download", BrowserPublicKey: "opaque-browser-key", BrowserNonce: strings.Repeat("a", 43)}, store.NodeAudit{Actor: "admin"})
 	if e != nil || result["fingerprint"] != "public-fingerprint" || agent.calls != 1 {
 		t.Fatal(result, e, agent.calls)
 	}
-	for _, value := range []map[string]any{{"action": "renew", "hostname": "other.fixture.test"}, {"action": "renew", "http01_directory": "/private"}, {"action": "renew", "command": "stop-business"}, {"action": "reset"}} {
+	for _, value := range []map[string]any{{"action": "status", "hostname": "other.fixture.test"}, {"action": "renew", "http01_directory": "/private"}, {"action": "renew", "command": "stop-business"}, {"action": "reset"}} {
 		if _, e = master.Call(ctx, r, "/internal/v1/certificate", value); e == nil {
 			t.Fatal("unsafe certificate operation admitted", value)
 		}

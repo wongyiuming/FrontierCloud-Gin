@@ -62,7 +62,7 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 		if !decodeNodeAdmin(c, &request) {
 			return
 		}
-		if request.Action != "renew" && request.Action != "auto" {
+		if request.Action != "download" {
 			invalid(c, "body", "action")
 			return
 		}
@@ -72,7 +72,7 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 			return
 		}
 		c.Header("Cache-Control", "no-store")
-		c.JSON(202, v)
+		c.JSON(200, v)
 	})
 	writes.POST("/promote", func(c *gin.Context) {
 		var body struct {

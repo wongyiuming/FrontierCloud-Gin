@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
@@ -68,6 +68,12 @@ func storagePairCommand(output io.Writer) error {
 	if settings.DeploymentMode != config.DeploymentStorage {
 		return errors.New("storage-pair requires only_stroge")
 	}
+	// Verify the actual local HTTPS service before starting a fresh pair TTL.
+	// Controller readiness alone is insufficient, and its cached observations
+	// must not form a circular dependency with pairing or Web health.
+	if err = healthcheck(); err != nil {
+		return errors.New("storage pairing requires ready HTTPS; automatic TLS is pending or degraded")
+	}
 	return guardedCommand(settings, func(ctx context.Context) error {
 		db, err := openRuntimeStore(ctx, settings)
 		if err != nil {
@@ -83,7 +89,11 @@ func storagePairCommand(output io.Writer) error {
 		}
 		transport := node.NewTransport()
 		defer transport.Close()
-		return printStoragePair(ctx, node.NewService(db.Nodes(), identity, transport), db.Nodes(), output)
+		service := node.NewService(db.Nodes(), identity, transport)
+		if err = service.ConfigureStorageTransport(settings.StorageTransport); err != nil {
+			return err
+		}
+		return printStoragePair(ctx, service, db.Nodes(), output)
 	})
 }
 
@@ -122,15 +132,22 @@ func storageStatusCommand(output io.Writer) error {
 func storageHealthClient(settings config.Config) (*http.Client, error) {
 	// Pin the current complete local pair for loopback readiness only. Remote
 	// control clients continue normal CA verification; no InsecureSkipVerify.
-	manager, err := certificate.NewTLS(settings.ServerName, settings.StorageCertificateDirectory, settings.StorageTLSCert, settings.StorageTLSKey)
-	if err != nil {
-		return nil, err
-	}
+	manager := certmanager.NewServing(settings.ServerName)
 	pair, err := manager.GetCertificate(nil)
 	if err != nil {
 		return nil, err
 	}
+	return storageHealthClientForPair(settings.ServerName, pair)
+}
+func storageHealthClientForPair(host string, pair *tls.Certificate) (*http.Client, error) {
+	if pair == nil || len(pair.Certificate) == 0 {
+		return nil, errors.New("TLS pair unavailable")
+	}
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil || leaf.VerifyHostname(host) != nil || time.Now().Before(leaf.NotBefore) || !time.Now().Before(leaf.NotAfter) {
+		return nil, errors.New("TLS pair is expired or has the wrong identity")
+	}
 	pool := x509.NewCertPool()
-	pool.AddCert(pair.Leaf)
-	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: settings.ServerName, MinVersion: tls.VersionTLS12}}}, nil
+	pool.AddCert(leaf)
+	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: host, MinVersion: tls.VersionTLS12}}}, nil
 }

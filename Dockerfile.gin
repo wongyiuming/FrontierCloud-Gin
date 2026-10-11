@@ -21,7 +21,7 @@ FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
       frontiercloud.runtime="go" frontiercloud.schema-generation="3" \
-      frontiercloud.release-manifest-version="1"
+      frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
