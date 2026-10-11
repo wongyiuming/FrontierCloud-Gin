@@ -30,6 +30,7 @@ func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
 	var validated atomic.Bool
 	var finalized atomic.Bool
 	var nonces atomic.Int32
+	var registrations atomic.Int32
 	var certificatePEM []byte
 	caKey, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if e != nil {
@@ -77,7 +78,11 @@ func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
 		case "/account":
 			payload(r)
 			w.Header().Set("Location", base+"/account/1")
-			w.WriteHeader(201)
+			status := 201
+			if registrations.Add(1) > 1 {
+				status = 200 // The SDK returns ErrAccountAlreadyExists and caches KID.
+			}
+			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(map[string]string{"status": "valid"})
 		case "/new-order":
 			p := payload(r)
@@ -156,5 +161,21 @@ func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
 	v := waitJob(t, a)
 	if v.Job.State != "success" || v.State != "valid" || !validated.Load() || !finalized.Load() || v.Job.Port80Active {
 		t.Fatal("ACME order did not complete safely", v)
+	}
+	// A restarted agent constructs a new SDK client with the same durable key.
+	// Renewals must continue through HTTP 200 existing-account registration.
+	validated.Store(false)
+	finalized.Store(false)
+	client = &acme.Client{Key: account, DirectoryURL: base + "/directory", HTTPClient: server.Client()}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cert, key, e := issueOrder(ctx, client, host, "", func(token, response string) (func(), error) {
+		return a.present(ctx, token, response)
+	})
+	if e != nil || !validated.Load() || !finalized.Load() || registrations.Load() != 2 {
+		t.Fatal("existing ACME account failed renewal", e)
+	}
+	if e = a.publish(cert, key); e != nil || a.Status().Job.Port80Active {
+		t.Fatal("renewed ACME pair unavailable or challenge port retained", e)
 	}
 }

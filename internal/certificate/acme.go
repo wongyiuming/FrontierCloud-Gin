@@ -75,7 +75,7 @@ func issueOrder(ctx context.Context, client *acme.Client, host, email string, pr
 	if email != "" {
 		registration.Contact = []string{"mailto:" + email}
 	}
-	if _, e := client.Register(ctx, registration, acme.AcceptTOS); e != nil {
+	if _, e := client.Register(ctx, registration, acme.AcceptTOS); e != nil && !errors.Is(e, acme.ErrAccountAlreadyExists) {
 		return nil, nil, e
 	}
 	order, e := client.AuthorizeOrder(ctx, acme.DomainIDs(host))
