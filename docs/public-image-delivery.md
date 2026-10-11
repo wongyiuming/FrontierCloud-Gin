@@ -138,7 +138,9 @@ The repository's Packages page links to:
 | Master updater | `ghcr.io/wongyiuming/frontiercloud-gin-updater` |
 | Master Nginx | `ghcr.io/wongyiuming/frontiercloud-gin-nginx` |
 
-Tags are full 40-character commit SHAs, not `latest`. A deployer resolves the
+Release evidence uses full 40-character commit SHA tags. The optional fresh-
+install `latest` alias advances only after verified current-main publication.
+An exact-version deployer resolves the
 manifest/index, checks its SHA-256 and unique matching platform, then pulls the
 **digest**. It verifies component, Go runtime, revision, schema generation,
 canonical repository, OS/architecture and release contract before tagging the
@@ -187,19 +189,47 @@ or proof of registry CAS. The verified `linux/amd64` runtime digests were:
 | Updater | `sha256:6f0edad01b75449b73a387a3d9bb21ee5d042b460db91da9d5a7b08f8916f624` |
 | Nginx | `sha256:f1c76d52389fa6fd43dd4b730ded3a1ffd3d6429189292480c52eddd4d66f60c` |
 
-Normal fresh deployment remains:
+## Fresh-install defaults
+
+With the five host-specific HTTPS settings in README.md, ordinary startup is:
+
+```bash
+docker compose up -d --wait
+```
+
+It pulls public GHCR `latest` images, defaults to SQLite, and never builds.
+Missing/network/private image errors stop startup. No SHA or host Python is
+required. `FRONTIERCLOUD_REVISION=<published full SHA>` remains an optional pin.
+The reviewed updater and CD continue to verify exact SHA/digest provenance.
+
+The `publish-latest` job runs only for main, after all three exact publish jobs.
+It checks successful newest source CI, current main HEAD, publication attempt,
+all anonymous provenance proofs and manifest bytes before any alias write.
+One global repository lock serializes alias writers; each write rechecks current
+HEAD and exact digest. It runs trusted main code only, with a short-lived package
+write token, without candidate execution, artifacts, Docker or builds. Dev and
+the one-time bootstrap cannot advance latest. A partially failed alias update
+fails the workflow and can be retried; registry tags are not cross-package
+atomic. Retry an installation overlapping promotion once publication completes,
+or use one exact SHA for reproducible component selection. Existing running
+containers are not replaced merely because an alias changes.
+
+These aliases first become available after this implementation is reviewed and
+merged to main and its normal main publication succeeds. Local fixture aliases
+verify startup before merge; they do not claim remote latest activation.
+
+Explicit development/confirmed-missing exact-version preparation remains:
 
 ```bash
 export FRONTIERCLOUD_REVISION="$(git rev-parse HEAD)"
 bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"
-docker compose up -d --no-build --wait
+docker compose up -d --pull never --wait
 ```
 
-Storage uses the same image-first resolver through `deploy-storage.sh`, then
-starts only its Web appliance. Compose consumes prepared exact-version aliases;
-it does not compile in this path. Host-side Python 3 is a script driver, not a
-runtime dependency inside Web. Compose build definitions remain available for
-explicit development/confirmed-missing-image fallback, not normal publication.
+The helper prepares immutable public-name and historical local-name aliases.
+Storage appliance operations retain their separate role/identity prerequisites.
+Host-side Python is only an advanced resolver/test driver, not a default-startup
+or Web runtime dependency. Compose no longer contains local build definitions.
 
 ## Fallback and recovery
 

@@ -2,7 +2,7 @@
 # Pull public exact-SHA images; only confirmed absence compiles immutable source.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-revision="${1:-${FRONTIERCLOUD_REVISION:-}}"
+revision="${1:-${FRONTIERCLOUD_REVISION:-$(git rev-parse HEAD)}}"
 selection="${2:-all}"
 if [[ "${FRONTIERCLOUD_IMAGE_SOURCE:-auto}" != auto && "${FRONTIERCLOUD_IMAGE_SOURCE:-auto}" != local ]]; then
   printf '%s\n' 'Image source must be auto, or local for isolated acceptance.' >&2
@@ -35,7 +35,7 @@ for component in "${components[@]}"; do
   if [[ "$component" == nginx ]]; then args+=(--build-arg FRONTIERCLOUD_RUNTIME=go); fi
   git archive --format=tar "$revision" -- "${paths[@]}" |
     DOCKER_BUILDKIT=0 docker --host unix:///var/run/docker.sock build --memory=1g --memory-swap=1g --cpu-period=100000 --cpu-quota=100000 -f "$dockerfile" "${args[@]}" \
-      -t "frontiercloud-go-$component:$revision" -
+      -t "frontiercloud-go-$component:$revision" -t "ghcr.io/wongyiuming/frontiercloud-gin-$component:$revision" -
 done
 printf 'Prepared verified native images at %s; no services were replaced.\n' "$revision"
 printf '%s\n' 'Production publication still requires reviewed source/CI proof.'

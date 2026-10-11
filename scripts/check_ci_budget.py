@@ -4,7 +4,7 @@ import re
 
 
 HEAVY = re.compile(
-    r"test-(?:mixed-runtime|mixed-release|native-matrix|native-release|native-api|go-business|go-updater|native-default|store-interop|go-deployment|publication-oci)\.sh"
+    r"test-(?:mixed-runtime|mixed-release|native-matrix|native-release|native-api|go-business|go-updater|native-default|five-parameter-startup|store-interop|go-deployment|publication-oci)\.sh"
     r"|docker\s+(?:build|buildx|compose\s+up)|federation_stack\.py|browser_ui_regression\.py"
     r"|runs-on:\s*.*self-hosted|\bnohup\b"
 )
@@ -68,7 +68,7 @@ def inspect_workflow(text: str, name: str) -> list[str]:
         if len(limits) != 1 or not 1 <= int(limits[0]) <= maximum:
             findings.append(f"{name}/{job}: explicit timeout-minutes from 1 through {maximum} required")
         dependencies = re.findall(r"(?m)^    needs:\s*(.+)$", block)
-        allowed = {'compile': '[plan]', 'publish': '[plan, compile]', 'notify-staging': '[plan, publish]'}
+        allowed = {'compile': '[plan]', 'publish': '[plan, compile]', 'notify-staging': '[plan, publish]', 'publish-latest': '[plan, publish]'}
         if dependencies and not (compilation and dependencies == [allowed.get(job)]):
             findings.append(f"{name}/{job}: serial CI job chains can exceed the workflow budget")
         if compilation and job in allowed and dependencies != [allowed[job]]:
@@ -77,18 +77,23 @@ def inspect_workflow(text: str, name: str) -> list[str]:
             if re.search(r'(?m)^      (?!packages:)[\w-]+:\s*write\s*$', block):
                 findings.append(f"{name}/{job}: publication must not grant other write permissions")
             package_permissions = re.findall(r'(?m)^      packages:\s*(\w+)\s*$', block)
-            if (job == 'publish' and package_permissions != ['write']) or (job != 'publish' and re.search(r'packages:\s*write', block)):
+            writer_job = job == 'publish' or (artifact and job == 'publish-latest')
+            if (writer_job and package_permissions != ['write']) or (not writer_job and re.search(r'packages:\s*write', block)):
                 findings.append(f"{name}/{job}: automatic package write belongs only to trusted publisher")
             if 'secrets.STAGING_CD_SECRET' in block and job != 'notify-staging':
                 findings.append(f"{name}/{job}: signing secret exposed outside trusted notifier")
-            if job == 'publish':
-                helper = 'scripts/bootstrap_native_publish.py' if bootstrap else 'scripts/trusted_native_publish.py'
+            if writer_job:
+                helper = 'scripts/bootstrap_native_publish.py' if bootstrap else ('scripts/trusted_latest_publish.py' if job == 'publish-latest' else 'scripts/trusted_native_publish.py')
                 for contract in ('github.workflow_sha', 'GITHUB_TOKEN: ${{ github.token }}',
                                  'persist-credentials: false', helper):
                     if contract not in block:
                         findings.append(f"{name}/{job}: isolated trusted publisher contract missing")
                 if re.search(r'docker\s+(?:build|buildx|load|run|login)|\bgo\s+build|ref:.*needs\.plan', block):
                     findings.append(f"{name}/{job}: candidate execution is forbidden with package credentials")
+            if job == 'publish-latest':
+                for contract in ("if: needs.plan.outputs.branch == 'main'", 'group: native-release-latest-', 'cancel-in-progress: false'):
+                    if contract not in block:
+                        findings.append(f'{name}/{job}: serialized main-only latest promotion gate missing')
             if job == 'notify-staging':
                 for contract in ('environment: staging-cd-main', 'github.workflow_sha',
                                  'persist-credentials: false', 'scripts/trusted_staging_notify.py'):

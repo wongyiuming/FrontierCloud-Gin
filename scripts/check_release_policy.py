@@ -65,7 +65,8 @@ require('ARG FRONTIERCLOUD_RUNTIME=go' in read("nginx/Dockerfile"), "Edge defaul
 require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
-        and 'dockerfile: updater/Dockerfile.gin' in compose, "Initializers/updater must be native")
+        and 'ghcr.io/wongyiuming/frontiercloud-gin-updater:${FRONTIERCLOUD_REVISION:-latest}' in compose
+        and '  build:' not in compose, "Initializers/updater must be native")
 require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
         and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}' in compose,
         "Default release profile must be native main/dev in FrontierCloud-Gin")

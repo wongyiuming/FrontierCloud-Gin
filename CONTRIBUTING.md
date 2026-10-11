@@ -77,7 +77,7 @@ remain three minutes, compilation ten minutes per component. Relabel-triggered
 duplicate runs and future PRs cannot use it. Staging acceptance remains a merge
 gate even though PR #5 must exist before this first label-triggered publication.
 
-Only the publish job receives automatic `GITHUB_TOKEN` `packages: write`; plan,
+Only exact publish jobs and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
 compile and notify jobs do not. Public packages must grant `FrontierCloud-Gin`
 Actions Write while anonymous image pulls require no credentials. Personal PATs
 and a publisher Environment are not required; old unreferenced ones may remain
@@ -106,3 +106,16 @@ claim assertion-equivalence from matching total counts. See
 A release is valid only when the exact development commit has successful CI and the production tree is identical to the reviewed source tree. The new repository uses only `dev -> main`. Post-merge proof is an additional guard, not a replacement for review. A local tested commit is not an already-published production release.
 
 The complete local baseline and CI composition are maintained in the separate [Engineering and CI Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Engineering-and-CI). Deployment, rollback, and migration procedures are maintained in the [Release and Database Migrations Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Release-and-Database-Migrations).
+
+### Startup-default regression gate
+
+Preserve the five-value HTTPS fresh-start baseline in ARCHITECTURE.md. Render
+real Compose with only those five values and also with empty optional values;
+verify default public latest images, no builds, SQLite, persistent initialization,
+ports and project identity. Run a fresh HTTPS startup on the development host
+with one CPU and isolated ports/volumes; fixture image aliases may stand in for
+unreleased main/latest bytes, but that is not evidence that remote latest exists.
+Verify trusted latest promotion rejects dev, stale main, incomplete publisher
+jobs, digest drift and partial proof before writes. Only main publication after
+an authorized merge activates the new default aliases; do not create them by
+an ad-hoc dev push or treat the source checkout HEAD as a published release.

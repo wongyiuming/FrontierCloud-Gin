@@ -6,11 +6,7 @@ x-app-image: &app-image
   env_file:
     - path: .env
       required: false
-  image: frontiercloud-go-web:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
-  build:
-    context: .
-    dockerfile: Dockerfile.gin
-    args: {REVISION: "${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}"}
+  image: ghcr.io/wongyiuming/frontiercloud-gin-web:${FRONTIERCLOUD_REVISION:-latest}
 
 x-app-environment: &app-environment
   DB_TYPE: ${DB_TYPE:-sqlite}
@@ -68,11 +64,7 @@ services:
     logging: *service-logging
 
   updater:
-    image: frontiercloud-go-updater:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
-    build:
-      context: .
-      dockerfile: updater/Dockerfile.gin
-      args: {REVISION: "${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}"}
+    image: ghcr.io/wongyiuming/frontiercloud-gin-updater:${FRONTIERCLOUD_REVISION:-latest}
     command: [serve]
     user: "0:0"
     restart: always
@@ -143,11 +135,7 @@ services:
     logging: *service-logging
 
   nginx:
-    image: frontiercloud-go-nginx:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
-    build:
-      context: .
-      dockerfile: nginx/Dockerfile
-      args: {REVISION: "${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}", FRONTIERCLOUD_RUNTIME: go}
+    image: ghcr.io/wongyiuming/frontiercloud-gin-nginx:${FRONTIERCLOUD_REVISION:-latest}
     restart: always
     environment:
       TLS_ENABLED: ${TLS_ENABLED:-false}

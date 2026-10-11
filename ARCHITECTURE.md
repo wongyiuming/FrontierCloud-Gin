@@ -227,7 +227,7 @@ source CI, not a dev-defined credentialed push workflow. Compile jobs are
 free of package-write credentials; a separate immutable-main publisher validates bounded OCI data
 and writes only the verified source SHA tag. It must not run candidate scripts,
 Dockerfiles, containers or archive-extracted executables with write credentials.
-Only the publisher receives automatic `GITHUB_TOKEN` `packages: write`; plan,
+Only exact publishers and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
 compile and notify jobs do not. The public packages must grant
 `FrontierCloud-Gin` Actions Write; public pulls remain anonymous. Repository
 workflow writers are explicitly trusted to request package writes in other
@@ -279,3 +279,23 @@ See [storage appliance operations](docs/storage-appliance.md).
 RN's production storage and preproduction Master (`www4399.sbs`) are
 separate security/data/Compose projects. Only the staging Master uses 80/443.
 No production operation is automated in this change.
+
+## Fresh-start configuration baseline
+
+A fresh HTTPS business deployment requires only `TLS_ENABLED`, `SERVER_NAME`,
+`SSL_CERT_PATH`, `SSL_KEY_PATH` and `ACME_WEBROOT`. Every other operator setting
+has a usable default. Plain `docker compose up -d` pulls public GHCR `latest`
+Web/Updater/Nginx images; it must not require a user-supplied source SHA or run
+local builds. Empty optional values retain their defaults. HTTP without `.env`
+also remains supported. Certificates and available listening ports are host
+prerequisites, not additional mandatory application variables.
+
+Only immutable-main workflow code, after successful current-main source CI and
+all three verified exact-SHA publication jobs, may advance `latest`. Candidate
+dev code cannot advance it. Alias promotion executes no candidate code and uses
+one repository-wide serialization lock with current-head/attempt checks before
+each write. Registry tags are not atomic across components: installs overlapping
+promotion should retry after publication completes or pin the exact SHA.
+Reviewed upgrades, CD, rollback, schema and provenance checks still use exact
+source/digest evidence. Defaults must not permit pull failure to trigger a build,
+change database identity, migrate existing data or replace generated secrets.
