@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -32,6 +33,7 @@ func encryptedFixtureBytes(t *testing.T, plain string) (mediacrypto.Metadata, []
 
 func TestEncryptedLocalUploadRenameDeleteRollbackAndNonceTombstone(t *testing.T) {
 	root, db, svc := deleteFixture(t)
+	svc.identity = &node.Identity{NodeIdentity: store.NodeIdentity{ID: strings.Repeat("a", 32), Role: "Standalone"}}
 	ctx := context.Background()
 	meta, payload := encryptedFixtureBytes(t, "ID3encrypted-payload")
 	stage, err := svc.Stage(ctx, bytes.NewReader(payload), meta.CiphertextSize)
