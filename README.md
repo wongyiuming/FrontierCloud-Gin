@@ -44,6 +44,18 @@ for the normal image-first deployment path.
 
 Open `http://localhost`. The startup initializer creates the managed media tree under `data/media` and the persistent runtime secrets required by the stack.
 
+For first Admin access, read the existing key from the running deployment:
+
+```bash
+# Run in this deployment's Compose directory.
+docker compose exec -T web cat /run/frontiercloud-secrets/admin_key
+```
+
+For preproduction, this works from any directory:
+`docker exec frontiercloud-staging-web-1 cat /run/frontiercloud-secrets/admin_key`.
+See [existing keys and exact staging Compose commands](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration#查看现有密钥含预发布)
+for the metrics token, persistent recovery keys and their separate purposes.
+
 The two supported `.env` deployment selections are documented in
 [Native deployment](protocol/v2/native-deployment.md). Changing the runtime or
 database selection does not migrate existing state. Historical Python cluster
