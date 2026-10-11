@@ -9,6 +9,8 @@ COPY internal ./internal
 COPY protocol ./protocol
 COPY migrations ./migrations
 COPY static ./static
+# Shared browser/server parser data is required by build-stage Go regression tests.
+COPY tests/lrc_parsing_vectors.json ./tests/
 # Keep deployment contract tests executable in the build stage only.
 COPY Dockerfile Dockerfile.gin ./
 COPY updater/Dockerfile updater/Dockerfile.gin ./updater/
