@@ -84,17 +84,62 @@ func (s *Service) cryptoObject(ctx context.Context, name, resourceID string, adm
 		if hidden(object.Path, hiddenPaths) {
 			return object, os.ErrNotExist
 		}
+		if object.Kind == "lyric" {
+			if e = s.authorizePublicLyric(ctx, object.Path, hiddenPaths); e != nil {
+				return object, e
+			}
+		}
 	}
 	object.Encryption, err = s.Encryption(ctx, object.ID)
 	return object, err
 }
 
+// authorizePublicLyric requires the caller's shared mutation lease. A lyric's
+// own visible path is insufficient: at least one current, visible audio source
+// must still reference it. Track checks use the internal method, never acquire
+// a nested lease, and preserve global logical resource identity on a Master.
+func (s *Service) authorizePublicLyric(ctx context.Context, name string, hiddenPaths map[string]bool) error {
+	relations, err := s.repository.LyricRelations(ctx, "", name)
+	if err != nil {
+		return err
+	}
+	unavailable := false
+	for _, relation := range relations {
+		if relation.Lyric != name || !strings.HasPrefix(relation.Track, "music/") || !managedObject(relation.Track, false) || hidden(relation.Track, hiddenPaths) {
+			continue
+		}
+		track, err := s.cryptoObject(ctx, relation.Track, "", true)
+		if errors.Is(err, ErrUnavailable) {
+			unavailable = true
+			continue
+		}
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrPath) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if track.Kind == "audio" && track.Path == relation.Track {
+			return nil
+		}
+	}
+	if unavailable {
+		return ErrUnavailable
+	}
+	return os.ErrNotExist
+}
+
 // EncryptedLyric exposes only the existing relation. It never parses ciphertext
 // as text and never moves lyric truth to a storage node.
 func (s *Service) EncryptedLyric(ctx context.Context, name, resourceID string) (store.MediaObject, error) {
+	release, err := s.acquire(ctx, false)
+	if err != nil {
+		return store.MediaObject{}, err
+	}
+	defer release()
 	// Inspect the relation before enforcing encrypted-content visibility. Plain
 	// lyrics retain the existing default-lyric fallback, including hidden tracks.
-	track, err := s.CryptoObject(ctx, name, resourceID, true)
+	track, err := s.cryptoObject(ctx, name, resourceID, true)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrPath) {
 			return store.MediaObject{}, ErrLyrics
@@ -123,17 +168,86 @@ func (s *Service) EncryptedLyric(ctx context.Context, name, resourceID string) (
 	if lyric == "" || lyric == defaultLyric || !s.validLyric(lyric) {
 		return store.MediaObject{}, nil
 	}
-	object, err := s.CryptoObject(ctx, lyric, "", true)
+	object, err := s.cryptoObject(ctx, lyric, "", true)
 	if err != nil {
 		return store.MediaObject{}, err
 	}
 	if object.Encryption == nil {
 		return store.MediaObject{}, nil
 	}
-	if _, err = s.CryptoObject(ctx, name, resourceID, false); err != nil {
+	if _, err = s.cryptoObject(ctx, name, resourceID, false); err != nil {
 		return store.MediaObject{}, err
 	}
-	return s.CryptoObject(ctx, lyric, "", false)
+	return s.cryptoObject(ctx, lyric, "", false)
+}
+
+// RecordingLyricSource rechecks the original signed Karaoke source as well as
+// its current lyric relation under one lease. A visible second track sharing
+// the lyric cannot authorize a new snapshot from a hidden or removed source.
+// Previously saved owner snapshots deliberately use RecordingLyricSnapshot.
+func (s *Service) RecordingLyricSource(ctx context.Context, token string) (store.RecordingMetadata, string, error) {
+	metadata := store.RecordingMetadata{Lyrics: []store.RecordingLyric{}}
+	release, err := s.acquire(ctx, false)
+	if err != nil {
+		return metadata, "", err
+	}
+	defer release()
+	if s.identity == nil {
+		return metadata, "", os.ErrNotExist
+	}
+	kind, id, err := s.identity.ResolveKaraoke(token)
+	if err != nil {
+		return metadata, "", os.ErrNotExist
+	}
+	var track store.MediaObject
+	if kind == "global" {
+		role, err := s.role(ctx)
+		if err != nil {
+			return metadata, "", err
+		}
+		if role != "Master" {
+			return metadata, "", os.ErrNotExist
+		}
+		track, err = s.cryptoObject(ctx, "", id, false)
+		if err != nil {
+			return metadata, "", err
+		}
+	} else {
+		row, err := s.repository.ObjectByID(ctx, id)
+		if err != nil {
+			return metadata, "", err
+		}
+		if row == nil {
+			return metadata, "", os.ErrNotExist
+		}
+		track, err = s.cryptoObject(ctx, row.Path, "", false)
+		if err != nil {
+			return metadata, "", err
+		}
+		if track.ID != id {
+			return metadata, "", os.ErrNotExist
+		}
+	}
+	metadata.Title = strings.TrimSuffix(path.Base(track.Path), path.Ext(track.Path))
+	if track.Kind != "audio" {
+		return metadata, "", nil
+	}
+	lyric, err := s.repository.LyricPath(ctx, track.ID)
+	if err != nil {
+		return metadata, "", err
+	}
+	if lyric == "" || lyric == defaultLyric || !s.validLyric(lyric) {
+		return metadata, "", nil
+	}
+	object, err := s.cryptoObject(ctx, lyric, "", false)
+	if err != nil {
+		return metadata, "", err
+	}
+	if object.Encryption == nil {
+		return metadata, "", nil
+	}
+	metadata.EncryptedLyricPath = lyric
+	return metadata, object.Encryption.FileID, nil
 }
 
 // OpenCryptoLyric applies the same path and visibility checks as key delivery.

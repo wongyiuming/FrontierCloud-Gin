@@ -265,7 +265,7 @@ func (a *Admin) cryptoPrepare(c *gin.Context) {
 		cryptoError(c, err)
 		return
 	}
-	if meta.CiphertextSize > a.settings.AdminMaxUploadBytes {
+	if meta.CiphertextSize > encryptedUploadLimit(a.settings.AdminMaxUploadBytes) {
 		detail(c, 413, "加密后的文件超过单文件上传限制")
 		return
 	}
@@ -423,8 +423,12 @@ func (a *Admin) downloadPlan(c *gin.Context) {
 		return
 	}
 	defer d.Close()
-	items, err := d.Plan(5000)
+	items, err := d.BrowserPlan(5000)
 	if err != nil {
+		if errors.Is(err, media.ErrUploadSize) {
+			detail(c, 413, "含加密文件的下载最多包含 5000 个文件，请分批下载")
+			return
+		}
 		mediaAdminError(c, err)
 		return
 	}

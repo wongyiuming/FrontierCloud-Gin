@@ -187,15 +187,15 @@ func testRecordingEncryptedLyricsHTTP(t *testing.T, cache karaoke.Cache) {
 	if _, err = master.public.media.ReplaceLyrics(ctx, "track", upload.Path, []string{lyricPath}, store.AdminAudit{}); err != nil {
 		t.Fatal(err)
 	}
-	getHandle := func() string {
-		w := perform("GET", "/api/v1/media/catalog/media?"+url.Values{"media_type": {"music"}, "path": {"music/artist"}, "playback_session_id": {"recording-crypto"}}.Encode(), nil, -1, false)
+	getHandle := func(category string) string {
+		w := perform("GET", "/api/v1/media/catalog/media?"+url.Values{"media_type": {"music"}, "path": {category}, "playback_session_id": {"recording-crypto"}}.Encode(), nil, -1, false)
 		var result struct{ Entries []media.Track }
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || len(result.Entries) != 1 {
 			t.Fatal("source catalog", w.Code, w.Body.String())
 		}
 		return result.Entries[0].KaraokeID
 	}
-	source := getHandle()
+	source := getHandle("music/artist")
 	// Cross the AES chunk boundary and keep recognizable private text in memory.
 	var lyricLines []store.RecordingLyric
 	for i := range 600 {
@@ -309,6 +309,48 @@ func testRecordingEncryptedLyricsHTTP(t *testing.T, cache karaoke.Cache) {
 		t.Fatal("tampered preparation", w.Code)
 	}
 	ticketBody["preparation_token"] = goodToken
+	// A second visible audio source sharing the lyric keeps public lyric
+	// access valid, but must not revive a stale hidden source's Karaoke token.
+	peer, err := master.public.media.ReserveMasterUpload(ctx, "peer.mp3", "music/peer", "", "primary", 10, 255, store.AdminAudit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = master.public.media.UploadMasterBytes(ctx, peer.ID, strings.NewReader("ID3source!"), store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = master.public.media.ReplaceLyrics(ctx, "track", peer.Path, []string{lyricPath}, store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	peerSource := getHandle("music/peer")
+	if err = master.public.media.Hide(ctx, []string{"music/artist"}, true, store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	w = jsonRequest("/api/v1/media/crypto/key", gin.H{"session_id": grant.SessionID, "file_path": lyricPath}, -1, false)
+	if w.Code != 200 {
+		t.Fatal("shared visible lyric rejected", w.Code)
+	}
+	for _, target := range []string{base + "/crypto/prepare", base + "/ticket"} {
+		body := prepareBody
+		if strings.HasSuffix(target, "/ticket") {
+			body = ticketBody
+		}
+		w = jsonRequest(target, body, 0, true)
+		if w.Code != 404 {
+			t.Fatal("hidden original source authorized encrypted snapshot", target, w.Code)
+		}
+	}
+	w = jsonRequest(base+"/crypto/prepare", gin.H{"media": peerSource, "session_id": grant.SessionID, "plaintext_size": len(lyricsPlain)}, 0, true)
+	var peerPrep struct {
+		Encryption mediacrypto.Metadata    `json:"encryption"`
+		Envelope   mediacrypto.KeyEnvelope `json:"key_envelope"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &peerPrep) != nil {
+		t.Fatal("visible shared source could not prepare snapshot", w.Code)
+	}
+	unwrap(peerPrep.Encryption, peerPrep.Envelope)
+	if err = master.public.media.Hide(ctx, []string{"music/artist"}, false, store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
 	w = jsonRequest(base+"/ticket", ticketBody, 0, true)
 	var ticket recording.Ticket
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil {
@@ -354,6 +396,13 @@ func testRecordingEncryptedLyricsHTTP(t *testing.T, cache karaoke.Cache) {
 		if w.Code != v.code {
 			t.Fatal("unauthorized snapshot key", w.Code, w.Body.String())
 		}
+	}
+	if err = master.public.media.Hide(ctx, []string{"music/artist"}, true, store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	w = jsonRequest(keyPath, keyBody, 0, true)
+	if w.Code != 200 {
+		t.Fatal("historical owner snapshot depends on hidden source", w.Code)
 	}
 	if _, err = master.public.media.Delete(ctx, []string{lyricPath}, store.AdminAudit{}); err != nil {
 		t.Fatal(err)

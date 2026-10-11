@@ -17,25 +17,16 @@ func recordingLyricBinding(userID, browser, source, lyricFileID string) string {
 }
 
 func (p *Public) recordingLyricSource(c *gin.Context, source string) (store.RecordingMetadata, string, bool) {
-	metadata, err := p.media.KaraokeMetadata(c.Request.Context(), source)
-	if err != nil {
-		detail(c, 404, "Karaoke media not found")
-		return store.RecordingMetadata{}, "", false
-	}
-	if metadata.EncryptedLyricPath == "" {
-		detail(c, 409, "当前媒体没有加密歌词")
-		return store.RecordingMetadata{}, "", false
-	}
-	object, err := p.media.CryptoObject(c.Request.Context(), metadata.EncryptedLyricPath, "", false)
+	metadata, fileID, err := p.media.RecordingLyricSource(c.Request.Context(), source)
 	if err != nil {
 		cryptoError(c, err)
 		return store.RecordingMetadata{}, "", false
 	}
-	if object.Kind != "lyric" || object.Encryption == nil {
+	if fileID == "" {
 		detail(c, 409, "当前媒体没有加密歌词")
 		return store.RecordingMetadata{}, "", false
 	}
-	return metadata, object.Encryption.FileID, true
+	return metadata, fileID, true
 }
 
 func (p *Public) recordingCryptoPrepare(c *gin.Context, user *store.KaraokeUser) {

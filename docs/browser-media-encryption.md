@@ -14,6 +14,10 @@ failure. Master and storage receive ciphertext. Master-managed lyrics use the
 same format without moving lyric relations to storage nodes. Existing plaintext
 objects remain plaintext.
 
+The configured single-file upload limit applies to plaintext size in both
+modes. Encrypted transport allows the bounded GCM tag overhead above that
+limit; preparation and upload enforce the same descriptor and size rules.
+
 Version 1 uses AES-256-GCM with independent 1 MiB chunks and 128-bit tags. A file
 descriptor contains a random 128-bit `file_id`, random 64-bit `nonce_prefix`,
 plaintext size, ciphertext size, chunk size, version and algorithm. Chunk IVs
@@ -49,6 +53,12 @@ HttpOnly same-site browser cookie. Key endpoints require same-origin requests
 and HTTPS, with a loopback-only development exception. Public authorization
 rechecks current visibility and object ownership for each envelope. A public session
 cannot grant Admin access, grant hidden content, or transfer to another cookie.
+
+Public lyric key and ciphertext requests also require a current relation to at
+least one visible, available audio source. An orphan lyric or one referenced
+only by hidden sources is refused. A shared lyric remains accessible through
+a visible source; the hidden source itself still cannot authorize playback or
+a new recording snapshot. These checks run again for each request.
 
 The session has a fixed 15-minute lifetime. Multiple files, Range requests,
 seeks and continuous playback reuse its wrapping key; file requests do not
@@ -106,6 +116,11 @@ A renamed/deleted/replaced source fails closed; equal byte counts do not permit
 substitution. Local reads retain a mutation lease through the pinned descriptor
 stream. Direct/Relay grants still bind the immutable storage object ID. Pure
 plaintext attachments retain their existing download audit and delivery path.
+The 5000-file browser plan limit applies to encrypted or mixed selections.
+The server checks the complete selection in metadata batches before choosing
+the download path; all-plaintext selections retain the existing uncapped ZIP
+path, including directories larger than that browser limit. Invalid metadata
+or a later encrypted entry cannot trigger plaintext fallback.
 Plaintext is not cached by the worker. Renames preserve file
 identity and descriptors; delete/recovery journals and backup validation include
 the metadata. Admin trees and search results carry the same descriptor, so
@@ -128,6 +143,9 @@ the ticket, recording footer, SQL metadata and storage receipts contain only
 the descriptor and ciphertext. The preparation token is account-, browser-
 and source-bound and is never persisted in the footer or database. Plaintext
 lyric entries cannot replace a reserved encrypted snapshot.
+Preparation and ticket issuance recheck the original source's current
+visibility and its lyric relation, even when another visible source shares
+the same lyric.
 
 Snapshots are limited to 1400 KiB of plaintext JSON within the existing 2 MiB
 recording-metadata limit. Direct and Relay signed upload capabilities carry
