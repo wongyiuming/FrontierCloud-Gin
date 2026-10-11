@@ -201,6 +201,10 @@
       },
       "CertificateStatus": {
         "properties": {
+          "validation": {
+            "type": "string",
+            "enum": ["temporary_port80", "shared_http01"]
+          },
           "auto_renew": {
             "type": "boolean"
           },

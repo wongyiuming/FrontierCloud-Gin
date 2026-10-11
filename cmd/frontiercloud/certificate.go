@@ -22,6 +22,7 @@ func certificateAgentCommand(args []string) error {
 	socket := f.String("socket", "", "private Unix control socket")
 	ca := f.String("acme-directory", certificate.ProductionDirectory, "approved production or staging ACME directory")
 	email := f.String("email", "", "ACME contact email")
+	httpDirectory := f.String("http01-directory", "", "fixed existing public HTTP-01 challenge directory")
 	if f.Parse(args) != nil || f.NArg() != 0 {
 		return errors.New("invalid certificate agent options")
 	}
@@ -36,5 +37,10 @@ func certificateAgentCommand(args []string) error {
 		return e
 	}
 	defer agent.Close()
+	if *httpDirectory != "" {
+		if e = agent.UseHTTP01Directory(*httpDirectory); e != nil {
+			return e
+		}
+	}
 	return agent.Serve(*socket)
 }

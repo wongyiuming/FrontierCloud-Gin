@@ -319,6 +319,7 @@
             ['状态', labels[facts.state] || '待查询'],
             ['有效期至', localTime(facts.not_after)],
             ['自动续期', facts.auto_renew ? '已开启' : '未开启'],
+			['验证入口', facts.validation === 'shared_http01' ? '复用现有 HTTP 入口' : facts.validation === 'temporary_port80' ? '临时监听 80' : '待查询'],
             ['申请任务', `${jobs[job.state] || '未执行'}${job.code ? ` · ${codes[job.code] || '未知错误'}` : ''}`],
             ['临时 80 端口', job.code === 'agent_unavailable' ? '暂不可确认' : job.port80_active ? '验证中' : '已释放'],
         ]));

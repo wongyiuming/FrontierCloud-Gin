@@ -3,6 +3,7 @@ package certificate
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -30,8 +31,12 @@ type Job struct {
 	Port80Active bool   `json:"port80_active"`
 }
 type persisted struct {
-	AutoRenew bool `json:"auto_renew"`
-	Job       Job  `json:"job"`
+	AutoRenew bool         `json:"auto_renew"`
+	Job       Job          `json:"job"`
+	HTTP01    *http01Lease `json:"http01,omitempty"`
+}
+type http01Lease struct {
+	Token, Proof, Directory string
 }
 type Issuer func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error)
 type Agent struct {
@@ -43,6 +48,7 @@ type Agent struct {
 	wg                       sync.WaitGroup
 	cancel                   context.CancelFunc
 	release                  func()
+	httpRoot                 *os.Root
 }
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
@@ -102,7 +108,49 @@ func Open(ctx context.Context, host, directory, address string, issue Issuer) (*
 }
 
 // Close cancels issuance, releases any challenge listener, then the host lease.
-func (a *Agent) Close() { a.mu.Lock(); a.cancel(); a.mu.Unlock(); a.wg.Wait(); a.release() }
+func (a *Agent) Close() {
+	a.mu.Lock()
+	a.cancel()
+	a.mu.Unlock()
+	a.wg.Wait()
+	if a.httpRoot != nil {
+		_ = a.httpRoot.Close()
+	}
+	a.release()
+}
+
+// The operator delegates only the existing server's public HTTP-01 directory.
+// It is immutable after configuration; network callers never select a host path.
+func (a *Agent) UseHTTP01Directory(directory string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !filepath.IsAbs(directory) || len(directory) > 2048 || a.ctx.Err() != nil || a.httpRoot != nil || a.state.Job.State == "running" {
+		return errors.New("invalid shared HTTP-01 directory")
+	}
+	root, e := os.OpenRoot(directory)
+	if e != nil {
+		return e
+	}
+	a.httpRoot = root
+	// Interrupted jobs only reclaim a token whose public bytes still match the
+	// private ownership journal. Never sweep the directory or another issuer.
+	if lease := a.state.HTTP01; lease != nil && lease.Directory == directory && tokenPattern.MatchString(lease.Token) {
+		f, err := root.Open(lease.Token)
+		if err == nil {
+			b, err := io.ReadAll(io.LimitReader(f, 513))
+			_ = f.Close()
+			h := sha256.Sum256(b)
+			if err == nil && len(b) > 0 && len(b) <= 512 && hex.EncodeToString(h[:]) == lease.Proof {
+				_ = root.Remove(lease.Token)
+			}
+		}
+		a.state.HTTP01 = nil
+		if err = a.save(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func atomicFile(path string, b []byte, mode os.FileMode) error {
 	r := make([]byte, 16)
 	if _, e := rand.Read(r); e != nil {
@@ -149,6 +197,10 @@ func (a *Agent) Status() View {
 			v.AutoRenew = a.state.AutoRenew
 			v.Job = a.state.Job
 		}
+	}
+	v.Validation = "temporary_port80"
+	if a.httpRoot != nil {
+		v.Validation = "shared_http01"
 	}
 	return v
 }
@@ -245,6 +297,9 @@ func (a *Agent) present(ctx context.Context, token, response string) (func(), er
 	if !tokenPattern.MatchString(token) || len(response) > 512 {
 		return nil, errors.New("invalid HTTP-01 challenge")
 	}
+	if a.httpRoot != nil {
+		return a.presentFile(ctx, token, response)
+	}
 	listener, e := net.Listen("tcp", a.address)
 	if e != nil {
 		if errors.Is(e, syscall.EADDRINUSE) {
@@ -280,6 +335,72 @@ func (a *Agent) present(ctx context.Context, token, response string) (func(), er
 			a.state.Job.Port80Active = false
 			a.mu.Unlock()
 		})
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			closeFn()
+		case <-done:
+		}
+	}()
+	return closeFn, nil
+}
+
+func (a *Agent) presentFile(ctx context.Context, token, response string) (func(), error) {
+	h := sha256.Sum256([]byte(response))
+	a.mu.Lock()
+	a.state.HTTP01 = &http01Lease{Token: token, Proof: hex.EncodeToString(h[:]), Directory: a.httpRoot.Name()}
+	e := a.save()
+	a.mu.Unlock()
+	if e != nil {
+		return nil, e
+	}
+	// O_EXCL never follows/replaces an existing token or another issuer's file.
+	f, e := a.httpRoot.OpenFile(token, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if e != nil {
+		a.mu.Lock()
+		a.state.HTTP01 = nil
+		_ = a.save()
+		a.mu.Unlock()
+		return nil, e
+	}
+	info, e := f.Stat()
+	if e == nil {
+		e = f.Chmod(0644) // Public proof must remain readable under service UMask=0077.
+	}
+	if e == nil {
+		_, e = io.WriteString(f, response)
+	}
+	if e == nil {
+		e = f.Sync()
+	}
+	closeErr := f.Close()
+	var once sync.Once
+	done := make(chan struct{})
+	closeFn := func() {
+		once.Do(func() {
+			// A replaced token belongs to somebody else; leave it untouched.
+			current, err := a.httpRoot.Lstat(token)
+			if err == nil && info != nil && os.SameFile(info, current) {
+				f, err := a.httpRoot.Open(token)
+				if err == nil {
+					b, err := io.ReadAll(io.LimitReader(f, 513))
+					_ = f.Close()
+					if err == nil && len(b) <= 512 && sha256.Sum256(b) == h {
+						_ = a.httpRoot.Remove(token)
+					}
+				}
+			}
+			a.mu.Lock()
+			a.state.HTTP01 = nil
+			_ = a.save()
+			a.mu.Unlock()
+			close(done)
+		})
+	}
+	if e != nil || closeErr != nil || ctx.Err() != nil {
+		closeFn()
+		return nil, errors.New("shared HTTP-01 publication failed")
 	}
 	go func() {
 		select {

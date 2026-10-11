@@ -86,7 +86,8 @@ Fresh storage deployments use `.env.storage.example` and `docker-compose.storage
 Master node management can inspect storage certificates and control renewal
 after the optional [host certificate service](docs/storage-certificate-control.md)
 is provisioned. It opens port 80 only for HTTP-01 validation and releases it
-afterwards. Storage STUN uses UDP 3478 by default; browser probes visit all
+afterwards, or reuses an existing HTTP-01 entrypoint on a shared host.
+Storage STUN uses UDP 3478 by default; browser probes visit all
 paired storage nodes serially.
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).

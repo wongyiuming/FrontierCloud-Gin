@@ -12,8 +12,10 @@ import (
 	"encoding/pem"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -25,8 +27,27 @@ import (
 // The real ACME SDK exchanges signed v2 requests with this bounded fixture CA.
 // The production factory still accepts only approved HTTPS directory URLs.
 func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
+	for _, shared := range []bool{false, true} {
+		t.Run(strconv.FormatBool(shared), func(t *testing.T) { testACMEV2Order(t, shared) })
+	}
+}
+
+func testACMEV2Order(t *testing.T, shared bool) {
 	host := "storage.fixture.test"
 	address := port(t)
+	directory := t.TempDir()
+	if shared {
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/.well-known/acme-challenge/", http.StripPrefix("/.well-known/acme-challenge/", http.FileServer(http.Dir(directory))))
+		mux.HandleFunc("/existing-business", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("healthy")) })
+		business := &http.Server{Handler: mux}
+		go func() { _ = business.Serve(listener) }()
+		t.Cleanup(func() { _ = business.Close() })
+	}
 	var validated atomic.Bool
 	var finalized atomic.Bool
 	var nonces atomic.Int32
@@ -155,6 +176,11 @@ func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
 	a := openTest(t, address, func(ctx context.Context, present func(string, string) (func(), error)) ([]byte, []byte, error) {
 		return issueOrder(ctx, client, host, "", present)
 	})
+	if shared {
+		if e = a.UseHTTP01Directory(directory); e != nil {
+			t.Fatal(e)
+		}
+	}
 	if _, e = a.Start(); e != nil {
 		t.Fatal(e)
 	}
@@ -177,5 +203,16 @@ func TestACMEV2OrderRealHTTPChallengeCSRAndCertificate(t *testing.T) {
 	}
 	if e = a.publish(cert, key); e != nil || a.Status().Job.Port80Active {
 		t.Fatal("renewed ACME pair unavailable or challenge port retained", e)
+	}
+	if shared {
+		files, e := os.ReadDir(directory)
+		if e != nil || len(files) != 0 || a.Status().Validation != "shared_http01" {
+			t.Fatal("shared HTTP-01 token not reclaimed", files, e)
+		}
+		response, e := http.Get("http://" + address + "/existing-business")
+		if e != nil || response.StatusCode != 200 {
+			t.Fatal("existing HTTP business interrupted", e)
+		}
+		response.Body.Close()
 	}
 }

@@ -30,6 +30,7 @@ type View struct {
 	State       string `json:"state"`
 	Managed     bool   `json:"managed"`
 	AutoRenew   bool   `json:"auto_renew"`
+	Validation  string `json:"validation,omitempty"`
 	Job         Job    `json:"job"`
 }
 type TLS struct {

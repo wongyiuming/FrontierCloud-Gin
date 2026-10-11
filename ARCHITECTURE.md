@@ -289,7 +289,8 @@ page. No fan-out, overlapping timers, four-node truncation or parallel probe
 workers. Reports retain the existing maximum eight observed addresses.
 
 An optional host-native certificate control service is the sole temporary port
-80 exception. It is not a storage business service. It has a fixed local
+80 exception, or reuses a locally delegated existing HTTP-01 public directory
+without opening another listener. It is not a storage business service. It has a fixed local
 hostname/approved ACME CA, a private Unix socket, no Docker socket, arbitrary
 commands or remote paths, and a five-percent CPU/128 MiB systemd boundary.
 The active upstream Master can request status/renewal/automatic-renewal policy

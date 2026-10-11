@@ -87,6 +87,7 @@ func (s *Service) ReceiveCertificate(ctx context.Context, r store.Relationship, 
 	// Show the actually served certificate, with the agent's durable renewal state.
 	v.Managed = true
 	v.AutoRenew = result.AutoRenew
+	v.Validation = result.Validation
 	v.Job = result.Job
 	return v, nil
 }

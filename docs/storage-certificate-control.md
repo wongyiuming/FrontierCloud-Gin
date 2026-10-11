@@ -31,8 +31,8 @@ Bridge-mode Docker cannot free a permanently published port 80 by merely
 closing an in-container listener. Therefore this optional control service runs
 the same static native binary directly on the host. The business container
 retains one Go process and receives read-only TLS/control-directory mounts.
-No Docker API, shell execution, privileged container or permanent HTTP proxy
-is needed. Initial pairing still requires an existing, valid trusted certificate.
+No Docker API, shell execution, privileged container or additional permanent
+HTTP proxy is needed. Initial pairing still requires an existing, valid trusted certificate.
 
 1. Install the **same reviewed exact-release** `/app/frontiercloud` binary as
    `/usr/local/libexec/frontiercloud` on the storage host. Copy it from the
@@ -86,6 +86,35 @@ Custom `STORAGE_CERTIFICATE_STATE`/`STORAGE_CERTIFICATE_RUNTIME` host paths
 require a matching operator-reviewed systemd unit. Do not give Web write access
 to TLS state. Compose publishes HTTPS and UDP STUN, never TCP 80/443 for storage.
 
+## Shared host HTTP-01 delegation
+
+When another business already owns 80, use its existing HTTP-01 route. No
+additional listener or storage port publication is introduced. Provision
+`/opt/frontiercloud-http01/.well-known/acme-challenge` as a public-proof-only
+directory, owned by root/group 10001, mode 2775. Configure the existing web
+server's **fixed storage hostname** to serve this directory only at
+`/.well-known/acme-challenge/`. Keep private TLS/account state elsewhere.
+If reusing an existing webroot at another location, adapt both literal paths
+in the operator-owned drop-in; do not change other domains' certificate routes.
+
+Install `scripts/ops/frontiercloud-certificate-webroot.conf` as
+`/etc/systemd/system/frontiercloud-certificate.service.d/webroot.conf`, then
+reload/restart the agent. It adds one fixed writable public directory and
+`--http01-directory`; network requests cannot select or change that path.
+First verify a harmless sentinel through the public hostname's HTTP-01 route
+and remove it, then query Master Nodes: validation must be `shared_http01`.
+Renewal/policy control works through the same authenticated Master API.
+
+Only one exact CA token is published, at most 512 bytes, mode 0644 even under
+the private service umask. Existing tokens/symlinks are never replaced. Success,
+failure and cancellation remove only the owned proof. Restart reclaims a
+proof only when its bytes match the private ownership journal; replaced or
+unknown files are preserved. An empty file from a crash between creation and
+write is preserved conservatively for local inspection. The existing server,
+other domains and other issuers are never stopped, scanned or pruned.
+Nodes shows the validation method and whether this agent owns a temporary
+listener. A shared host's business may continue listening on 80 throughout.
+
 ## Issuance and failure behavior
 
 Native ACME v2 uses ECDSA P-256 and certificate-verified HTTPS to the approved
@@ -107,11 +136,12 @@ agent's ownership; no implicit import of externally managed private keys occurs.
 
 Failure codes include `port80_busy`, `issuance_failed`, `publication_failed`,
 `timeout_or_shutdown`, `interrupted`, `journal_io` and `agent_unavailable`.
-An occupied port is never taken from another application. If a shared host must
-keep 80 continuously, use its existing certificate manager and status-only mode,
-or introduce a separately reviewed DNS-01 provider/delegation integration;
-DNS credentials are not accepted by this API. Firewall/DNS must permit public
-HTTP-01 validation during the operation, though nothing listens on 80 at rest.
+An occupied port is never taken from another application. Shared hosts can
+delegate their existing HTTP-01 entrypoint as above; otherwise the explicit
+conflict retains the old certificate. DNS-01 would require a separately reviewed
+provider integration; DNS credentials are not accepted by this API.
+Firewall/DNS must permit public HTTP-01 validation. The temporary-listener
+mode owns no listener at rest; shared mode never owns one.
 Expired certificates cannot be renewed through an untrusted/expired node HTTPS
 connection: recover the certificate locally, retaining TLS verification.
 

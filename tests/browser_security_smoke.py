@@ -104,7 +104,7 @@ def main():
         # Native signed ownership and the real Unix/TLS lifecycle have separate tests.
         operations = []
         facts = {'hostname': 'storage.fixture.test', 'state': 'renewal_due',
-                 'not_after': 1900000000, 'managed': True, 'auto_renew': False,
+                 'not_after': 1900000000, 'managed': True, 'auto_renew': False, 'validation': 'shared_http01',
                  'job': {'state': 'idle', 'port80_active': False}}
         member = {'member_id': 'storage-fixture', 'member_kind': 'Follower', 'transport': 'Direct',
                   'storage_enabled': True, 'allocated_bytes': 1073741824}
@@ -139,6 +139,7 @@ def main():
         page.locator('#nodesPanel .module-heading').click()
         panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
         panel.get_by_role('button', name='查询证书', exact=True).click()
+        panel.get_by_text('复用现有 HTTP 入口', exact=True).wait_for(state='visible')
         panel.get_by_role('button', name='申请 / 续期', exact=True).click()
         panel.get_by_text('80 端口被占用', exact=False).wait_for(state='visible')
         panel.get_by_role('button', name='开启自动续期', exact=True).click()

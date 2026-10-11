@@ -5,9 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"io"
@@ -17,10 +20,112 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestSharedHTTP01CancellationCollisionAndReplacement(t *testing.T) {
+	a := openTest(t, port(t), func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error) {
+		return nil, nil, errors.New("not requested")
+	})
+	directory := t.TempDir()
+	if e := a.UseHTTP01Directory(directory); e != nil {
+		t.Fatal(e)
+	}
+	// An existing business keeps ownership of the would-be temporary address.
+	listener, e := net.Listen("tcp", a.address)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer listener.Close()
+	other := filepath.Join(directory, "existing_token")
+	if e = os.WriteFile(other, []byte("another issuer"), 0644); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.present(context.Background(), "existing_token", "ours"); e == nil {
+		t.Fatal("overwrote another issuer")
+	}
+	outside := filepath.Join(t.TempDir(), "private")
+	os.WriteFile(outside, []byte("private"), 0600)
+	if e = os.Symlink(outside, filepath.Join(directory, "symlink_token")); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.present(context.Background(), "symlink_token", "ours"); e == nil {
+		t.Fatal("followed a token symlink")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	closeFn, e := a.present(ctx, "owned_token", "public proof")
+	if e != nil {
+		t.Fatal(e)
+	}
+	info, e := os.Stat(filepath.Join(directory, "owned_token"))
+	if e != nil || info.Mode().Perm() != 0644 || a.Status().Job.Port80Active {
+		t.Fatal("shared proof not public or bound a listener", e)
+	}
+	cancel()
+	deadline := time.Now().Add(time.Second)
+	for {
+		_, e = os.Stat(filepath.Join(directory, "owned_token"))
+		if errors.Is(e, os.ErrNotExist) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cancel retained own token")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	closeFn()
+	closeFn, e = a.present(context.Background(), "replacement_token", "ours")
+	if e != nil {
+		t.Fatal(e)
+	}
+	os.Remove(filepath.Join(directory, "replacement_token"))
+	os.WriteFile(filepath.Join(directory, "replacement_token"), []byte("replacement issuer"), 0644)
+	closeFn()
+	for path, want := range map[string]string{other: "another issuer", outside: "private", filepath.Join(directory, "replacement_token"): "replacement issuer"} {
+		b, e := os.ReadFile(path)
+		if e != nil || string(b) != want {
+			t.Fatal("changed unrelated proof/file", path, e)
+		}
+	}
+}
+
+func TestSharedHTTP01RestartReclaimsOnlyMatchingJournalProof(t *testing.T) {
+	for _, matching := range []bool{false, true} {
+		t.Run(strconv.FormatBool(matching), func(t *testing.T) {
+			directory, state := t.TempDir(), t.TempDir()
+			os.Chmod(state, 0700)
+			proof := "owned public proof"
+			h := sha256.Sum256([]byte(proof))
+			journal := persisted{Job: Job{State: "running", StartedAt: time.Now().Unix()}, HTTP01: &http01Lease{Token: "interrupted_token", Proof: hex.EncodeToString(h[:]), Directory: directory}}
+			b, _ := json.Marshal(journal)
+			os.WriteFile(filepath.Join(state, "state.json"), b, 0600)
+			if !matching {
+				proof = "another issuer"
+			}
+			os.WriteFile(filepath.Join(directory, "interrupted_token"), []byte(proof), 0644)
+			a, e := Open(context.Background(), "storage.fixture.test", state, port(t), func(context.Context, func(string, string) (func(), error)) ([]byte, []byte, error) {
+				return nil, nil, errors.New("not requested")
+			})
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer a.Close()
+			if e = a.UseHTTP01Directory(directory); e != nil {
+				t.Fatal(e)
+			}
+			b, e = os.ReadFile(filepath.Join(directory, "interrupted_token"))
+			if matching && !errors.Is(e, os.ErrNotExist) || !matching && (e != nil || string(b) != proof) {
+				t.Fatal("unsafe interrupted proof cleanup", e)
+			}
+			if a.Status().Job.Code != "interrupted" || a.state.HTTP01 != nil {
+				t.Fatal("interrupted journal not retired")
+			}
+		})
+	}
+}
 
 func testPair(t *testing.T, host string, days int) ([]byte, []byte) {
 	t.Helper()

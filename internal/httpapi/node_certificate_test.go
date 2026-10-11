@@ -53,7 +53,7 @@ func TestStorageCertificateHTTPUsesSignedOwnerAndStrictBody(t *testing.T) {
 	if e != nil || result["fingerprint"] != "public-fingerprint" || agent.calls != 1 {
 		t.Fatal(result, e, agent.calls)
 	}
-	for _, value := range []map[string]any{{"action": "renew", "hostname": "other.fixture.test"}, {"action": "renew", "command": "stop-business"}, {"action": "reset"}} {
+	for _, value := range []map[string]any{{"action": "renew", "hostname": "other.fixture.test"}, {"action": "renew", "http01_directory": "/private"}, {"action": "renew", "command": "stop-business"}, {"action": "reset"}} {
 		if _, e = master.Call(ctx, r, "/internal/v1/certificate", value); e == nil {
 			t.Fatal("unsafe certificate operation admitted", value)
 		}

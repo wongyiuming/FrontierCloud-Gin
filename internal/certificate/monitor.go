@@ -22,6 +22,7 @@ func (m *Monitor) Status() View {
 	defer m.mu.Unlock()
 	v.Managed = m.client != nil && m.observed.Managed
 	v.AutoRenew = m.observed.AutoRenew
+	v.Validation = m.observed.Validation
 	v.Job = m.observed.Job
 	return v
 }
