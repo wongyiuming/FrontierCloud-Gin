@@ -38,9 +38,22 @@ is needed. Initial pairing still requires an existing, valid trusted certificate
    `/usr/local/libexec/frontiercloud` on the storage host. Copy it from the
    verified Web image using operator tools; never build on production. Make
    the installed file root-owned and executable, mode 0755.
-2. Create `/opt/frontiercloud-storage/certificate-state`, owned by UID/GID
-   10001, mode 0700. Do not put this state on a shared/NFS volume. Preserve this
-   private directory in node recovery backups; it includes the ACME account.
+2. Provision the dedicated host account before starting systemd; a numeric
+   container UID alone is not a registered host user. Install
+   `scripts/ops/frontiercloud-certificate.sysusers` in `/etc/sysusers.d/`, then:
+
+   ```bash
+   systemd-sysusers /etc/sysusers.d/frontiercloud-certificate.sysusers
+   test "$(id -u frontiercloud-certificate)" = 10001
+   test "$(id -g frontiercloud-certificate)" = 10001
+   ```
+
+   If UID/GID 10001 belongs to an unrelated host account, stop installation;
+   do not reassign or delete that account. The registered identity and the
+   container's UID/GID must match before any private state is provisioned.
+   Create `/opt/frontiercloud-storage/certificate-state`, owned by that
+   UID/GID, mode 0700. Do not put this state on a shared/NFS volume. Preserve
+   this private directory in node recovery backups; it includes the ACME account.
 3. Create root-owned `/etc/frontiercloud-certificate.env`, mode 0600:
 
    ```dotenv
