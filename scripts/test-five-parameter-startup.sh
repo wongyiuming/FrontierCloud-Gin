@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Real parser + fresh TLS startup; isolated development host only, one CPU.
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
 work=$(mktemp -d /tmp/fc-five-parameter-XXXXXXXX)
@@ -20,15 +20,15 @@ cleanup() {
   if [[ "$work" == /tmp/fc-five-parameter-* && ! -L "$work" ]]; then rm -r -- "$work"; fi
 }
 trap cleanup EXIT
-trap 'compose stop web >/dev/null 2>&1 || true; compose logs --no-color --tail 12 web nginx updater >&2 || true' ERR
+trap 'compose stop web >/dev/null 2>&1 || true; compose logs --no-color --tail 12 secrets-init media-init web nginx updater >&2 || true' ERR
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir "$work/acme"
-openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
-  -addext subjectAltName=DNS:localhost -keyout "$work/key.pem" -out "$work/cert.pem" >/dev/null 2>&1
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=fc-startup.test \
+  -addext subjectAltName=DNS:fc-startup.test -keyout "$work/key.pem" -out "$work/cert.pem" >/dev/null 2>&1
 cat > "$work/five.env" <<EOF
 TLS_ENABLED=true
-SERVER_NAME=localhost
+SERVER_NAME=fc-startup.test
 SSL_CERT_PATH=$work/cert.pem
 SSL_KEY_PATH=$work/key.pem
 ACME_WEBROOT=$work/acme
@@ -106,14 +106,14 @@ cid=$(compose ps -q web)
 test "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$cid")" = 1000000000
 address=$(compose port nginx 443)
 port=${address##*:}
-curl --fail --silent --show-error --cacert "$work/cert.pem" "https://localhost:$port/health/ready" >/dev/null
-curl --fail --silent --show-error --cacert "$work/cert.pem" "https://localhost:$port/" | grep -q '前沿娱乐'
+curl --fail --silent --show-error --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" "https://fc-startup.test:$port/health/ready" >/dev/null
+curl --fail --silent --show-error --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" "https://fc-startup.test:$port/" | grep -q '前沿娱乐'
 compose exec -T web sh -c 'test "$(id -u)" = 10001; test -s /run/frontiercloud-secrets/admin_key; ! command -v python; ! command -v go'
 test -d "$work/data/media"
 test -f "$work/data/frontiercloud.db"
 receipt=$(sha256sum "$work/data/.native-runtime" | cut -d' ' -f1)
 compose restart web
-curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 --cacert "$work/cert.pem" "https://localhost:$port/health/ready" >/dev/null
+curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 --noproxy "*" --resolve "fc-startup.test:$port:127.0.0.1" --cacert "$work/cert.pem" "https://fc-startup.test:$port/health/ready" >/dev/null
 test "$(sha256sum "$work/data/.native-runtime" | cut -d' ' -f1)" = "$receipt"
 python3 scripts/check_cpu_quiescence.py "$cid" --timeout 30
 printf '%s\n' 'PASS: fresh five-value HTTPS, initialized SQLite/media/secrets, persistent restart, one CPU; fixture latest aliases, not remote publication'
