@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StorageDeploymentContract(unittest.TestCase):
+    def test_built_and_published_web_images_declare_the_same_tls_topology(self):
+        # The updater uses this capability to fence incompatible Compose stacks.
+        for name in ("Dockerfile.gin", "ci/Dockerfile.web", "nginx/Dockerfile"):
+            with self.subTest(dockerfile=name):
+                source = (ROOT / name).read_text(encoding="utf-8")
+                self.assertIn('frontiercloud.automatic-tls="1"', source)
+
     def test_certificate_services_are_compose_only_with_persistent_socket_volume(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         for value in ("certificate-init:", "certificate-agent:", "command: [init-certificate]",
