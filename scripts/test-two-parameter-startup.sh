@@ -39,6 +39,7 @@ for mode in ('http','tls','empty','pinned'):
     assert web['DB_TYPE']=='sqlite' and web['SQLITE_PATH']=='/app/data/frontiercloud.db'
     assert web['RELEASE_BRANCH']=='main' and web['RELEASE_SOURCE_BRANCH']=='dev'
     assert web['TLS_ENABLED']==('false' if mode=='http' else 'true')
+    assert services['nginx']['healthcheck']['test']==['CMD','/usr/local/bin/frontiercloud-tls-edge','ready']
     assert {(p['target'],p['published']) for p in services['nginx']['ports']}=={(80,'80'),(443,'443')}
     assert all(p['published']=='3478' for p in services['stun']['ports'])
     assert any(v.get('source')==str(root/'data') and v['target']=='/app/data' for v in services['web']['volumes'])

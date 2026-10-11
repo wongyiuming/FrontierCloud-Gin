@@ -7,6 +7,10 @@ uses `STORAGE_TRANSPORT=relay`, `STORAGE_PORT=8443` and an HTTPS endpoint on 844
 No installation requires a prepared certificate, Certbot or host service.
 Public HTTP-01 needs reachable TCP 80; Direct HTTPS uses TCP 443. Relay releases
 80 after each bounded challenge and never opens 443.
+Business `compose --wait` includes a trusted local Nginx TLS handshake and
+managed-fingerprint check; a running HTTP bootstrap cannot count as ready.
+The controller waits for its private Challenge route before contacting the CA,
+without treating that check as proof of public reachability.
 
 ## Existing deployment boundary
 

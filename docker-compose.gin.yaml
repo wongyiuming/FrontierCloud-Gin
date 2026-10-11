@@ -216,6 +216,13 @@ services:
     depends_on:
       web: {condition: service_healthy}
       certificate-agent: {condition: service_started}
+    healthcheck:
+      test: [CMD, /usr/local/bin/frontiercloud-tls-edge, ready]
+      interval: 30s
+      start_interval: 2s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     stop_grace_period: 30s
     logging: *service-logging
 

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certedge"
 )
@@ -22,7 +23,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) != 2 {
-		return errors.New("TLS edge accepts initialize, watch or security only")
+		return errors.New("TLS edge accepts initialize, watch, ready or security only")
 	}
 	enabled, err := strconv.ParseBool(value("TLS_ENABLED", "false"))
 	if err != nil {
@@ -43,6 +44,10 @@ func run() error {
 	}
 	edge := certedge.New(strings.ToLower(strings.TrimSpace(value("SERVER_NAME", "localhost"))), enabled, os.Getenv("PUBLIC_BIND_ADDRESS") == "::", execute)
 	switch os.Args[1] {
+	case "ready":
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return edge.Ready(ctx)
 	case "initialize":
 		return edge.Initialize()
 	case "security":

@@ -5,11 +5,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,7 +37,7 @@ func edgeFixture(t *testing.T) *Edge {
 	}
 	return e
 }
-func publishFixture(t *testing.T, e *Edge, generation, domain string, expires time.Time) {
+func publishFixture(t *testing.T, e *Edge, generation, domain string, expires time.Time) *x509.Certificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -72,6 +75,35 @@ func publishFixture(t *testing.T, e *Edge, generation, domain string, expires ti
 	pointer, _ := json.Marshal(map[string]string{"generation": generation})
 	if err = os.WriteFile(filepath.Join(e.published, "current.json"), pointer, 0640); err != nil {
 		t.Fatal(err)
+	}
+	return root
+}
+
+func TestReadinessRejectsBootstrapAndStaleServingGeneration(t *testing.T) {
+	e := edgeFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if e.readyAt(ctx, "127.0.0.1:1") == nil {
+		t.Fatal("certificate bootstrap reported TLS ready")
+	}
+	first := strings.Repeat("a", 32)
+	oldRoot := publishFixture(t, e, first, e.Host, time.Now().Add(time.Hour))
+	pair, err := tls.LoadX509KeyPair(filepath.Join(e.published, first, "fullchain.pem"), filepath.Join(e.published, first, "privkey.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12}
+	server.StartTLS()
+	defer server.Close()
+	address := server.Listener.Addr().String()
+	if err = e.readyAt(ctx, address); err != nil {
+		t.Fatal("actual trusted managed TLS rejected", err)
+	}
+	publishFixture(t, e, strings.Repeat("b", 32), e.Host, time.Now().Add(time.Hour))
+	e.roots.AddCert(oldRoot)
+	if e.readyAt(ctx, address) == nil {
+		t.Fatal("trusted but stale TLS fingerprint reported healthy")
 	}
 }
 func TestBootstrapHasNoBusinessAndSwitchIsVerifiedAndRollbackSafe(t *testing.T) {

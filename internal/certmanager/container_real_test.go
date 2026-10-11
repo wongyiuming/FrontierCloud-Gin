@@ -62,8 +62,12 @@ func TestAutomaticTLSContainerLifecycle(t *testing.T) {
 		t.Fatal("container fixture synchronization timed out", name)
 	}
 	marker("ca-ready")
-	waitMarker("serving-started")
+	// The controller starts before consumers, as in the actual fresh Compose
+	// graph. Business issuance must wait for its private HTTP-01 edge route.
 	opt := options{host: host, enabled: true, profile: profile, private: PrivateDirectory, published: PublishedDirectory, runtime: RuntimeDirectory, challenge: ":80", serving: serving, ca: ca.server.URL + "/directory", roots: ca.roots}
+	if profile == Business {
+		opt.ingress = "http://nginx/.well-known/acme-challenge/frontiercloud-readiness"
+	}
 	opt.issuer = func(cfg *certmagic.Config) *certmagic.ACMEIssuer {
 		return certmagic.NewACMEIssuer(cfg, certmagic.ACMEIssuer{CA: opt.ca, Agreed: true, DisableTLSALPNChallenge: true, ListenHost: "", AltHTTPPort: 80, CertObtainTimeout: 30 * time.Second, Logger: zap.NewNop()})
 	}

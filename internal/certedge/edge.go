@@ -4,6 +4,7 @@ package certedge
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,6 +37,53 @@ type Edge struct {
 
 func New(host string, enabled, ipv6 bool, execute func(context.Context, ...string) error) *Edge {
 	return &Edge{Host: host, Enabled: enabled, IPv6: ipv6, Execute: execute, config: "/etc/nginx/nginx.conf", runtime: Runtime, published: Directory}
+}
+
+// Ready checks the actual local listener, independently of controller liveness.
+// Compose can keep the restricted bootstrap running without reporting TLS ready.
+func (e *Edge) Ready(ctx context.Context) error {
+	port := "80"
+	if e.Enabled {
+		port = "443"
+	}
+	return e.readyAt(ctx, net.JoinHostPort("127.0.0.1", port))
+}
+func (e *Edge) readyAt(ctx context.Context, address string) error {
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	if !e.Enabled {
+		connection, err := dialer.DialContext(ctx, "tcp", address)
+		if err == nil {
+			connection.Close()
+		}
+		return err
+	}
+	generation, err := e.generation()
+	if err != nil {
+		return err
+	}
+	cert, err := read(filepath.Join(e.published, generation, "fullchain.pem"), 65536)
+	if err != nil {
+		return err
+	}
+	key, err := read(filepath.Join(e.published, generation, "privkey.pem"), 16384)
+	if err != nil {
+		return err
+	}
+	defer clear(key)
+	pair, err := tls.X509KeyPair(cert, key)
+	if err != nil || len(pair.Certificate) == 0 {
+		return errors.New("managed TLS pair unavailable")
+	}
+	connection, err := (&tls.Dialer{NetDialer: dialer, Config: &tls.Config{ServerName: e.Host, RootCAs: e.roots, MinVersion: tls.VersionTLS12}}).DialContext(ctx, "tcp", address)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	served := connection.(*tls.Conn).ConnectionState().PeerCertificates
+	if len(served) == 0 || sha256.Sum256(served[0].Raw) != sha256.Sum256(pair.Certificate[0]) {
+		return errors.New("Nginx is not serving the managed TLS generation")
+	}
+	return nil
 }
 
 var id = regexp.MustCompile(`^[a-f0-9]{32}$`)

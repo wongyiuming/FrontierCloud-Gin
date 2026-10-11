@@ -51,6 +51,7 @@ type options struct {
 	roots                                               *x509.CertPool
 	lookup                                              func(context.Context, string) ([]net.IPAddr, error)
 	issuer                                              func(*certmagic.Config) *certmagic.ACMEIssuer
+	ingress                                             string
 }
 type journal struct {
 	Host        string `json:"host"`
@@ -90,7 +91,11 @@ func New(ctx context.Context, host string, enabled bool, profile Profile, relayP
 	if profile == Relay {
 		serving = net.JoinHostPort("localhost", strconv.Itoa(relayPort))
 	}
-	return open(ctx, options{host: host, enabled: enabled, profile: profile, private: PrivateDirectory, published: PublishedDirectory, runtime: RuntimeDirectory, challenge: ":80", serving: serving, ca: certmagic.LetsEncryptProductionCA, lookup: net.DefaultResolver.LookupIPAddr})
+	opt := options{host: host, enabled: enabled, profile: profile, private: PrivateDirectory, published: PublishedDirectory, runtime: RuntimeDirectory, challenge: ":80", serving: serving, ca: certmagic.LetsEncryptProductionCA, lookup: net.DefaultResolver.LookupIPAddr}
+	if profile == Business {
+		opt.ingress = "http://nginx/.well-known/acme-challenge/frontiercloud-readiness"
+	}
+	return open(ctx, opt)
 }
 
 func open(parent context.Context, opt options) (*Manager, error) {
@@ -240,6 +245,12 @@ func (b *boundedIssuer) Issue(parent context.Context, csr *x509.CertificateReque
 		}
 		defer m.endChallenge()
 	}
+	if m.opt.ingress != "" {
+		if err := awaitIngress(ctx, m.opt.ingress, m.opt.host); err != nil {
+			m.failed("http01_ingress", false)
+			return nil, err
+		}
+	}
 	m.mu.Lock()
 	renewal := m.view.Fingerprint != ""
 	m.journal.State = Issuing
@@ -302,6 +313,7 @@ func (m *Manager) beginChallenge() error {
 			m.updateView()
 		}
 		m.mu.Unlock()
+		w.Header().Set("X-FrontierCloud-ACME", "ready")
 		handler.ServeHTTP(w, r)
 	})}
 	m.challenge = server
