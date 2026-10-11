@@ -45,7 +45,7 @@ services:
       - certificate_state:/var/lib/frontiercloud-certificate
       - certificate_runtime:/run/frontiercloud-certificate
       - certificate_http01:/run/frontiercloud-http01
-    tmpfs: [/tmp:size=16m,mode=1777]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
     stop_grace_period: 10s
     healthcheck:
       test: [CMD, /app/frontiercloud, certificate-healthcheck]

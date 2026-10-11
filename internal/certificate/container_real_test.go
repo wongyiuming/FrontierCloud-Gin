@@ -90,7 +90,11 @@ func TestCertificateContainerTemporaryPort80(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			entered, proceed := make(chan struct{}), make(chan struct{})
 			cert, key := testPair(t, "storage.fixture.test", 90)
-			a, e := OpenContainer(context.Background(), "storage.fixture.test", t.TempDir(), ":80", func(ctx context.Context, present func(string, string) (func(), error)) ([]byte, []byte, error) {
+			state := t.TempDir()
+			if e := os.Chmod(state, 0750); e != nil {
+				t.Fatal(e)
+			}
+			a, e := OpenContainer(context.Background(), "storage.fixture.test", state, ":80", func(ctx context.Context, present func(string, string) (func(), error)) ([]byte, []byte, error) {
 				closeFn, e := present("container_temporary_token", "temporary_proof")
 				if e != nil {
 					return nil, nil, e

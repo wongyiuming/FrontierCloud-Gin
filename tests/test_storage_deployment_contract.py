@@ -11,7 +11,8 @@ class StorageDeploymentContract(unittest.TestCase):
         text = (ROOT / "docker-compose.storage-certificate.yaml").read_text(encoding="utf-8")
         for value in ("certificate-init:", "certificate-agent:", "command: [init-certificate]",
                       "build:", "cpus: 0.05", "mem_limit: 128m", "memswap_limit: 128m",
-                      "cap_drop: [ALL]", "read_only: true", "certificate_runtime:/run/frontiercloud-certificate:ro"):
+                      "cap_drop: [ALL]", "read_only: true", 'tmpfs: ["/tmp:size=16m,mode=1777"]',
+                      "certificate_runtime:/run/frontiercloud-certificate:ro"):
             self.assertIn(value, text)
         for forbidden in ("systemctl", "sysusers", "docker.sock", "privileged:", "pid: host", "ports:", "network_mode: host", "/etc/systemd", "/usr/local/libexec"):
             self.assertNotIn(forbidden, text)

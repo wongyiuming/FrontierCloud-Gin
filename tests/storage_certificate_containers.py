@@ -16,7 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def call(args, **kwargs):
-    return subprocess.check_output(args, text=True, **kwargs).strip()
+    try:
+        return subprocess.check_output(args, text=True, **kwargs).strip()
+    except subprocess.CalledProcessError as error:
+        print((error.output or "")[-8192:], flush=True)
+        raise
 
 
 def inspect(name):
@@ -144,7 +148,9 @@ def run(work, project, revision):
     compose("stop", "certificate-agent")
     # Port 80 is used only on the development host after an explicit ownership check.
     with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("0.0.0.0", 80))
+        probe.listen(1)
     result = call(["docker", "run", "--rm", "--name", tester, "--network=host", "--user=0:10001", *common,
                    "--cap-add", "NET_BIND_SERVICE", "--tmpfs", "/tmp:size=16m,mode=1777", "-e", "GOMAXPROCS=1", "-e", "GOMEMLIMIT=64MiB", "-e", "FRONTIERCLOUD_TEST_CERTIFICATE_PORT80=1", *mounts, "--entrypoint", "/certificate.test", image, "-test.v", "-test.timeout=30s", "-test.run", "TestCertificateContainerTemporaryPort80"])
     print(result)
@@ -153,11 +159,16 @@ def run(work, project, revision):
     wait_agent()
     temporary = inspect(names["certificate-agent"])
     assert temporary["HostConfig"]["NetworkMode"] == "host" and not temporary["HostConfig"]["PortBindings"]
-    assert temporary["HostConfig"]["CapAdd"] == ["NET_BIND_SERVICE"]
+    capabilities = temporary["HostConfig"]["CapAdd"] or []
+    assert [value.removeprefix("CAP_") for value in capabilities] == ["NET_BIND_SERVICE"], capabilities
     facts = status(reader)
     assert facts["validation"] == "temporary_port80" and not facts["job"]["port80_active"]
     with socket.socket() as probe:
+        # Closed challenge connections may retain TIME_WAIT; a new listener
+        # must still be possible, without allowing concurrent listener reuse.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("0.0.0.0", 80))
+        probe.listen(1)
     print("PASS: actual host-network container owns 80 only during challenge; busy/failure/cancel release; idle 80 available")
     class EngineConnection(http.client.HTTPConnection):
         def connect(self):
