@@ -105,12 +105,16 @@ func TestActualComposeSQLiteAndMySQLSelection(t *testing.T) {
 				if s.Command[0] != want {
 					t.Fatal("service delegates to a script", name)
 				}
-				if s.Build.Args["REVISION"] == "" || !strings.HasSuffix(s.Image, ":"+s.Build.Args["REVISION"]) {
+				component := name
+				if name == "secrets-init" || name == "media-init" {
+					component = "web"
+				}
+				if s.Build.Dockerfile != "" || s.Image != "ghcr.io/wongyiuming/frontiercloud-gin-"+component+":"+os.Getenv("FRONTIERCLOUD_REVISION") {
 					t.Fatal("immutable image revision missing", name)
 				}
 			}
 			web, updater := spec.Services["web"], spec.Services["updater"]
-			if web.Build.Dockerfile != "Dockerfile.gin" || updater.Build.Dockerfile != "updater/Dockerfile.gin" || web.User != "10001:10001" || updater.User != "0:0" {
+			if web.User != "10001:10001" || updater.User != "0:0" {
 				t.Fatal("runtime/privilege boundary changed")
 			}
 			if len(web.CapAdd) != 0 || !reflect.DeepEqual(web.CapDrop, []string{"ALL"}) || !reflect.DeepEqual(updater.CapDrop, []string{"ALL"}) || !reflect.DeepEqual(updater.CapAdd, []string{"CHOWN", "DAC_OVERRIDE"}) {

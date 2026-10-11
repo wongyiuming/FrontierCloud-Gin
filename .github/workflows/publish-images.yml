@@ -139,7 +139,7 @@ jobs:
     needs: [plan, compile]
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    # Only this job receives the automatic, short-lived package-write token.
+    # Exact publishers and main-only alias promotion receive short-lived package-write tokens.
     # Repository workflow writers are trusted; no personal PAT is required.
     permissions:
       contents: read
@@ -167,6 +167,35 @@ jobs:
           PLAN_JSON: ${{ needs.plan.outputs.plan }}
           COMPONENT: ${{ matrix.component }}
         run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_native_publish.py publish --component "$COMPONENT"
+
+  publish-latest:
+    needs: [plan, publish]
+    if: needs.plan.outputs.branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    concurrency:
+      group: native-release-latest-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/trusted_latest_publish.py
+            scripts/trusted_native_publish.py
+            scripts/trusted_staging_notify.py
+            scripts/registry_images.py
+          sparse-checkout-cone-mode: false
+      - name: Promote all verified main components to fresh-install aliases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLAN_JSON: ${{ needs.plan.outputs.plan }}
+        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_latest_publish.py
 
   notify-staging:
     needs: [plan, publish]

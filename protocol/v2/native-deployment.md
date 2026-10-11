@@ -16,16 +16,16 @@ In `.env`, select the runtime/database combination:
 Use `;` instead of `:` as the separator on Windows. An external MySQL deployment
 can select `DB_TYPE=mysql` and a stable `MYSQL_HOST` without the service overlay.
 Use a distinct `COMPOSE_PROJECT_NAME`, `DATA_DIRECTORY`, database and secrets
-volume for acceptance fixtures. The required `FRONTIERCLOUD_REVISION` is a full
-source commit SHA, not a branch, runtime compatibility version or schema version.
-
-For fresh native bootstrap, export that exact SHA and run
-`bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"`, then
-`docker compose up -d --no-build --wait`. The builder sends only fixed paths from
-`git archive` at the exact commit: never `.env`, data, keys, mutable edits or
-untracked files. It builds images only and cannot replace services. Ordinary
-Compose `--build` is useful for private testing, but its SHA label alone is not
-source proof. Publication still requires reviewed source and exact successful CI.
+volume for acceptance fixtures. These are optional overrides, not fresh-start
+requirements. Normal HTTPS startup needs only the five TLS/hostname/certificate/
+ACME values shown in README.md, then `docker compose up -d --wait`. The default
+stack pulls public main-release `latest` images and has no build definitions.
+An optional `FRONTIERCLOUD_REVISION` pins a full published SHA. Local acceptance
+may explicitly run `bash scripts/build-native-images.sh` (default commit: HEAD),
+then set that exact revision and use `--pull never`. The builder sends only
+allowlisted immutable Git archive paths, never `.env`, data, keys or mutable
+edits. It prepares both public-name and historical local-name image aliases;
+no services are replaced. Pull/network/provenance failures never compile.
 
 The fixed Web commands, initializers and updater use native binaries. The Web
 process is UID/GID 10001, has no Docker socket, drops capabilities and has a

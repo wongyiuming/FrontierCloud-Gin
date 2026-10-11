@@ -354,11 +354,17 @@ class TrustedNativePublishTests(unittest.TestCase):
     def test_compile_and_write_credential_jobs_are_separated_in_trusted_workflow(self):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/publish-images.yml').read_text()
         compile_part = workflow.split('  compile:\n')[1].split('  publish:\n')[0]
-        publish_part = workflow.split('  publish:\n')[1].split('  notify-staging:\n')[0]
+        publish_part = workflow.split('  publish:\n')[1].split('  publish-latest:\n')[0]
         self.assertIn('workflow_run:', workflow)
         self.assertIn('workflows: ["Build and Test Docker Compose"]', workflow)
         self.assertNotIn('195000', workflow)
-        self.assertEqual(workflow.count('packages: write'), 1)
+        self.assertEqual(workflow.count('packages: write'), 2)
+        latest_part = workflow.split('  publish-latest:\n')[1].split('  notify-staging:\n')[0]
+        self.assertIn("if: needs.plan.outputs.branch == 'main'", latest_part)
+        self.assertIn('scripts/trusted_latest_publish.py', latest_part)
+        self.assertNotIn('secrets.', latest_part)
+        self.assertNotIn('docker ', latest_part)
+        self.assertNotIn('ref: ${{ needs.plan.outputs.revision }}', latest_part)
         self.assertNotIn('GHCR_PUBLISH_TOKEN', workflow)
         self.assertNotIn('secrets.', compile_part)
         self.assertNotIn('docker login', compile_part)

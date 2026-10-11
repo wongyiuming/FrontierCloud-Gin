@@ -5,8 +5,8 @@ FrontierCloud is a self-hosted media browsing, continuous-audio playback, karaok
 The core product model is deliberately small: one business Master owns business truth, storage nodes provide Storage and/or Backup resources, and every managed media object has one complete physical owner.
 
 This independent repository is `FrontierCloud-Gin`, with Go-only `dev` and
-`main` branches inherited from the old native reconstruction. Deployment must
-use an exact reviewed release; bootstrap history alone is not release proof.
+`main` branches inherited from the old native reconstruction. Default startup uses the latest published main release; reviewed upgrades still
+require exact-source proof. Bootstrap history alone is not release proof.
 
 ## Current capabilities
 
@@ -26,23 +26,35 @@ use an exact reviewed release; bootstrap history alone is not release proof.
 
 ## Quick start
 
-For a fresh HTTP Standalone node, prepare images for the exact committed native
-source: pull verified public GHCR images first, compile locally only for confirmed
-missing versions/platforms. No Python application or MySQL service is required
-(the host-side image resolver uses Python 3):
+For a fresh HTTPS node, create `.env` with only these five host-specific values
+(use your own hostname and existing certificate paths):
 
-```bash
-export FRONTIERCLOUD_REVISION="$(git rev-parse HEAD)"
-bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"
-docker compose up -d --no-build --wait
+```dotenv
+TLS_ENABLED=true
+SERVER_NAME=ml.520mall.cc
+SSL_CERT_PATH=/etc/letsencrypt/live/ml.520mall.cc/fullchain.pem
+SSL_KEY_PATH=/etc/letsencrypt/live/ml.520mall.cc/privkey.pem
+ACME_WEBROOT=/root/FrontierCloud/certs/acme
 ```
 
-Compiled images are visible in the repository's [public Packages](https://github.com/wongyiuming/FrontierCloud-Gin/packages).
-See [image delivery](docs/public-image-delivery.md) for exact-SHA/digest checks,
-fallback rules and the independent compilation workflow. Do not use `--build`
-for the normal image-first deployment path.
+```bash
+docker compose up -d --wait
+```
 
-Open `http://localhost`. The startup initializer creates the managed media tree under `data/media` and the persistent runtime secrets required by the stack.
+All other settings have defaults: public GHCR `latest` images from the newest
+successfully published **main** release, SQLite, `./data`, generated persistent
+secrets, the `frontiercloud-gin` project and ports 80/443/3478. No source SHA,
+host Python, local image preparation or compilation is required. With no `.env`,
+the same command starts HTTP at `http://localhost`. Existing certificate files
+and free ports remain host prerequisites; on a shared host, optional port and
+project/data overrides avoid collisions. Startup does not migrate an old store.
+
+Compiled images are available in the repository's [public Packages](https://github.com/wongyiuming/FrontierCloud-Gin/packages).
+Advanced deployments may set `FRONTIERCLOUD_REVISION` to an exact published SHA.
+See [image delivery](docs/public-image-delivery.md) for immutable digest checks,
+local development builds and release gates. The default stack has no build
+instructions; failed image pulls stop startup. The initializer creates
+`data/media` and persistent runtime secrets automatically.
 
 For first Admin access, read the existing key from the running deployment:
 
@@ -79,7 +91,7 @@ from a default-`main` trusted workflow after successful exact-`dev` test CI and
 all three public image proofs. Publication itself also executes immutable main
 code: candidate compilation has no package-write credentials, and the isolated
 publisher consumes verified OCI data without running candidate code. Only the
-publisher receives automatic `GITHUB_TOKEN` `packages: write`; plan, compilation
+exact publishers and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan, compilation
 and notification do not. Each public package grants `FrontierCloud-Gin` Actions
 Write access. Repository workflow writers are trusted to request package write
 permissions; this model does not isolate them from publishing package versions.

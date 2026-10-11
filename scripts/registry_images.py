@@ -229,6 +229,7 @@ def ensure(revision, component):
         raise ValueError('Public release image contract mismatch')
     alias = 'frontiercloud-go-' + component + ':' + revision
     subprocess.run(DOCKER + ['tag', ref, alias], check=True, capture_output=True)
+    subprocess.run(DOCKER + ['tag', ref, 'ghcr.io/wongyiuming/frontiercloud-gin-' + component + ':' + revision], check=True, capture_output=True)
     print('Pulled verified public image:', component, revision)
 
 
