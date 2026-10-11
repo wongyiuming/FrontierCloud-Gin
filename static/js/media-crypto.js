@@ -186,7 +186,10 @@
             await response.body?.cancel();
             throw new Error('歌词超出浏览器读取限制');
         }
-        return new TextDecoder().decode(await common.boundedBytes(response, expected));
+        // ParseLRC rejects invalid UTF-8 and removes exactly one leading BOM.
+        // Preserve that BOM for the shared parser rather than removing it twice.
+        return new TextDecoder('utf-8', {fatal: true, ignoreBOM: true})
+            .decode(await common.boundedBytes(response, expected));
     }
     const MAX_RECORDING_LYRIC_BYTES = 1400 * 1024;
     function recordingLyrics(entries) {

@@ -127,6 +127,10 @@
                     try { await response.body?.cancel(); } catch (_) {}
                     throw new Error('媒体请求范围无效，请重新选择文件');
                 }
+                if (response?.status === 429) {
+                    try { await response.body?.cancel(); } catch (_) {}
+                    throw new Error('媒体授权请求已达到限额，请稍后重新选择文件');
+                }
                 // Permission, stale-object and authenticated-decryption failures
                 // must hold the current song for diagnosis, not loop forever.
                 if ([401, 403, 404, 409, 422].includes(response?.status)) {

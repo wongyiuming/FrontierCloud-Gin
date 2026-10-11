@@ -182,6 +182,12 @@ func cryptoDecode(c *gin.Context, body any) bool {
 }
 
 func cryptoError(c *gin.Context, err error) {
+	if errors.Is(err, mediacrypto.ErrSessionLimit) {
+		noStore(c)
+		c.Header("Retry-After", "60")
+		detail(c, http.StatusTooManyRequests, "临时密钥会话数量达到限额，请稍后重试")
+		return
+	}
 	if errors.Is(err, mediacrypto.ErrSession) {
 		detail(c, 401, "临时密钥授权已失效，请重新建立浏览器会话")
 		return
@@ -206,6 +212,9 @@ func (p *Public) cryptoSession(c *gin.Context) {
 	binding, err := p.browserBinding(c, true)
 	if err != nil {
 		cryptoError(c, err)
+		return
+	}
+	if !p.allowPublicCryptoSession(c, binding) {
 		return
 	}
 	grant, err := p.crypto.NewSession(binding, body.PublicKey)
@@ -419,9 +428,21 @@ func (a *Admin) downloadPlan(c *gin.Context) {
 		mediaAdminError(c, err)
 		return
 	}
+	encrypted := false
+	for _, item := range items {
+		encrypted = encrypted || item.Encryption != nil
+	}
 	for i := range items {
-		paths, _ := json.Marshal([]string{items[i].Path})
-		items[i].URL = "/api/v1/media/admin/download?" + url.Values{"paths": {string(paths)}}.Encode()
+		if encrypted {
+			items[i].URL = "/api/v1/media/admin/download/bytes?" + url.Values{"file_path": {items[i].Path}, "media_id": {items[i].MediaID}, "snapshot": {items[i].Snapshot}}.Encode()
+		} else {
+			paths, _ := json.Marshal([]string{items[i].Path})
+			items[i].URL = "/api/v1/media/admin/download?" + url.Values{"paths": {string(paths)}}.Encode()
+		}
+	}
+	if err := a.auditEncryptedDownloadPlan(c, d, items); err != nil {
+		internalError(c, err)
+		return
 	}
 	noStore(c)
 	c.JSON(200, gin.H{"items": items})

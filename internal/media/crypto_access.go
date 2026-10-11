@@ -2,10 +2,14 @@ package media
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
@@ -165,6 +169,20 @@ type DownloadEntry struct {
 	URL        string                `json:"url"`
 	Bytes      int64                 `json:"size_bytes"`
 	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
+	Snapshot   string                `json:"-"`
+}
+
+// This is a digest of source identity, not media content. A browser archive must
+// never follow a path to a replacement uploaded after the plan was issued.
+func downloadSnapshot(id, name string, size int64, revision string) string {
+	payload, _ := json.Marshal([]any{id, name, size, revision})
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
+func globalDownloadRevision(row store.GlobalMedia) string {
+	payload, _ := json.Marshal([]any{row.MemberID, row.ObjectID, row.ETag})
+	return string(payload)
 }
 
 // Plan enumerates the same bounded managed tree as ZIP. Content remains on the
@@ -172,7 +190,7 @@ type DownloadEntry struct {
 func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 	entries := []DownloadEntry{}
 	seen := map[string]bool{}
-	add := func(name, id string, size int64) error {
+	add := func(name, id string, size int64, revision string) error {
 		if seen[name] {
 			return nil
 		}
@@ -189,6 +207,7 @@ func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 				return ErrPath
 			}
 			size = info.Size()
+			revision = strconv.FormatInt(info.ModTime().UnixNano(), 10)
 			kind := "audio"
 			if strings.HasPrefix(name, "vido/") {
 				kind = "video"
@@ -206,11 +225,11 @@ func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 		if err != nil {
 			return err
 		}
-		entries = append(entries, DownloadEntry{Path: name, MediaID: id, Filename: path.Base(name), Encryption: meta, Bytes: size})
+		entries = append(entries, DownloadEntry{Path: name, MediaID: id, Filename: path.Base(name), Encryption: meta, Bytes: size, Snapshot: downloadSnapshot(id, name, size, revision)})
 		return nil
 	}
 	for _, row := range d.globals {
-		if err := add(row.Path, row.ID, row.Bytes); err != nil {
+		if err := add(row.Path, row.ID, row.Bytes, globalDownloadRevision(row)); err != nil {
 			return nil, err
 		}
 	}
@@ -240,7 +259,7 @@ func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 					}
 				}
 				if child.Type().IsRegular() && managedObject(name, false) {
-					if err := add(name, "", 0); err != nil {
+					if err := add(name, "", 0, ""); err != nil {
 						return err
 					}
 				}
@@ -261,7 +280,7 @@ func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 			if err := visit(item.Path); err != nil {
 				return nil, err
 			}
-		} else if err := add(item.Path, "", 0); err != nil {
+		} else if err := add(item.Path, "", 0, ""); err != nil {
 			return nil, err
 		}
 	}

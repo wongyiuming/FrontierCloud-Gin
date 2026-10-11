@@ -208,13 +208,14 @@ const oldRequest = stale.fetch('/api/v1/media/stream', {credentials:'same-origin
 stale.playerSwitchSequence += 1;
 await assert.rejects(oldRequest, error => error.name === 'AbortError');
 
-for (const status of [401, 403, 404, 409, 422]) {
+for (const status of [401, 403, 404, 409, 422, 429]) {
     let failedRequests = 0;
     const denied = await isolatedRetry(async () => {
         failedRequests += 1;
         return new Response('authorization/integrity failure', {status});
     });
-    await assert.rejects(denied.fetch('/__fc_media/session/music%2Fa.mp3', {credentials: 'same-origin'}));
+    await assert.rejects(denied.fetch('/__fc_media/session/music%2Fa.mp3', {credentials: 'same-origin'}),
+        status === 429 ? /限额/ : /授权或完整性/);
     assert.equal(failedRequests, 1, `HTTP ${status} must hold encrypted playback instead of looping`);
 }
 let virtualRequests = 0;

@@ -100,7 +100,16 @@ func TestEncryptedUploadExplicitChoiceSessionReuseRangeAndVisibility(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &Admin{settings: p.settings, public: p, network: resolver}
+	auditSettings := p.settings
+	auditSettings.SecretsDirectory = t.TempDir()
+	if err := os.WriteFile(filepath.Join(auditSettings.SecretsDirectory, "admin_key"), []byte("crypto-audit-fixture-key"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	auth, err := admin.New(auditSettings, nil, db.Admin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &Admin{settings: p.settings, public: p, auth: auth, network: resolver}
 	g := router.Group("/api/v1/media/admin", func(c *gin.Context) { c.Set("admin_session", admin.Session{Hash: "crypto-admin-session"}); c.Next() })
 	g.POST("/crypto/session", a.cryptoSession)
 	g.POST("/crypto/prepare", a.cryptoPrepare)

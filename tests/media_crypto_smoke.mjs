@@ -34,6 +34,8 @@ let keyDelay = 0;
 let mismatchedEnvelope = false;
 let sessionLifetime = 899;
 let handshakeDelay = 0;
+let sessionStatus = 0;
+let cipherStatus = 0;
 let worker;
 let common;
 
@@ -87,6 +89,7 @@ async function backendFetch(input, init = {}) {
     const body = init.body ? JSON.parse(init.body) : {};
     calls.push({url: url.pathname, body});
     if (url.pathname.endsWith('/session')) {
+        if (sessionStatus) return Response.json({detail: 'temporary key session limit'}, {status: sessionStatus});
         const pair = await webcrypto.subtle.generateKey({name: 'ECDH', namedCurve: 'P-256'}, false, ['deriveBits']);
         const clientKey = await webcrypto.subtle.importKey('raw', common.decode(body.public_key),
             {name: 'ECDH', namedCurve: 'P-256'}, false, []);
@@ -186,6 +189,24 @@ assert.equal(common.range('bytes=0-1,3-4', bytes.length), null);
 assert.equal(common.range('bytes=99999999999-', bytes.length), null);
 assert.deepEqual(JSON.parse(JSON.stringify(common.parseLyrics('[offset:100]\n[00:01.20][00:02.30]词\n[ar:Artist]'))),
     [{time: 1.3, text: '词'}, {time: 2.4, text: '词'}]);
+// These expectations are shared with the server's ParseLRC contract. The
+// compiled and source modules must preserve exactly the same valid grammar.
+const lyricVectors = JSON.parse(fs.readFileSync('tests/lrc_parsing_vectors.json', 'utf8'));
+for (const vector of lyricVectors) {
+    if (vector.error) assert.throws(() => common.parseLyrics(vector.input),
+        error => error.message === vector.error, vector.name);
+    else assert.deepEqual(JSON.parse(JSON.stringify(common.parseLyrics(vector.input))), vector.entries, vector.name);
+}
+assert.equal(common.parseLyrics('[00:01]' + '😀'.repeat(4000))[0].text, '😀'.repeat(4000),
+    'the 4000-character boundary counts Unicode code points, as Go counts UTF-8 runes');
+assert.throws(() => common.parseLyrics('[00:01]' + '乐'.repeat(4001)), /4000/);
+assert.throws(() => common.parseLyrics('[00:01]' + '😀'.repeat(4001)), /4000/);
+assert.throws(() => common.parseLyrics('[00:01]bad\ud800'), /UTF-8/);
+const maximumLyrics = Array.from({length: 10000}, (_, index) => '[00:01]' + index).join('\n');
+assert.equal(common.parseLyrics(maximumLyrics).length, 10000);
+assert.throws(() => common.parseLyrics(maximumLyrics + '\n[00:01]extra'), /10000/);
+assert.equal(common.parseLyrics(Array.from({length: 10001}, () => '[00:01]duplicate').join('\n')).length, 1,
+    'duplicate entries are removed before the 10000-entry limit');
 
 // A recorded encrypted-source lyric is an independent opaque object. Its
 // plaintext never enters the preparation request or the stored footer shape.
@@ -255,6 +276,7 @@ function createWorker() {
             if (!record) return backendFetch(input, init);
             const header = new Headers(init.headers).get('Range');
             cipherRequests.push({url: String(input), range: header});
+            if (cipherStatus) return new Response('ciphertext request limit', {status: cipherStatus});
             const range = /^bytes=(\d+)-(\d+)$/.exec(header);
             assert(range, 'ciphertext fetches must name one exact authenticated chunk');
             const start = Number(range[1]); const end = Number(range[2]);
@@ -349,8 +371,9 @@ assert.equal(vm.runInContext('capabilities.size + grants.size + zipPlans.size', 
 const restartMessages = controllerMessages.length;
 const restartSessions = calls.filter(call => call.url.endsWith('/session')).length;
 await page.FrontierMediaCrypto.downloadPlan([
-    {path: 'music/b.mp3', encryption: second.meta, size_bytes: secondBytes.length},
-    {path: 'lyrics/plain.lrc', url: '/plain-lyric', size_bytes: 18},
+    {path: 'music/b.mp3', filename: 'b.mp3', encryption: second.meta, size_bytes: secondBytes.length},
+    {path: 'lyrics/plain.lrc', filename: 'plain.lrc', url: '/plain-lyric', size_bytes: 18},
+    {path: 'music/other/b.mp3', filename: 'b.mp3', url: '/plain-lyric', size_bytes: 18},
 ]);
 assert.deepEqual(controllerMessages.slice(restartMessages), ['fc-crypto-register', 'fc-crypto-zip']);
 assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
@@ -361,11 +384,13 @@ const zip = new Uint8Array(await response.arrayBuffer());
 assert.equal(response.headers.get('Content-Type'), 'application/zip');
 let cursor = 0;
 const archived = [];
-for (let file = 0; file < 2; file += 1) {
+const archivedNames = [];
+for (let file = 0; file < 3; file += 1) {
     const view = new DataView(zip.buffer, cursor);
     assert.equal(view.getUint32(0, true), 0x04034b50);
     const nameLength = view.getUint16(26, true);
     const extraLength = view.getUint16(28, true);
+    archivedNames.push(new TextDecoder().decode(zip.slice(cursor + 30, cursor + 30 + nameLength)));
     const size = Number(view.getBigUint64(30 + nameLength + 4, true));
     const start = cursor + 30 + nameLength + extraLength;
     archived.push(zip.slice(start, start + size));
@@ -378,9 +403,12 @@ for (let file = 0; file < 2; file += 1) {
 }
 assert.deepEqual(archived[0], secondBytes);
 assert.equal(new TextDecoder().decode(archived[1]), 'plain legacy lyric');
+assert.equal(new TextDecoder().decode(archived[2]), 'plain legacy lyric');
+assert.deepEqual(archivedNames, ['music/b.mp3', 'lyrics/plain.lrc', 'music/other/b.mp3'],
+    'ZIP entries retain logical directories even when API filenames are identical basenames');
 assert.equal(new DataView(zip.buffer, cursor).getUint32(0, true), 0x02014b50);
 assert.equal(new DataView(zip.buffer, zip.length - 98).getUint32(0, true), 0x06064b50);
-assert.equal(Number(new DataView(zip.buffer, zip.length - 98).getBigUint64(24, true)), 2);
+assert.equal(Number(new DataView(zip.buffer, zip.length - 98).getBigUint64(24, true)), 3);
 assert.equal(calls.filter(call => call.url.endsWith('/session')).length, restartSessions,
     'worker restart restores its page capability and decrypts ZIP without another master handshake');
 assert.equal((await workerFetch('/__fc_zip/' + zipId)).status, 403, 'download plan capability is consumed once');
@@ -403,6 +431,34 @@ await page.FrontierMediaCrypto.prepareCatalog(fresh);
 response = await workerFetch(fresh[0].url);
 assert.equal(new TextDecoder().decode(await response.arrayBuffer()), 'replaced');
 
+// Exercise text decoding through authenticated chunk playback, rather than
+// passing already-decoded strings to the parser. A literal replacement code
+// point is valid; invalid byte sequences cannot be silently replaced by it.
+const encodedLyric = new TextEncoder().encode('\ufeff\ufeff[00:01]词\ufeff\n[00:02]�');
+const lyricRecord = await prepare(encodedLyric, 'lyrics/utf8.lrc', 'https://cloud.example/relay/utf8-lyric');
+const decodedLyric = await page.FrontierMediaCrypto.textFor('lyrics/utf8.lrc', lyricRecord.meta.file_id);
+assert.equal(decodedLyric, '\ufeff\ufeff[00:01]词\ufeff\n[00:02]�', 'the decoder preserves the single-BOM parsing contract');
+assert.deepEqual(JSON.parse(JSON.stringify(common.parseLyrics(decodedLyric))),
+    [{time: 1, text: '\ufeff词\ufeff'}, {time: 2, text: '�'}]);
+for (const [index, invalidBytes] of [
+    [0xff], [0xe2, 0x82], [0xed, 0xa0, 0x80], [0xc0, 0xaf],
+].entries()) {
+    const invalidLyric = await prepare(Uint8Array.from(invalidBytes), 'lyrics/invalid-' + index + '.lrc',
+        'https://cloud.example/relay/invalid-lyric-' + index);
+    await assert.rejects(page.FrontierMediaCrypto.textFor('lyrics/invalid-' + index + '.lrc', invalidLyric.meta.file_id),
+        error => error.name === 'TypeError', 'invalid UTF-8 must fail after successful authenticated decryption');
+}
+
+// A source or mid-transfer authorization limit must hold playback for an
+// explicit user retry, rather than being classified as a resumable outage.
+page.FrontierMediaCrypto.resetFault('music/a.mp3');
+cipherStatus = 429;
+response = await workerFetch(catalog[0].url);
+await assert.rejects(response.arrayBuffer(), /存储节点/);
+assert.match(page.FrontierMediaCrypto.failureFor(catalog[0].url), /限额/);
+cipherStatus = 0;
+page.FrontierMediaCrypto.resetFault('music/a.mp3');
+
 replacement.ciphertext[0] ^= 1;
 response = await workerFetch(fresh[0].url);
 await assert.rejects(response.arrayBuffer(), 'tampered ciphertext cannot return plaintext');
@@ -410,6 +466,20 @@ assert(page.FrontierMediaCrypto.failureFor(fresh[0].url), 'tag failures propagat
 assert.equal((await workerFetch(fresh[0].url)).status, 422, 'integrity failure must not be retried as a network failure');
 
 advance(901000);
+sessionStatus = 429;
+const limitedSessionStart = calls.filter(call => call.url.endsWith('/session')).length;
+const limitedCipherStart = cipherRequests.length;
+const limitedKeysStart = calls.filter(call => call.url.endsWith('/key')).length;
+const limitedRequests = await Promise.all([workerFetch(catalog[0].url), workerFetch(catalog[0].url)]);
+for (const limited of limitedRequests) {
+    assert.equal(limited.status, 429, 'an expired session preserves its failed handshake status');
+    assert.equal(await limited.text(), 'temporary key session limit');
+}
+assert.equal(calls.filter(call => call.url.endsWith('/session')).length, limitedSessionStart + 1,
+    'simultaneous requests coalesce one limited handshake without renewal loops');
+assert.equal(calls.filter(call => call.url.endsWith('/key')).length, limitedKeysStart);
+assert.equal(cipherRequests.length, limitedCipherStart, 'no ciphertext request can use an expired or denied session');
+sessionStatus = 0;
 for (const invalidLifetime of [0, 901, 1.5]) {
     sessionLifetime = invalidLifetime;
     await assert.rejects(page.FrontierMediaCrypto.encryptFile(inputFile(secondBytes, 'clock.mp3')),

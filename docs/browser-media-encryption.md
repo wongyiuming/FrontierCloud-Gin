@@ -58,7 +58,17 @@ before the handshake request, so client clock offsets and wall-clock changes
 cannot renew authorization. Envelopes retain the original server `expires_at`.
 “One-time” means one ephemeral handshake and one bounded
 authorization session, not one file or one HTTP request. The server bounds its
-in-memory session registry to 4096 entries. Master process restart, explicit server
+in-memory session registry to 4096 entries: up to 3584 public authorizations and
+512 separately reserved Admin authorizations. One cookie or Admin binding may
+hold at most 16 unexpired authorizations, allowing independent browser tabs.
+Public handshakes additionally allow at most 8 creations per browser cookie and
+64 per client IP in a fixed one-minute creation window. Client IPs come from the
+configured trusted-proxy resolver. The bounded window cache holds at most 8192
+entries and reclaims expired windows. Admission failures return HTTP 429 with
+`Retry-After: 60`; playback stops with a retryable user-visible failure instead
+of repeatedly creating sessions. These limits never evict or renew existing
+authorizations, and file-key/Range requests do not consume creation windows.
+Master process restart, explicit server
 revocation through `/api/v1/media/crypto/revoke`,
 Admin logout or timeout invalidates further envelope issuance. Upload preparation
 tokens are independently signed, bound to the Admin session and descriptor, and
@@ -86,7 +96,17 @@ Relay storage still transport opaque ciphertext through existing capabilities.
 
 Single-file downloads decrypt in the browser. Mixed folders use a bounded
 download plan and browser-streamed ZIP64 with CRC32, including plaintext and
-encrypted objects. Plaintext is not cached by the worker. Renames preserve file
+encrypted objects. ZIP entries retain full managed paths even when their
+attachment basenames match. An encrypted or mixed download plan records one
+canonical Admin download audit before it is returned; an audit failure refuses
+the plan. Subsequent chunk/Range requests do not add per-file download audits.
+Plaintext entries in those plans bind the issued durable media ID and a small
+digest of source identity/version, rather than reopening an unqualified path.
+A renamed/deleted/replaced source fails closed; equal byte counts do not permit
+substitution. Local reads retain a mutation lease through the pinned descriptor
+stream. Direct/Relay grants still bind the immutable storage object ID. Pure
+plaintext attachments retain their existing download audit and delivery path.
+Plaintext is not cached by the worker. Renames preserve file
 identity and descriptors; delete/recovery journals and backup validation include
 the metadata. Admin trees and search results carry the same descriptor, so
 encrypted media and lyrics retain their status after rename.
@@ -95,6 +115,11 @@ Virtual encrypted downloads and ZIP downloads use attachment navigation and the
 worker's `Content-Disposition` filename. They omit the link's `download`
 attribute so Chromium dispatches the worker fetch; the live page remains open
 to provide its existing keys.
+
+Encrypted lyrics use the same LRC parsing and normalization contract as server
+`ParseLRC`, including millisecond `.`/`:` fractions, second bounds, offsets,
+Unicode line boundaries, trimming and deduplication. Shared regression vectors
+cover both implementations; invalid UTF-8 and invalid timelines fail closed.
 
 Karaoke decrypts lyrics in the browser. Saving an account recording with
 encrypted source lyrics creates an independent encrypted snapshot of its lyric

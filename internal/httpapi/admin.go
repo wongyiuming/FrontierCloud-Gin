@@ -53,6 +53,8 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.POST("/delete", a.delete)
 	protected.GET("/download", a.download)
 	protected.GET("/download/plan", a.downloadPlan)
+	protected.GET("/download/bytes", a.downloadPlanBytes)
+	protected.HEAD("/download/bytes", a.downloadPlanBytes)
 	protected.POST("/upload/item", func(c *gin.Context) { a.upload(c, false) })
 	protected.POST("/upload/lyric", func(c *gin.Context) { a.upload(c, true) })
 	protected.GET("/storage-pool", a.storagePool)

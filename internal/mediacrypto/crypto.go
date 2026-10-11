@@ -30,11 +30,16 @@ import (
 
 const ChunkSize int64 = 1024 * 1024
 const SessionLifetime = 15 * time.Minute
+const MaxSessions = 4096
+const MaxPublicSessions = MaxSessions - 512
+const MaxAdminSessions = 512
+const MaxSessionsPerBinding = 16
 const MaxCiphertextSize int64 = 10 * 1024 * 1024 * 1024
 const MaxPlaintextSize int64 = MaxCiphertextSize - 16*((MaxCiphertextSize+ChunkSize-1)/ChunkSize)
 
 var ErrMetadata = errors.New("invalid media encryption descriptor")
 var ErrSession = errors.New("browser encryption authorization expired or invalid")
+var ErrSessionLimit = errors.New("browser encryption authorization creation limit reached")
 var ErrPremaster = errors.New("media premaster does not match durable business key identity")
 
 type Metadata struct {
@@ -111,13 +116,43 @@ type Manager struct {
 	mu       sync.Mutex
 	sessions map[string]session
 	now      func() time.Time
+	limits   sessionLimits
 }
+
+type sessionLimits struct{ public, admin, binding int }
 
 func New(master []byte) (*Manager, error) {
 	if len(master) != 32 {
 		return nil, fmt.Errorf("media premaster key must contain 32 bytes")
 	}
-	return &Manager{master: append([]byte(nil), master...), sessions: map[string]session{}, now: time.Now}, nil
+	return &Manager{master: append([]byte(nil), master...), sessions: map[string]session{}, now: time.Now,
+		limits: sessionLimits{MaxPublicSessions, MaxAdminSessions, MaxSessionsPerBinding}}, nil
+}
+
+// Admission never evicts or renews a live authorization. Public traffic cannot
+// consume the separately reserved Admin capacity, and a cookie may own several
+// page handshakes without owning the process-wide registry.
+func (m *Manager) admitSessionLocked(binding string, now time.Time) error {
+	public, admin, own := 0, 0, 0
+	for id, s := range m.sessions {
+		if !s.expires.After(now) {
+			delete(m.sessions, id)
+			continue
+		}
+		if strings.HasPrefix(s.binding, "admin:") {
+			admin++
+		} else {
+			public++
+		}
+		if s.binding == binding {
+			own++
+		}
+	}
+	if own >= m.limits.binding || strings.HasPrefix(binding, "admin:") && admin >= m.limits.admin ||
+		!strings.HasPrefix(binding, "admin:") && public >= m.limits.public {
+		return ErrSessionLimit
+	}
+	return nil
 }
 
 // KeyID is a domain-separated public verifier. It permits database restores to
@@ -235,6 +270,15 @@ func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, err
 	if binding == "" {
 		return SessionGrant{}, ErrSession
 	}
+	// Reject a full binding before performing ECDH. Recheck atomically at insert
+	// time so concurrent handshakes cannot exceed any admission boundary.
+	m.mu.Lock()
+	started := m.now()
+	err := m.admitSessionLocked(binding, started)
+	m.mu.Unlock()
+	if err != nil {
+		return SessionGrant{}, err
+	}
 	encoded, err := base64.StdEncoding.Strict().DecodeString(clientPublicKey)
 	if err != nil {
 		return SessionGrant{}, ErrSession
@@ -266,15 +310,10 @@ func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, err
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.now()
-	for id, s := range m.sessions {
-		if !s.expires.After(now) {
-			delete(m.sessions, id)
-		}
+	if err := m.admitSessionLocked(binding, now); err != nil {
+		return SessionGrant{}, err
 	}
-	if len(m.sessions) >= 4096 {
-		return SessionGrant{}, ErrSession
-	}
-	expires := now.Add(SessionLifetime)
+	expires := started.Add(SessionLifetime)
 	// Give browsers a conservative duration independent of their wall clock.
 	// Floor against the serialized deadline so its second precision never grants
 	// longer than expires_at; the registry deadline remains authoritative.

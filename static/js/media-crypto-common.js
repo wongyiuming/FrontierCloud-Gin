@@ -92,18 +92,39 @@
         return bytes;
     }
     function parseLyrics(text) {
+        // Keep encrypted lyrics identical to media.ParseLRC: one leading BOM,
+        // Go's Unicode whitespace/line boundaries, and millisecond timestamps.
+        text = text.replace(/^\uFEFF/, '');
+        if (!text || text.includes('\0') || /[\uD800-\uDFFF]/u.test(text))
+            throw new Error('歌词文件必须使用非空 UTF-8 编码');
         let offset = 0;
         const offsetMatch = /\[offset:([+-]?\d+)\]/i.exec(text);
-        if (offsetMatch) offset = Number(offsetMatch[1]) / 1000;
+        if (offsetMatch) {
+            offset = Number(offsetMatch[1]);
+            if (!Number.isSafeInteger(offset) || offset < -1000000000 || offset > 1000000000)
+                throw new Error('invalid lyric offset');
+        }
         const entries = [];
-        for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
-            const tags = [...line.matchAll(/\[(\d+):(\d{1,2}(?:\.\d+)?)\]/g)];
-            const value = line.replace(/\[[^\]]*\]/g, '').trim();
+        const seen = new Set();
+        const timeTag = /\[(\d{1,3}):([0-5]\d)(?:[.:](\d{1,3}))?\]/g;
+        const whitespace = /^[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+|[\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+$/g;
+        for (const line of text.split(/[\n\r\v\f\u001C-\u001E\u0085\u2028\u2029]/)) {
+            const tags = [...line.matchAll(timeTag)];
+            if (!tags.length) continue;
+            const value = line.replace(timeTag, '').replace(whitespace, '');
+            if (!value) continue;
+            if ([...value].length > 4000) throw new Error('单行歌词最多允许 4000 个字符');
             for (const tag of tags) {
-                const time = Number(tag[1]) * 60 + Number(tag[2]) + offset;
-                if (time >= 0 && value) entries.push({time, text: value});
+                const fraction = tag[3] ? Number(tag[3].padEnd(3, '0')) : 0;
+                const milliseconds = Math.max(0, Number(tag[1]) * 60000 + Number(tag[2]) * 1000 + fraction + offset);
+                const identity = milliseconds + ':' + value;
+                if (seen.has(identity)) continue;
+                seen.add(identity);
+                entries.push({time: milliseconds / 1000, text: value});
+                if (entries.length > 10000) throw new Error('歌词最多允许 10000 行');
             }
         }
+        if (!entries.length) throw new Error('LRC 歌词没有可展示的时间轴内容');
         return entries.sort((left, right) => left.time - right.time);
     }
     globalThis.FrontierCryptoCommon = {CHUNK_SIZE, TAG_SIZE, monotonicNow, encode, decode, validate,

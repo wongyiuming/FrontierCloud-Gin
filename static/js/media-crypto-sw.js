@@ -166,11 +166,12 @@ async function servePlaintext(request, token, filePath, download, expectedFileId
                 index += 1;
                 if (index > last) output.close();
             } catch (error) {
-                if (error.fatal || [401, 403, 404, 409, 422].includes(error.status)) {
+                if (error.fatal || [401, 403, 404, 409, 422, 429].includes(error.status)) {
                     grant.failed = true;
                     const client = await self.clients.get(capabilities.get(token)?.clientId || '');
                     client?.postMessage({type: 'fc-crypto-fault', token, file_path: filePath,
-                        error: '加密媒体授权或完整性校验失败，请重新选择文件'});
+                        error: error.status === 429 ? '媒体授权请求已达到限额，请稍后重新选择文件'
+                            : '加密媒体授权或完整性校验失败，请重新选择文件'});
                 }
                 controller.abort(); output.error(error);
             }

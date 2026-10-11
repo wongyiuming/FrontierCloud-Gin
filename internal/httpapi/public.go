@@ -26,12 +26,13 @@ import (
 )
 
 type Public struct {
-	settings config.Config
-	media    *media.Service
-	static   *os.Root
-	assets   map[string]string
-	brand    *brand.Service
-	crypto   *mediacrypto.Manager
+	settings           config.Config
+	media              *media.Service
+	static             *os.Root
+	assets             map[string]string
+	brand              *brand.Service
+	crypto             *mediacrypto.Manager
+	cryptoSessionLimit cryptoSessionAdmission
 }
 
 func assetURL(name string, content []byte) string {
@@ -202,13 +203,17 @@ func (p *Public) catalog(c *gin.Context) {
 		}
 		return
 	}
+	ids := make([]string, len(entries))
 	for i := range entries {
-		meta, e := p.media.Encryption(c.Request.Context(), entries[i].MediaID)
-		if e != nil {
-			internalError(c, e)
-			return
-		}
-		entries[i].Encryption = meta
+		ids[i] = entries[i].MediaID
+	}
+	metadata, err := p.media.Encryptions(c.Request.Context(), ids)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	for i := range entries {
+		entries[i].Encryption = metadata[entries[i].MediaID]
 	}
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": entries})

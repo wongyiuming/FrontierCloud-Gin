@@ -276,6 +276,11 @@ func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID str
 		result.Stream = local
 		return result, nil
 	}
+	return s.remoteDelivery(ctx, row, relation, requestID, traceID, nginx)
+}
+
+func (s *Service) remoteDelivery(ctx context.Context, row store.GlobalMedia, relation *store.Relationship, requestID, traceID string, nginx bool) (Delivery, error) {
+	result := Delivery{ResourceID: row.ID, OwnerID: row.MemberID, ObjectID: row.ObjectID}
 	token, err := s.control.MediaCapability(ctx, relation.ID, row.MemberID, row.ObjectID, row.ID, requestID, traceID)
 	if err != nil {
 		return Delivery{}, err
