@@ -305,7 +305,7 @@ runUploadTask = async function runUploadTaskWithReservationCleanup(fileList, rel
                 if (storageMode === 'encrypted') {
                     if (!window.FrontierMediaCrypto) throw new Error('浏览器加密组件未加载');
                     $('currentFileLabel').textContent = `浏览器加密：${displayName}`;
-                    encrypted = await window.FrontierMediaCrypto.encryptFile(file, fraction => progress(fraction * 0.25));
+                    encrypted = await window.FrontierMediaCrypto.encryptUploadFile(file, fraction => progress(fraction * 0.25));
                     $('currentFileLabel').textContent = `密文上传：${displayName}`;
                 }
                 const outgoingFile = encrypted?.file || file;

@@ -166,6 +166,31 @@ async function prepare(bytes, path, sourceUrl) {
     await result.cleanup();
     return record;
 }
+const validationCalls = calls.length;
+for (const name of ['bad.mp3', 'bad.flac', 'bad.wav', 'bad.m4a', 'bad.mp4', 'bad.webm', 'bad.mkv', 'bad.txt']) {
+    await assert.rejects(page.FrontierMediaCrypto.encryptUploadFile(
+        inputFile(new TextEncoder().encode('not media'), name)), /媒体格式/);
+}
+for (const invalid of [new TextEncoder().encode('not lyrics'), new Uint8Array([0xff, 0xfe]),
+    new TextEncoder().encode('[00:01]bad\0lyric'), new Uint8Array(2 * 1024 * 1024 + 1)]) {
+    await assert.rejects(page.FrontierMediaCrypto.encryptUploadFile(inputFile(invalid, 'bad.lrc')));
+}
+assert.equal(calls.length, validationCalls, 'invalid plaintext creates no handshake/preparation requests');
+assert.equal(temporary.size, 0, 'invalid plaintext creates no ciphertext temporary object');
+for (const [name, header] of [
+    ['valid.mp3', new TextEncoder().encode('ID3')],
+    ['valid.flac', new TextEncoder().encode('fLaC')],
+    ['valid.wav', new TextEncoder().encode('RIFF0000WAVE')],
+    ['valid.m4a', new TextEncoder().encode('0000ftyp0000')],
+    ['valid.mp4', new TextEncoder().encode('0000ftyp0000')],
+    ['valid.webm', new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])],
+    ['valid.mkv', new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])],
+    ['valid.lrc', new TextEncoder().encode('[00:01.00]valid lyric')],
+]) {
+    const validUpload = await page.FrontierMediaCrypto.encryptUploadFile(inputFile(header, name));
+    assert.equal(validUpload.encryption.plaintext_size, header.length);
+    await validUpload.cleanup();
+}
 const bytes = Uint8Array.from({length: 2 * 1048576 + 97}, (_, index) => index % 251);
 const first = await prepare(bytes, 'music/a.mp3', 'https://direct.example/cipher/a');
 const secondBytes = new TextEncoder().encode('second encrypted resource');
@@ -296,6 +321,27 @@ createWorker();
 const catalog = [{media_path: 'music/a.mp3', encryption: first.meta}, {media_path: 'music/b.mp3', encryption: second.meta}];
 await page.FrontierMediaCrypto.prepareCatalog(catalog);
 assert.match(catalog[0].url, /^\/__fc_media\/.*\?object=/);
+vm.runInContext(`capabilities.clear();
+    for (let index = 0; index < 256; index++)
+        capabilities.set(index.toString(16).padStart(32, '0'), {clientId: 'crashed-' + index});
+    grants.set('00000000000000000000000000000000:dead:', {});
+    zipPlans.set('dead-plan', {token: '00000000000000000000000000000000'});`, worker);
+await page.FrontierMediaCrypto.ensureWorker();
+assert.equal(vm.runInContext('capabilities.size', worker), 1, 'crashed clients cannot permanently exhaust registration');
+assert.equal(vm.runInContext("grants.has('00000000000000000000000000000000:dead:') || zipPlans.has('dead-plan')", worker), false,
+    'dead-client reclamation removes its cached keys and ZIP plans');
+vm.runInContext(`capabilities.clear();
+    for (let index = 0; index < 256; index++)
+        capabilities.set(index.toString(16).padStart(32, '0'), {clientId: 'browser-tab'});`, worker);
+let fullRegistration;
+const fullEvent = {data: {type: 'fc-crypto-register', token: 'f'.repeat(32)}, source: client,
+    ports: [{postMessage(value) { fullRegistration = value; }}], waitUntil: value => value};
+for (const listener of workerListeners.get('message')) listener(fullEvent);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert(fullRegistration.error, '256 live capabilities retain the cap');
+assert.equal(vm.runInContext('capabilities.size', worker), 256);
+vm.runInContext('capabilities.clear()', worker);
+await page.FrontierMediaCrypto.ensureWorker();
 
 let response = await workerFetch(catalog[0].url, {headers: {Range: 'bytes=1048541-1048619'}});
 assert.equal(response.status, 206);

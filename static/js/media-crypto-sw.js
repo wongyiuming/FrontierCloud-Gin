@@ -8,18 +8,39 @@ const pendingGrants = new Map();
 const zipPlans = new Map();
 const PREFIX = '/__fc_media/';
 
+function revokeCapability(token) {
+    capabilities.delete(token);
+    for (const key of grants.keys()) if (key.startsWith(token + ':')) grants.delete(key);
+    for (const [id, plan] of zipPlans) if (plan.token === token) zipPlans.delete(id);
+}
+
+async function registerCapability(event, data) {
+    if (capabilities.size >= 256 && !capabilities.has(data.token)) {
+        // A renderer crash need not send pagehide. Reclaim only capabilities
+        // whose owning client is gone, and retain concurrent replacements.
+        await Promise.all([...capabilities].map(async ([token, capability]) => {
+            if (!await self.clients.get(capability.clientId)
+                && capabilities.get(token) === capability) revokeCapability(token);
+        }));
+    }
+    if (capabilities.size >= 256 && !capabilities.has(data.token)) {
+        event.ports[0]?.postMessage({error: '加密播放会话过多，请关闭闲置页面'});
+        return;
+    }
+    capabilities.set(data.token, {clientId: event.source.id});
+    event.ports[0]?.postMessage({ok: true});
+}
+
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 self.addEventListener('message', event => {
     const data = event.data || {};
     if (!event.source?.id || !/^[a-f0-9]{32}$/.test(data.token || '')) return;
     if (data.type === 'fc-crypto-register') {
-        if (capabilities.size >= 256 && !capabilities.has(data.token)) {
-            event.ports[0]?.postMessage({error: '加密播放会话过多，请关闭闲置页面'});
-            return;
-        }
-        capabilities.set(data.token, {clientId: event.source.id});
-        event.ports[0]?.postMessage({ok: true});
+        const registration = registerCapability(event, data).catch(() => {
+            event.ports[0]?.postMessage({error: '加密播放会话检查失败，请重试'});
+        });
+        event.waitUntil?.(registration);
     } else if (data.type === 'fc-crypto-invalidate'
         && capabilities.get(data.token)?.clientId === event.source.id) {
         for (const key of grants.keys()) if (key.startsWith(data.token + ':' + data.file_path + ':')) grants.delete(key);
@@ -35,8 +56,7 @@ self.addEventListener('message', event => {
         event.ports[0]?.postMessage({ok: true});
     } else if (data.type === 'fc-crypto-revoke'
         && capabilities.get(data.token)?.clientId === event.source.id) {
-        capabilities.delete(data.token);
-        for (const key of grants.keys()) if (key.startsWith(data.token + ':')) grants.delete(key);
+        revokeCapability(data.token);
     }
 });
 

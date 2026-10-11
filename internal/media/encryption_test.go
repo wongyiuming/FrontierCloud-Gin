@@ -6,6 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,8 +74,22 @@ func TestEncryptedLocalUploadRenameDeleteRollbackAndNonceTombstone(t *testing.T)
 	if _, err = db.Database().Exec("DROP TRIGGER reject_encrypted_delete"); err != nil {
 		t.Fatal(err)
 	}
+	delivery, err := svc.Delivery(ctx, name, "", "", "", false)
+	if err != nil || delivery.Stream == nil || delivery.Stream.Encryption == nil || *delivery.Stream.Encryption != meta {
+		t.Fatal("delivery lost its leased encryption classification", err)
+	}
+	defer delivery.Stream.File.Close()
 	if _, err = svc.Delete(ctx, []string{name}, store.AdminAudit{Action: "delete"}); err != nil {
 		t.Fatal(err)
+	}
+	if delivery.Stream.Encryption == nil || *delivery.Stream.Encryption != meta {
+		t.Fatal("deletion reclassified the opened ciphertext")
+	}
+	// Unix retains opened bytes after unlink. Windows may prevent the unlink;
+	// the platform's existing deletion tests determine that behavior.
+	opened, err := io.ReadAll(delivery.Stream.File)
+	if err != nil || !bytes.Equal(opened, payload) {
+		t.Fatal("opened delivery bytes changed", err)
 	}
 	if actual, err := svc.Encryption(ctx, id); err != nil || actual != nil {
 		t.Fatal("deleted descriptor remains active", err)
@@ -152,6 +167,11 @@ func TestEncryptedMasterAndOwnedStoragePublication(t *testing.T) {
 		if err != nil || !bytes.Equal(data, payload) {
 			t.Fatal("not ciphertext", err)
 		}
+		delivery, err := svc.Delivery(ctx, ticket.Path, "", "", "", false)
+		if err != nil || delivery.Stream == nil || delivery.Stream.Encryption == nil || *delivery.Stream.Encryption != meta {
+			t.Fatal("MasterLocal delivery lost encryption", err)
+		}
+		delivery.Stream.File.Close()
 		if _, err = svc.ReserveMasterEncryptedUpload(ctx, "reuse.mp3", "music/EncryptedMaster", "", "primary", meta.CiphertextSize, 255, store.AdminAudit{}, &meta); err == nil {
 			t.Fatal("same key/nonce reserved twice")
 		}

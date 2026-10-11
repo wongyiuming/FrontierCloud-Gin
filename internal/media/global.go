@@ -347,7 +347,8 @@ func (s *Service) OwnedStream(ctx context.Context, id string) (*Stream, error) {
 		f.Close()
 		return nil, err
 	}
-	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: o.ID, OwnerID: identity.ID, ResourceID: node.ResourceID(identity.ID, o.ID)}, nil
+	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: o.ID, OwnerID: identity.ID,
+		ResourceID: node.ResourceID(identity.ID, o.ID), Encryption: o.Encryption}, nil
 }
 
 func (s *Service) GlobalPlayback(ctx context.Context, name, id, session string, played, duration float64) (store.PlaybackResult, error) {

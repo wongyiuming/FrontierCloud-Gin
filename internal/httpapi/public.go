@@ -261,20 +261,7 @@ func (p *Public) deliver(c *gin.Context, name, id string) {
 	}
 	stream := delivery.Stream
 	defer stream.File.Close()
-	encryptionID := delivery.ObjectID
-	identity, err := p.media.IdentityState(c.Request.Context())
-	if err != nil {
-		internalError(c, err)
-		return
-	}
-	if identity.Role == "Master" {
-		encryptionID = delivery.ResourceID
-	}
-	encryption, err := p.media.Encryption(c.Request.Context(), encryptionID)
-	if err != nil {
-		internalError(c, err)
-		return
-	}
+	encryption := stream.Encryption
 	if c.GetBool("karaoke_no_store") {
 		noStore(c)
 	} else {

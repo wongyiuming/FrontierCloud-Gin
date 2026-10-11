@@ -65,7 +65,7 @@ const context = {
     async uploadRaw(url, file, progress) { transfers.push({url, file}); progress(1); },
 };
 context.window = context;
-context.FrontierMediaCrypto = {async encryptFile(file) {
+context.FrontierMediaCrypto = {async encryptUploadFile(file) {
     encryptedCalls += 1;
     if (encryptionFails) throw new Error('browser encryption failed');
     return {file: {name: 'temporary-ciphertext', size: file.size + 16},

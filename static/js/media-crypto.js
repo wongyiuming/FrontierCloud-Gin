@@ -272,6 +272,33 @@
                 await directory.removeEntry(name).catch(() => {});
         }
     }
+    async function encryptUploadFile(file, onProgress = () => {}) {
+        requireCrypto();
+        const extension = /\.[^.]+$/.exec(file.name || '')?.[0].toLowerCase();
+        if (extension === '.lrc') {
+            if (file.size < 1 || file.size > 2 * 1024 * 1024)
+                throw new Error('歌词文件最多允许 2 MiB');
+            const payload = await file.slice(0, file.size).arrayBuffer();
+            try {
+                common.parseLyrics(new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(payload));
+            } finally { new Uint8Array(payload).fill(0); }
+        } else {
+            const head = new Uint8Array(await file.slice(0, Math.min(file.size, 12)).arrayBuffer());
+            const starts = values => values.every((value, index) => head[index] === value);
+            const word = (start, end) => String.fromCharCode(...head.subarray(start, end));
+            const valid = extension === '.mp3' && (word(0, 3) === 'ID3'
+                    || head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0)
+                || extension === '.flac' && word(0, 4) === 'fLaC'
+                || extension === '.wav' && head.length >= 12 && word(0, 4) === 'RIFF' && word(8, 12) === 'WAVE'
+                || ['.m4a', '.mp4'].includes(extension) && head.length >= 12 && word(4, 8) === 'ftyp'
+                || ['.webm', '.mkv'].includes(extension) && starts([0x1a, 0x45, 0xdf, 0xa3]);
+            head.fill(0);
+            if (!valid) throw new Error('上传失败，文件内容不是受支持的媒体格式');
+        }
+        // Validate the bounded plaintext locally before key preparation or
+        // encryption. Neither content validation nor media encryption uses the Master.
+        return encryptFile(file, onProgress);
+    }
     async function encryptFile(file, onProgress = () => {}) {
         const activeSession = await getSession();
         const prepared = await jsonRequest('/prepare', {session_id: activeSession.session_id, plaintext_size: file.size});
@@ -374,7 +401,7 @@
             for (const name of temporaryNames) await directory.removeEntry(name).catch(() => {});
         }).catch(() => {});
     });
-    window.FrontierMediaCrypto = {prepareCatalog, ensureWorker, encryptFile, textFor,
+    window.FrontierMediaCrypto = {prepareCatalog, ensureWorker, encryptFile, encryptUploadFile, textFor,
         encryptRecordingLyrics, decryptRecordingLyrics,
         virtualUrl, failureFor, resetFault, downloadPlan, parseLyrics: common?.parseLyrics, crcUpdate};
     void cleanAbandonedTemporaryFiles().catch(() => {});

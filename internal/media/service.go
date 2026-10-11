@@ -478,6 +478,7 @@ type Stream struct {
 	ObjectID   string
 	OwnerID    string
 	ResourceID string
+	Encryption *mediacrypto.Metadata
 }
 
 func (s *Service) Stream(ctx context.Context, name string) (*Stream, error) {
@@ -513,7 +514,18 @@ func (s *Service) Stream(ctx context.Context, name string) (*Stream, error) {
 		f.Close()
 		return nil, err
 	}
-	return &Stream{f, info, o.Path, id, identity.ID, node.ResourceID(identity.ID, id)}, nil
+	var encryption *mediacrypto.Metadata
+	if repository, ok := s.repository.(store.EncryptionRepository); ok {
+		encryption, err = repository.Encryption(ctx, id)
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+	}
+	// Capture byte classification before releasing the mutation lease. An open
+	// file can outlive deletion of its descriptor on Unix filesystems.
+	return &Stream{File: f, Info: info, Path: o.Path, ObjectID: id, OwnerID: identity.ID,
+		ResourceID: node.ResourceID(identity.ID, id), Encryption: encryption}, nil
 }
 
 func (s *Service) Playback(ctx context.Context, name, session string, played, duration float64) (store.PlaybackResult, error) {
