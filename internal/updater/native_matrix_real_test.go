@@ -556,7 +556,9 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal("native sequential STUN binding failed", i, n, err, readErr)
 		}
 	}
-	request, _ := http.NewRequestWithContext(ctx, "GET", master.origin+"/api/v1/media/music/category?path=music", nil)
+	// Karaoke renders the shared player network configuration before upload
+	// fixtures exist; an empty music root is not a playable category.
+	request, _ := http.NewRequestWithContext(ctx, "GET", master.origin+"/karaoke/", nil)
 	page, err := master.client.Do(request)
 	if err != nil {
 		t.Fatal(err)

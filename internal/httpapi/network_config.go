@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -14,5 +15,5 @@ func (p *Public) stunURLs(c *gin.Context) []string {
 			return urls
 		}
 	}
-	return []string{"stun:" + p.settings.ServerName + ":" + strconv.Itoa(p.settings.STUNPort)}
+	return []string{"stun:" + net.JoinHostPort(p.settings.ServerName, strconv.Itoa(p.settings.STUNPort))}
 }
