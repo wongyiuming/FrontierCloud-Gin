@@ -155,3 +155,42 @@ func (s *Service) MigrationChunk(ctx context.Context, id, name string, expected,
 	}
 	return data, nil
 }
+
+func (s *Service) MigrationRecheck(ctx context.Context, spec migrationdata.Spec, id string, admission func() error) (migrationdata.Checkpoint, error) {
+	r, e := s.MigrationReceiver(ctx)
+	if e != nil {
+		return migrationdata.Checkpoint{}, e
+	}
+	return r.Recheck(ctx, spec, id, admission, func(stage string) error {
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		a, e := s.root.Lstat(stage)
+		if e != nil {
+			return e
+		}
+		b, e := s.safeInfo(spec.TargetPath)
+		if e != nil {
+			return e
+		}
+		if !b.Mode().IsRegular() || !os.SameFile(a, b) || b.Size() != spec.Bytes {
+			return store.ErrMigrationState
+		}
+		o, e := s.repository.ObjectByID(ctx, spec.ObjectID)
+		if e != nil {
+			return e
+		}
+		if o == nil || o.Path != spec.TargetPath {
+			return store.ErrMigrationState
+		}
+		if (o.Encryption == nil) != (spec.Encryption == nil) || o.Encryption != nil && *o.Encryption != *spec.Encryption {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}

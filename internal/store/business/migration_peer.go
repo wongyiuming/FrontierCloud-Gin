@@ -326,7 +326,7 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		} else if state == "cancelling" {
 			return store.ErrMigrationState
 		}
-		if operation != "read" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "abort" {
+		if operation != "read" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "abort" {
 			return store.ErrMigrationState
 		}
 		if operation == "read" && n.ID != h.SourceID || operation != "read" && n.ID != h.TargetID {
@@ -350,6 +350,9 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 			return store.ErrMigrationState
 		}
 		if operation == "publish" && phase != "verified" && phase != "publishing" && phase != "published" {
+			return store.ErrMigrationState
+		}
+		if operation == "recheck" && phase != "published" {
 			return store.ErrMigrationState
 		}
 		v.Proof.ID = v.Object.ID

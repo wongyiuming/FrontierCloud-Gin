@@ -17,6 +17,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
@@ -48,12 +49,15 @@ type Spec struct {
 	Recording     *store.RecordingProof `json:"recording_binding,omitempty"`
 }
 type Checkpoint struct {
-	Version   int    `json:"version"`
-	Spec      Spec   `json:"binding"`
-	Offset    int64  `json:"offset"`
-	PrefixSHA string `json:"prefix_sha256"`
-	HashState []byte `json:"-"`
-	State     string `json:"state"`
+	Version      int    `json:"version"`
+	Spec         Spec   `json:"binding"`
+	Offset       int64  `json:"offset"`
+	PrefixSHA    string `json:"prefix_sha256"`
+	HashState    []byte `json:"-"`
+	State        string `json:"state"`
+	RecheckID    string `json:"recheck_id,omitempty"`
+	RecheckedAt  int64  `json:"rechecked_at,omitempty"`
+	RecheckError string `json:"recheck_error,omitempty"`
 }
 type journalRecord struct {
 	Checkpoint
@@ -580,5 +584,48 @@ func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, 
 		return c, e
 	}
 	c.State = "published"
+	return c, r.save(c)
+}
+
+// Recheck creates a fresh proof only after actual bytes and the published
+// inode/metadata are inspected. A failed/new request cannot reuse an old ID.
+func (r *Receiver) Recheck(ctx context.Context, s Spec, id string, admission func() error, published func(string) error) (Checkpoint, error) {
+	if !r.valid(s) || !identifier.MatchString(id) || admission == nil || published == nil {
+		return Checkpoint{}, ErrState
+	}
+	release, e := r.lock(ctx, s)
+	if e != nil {
+		return Checkpoint{}, e
+	}
+	defer release()
+	c, e := r.load(s)
+	if e != nil {
+		return c, e
+	}
+	if c.State != "published" {
+		return c, ErrState
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	failed := func(cause error) (Checkpoint, error) {
+		c.RecheckID = id
+		c.RecheckedAt = 0
+		c.RecheckError = "disk_verification_failed"
+		return c, errors.Join(cause, r.save(c))
+	}
+	if _, e = r.inspect(ctx, c); e != nil {
+		return failed(e)
+	}
+	name, _, _ := names(s)
+	if e = published(name); e != nil {
+		return failed(e)
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	c.RecheckID = id
+	c.RecheckedAt = time.Now().Unix()
+	c.RecheckError = ""
 	return c, r.save(c)
 }

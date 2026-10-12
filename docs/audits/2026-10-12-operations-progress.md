@@ -505,6 +505,27 @@ test reconciles target scopes, deletes the migrated object through the ordinary
 path and confirms exactly one refund. This repairs post-migration deletion;
 it does not bypass active migration scopes or authorize source removal.
 
+## Fresh target disk recheck
+
+The service now generates a new authenticated request ID for each target disk
+proof. The joined local worker rehashes the actual published inode with bounded
+I/O, checks its private anchor and current metadata, and durably records that
+exact request's result. A failed request invalidates its receipt instead of
+reusing an older successful publication. Master accepts only its own fresh
+request ID, immutable object binding, complete SHA/length and published state.
+This supplies the previously missing disk proof RPC; it does not yet dispatch
+source deletion or prove completion of old playback connections.
+
+Actual SQLite/Gin/HMAC byte fixtures moved 524351 bytes, retried lost receipts
+and failed SQL cutover, then detected target corruption on a fresh request while
+retaining target authority. These use a router transport, not native TLS/socket
+or browser fleet acceptance. Filesystem tests additionally rejected replacement
+by a different inode with identical bytes and persisted failure across restart.
+See [race/actual byte evidence](2026-10-12-target-disk-recheck.txt),
+[SQLite/MySQL transactions](2026-10-12-target-disk-recheck-mysql.txt), and
+[full Go regression](2026-10-12-target-disk-recheck-go.txt). Source CI also passed
+201 Python tests (two optional skips) and the existing JavaScript smoke checks.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

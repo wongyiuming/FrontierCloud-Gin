@@ -13,6 +13,8 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +47,7 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
 	_, _, _, _, source := clusterFixture(t, "https://source.test", transport, true)
-	_, targetDB, _, _, target := clusterFixture(t, "https://target.test", transport, true)
+	_, targetDB, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true)
 	for _, v := range []struct {
 		s          *node.Service
 		role, url  string
@@ -209,6 +211,34 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	hidden, e := db.Media().HiddenPaths(ctx)
 	if e != nil || !hidden["music/RunnerUnit/a.mp3"] {
 		t.Fatal("hidden state changed", hidden, e)
+	}
+	cleanupLease, e := repo.ClaimMigration(ctx, plan.ID, strings.Repeat("d", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	proof, e := engine.FreshTargetProof(ctx, cleanupLease, ids[0])
+	if e != nil || proof.Bytes <= 0 || proof.VerifiedAt < time.Now().Unix()-30 {
+		t.Fatal("fresh authenticated target proof", proof, e)
+	}
+	row, e := db.Pool().Resource(ctx, ids[0])
+	if e != nil {
+		t.Fatal(e)
+	}
+	file, e := os.OpenFile(filepath.Join(targetDir, "media", row.Path), os.O_WRONLY, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = file.WriteAt([]byte("!"), 0)
+	file.Close()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = engine.FreshTargetProof(ctx, cleanupLease, ids[0]); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("corrupted target reused old publication proof", e)
+	}
+	row, e = db.Pool().Resource(ctx, ids[0])
+	if e != nil || row.MemberID != tr.PeerID {
+		t.Fatal("failed recheck reversed committed authority", row, e)
 	}
 	t.Logf("Master runner moved %d actual bytes across one complete parent; lost acknowledgement and SQL cutover failure safely retried", catalog.TotalBytes)
 }

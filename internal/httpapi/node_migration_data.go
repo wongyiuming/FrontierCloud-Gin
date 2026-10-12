@@ -91,7 +91,13 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				return
 			case job := <-jobs:
 				v := job.request
-				if job.operation == "publish" {
+				if job.operation == "recheck" {
+					if v.Spec.Resource == "recording" && recordings != nil {
+						_, _ = recordings.MigrationRecheck(ctx, v.Spec, v.RecheckID, func() error { return admission(ctx, job.relationship, v, "recheck") })
+					} else {
+						_, _ = volume.MigrationRecheck(ctx, v.Spec, v.RecheckID, func() error { return admission(ctx, job.relationship, v, "recheck") })
+					}
+				} else if job.operation == "publish" {
 					if v.Spec.Resource == "recording" && recordings != nil {
 						_, _ = recordings.MigrationPublish(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "publish") }, func(receipt store.RecordingReceipt, free int64) error {
 							return repo.CompletePeerRecordingPublication(ctx, job.relationship, v.Lease, v.Spec.LogicalID, receipt, free, store.NodeAudit{})
@@ -289,6 +295,37 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "publish"}:
 			active[key(v)] = true
 			return gin.H{"status": "publishing"}, nil
+		default:
+			return gin.H{"status": "waiting"}, nil
+		}
+	})
+	register("recheck", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		if !migrationdata.ValidRecheckID(v.RecheckID) {
+			return nil, store.ErrMigrationState
+		}
+		r, e := receiver(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		cp, e := r.Status(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		if cp.State != "published" {
+			return nil, store.ErrMigrationState
+		}
+		if cp.RecheckID == v.RecheckID {
+			return gin.H{"status": "rechecked", "checkpoint": cp}, nil
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"status": "working"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "recheck"}:
+			active[key(v)] = true
+			return gin.H{"status": "rechecking"}, nil
 		default:
 			return gin.H{"status": "waiting"}, nil
 		}

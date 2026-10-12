@@ -124,3 +124,43 @@ func (s *Storage) MigrationChunk(ctx context.Context, relationship, user, id str
 	}
 	return data, nil
 }
+
+func (s *Storage) MigrationRecheck(ctx context.Context, spec migrationdata.Spec, id string, admission func() error) (migrationdata.Checkpoint, error) {
+	if spec.Recording == nil {
+		return migrationdata.Checkpoint{}, store.ErrMigrationState
+	}
+	r, e := s.MigrationReceiver(ctx)
+	if e != nil {
+		return migrationdata.Checkpoint{}, e
+	}
+	return r.Recheck(ctx, spec, id, admission, func(stage string) error {
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		a, e := s.info(stage)
+		if e != nil {
+			return e
+		}
+		b, e := s.info(spec.TargetPath)
+		if e != nil {
+			return e
+		}
+		if !os.SameFile(a, b) || b.Size() != spec.Bytes {
+			return store.ErrMigrationState
+		}
+		row, e := s.repo.Recording(ctx, spec.LogicalID)
+		if e != nil {
+			return e
+		}
+		p := spec.Recording
+		if row == nil || row.State != "ready" || row.UserID != p.UserID || row.Filename != p.Filename || row.ContentType != p.ContentType || row.Bytes != spec.Bytes || row.SHA256 == nil || *row.SHA256 != spec.SHA256 || !store.RecordingProofSnapshotMatches(*p, &store.RecordingMetadata{Title: row.Title, Lyrics: row.Lyrics, EncryptedLyrics: row.EncryptedLyrics}) {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}
