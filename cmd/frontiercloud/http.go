@@ -15,6 +15,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -111,6 +112,14 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	if peers, ok := database.Pool().(store.MigrationPeerRepository); ok {
 		httpapi.RegisterNodeMigrationControl(handler, settings, resolver, controlService, mediaService, peers)
 		closers = append(closers, httpapi.RegisterNodeMigrationData(handler, settings, resolver, controlService, mediaService, recordingStorage, peers))
+	}
+	if migrations, ok := database.Pool().(store.MigrationRepository); ok {
+		runner := &resourcemigration.Runner{Repository: migrations, Nodes: database.Nodes(), Client: controlService}
+		stop, err := runner.Start(context.Background())
+		if err != nil {
+			return nil, nil, err
+		}
+		closers = append(closers, stop)
 	}
 	httpapi.RegisterObservations(handler, adminHTTP, observation.New(database.Observations(), redisClient, settings.WebRTCCooldown), resolver)
 

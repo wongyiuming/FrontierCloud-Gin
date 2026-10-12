@@ -146,4 +146,7 @@ type MigrationRepository interface {
 	PrepareMigrationPublication(context.Context, MigrationLease, string) error
 	PublishMigrationObject(context.Context, MigrationLease, string) error
 	CommitMigrationUnit(context.Context, MigrationLease, string, NodeAudit) error
+	MigrationRunState(context.Context, MigrationLease, string, string, string, NodeAudit) error
+	ValidateMigrationLease(context.Context, MigrationLease) error
+	NextMigrationRun(context.Context) (string, error)
 }

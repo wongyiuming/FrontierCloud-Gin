@@ -431,6 +431,45 @@ completion, including the group access used by Direct Nginx. The earlier media
 path omitted this permission change; Go-router reads alone had not exposed it.
 Native Nginx/browser verification remains required.
 
+## Master execution checkpoint
+
+The single existing business process now joins one Master migration worker into
+shutdown. It selects the oldest runnable task with no live SQL runner, rather
+than relying on the GUI's bounded history list. The worker claims a monotonic
+epoch, loads the original persisted plan, registers both followers/object rosters,
+relays one 256 KiB message at a time and checks the current SQL lease before each
+network action. It renews the Master/peer leases between bounded operations.
+Typed requests are converted through strict bounded JSON before existing
+raw-body HMAC canonicalization; no arbitrary destination URL or file key is used.
+
+Restart/retry reads target offset/hash facts and actual verified/publication
+receipts. All objects in a complete parent are verified before publication is
+prepared, then every published receipt is persisted before the short unit-owner
+transaction. Failed tasks retain stable error/object identifiers and audit facts,
+owned reservations/drains and peer fences; they require explicit retry. SQL
+pause/resume cannot revive an old runner epoch. Source copies are retained and
+the executor stops at cleanup_pending. Cancellation reconciliation, grace/read
+dependencies and managed source/anchor deletion remain separate unfinished work.
+
+The actual SQLite/Gin pairing/HMAC fixture moved 524,351 bytes in two files under
+one parent. It injected a lost successful append acknowledgement, recreated the
+runner, resumed the saved prefix, then failed the unit SQL transaction after
+ownership updates. Both owners remained at source, while durable target copies
+and target local quota were retained. A further retry reused published copies,
+committed the whole parent and read identical bytes through ordinary target media
+capabilities. Logical IDs and hidden state were preserved. The fixture opts into
+the unfinished capability explicitly and uses router transport; it does not
+claim real TLS/fleet or native-process restart acceptance. Repository SQLite/MySQL
+checks separately cover scheduling, duplicate-runner rejection, pause/resume
+epoch fencing and explicit failure/retry state. Full migration capability remains
+unadvertised pending complete planning, cleanup, retirement and fleet validation.
+See [actual-byte runner output](2026-10-12-master-runner.txt),
+[SQLite/MySQL runner transactions](2026-10-12-master-runner-mysql.txt) and
+[full Go regression](2026-10-12-master-runner-go.txt). Source CI also passed its
+existing budget with 201 Python tests and two optional skips. MySQL required
+bounded standalone task error codes; full failing object IDs remain in the
+structured audit rather than exceeding the error-code column.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

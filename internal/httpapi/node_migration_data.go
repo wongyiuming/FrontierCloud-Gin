@@ -21,14 +21,8 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
-type migrationDataRequest struct {
-	Lease  store.MigrationLease `json:"lease"`
-	Spec   migrationdata.Spec   `json:"binding"`
-	Offset int64                `json:"offset"`
-	Length int                  `json:"length"`
-	Data   []byte               `json:"data,omitempty"`
-	SHA    string               `json:"chunk_sha256,omitempty"`
-}
+type migrationDataRequest = migrationdata.Request
+
 type migrationVerifyJob struct {
 	request      migrationDataRequest
 	relationship string
