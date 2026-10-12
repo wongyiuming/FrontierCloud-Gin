@@ -71,6 +71,15 @@ type MigrationCleanupProof struct {
 	MigrationDiskProof
 	VerifiedAt int64 `json:"verified_at"`
 }
+
+// A shadow deletion grant is issued only after the service has freshly hashed
+// authoritative source bytes. It never authorizes source deletion or cutover.
+type MigrationShadowGrant struct {
+	Unit        MigrationUnitFinishGrant `json:"unit_grant"`
+	Object      MigrationObject          `json:"object"`
+	SourceProof MigrationCleanupProof    `json:"source_proof"`
+}
+
 type MigrationCleanupGrant struct {
 	SourceCopyDeleted bool            `json:"source_copy_deleted,omitempty"`
 	TaskID            string          `json:"task_id"`
@@ -171,6 +180,7 @@ type MigrationRepository interface {
 	MigrationRunState(context.Context, MigrationLease, string, string, string, NodeAudit) error
 	ValidateMigrationLease(context.Context, MigrationLease) error
 	NextMigrationRun(context.Context) (string, error)
+	AuthorizeMigrationShadowDeletion(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationShadowGrant, error)
 	AuthorizeMigrationCleanup(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
 	AuthorizeMigrationAnchorRetirement(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
 	RecordMigrationSourceDeletion(context.Context, MigrationLease, MigrationSourceReceipt, NodeAudit) error

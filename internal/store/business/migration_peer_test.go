@@ -396,3 +396,33 @@ func TestPeerMigrationEmptyCancellationReceiptReplay(t *testing.T) {
 		t.Fatal("cancelled empty task reopened", e)
 	}
 }
+
+func TestPeerMigrationCancellationSourceProofReadIsTaskStateBound(t *testing.T) {
+	_, raw, repo, rel, h, l, v := peerMigrationFixture(t, true)
+	ctx := context.Background()
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "queued", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "cancel-read"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("proof read outside cancellation", e)
+	}
+	l.Epoch++
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "read"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("ordinary copy read restored", e)
+	}
+	if bound, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "cancel-read"); e != nil || bound.Object.Version != v.Object.Version || bound.Proof.SHA256 != v.Proof.SHA256 {
+		t.Fatal(bound, e)
+	}
+	if _, e := raw.Exec("UPDATE migration_storage_journal SET state='deleting' WHERE task_id=?", h.TaskID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "cancel-read"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("deleting source accepted as authority proof", e)
+	}
+}

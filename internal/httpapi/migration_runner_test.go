@@ -97,6 +97,9 @@ func TestMasterMigrationCancellationRealPrefixAndLostFinalReceipts(t *testing.T)
 func TestMasterMigrationPartialCommitCancellationPreservesBothOwners(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "mixed")
 }
+func TestMasterMigrationShadowGrantRequiresCurrentSourceBytes(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "shadowproof")
+}
 func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
 	mixed := len(modes) > 0 && modes[0] == "mixed"
 	ctx := context.Background()
@@ -438,6 +441,53 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	targetDB.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", tr.PeerID).Scan(&targetUsed, &targetReserved)
 	if targetUsed != catalog.TotalBytes || targetReserved != 0 {
 		t.Fatal("local publication accounting", targetUsed, targetReserved)
+	}
+	if len(modes) > 0 && modes[0] == "shadowproof" {
+		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		lease, e := repo.ClaimMigration(ctx, plan.ID, strings.Repeat("8", 32), time.Minute)
+		if e != nil {
+			t.Fatal(e)
+		}
+		resource, e := db.Pool().Resource(ctx, ids[0])
+		if e != nil || resource.MemberID != sr.PeerID {
+			t.Fatal(resource, e)
+		}
+		original := payloads[resource.Path]
+		if e = os.WriteFile(filepath.Join(sourceDir, "media", resource.Path), append([]byte("!"), original[1:]...), 0644); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = engine.FreshCancellationSourceProof(ctx, lease, ids[0]); !errors.Is(e, store.ErrMigrationState) {
+			t.Fatal("corrupted source accepted for shadow deletion", e)
+		}
+		if data, e := os.ReadFile(filepath.Join(targetDir, "media", resource.Path)); e != nil || !bytes.Equal(data, original) {
+			t.Fatal("unique valid target copy changed", e)
+		}
+		if e = os.WriteFile(filepath.Join(sourceDir, "media", resource.Path), original, 0644); e != nil {
+			t.Fatal(e)
+		}
+		proof, e := engine.FreshCancellationSourceProof(ctx, lease, ids[0])
+		if e != nil {
+			t.Fatal(e)
+		}
+		grant, e := repo.AuthorizeMigrationShadowDeletion(ctx, lease, ids[0], proof)
+		if e != nil || grant.Unit.Unit.CommittedAt != 0 || grant.Object.ID != ids[0] || grant.SourceProof.SHA256 != proof.SHA256 {
+			t.Fatal(grant, e)
+		}
+		old := proof
+		old.VerifiedAt -= 31
+		if _, e = repo.AuthorizeMigrationShadowDeletion(ctx, lease, ids[0], old); !errors.Is(e, store.ErrMigrationState) {
+			t.Fatal("stale source proof", e)
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "pause", store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+			t.Fatal("cancel converted to paused", e)
+		}
+		t.Logf("published shadow retained while corrupted source blocked authorization; fresh %d-byte authenticated source SHA bound to uncommitted cancellation unit", proof.Bytes)
+		return
 	}
 	if _, e = db.Database().Exec("DROP TRIGGER block_runner_cutover"); e != nil {
 		t.Fatal(e)

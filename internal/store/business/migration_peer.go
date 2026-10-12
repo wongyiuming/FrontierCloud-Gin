@@ -328,13 +328,13 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 			if state != "cancelling" || n.ID != h.TargetID {
 				return store.ErrMigrationState
 			}
-		} else if state == "cancelling" && operation != "cleanup" && operation != "recheck" && operation != "retire" && operation != "status" {
+		} else if state == "cancelling" && operation != "cleanup" && operation != "recheck" && operation != "retire" && operation != "status" && operation != "cancel-read" {
 			return store.ErrMigrationState
 		}
-		if operation != "read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "retire" && operation != "abort" {
+		if operation != "read" && operation != "cancel-read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "retire" && operation != "abort" {
 			return store.ErrMigrationState
 		}
-		sourceAction := operation == "read" || operation == "cleanup"
+		sourceAction := operation == "read" || operation == "cancel-read" || operation == "cleanup"
 		if sourceAction && n.ID != h.SourceID || !sourceAction && n.ID != h.TargetID {
 			return store.ErrMigrationState
 		}
@@ -353,6 +353,9 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 			return store.ErrMigrationState
 		}
 		if operation == "abort" && phase != "receiving" && phase != "verified" && phase != "aborting" && phase != "aborted" {
+			return store.ErrMigrationState
+		}
+		if operation == "cancel-read" && (state != "cancelling" || phase != "receiving") {
 			return store.ErrMigrationState
 		}
 		if operation == "cleanup" && phase != "receiving" && phase != "deleting" && phase != "deleted" {

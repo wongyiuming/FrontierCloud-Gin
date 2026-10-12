@@ -207,35 +207,39 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 		return nil, store.ErrMigrationState
 	}
-	register("read", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
-		if v.Length < 1 || v.Length > migrationdata.ChunkBytes || v.Offset < 0 || v.Offset%migrationdata.ChunkBytes != 0 || v.Offset > v.Spec.Bytes-int64(v.Length) {
-			return nil, store.ErrMigrationState
-		}
-		if e := paceBytes(c.Request.Context(), v.Length); e != nil {
-			return nil, e
-		}
-		var data []byte
-		var e error
-		if v.Spec.Resource == "media" {
-			data, e = volume.MigrationChunk(c.Request.Context(), p.Object.ObjectID, p.Object.Path, v.Spec.Bytes, v.Offset, v.Length)
-		} else if recordings != nil {
-			parts := strings.Split(p.Object.Path, "/")
-			if len(parts) != 3 {
+	readChunk := func(operation string) func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		return func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+			if v.Length < 1 || v.Length > migrationdata.ChunkBytes || v.Offset < 0 || v.Offset%migrationdata.ChunkBytes != 0 || v.Offset > v.Spec.Bytes-int64(v.Length) {
 				return nil, store.ErrMigrationState
 			}
-			data, e = recordings.MigrationChunk(c.Request.Context(), rel.ID, parts[1], p.Object.ObjectID, v.Spec.Bytes, v.Offset, v.Length)
-		} else {
-			return nil, store.ErrMigrationState
+			if e := paceBytes(c.Request.Context(), v.Length); e != nil {
+				return nil, e
+			}
+			var data []byte
+			var e error
+			if v.Spec.Resource == "media" {
+				data, e = volume.MigrationChunk(c.Request.Context(), p.Object.ObjectID, p.Object.Path, v.Spec.Bytes, v.Offset, v.Length)
+			} else if recordings != nil {
+				parts := strings.Split(p.Object.Path, "/")
+				if len(parts) != 3 {
+					return nil, store.ErrMigrationState
+				}
+				data, e = recordings.MigrationChunk(c.Request.Context(), rel.ID, parts[1], p.Object.ObjectID, v.Spec.Bytes, v.Offset, v.Length)
+			} else {
+				return nil, store.ErrMigrationState
+			}
+			if e != nil {
+				return nil, e
+			}
+			if e = admission(c.Request.Context(), rel.ID, v, operation); e != nil {
+				return nil, e
+			}
+			sum := sha256.Sum256(data)
+			return gin.H{"data": data, "offset": v.Offset, "size_bytes": len(data), "chunk_sha256": hex.EncodeToString(sum[:]), "source_version": v.Spec.SourceVersion}, nil
 		}
-		if e != nil {
-			return nil, e
-		}
-		if e = admission(c.Request.Context(), rel.ID, v, "read"); e != nil {
-			return nil, e
-		}
-		sum := sha256.Sum256(data)
-		return gin.H{"data": data, "offset": v.Offset, "size_bytes": len(data), "chunk_sha256": hex.EncodeToString(sum[:]), "source_version": v.Spec.SourceVersion}, nil
-	})
+	}
+	register("read", readChunk("read"))
+	register("cancel-read", readChunk("cancel-read"))
 	register("begin", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		r, e := receiver(c.Request.Context(), v.Spec)
 		if e != nil {

@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“5 snapshots and
+manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -1006,3 +1006,32 @@ peer admission when target is full/unwritable, cancellation after a peer has
 already returned a normal completed receipt, recording cancellation/fleet/browser
 and reverse acceptance, and all remaining original delivery scope. Migration
 capability is still unadvertised in production.
+
+
+## Fresh source proof before shadow deletion (2026-10-12)
+
+Published-but-uncommitted target copies can be the only intact physical copy if
+the source has suffered corruption. The new cancellation source verifier reads
+the full source object through authenticated, paced, 256 KiB chunks, verifies
+chunk lengths/offsets/versions/SHA and then the complete original SHA. Master
+keeps no file-sized buffer or disk cache. The still-uncommitted authoritative
+unit and SQL runner lease are checked before and after this scan.
+
+The distinct `cancel-read` action is accepted only by the active upstream Master
+under a cancelling task with a complete bound roster and a receiving source
+journal. It does not re-enable ordinary copy reads, appends or publication and
+cannot read a deleting source as an authoritative proof. A shadow deletion grant
+binds the immutable cancellation unit/object and a matching source proof no
+older than 30 seconds. Stale, wrong-sized/version/hash proofs and committed units
+are rejected. No administrator API accepts supplied source proof values.
+
+`2026-10-12-cancellation-source-proof.txt` records actual failed-cutover target
+publication, source corruption, authenticated full source scans and preserved
+intact target bytes. Backend grant/action fences are checked with SQLite/MySQL
+in `2026-10-12-cancellation-source-proof-mysql.txt`; full Go regression is in
+`2026-10-12-cancellation-source-proof-full-go.txt`.
+
+This is the safety prerequisite for managed target-shadow deletion. The target
+admission, managed file deletion/recovery, private anchor removal and mixed
+used/reserved reconciliation for published shadows are still outstanding.
+Production capability remains unadvertised and the full original goal continues.

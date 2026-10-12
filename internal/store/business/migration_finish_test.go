@@ -352,3 +352,41 @@ func TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts(t *t
 		}
 	}
 }
+
+func TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof(t *testing.T) {
+	f := migrationDatabase(t)
+	ctx := context.Background()
+	p := f.plan(t, hashPath(t.Name())[:32])
+	if _, e := f.repo.StartMigration(ctx, p, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.repo.ControlMigration(ctx, p.ID, "cancel", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	l, e := f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("f", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	w, e := f.repo.MigrationWork(ctx, p.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	cp := w.Objects[0]
+	proof := store.MigrationCleanupProof{MigrationDiskProof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}, VerifiedAt: time.Now().Unix()}
+	for _, alter := range []func(*store.MigrationCleanupProof){func(p *store.MigrationCleanupProof) { p.VerifiedAt -= 31 }, func(p *store.MigrationCleanupProof) { p.Bytes++ }, func(p *store.MigrationCleanupProof) { p.Version = strings.Repeat("0", 64) }, func(p *store.MigrationCleanupProof) { p.SHA256 = strings.Repeat("0", 64) }} {
+		wrong := proof
+		alter(&wrong)
+		if _, e = f.repo.AuthorizeMigrationShadowDeletion(ctx, l, cp.Object.ID, wrong); !errors.Is(e, store.ErrMigrationState) {
+			t.Fatal("invalid source proof", e)
+		}
+	}
+	if g, e := f.repo.AuthorizeMigrationShadowDeletion(ctx, l, cp.Object.ID, proof); e != nil || g.Object.ID != cp.Object.ID || g.Unit.Unit.State != "cancelled" {
+		t.Fatal(g, e)
+	}
+	if _, e = f.raw.Exec("UPDATE migration_units SET committed_at=1 WHERE task_id=? AND unit_id=?", p.ID, cp.UnitID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.repo.AuthorizeMigrationShadowDeletion(ctx, l, cp.Object.ID, proof); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("committed target delete authorized", e)
+	}
+}
