@@ -391,6 +391,46 @@ This checkpoint strengthens the durable resource description needed by recording
 publication. Recording publication, the Master runner and the required fleet
 acceptance remain incomplete; no full migration capability is advertised.
 
+## Recording publication checkpoint
+
+Recording objects now carry a bounded original filename/content type/creation
+binding and, for encrypted lyric snapshots, the original descriptor/metadata
+hash. Followers persist these facts in generation 6's existing binding table.
+The target's local job rehashes private bytes, validates the actual opaque footer,
+links the verified inode under the target relationship/user path and commits
+the original recording ID, footer receipt, owned used/reserved accounting and
+publication audit together. It does not create a user account, copy a password,
+alter Master personal quota or change Master ownership. Publication replay
+checks the same recorded description and refuses deleted user accounts.
+
+Reverse recording migration can reactivate only the same deleted physical ID,
+user, filename/type, original byte count and full SHA. An encrypted lyric file-ID
+tombstone can be restored only for that exact recording and physically verified
+original footer; ordinary upload nonce rules are retained. Private publication
+anchors stay journaled pending whole-task reconciliation/cleanup.
+
+Actual SQLite/Gin pairing/HMAC tests uploaded, relayed, verified and published
+plain and valid AES-GCM encrypted recording footers. The ordinary target read
+returned identical full bytes; the encrypted fixture then decrypted the returned
+lyric snapshot with its client-only test key. Neither server received this key.
+Master ownership/personal used bytes remained unchanged, target owned capacity
+was charged once and no target account was created. This router fixture is not
+real TLS/native process or browser playback acceptance. Repository SQLite/MySQL
+tests cover publication rollback after row/quota writes, duplicate replay,
+deleted-account refusal and exact encrypted reverse descriptor/tombstone reuse.
+Their repository proof fixture uses synthetic disk receipts; the separate
+authenticated fixture transfers actual bytes.
+See [authenticated publication output](2026-10-12-recording-publication.txt),
+[actual SQLite/MySQL output](2026-10-12-recording-publication-mysql.txt) and
+[full Go regression](2026-10-12-recording-publication-go.txt). The source suite
+also passed within its existing budget: 201 Python tests, two optional skips
+and the existing JavaScript/crypto/UI smoke checks.
+
+Verified publication now restores media/recording read permissions before SQL
+completion, including the group access used by Direct Nginx. The earlier media
+path omitted this permission change; Go-router reads alone had not exposed it.
+Native Nginx/browser verification remains required.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
@@ -413,7 +453,7 @@ acceptance remain incomplete; no full migration capability is advertised.
    orphan/quarantine/backup details and paginated large-node planning remain.
 5. Finish persistent whole-task execution using the implemented authenticated
    chunk transport, target staging, disk SHA proof and media publication journal.
-   Add recording publication and orchestration of complete-parent SQL cutover
+   Connect recording/media publication to complete-parent SQL cutover
    and cache invalidation; verify all Direct/Relay pairs. No network I/O inside
    long SQL/global-exclusive transactions.
 6. Add version-bound managed source cleanup after old capability/read dependencies

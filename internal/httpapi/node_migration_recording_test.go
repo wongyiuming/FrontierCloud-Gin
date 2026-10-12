@@ -1,0 +1,265 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestAuthenticatedRecordingRelayPublicationPreservesBytesIdentityAndMasterQuota(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		name := "plain"
+		if encrypted {
+			name = "encrypted"
+		}
+		t.Run(name, func(t *testing.T) { authenticatedRecordingPublication(t, encrypted) })
+	}
+}
+func authenticatedRecordingPublication(t *testing.T, encrypted bool) {
+	ctx := context.Background()
+	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
+	_, mdb, _, _, master := clusterFixture(t, "https://master.test", transport, true, true)
+	_, _, _, _, source := clusterFixture(t, "https://source.test", transport, true, true)
+	targetRouter, tdb, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true, true)
+	for _, v := range []struct {
+		s         *node.Service
+		role, url string
+	}{{master, "Master", "https://master.test"}, {source, "Follower", "https://source.test"}, {target, "Follower", "https://target.test"}} {
+		allocation := int64(0)
+		if v.role == "Master" {
+			allocation = store.GiB
+		}
+		if _, e := v.s.Promote(ctx, v.role, v.url, allocation, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	pair, e := source.CreatePair(ctx, store.NodeAudit{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	srid, e := master.ImportPair(ctx, pair, store.NodeAudit{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	pair, e = target.CreatePair(ctx, store.NodeAudit{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	trid, e := master.ImportPair(ctx, pair, store.NodeAudit{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	configure := func(id string) {
+		t.Helper()
+		rel, e := mdb.Nodes().Relationship(ctx, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		cfg := store.ResourceConfiguration{}
+		cfg.Storage.Enabled = true
+		cfg.Storage.Allocation = 5 * store.GiB
+		if e = mdb.Pool().ConfigureMember(ctx, rel.PeerID, cfg, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		rel, _ = mdb.Nodes().Relationship(ctx, id)
+		if e = master.Tick(ctx, rel); e != nil {
+			t.Fatal(e)
+		}
+	}
+	configure(srid)
+	user := store.KaraokeUser{ID: strings.Repeat("a", 32), Username: "migration-user", NameKey: "migration-user", PasswordHash: "fixture", Quota: 3 * store.GiB}
+	if e = mdb.Karaoke().RegisterUser(ctx, user, "192.0.2.241", "20261012", store.KaraokeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	snapshot := store.RecordingMetadata{Title: "原始录音", Lyrics: []store.RecordingLyric{{Time: 1.5, Text: "原始歌词"}}}
+	plaintext := []byte("original encrypted lyric snapshot")
+	var aead cipher.AEAD
+	if encrypted {
+		meta, e := mediacrypto.NewMetadata(int64(len(plaintext)))
+		if e != nil {
+			t.Fatal(e)
+		}
+		block, e := aes.NewCipher(bytes.Repeat([]byte{0x51}, 32))
+		if e != nil {
+			t.Fatal(e)
+		}
+		aead, e = cipher.NewGCM(block)
+		if e != nil {
+			t.Fatal(e)
+		}
+		nonce, _ := meta.ChunkNonce(0)
+		snapshot.Lyrics = []store.RecordingLyric{}
+		snapshot.EncryptedLyrics = &store.RecordingEncryptedLyrics{Encryption: meta, Ciphertext: base64.StdEncoding.EncodeToString(aead.Seal(nil, nonce, plaintext, meta.ChunkAAD(0)))}
+	}
+	metadata, e := json.Marshal(map[string]any{"version": 1, "title": snapshot.Title, "lyrics": snapshot.Lyrics, "encrypted_lyrics": snapshot.EncryptedLyrics})
+	if e != nil {
+		t.Fatal(e)
+	}
+	payload := bytes.Repeat([]byte{0x51}, migrationdata.ChunkBytes+31)
+	payload = append(payload, metadata...)
+	tail := make([]byte, 8)
+	binary.BigEndian.PutUint64(tail, uint64(len(metadata)))
+	payload = append(payload, tail...)
+	payload = append(payload, recording.TrailerMagic...)
+	id := strings.Repeat("b", 32)
+	v, member, e := mdb.Recordings().ReserveRecording(ctx, store.Recording{ID: id, UserID: user.ID, Filename: "voice.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), Title: snapshot.Title, Lyrics: snapshot.Lyrics, EncryptedLyrics: snapshot.EncryptedLyrics}, 10*store.GiB, store.KaraokeAudit{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	srel, _ := mdb.Nodes().Relationship(ctx, srid)
+	if member.ID != srel.PeerID {
+		t.Fatal("ordinary allocation did not choose enabled source")
+	}
+	reply, e := master.UploadRecording(ctx, v, member, bytes.NewReader(payload))
+	if e != nil {
+		t.Fatal(e)
+	}
+	raw, _ := json.Marshal(reply)
+	var receipt store.RecordingReceipt
+	if e = json.Unmarshal(raw, &receipt); e != nil {
+		t.Fatal(e)
+	}
+	if e = mdb.Recordings().FinalizeRecording(ctx, user.ID, id, receipt, store.KaraokeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	configure(trid)
+	trel, _ := mdb.Nodes().Relationship(ctx, trid)
+	mid, _ := mdb.Nodes().ReadIdentity(ctx)
+	sum := sha256.Sum256(payload)
+	sha := hex.EncodeToString(sum[:])
+	task := strings.Repeat("c", 32)
+	h := store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: task, MasterID: mid.ID, SourceID: srel.PeerID, TargetID: trel.PeerID, SourceRelationship: srid, TargetRelationship: trid, PlanSHA: strings.Repeat("1", 64), ObjectCount: 1, Bytes: int64(len(payload))}
+	l := store.MigrationLease{TaskID: task, RunnerID: strings.Repeat("d", 32), Epoch: 1, ExpiresAt: time.Now().Unix() + 60}
+	binding := &store.RecordingProof{ID: id, UserID: user.ID, Filename: v.Filename, ContentType: v.ContentType, Bytes: h.Bytes, SHA256: sha, CreatedAt: time.Now().Unix() - 1}
+	if encrypted {
+		binding.EncryptedLyricsEncryption = &snapshot.EncryptedLyrics.Encryption
+		binding.MetadataSHA256 = store.RecordingMetadataSHA256(snapshot)
+	}
+	o := store.MigrationObject{ID: id, ObjectID: id, Resource: "recording", Kind: "recording", Parent: user.ID, Path: srid + "/" + user.ID + "/" + id + ".bin", TargetPath: trid + "/" + user.ID + "/" + id + ".bin", Bytes: h.Bytes, ETag: sha, Version: strings.Repeat("2", 64), Recording: binding}
+	obj := store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: id, Version: o.Version, Bytes: h.Bytes, SHA256: sha}}
+	call := func(rel store.Relationship, route string, value any) map[string]any {
+		t.Helper()
+		raw, e := json.Marshal(value)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var body map[string]any
+		if e = controlJSON(raw, &body); e != nil {
+			t.Fatal(e)
+		}
+		result, e := master.Call(ctx, rel, route, body)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return result
+	}
+	for _, rel := range []store.Relationship{srel, trel} {
+		call(rel, "/internal/v1/resource-migration/register", map[string]any{"header": h, "lease": l, "state": "queued"})
+		call(rel, "/internal/v1/resource-migration/object", map[string]any{"lease": l, "object": obj})
+	}
+	req := migrationDataRequest{Lease: l, Spec: migrationdata.Spec{TaskID: task, MasterID: mid.ID, SourceID: srel.PeerID, TargetID: trel.PeerID, LogicalID: id, ObjectID: id, Resource: "recording", TargetPath: o.TargetPath, Bytes: o.Bytes, SHA256: sha, SourceVersion: o.Version, Recording: binding}}
+	prefix := "/internal/v1/resource-migration/data/"
+	call(trel, prefix+"begin", req)
+	for offset := 0; offset < len(payload); offset += migrationdata.ChunkBytes {
+		req.Offset = int64(offset)
+		req.Length = min(migrationdata.ChunkBytes, len(payload)-offset)
+		response := call(srel, prefix+"read", req)
+		encoded, _ := response["data"].(string)
+		data, e := base64.StdEncoding.DecodeString(encoded)
+		if e != nil {
+			t.Fatal(e)
+		}
+		req.Data = data
+		req.SHA, _ = response["chunk_sha256"].(string)
+		call(trel, prefix+"append", req)
+		req.Data = nil
+		req.SHA = ""
+	}
+	wait := func(phase string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if call(trel, prefix+"status", req)["peer_state"] == phase {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("missing durable recording phase", phase)
+	}
+	call(trel, prefix+"verify", req)
+	wait("verified")
+	call(trel, prefix+"publish", req)
+	wait("published")
+	call(trel, prefix+"publish", req)
+	wait("published")
+	row, e := tdb.Recordings().Recording(ctx, id)
+	if e != nil || row == nil || row.UserID != user.ID || row.MemberID != trel.PeerID || row.Title != "原始录音" || len(row.Lyrics) != len(snapshot.Lyrics) {
+		t.Fatal(row, e)
+	}
+	targetMember := store.StorageMember{ID: trel.PeerID, RelationshipID: &trid}
+	token, e := master.RecordingCapability(ctx, *row, targetMember, "download")
+	if e != nil {
+		t.Fatal(e)
+	}
+	request := httptest.NewRequest("GET", "https://target.test/internal/v1/recordings/"+id, nil)
+	request.Header.Set("X-Recording-Capability", token)
+	response := httptest.NewRecorder()
+	targetRouter.ServeHTTP(response, request)
+	if response.Code != 200 || !bytes.Equal(response.Body.Bytes(), payload) {
+		t.Fatal("ordinary recording read mismatch", response.Code)
+	}
+	if encrypted {
+		footer := recording.Metadata(bytes.NewReader(response.Body.Bytes()), int64(response.Body.Len()))
+		if footer == nil || footer.EncryptedLyrics == nil || footer.EncryptedLyrics.Encryption != snapshot.EncryptedLyrics.Encryption {
+			t.Fatal("encrypted footer changed")
+		}
+		cipherBytes, e := base64.StdEncoding.DecodeString(footer.EncryptedLyrics.Ciphertext)
+		if e != nil {
+			t.Fatal(e)
+		}
+		meta := footer.EncryptedLyrics.Encryption
+		nonce, _ := meta.ChunkNonce(0)
+		decoded, e := aead.Open(nil, nonce, cipherBytes, meta.ChunkAAD(0))
+		if e != nil || !bytes.Equal(decoded, plaintext) {
+			t.Fatal("client decryption after migration failed", e)
+		}
+	}
+	masterRow, e := mdb.Recordings().Recording(ctx, id)
+	if e != nil || masterRow.MemberID != srel.PeerID || masterRow.Title != "原始录音" {
+		t.Fatal("publication changed business owner", masterRow, e)
+	}
+	var used, reserved, personal int64
+	mdb.Database().QueryRow("SELECT used_bytes FROM karaoke_users WHERE user_id=?", user.ID).Scan(&personal)
+	tdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", trel.PeerID).Scan(&used, &reserved)
+	if personal != o.Bytes || used != o.Bytes || reserved != 0 {
+		t.Fatal("quota mismatch", personal, used, reserved)
+	}
+	var users int
+	tdb.Database().QueryRow("SELECT COUNT(*) FROM karaoke_users WHERE user_id=?", user.ID).Scan(&users)
+	if users != 0 {
+		t.Fatal("copied account")
+	}
+	info, e := os.Stat(filepath.Join(targetDir, "recordings", o.TargetPath))
+	if e != nil || info.Mode().Perm()&0040 == 0 {
+		t.Fatal("Direct media group cannot read published recording", info, e)
+	}
+	t.Logf("recording bytes=%d logical ID preserved, Master quota unchanged, no account copied", len(payload))
+}

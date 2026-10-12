@@ -249,8 +249,12 @@ func TestAuthenticatedBytesRelayThroughMasterToPrivateTargetStage(t *testing.T) 
 	if used != o.Bytes || reserved != 0 {
 		t.Fatal("publication quota replay mismatch", used, reserved)
 	}
-	if _, e = os.Stat(filepath.Join(tdir, "media", name)); e != nil {
+	info, e := os.Stat(filepath.Join(tdir, "media", name))
+	if e != nil {
 		t.Fatal("published media path absent", e)
+	}
+	if info.Mode().Perm()&0044 != 0044 {
+		t.Fatal("Direct readers cannot read published media", info.Mode())
 	}
 }
 func migrationUnsignedStatus(router *gin.Engine, path string) int {

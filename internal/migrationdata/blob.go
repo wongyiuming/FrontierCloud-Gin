@@ -45,6 +45,7 @@ type Spec struct {
 	Bytes         int64                 `json:"size_bytes"`
 	SHA256        string                `json:"sha256"`
 	Encryption    *mediacrypto.Metadata `json:"encryption,omitempty"`
+	Recording     *store.RecordingProof `json:"recording_binding,omitempty"`
 }
 type Checkpoint struct {
 	Version   int    `json:"version"`

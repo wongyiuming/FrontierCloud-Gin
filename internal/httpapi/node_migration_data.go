@@ -38,7 +38,7 @@ type migrationVerifyJob struct {
 
 func migrationRequestMatches(v migrationDataRequest, p store.MigrationPeerObject) bool {
 	s, h, o := v.Spec, p.Header, p.Object
-	return s.TaskID == v.Lease.TaskID && s.TaskID == h.TaskID && s.MasterID == h.MasterID && s.SourceID == h.SourceID && s.TargetID == h.TargetID && s.LogicalID == o.ID && s.ObjectID == o.ObjectID && s.Resource == o.Resource && s.SourceVersion == o.Version && s.Bytes == o.Bytes && s.SHA256 == p.Proof.SHA256 && reflect.DeepEqual(s.Encryption, o.Encryption) && (s.TargetPath == o.Path || s.Resource == "recording" && strings.HasPrefix(o.Path, h.SourceRelationship+"/") && s.TargetPath == h.TargetRelationship+strings.TrimPrefix(o.Path, h.SourceRelationship))
+	return s.TaskID == v.Lease.TaskID && s.TaskID == h.TaskID && s.MasterID == h.MasterID && s.SourceID == h.SourceID && s.TargetID == h.TargetID && s.LogicalID == o.ID && s.ObjectID == o.ObjectID && s.Resource == o.Resource && s.SourceVersion == o.Version && s.Bytes == o.Bytes && s.SHA256 == p.Proof.SHA256 && reflect.DeepEqual(s.Encryption, o.Encryption) && reflect.DeepEqual(s.Recording, o.Recording) && (s.TargetPath == o.Path || s.Resource == "recording" && strings.HasPrefix(o.Path, h.SourceRelationship+"/") && s.TargetPath == h.TargetRelationship+strings.TrimPrefix(o.Path, h.SourceRelationship))
 }
 
 // One joined local verification worker scans disk outside HTTP request timeouts
@@ -98,9 +98,15 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			case job := <-jobs:
 				v := job.request
 				if job.operation == "publish" {
-					_, _ = volume.MigrationPublish(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "publish") }, func(o store.MediaObject, free int64) error {
-						return repo.CompletePeerMediaPublication(ctx, job.relationship, v.Lease, v.Spec.LogicalID, o, v.Spec.Bytes, v.Spec.SHA256, free, store.NodeAudit{})
-					})
+					if v.Spec.Resource == "recording" && recordings != nil {
+						_, _ = recordings.MigrationPublish(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "publish") }, func(receipt store.RecordingReceipt, free int64) error {
+							return repo.CompletePeerRecordingPublication(ctx, job.relationship, v.Lease, v.Spec.LogicalID, receipt, free, store.NodeAudit{})
+						})
+					} else {
+						_, _ = volume.MigrationPublish(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "publish") }, func(o store.MediaObject, free int64) error {
+							return repo.CompletePeerMediaPublication(ctx, job.relationship, v.Lease, v.Spec.LogicalID, o, v.Spec.Bytes, v.Spec.SHA256, free, store.NodeAudit{})
+						})
+					}
 				} else {
 					c, e := job.receiver.Verify(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "verify") })
 					if e == nil {
@@ -266,7 +272,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 	})
 	register("publish", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
-		if v.Spec.Resource != "media" {
+		if v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
 			return nil, store.ErrMigrationState
 		}
 		r, e := receiver(c.Request.Context(), v.Spec)

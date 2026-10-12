@@ -236,6 +236,11 @@ func (r *Repository) migrationCatalog(ctx context.Context, q queryer, source, ta
 		if v.SHA256 != nil {
 			o.ETag = *v.SHA256
 		}
+		o.Recording = &store.RecordingProof{ID: v.ID, UserID: v.UserID, Filename: v.Filename, ContentType: v.ContentType, Bytes: v.Bytes, SHA256: o.ETag, CreatedAt: v.CreatedAt}
+		if v.EncryptedLyrics != nil {
+			o.Recording.EncryptedLyricsEncryption = &v.EncryptedLyrics.Encryption
+			o.Recording.MetadataSHA256 = store.RecordingMetadataSHA256(store.RecordingMetadataFor(v))
+		}
 		c.Objects = append(c.Objects, o)
 	}
 	e = rows.Err()

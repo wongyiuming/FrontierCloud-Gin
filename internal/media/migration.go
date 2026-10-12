@@ -87,6 +87,19 @@ func (s *Service) MigrationPublish(ctx context.Context, spec migrationdata.Spec,
 		if e = s.syncDirectory(path.Dir(o.Path)); e != nil {
 			return e
 		}
+		// Direct Nginx reads through the media group, never the application UID.
+		file, e := s.root.OpenFile(o.Path, os.O_RDWR, 0)
+		if e != nil {
+			return e
+		}
+		e = file.Chmod(0644)
+		if e == nil {
+			e = file.Sync()
+		}
+		e = errors.Join(e, file.Close())
+		if e != nil {
+			return e
+		}
 		_, free, e := fsutil.DiskUsage(s.root)
 		if e != nil {
 			return e

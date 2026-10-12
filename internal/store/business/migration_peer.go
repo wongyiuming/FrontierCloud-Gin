@@ -174,7 +174,22 @@ func validPeerObject(h store.MigrationPeerHeader, v store.MigrationPeerObject) b
 		return false
 	}
 	if o.Resource == "media" {
+		if o.Recording != nil {
+			return false
+		}
 		return nodeHashPattern.MatchString(o.ID) && nodeHashPattern.MatchString(o.ObjectID) && poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: o.Path, Kind: o.Kind}, Bytes: o.Bytes}) && o.Parent == path.Dir(o.Path) && o.TargetPath == o.Path && (o.Encryption == nil || o.Encryption.Validate() == nil && o.Encryption.CiphertextSize == o.Bytes)
+	}
+	if o.Recording != nil {
+		r := o.Recording
+		if r.ID != o.ID || r.UserID != o.Parent || r.Bytes != o.Bytes || r.SHA256 != p.SHA256 || r.CreatedAt <= 0 || !store.ValidRecordingFilename(r.Filename) || !store.RecordingContentType(r.ContentType) || r.VerifiedMetadata != nil {
+			return false
+		}
+		if r.EncryptedLyricsEncryption != nil && (r.EncryptedLyricsEncryption.Validate() != nil || !nodeHashPattern.MatchString(r.MetadataSHA256)) {
+			return false
+		}
+		if r.EncryptedLyricsEncryption == nil && r.MetadataSHA256 != "" {
+			return false
+		}
 	}
 	return o.Resource == "recording" && nodeIDPattern.MatchString(o.ID) && o.ObjectID == o.ID && nodeIDPattern.MatchString(o.Parent) && o.Bytes <= store.MaxRecordingBytes && o.Path == h.SourceRelationship+"/"+o.Parent+"/"+o.ID+".bin" && o.TargetPath == h.TargetRelationship+"/"+o.Parent+"/"+o.ID+".bin" && o.Encryption == nil
 }
@@ -263,7 +278,10 @@ func (r *Repository) RegisterPeerMigrationObject(ctx context.Context, relationsh
 				if v == nil || v.UserID != o.Parent || v.State != "ready" || v.MemberID != n.ID || v.Bytes != o.Bytes || v.SHA256 == nil || *v.SHA256 != o.ETag {
 					return store.ErrMigrationState
 				}
-			} else if v != nil {
+				if o.Recording != nil && (v.Filename != o.Recording.Filename || v.ContentType != o.Recording.ContentType || !store.RecordingProofSnapshotMatches(*o.Recording, ptrMetadata(store.RecordingMetadataFor(*v)))) {
+					return store.ErrMigrationState
+				}
+			} else if v != nil && (o.Recording == nil || v.State != "deleted" || v.UserID != o.Parent || v.MemberID != n.ID || v.Bytes != o.Bytes || v.SHA256 == nil || *v.SHA256 != o.Recording.SHA256 || v.Filename != o.Recording.Filename || v.ContentType != o.Recording.ContentType) {
 				return store.ErrMigrationState
 			}
 		}

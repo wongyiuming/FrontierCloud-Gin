@@ -35,6 +35,7 @@ type MigrationObject struct {
 	Version    string                `json:"source_version"`
 	ETag       string                `json:"etag"`
 	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
+	Recording  *RecordingProof       `json:"recording_binding,omitempty"`
 }
 type MigrationCatalog struct {
 	SourceBackup  MigrationBackupFact `json:"source_backup"`

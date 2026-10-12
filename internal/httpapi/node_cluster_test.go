@@ -22,6 +22,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
@@ -137,7 +138,7 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 	return result, err
 }
 
-func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty bool) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
+func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty bool, withRecordings ...bool) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
 	t.Helper()
 	router, db, dir, public := publicFixture(t, false)
 	if empty {
@@ -170,7 +171,15 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	RegisterNodeMedia(router, public.settings, resolver, service, public.media)
 	RegisterNodeStorage(router, public.settings, resolver, service, public.media)
 	RegisterNodeMigrationControl(router, public.settings, resolver, service, public.media, db.Pool().(store.MigrationPeerRepository))
-	closeMigration := RegisterNodeMigrationData(router, public.settings, resolver, service, public.media, nil, db.Pool().(store.MigrationPeerRepository))
+	var privateRecordings *recording.Storage
+	if len(withRecordings) > 0 && withRecordings[0] {
+		privateRecordings, err = recording.New(recordingRoot, db.Recordings(), db.Nodes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		RegisterNodeRecordings(router, public.settings, resolver, service, privateRecordings)
+	}
+	closeMigration := RegisterNodeMigrationData(router, public.settings, resolver, service, public.media, privateRecordings, db.Pool().(store.MigrationPeerRepository))
 	t.Cleanup(func() { closeMigration() })
 	transport.routers[origin] = router
 	return router, db, dir, public, service
