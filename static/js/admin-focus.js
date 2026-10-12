@@ -25,6 +25,7 @@
                     focusExpanded(module);
                     navigationPanel?.classList.remove('open');
                     navigationToggle?.setAttribute('aria-expanded', 'false');
+                    module.querySelector('.module-heading')?.focus({preventScroll: true});
                 };
                 navigationButtons.set(name, button);
             }

@@ -170,6 +170,11 @@ with sync_playwright() as driver:
     wait_saved(phone)
     assert names(phone) == ['a.mp3', 'c.mp3', 'b.mp3', 'd.mp3']
     assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    assert phone.evaluate('''() => [...document.querySelectorAll('[data-priority-kind]')].every(row=>{
+        const r=row.getBoundingClientRect(), control=row.querySelector('.priority-control').getBoundingClientRect();
+        return control.top>=r.top && control.bottom<=r.bottom+1;
+    })'''), 'mobile priority controls must remain inside their complete row'
+    assert phone.locator('#adminNavigationToggle').bounding_box()['y'] < 56
     assert phone.locator('[data-module-target="priority"]').get_attribute('aria-current') == 'true'
     phone.screenshot(path=str(args.output / 'mobile.png'))
     proof.append('real-touch-drag-mobile-layout-and-reduced-motion')

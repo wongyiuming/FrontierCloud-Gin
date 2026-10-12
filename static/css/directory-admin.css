@@ -8,6 +8,8 @@
 }
 
 .priority-list { position: relative; scroll-behavior: auto; overscroll-behavior: contain; }
+.priority-list > .priority-row,
+.priority-list > .priority-directory-row { flex: 0 0 auto; }
 .priority-reorderable.priority-row,
 .priority-reorderable.priority-directory-row {
     display: grid;

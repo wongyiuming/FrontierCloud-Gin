@@ -234,3 +234,25 @@
     .release-node { grid-template-columns: 1fr; }
     .release-steps { grid-template-columns: 1fr; }
 }
+
+.admin-mobile-toolbar { display: none; }
+@media (max-width: 999px) {
+    .admin-mobile-toolbar {
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 30;
+        display: flex;
+        height: 56px;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 14px;
+        background: #0c1420;
+        border-bottom: 1px solid var(--line);
+    }
+    .admin-mobile-toolbar span { flex: 1; color: var(--muted); font-size: 12px; }
+    .admin-mobile-toolbar a { color: var(--text-soft); font-size: 12px; text-decoration: none; }
+    .admin-navigation-toggle { position: static; min-height: 38px; padding: 8px 12px; border-radius: 7px; box-shadow: none; }
+    .admin-navigation.open { top: 56px; z-index: 40; }
+    .admin-console { height: calc(100dvh - 56px); margin-top: 56px; }
+    .admin-console .admin-module.expanded { min-height: calc(100dvh - 84px); flex-basis: calc(100dvh - 84px); }
+}

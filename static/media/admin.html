@@ -12,7 +12,10 @@
         <nav id="adminModuleLinks" aria-label="功能模块"></nav>
         <small class="admin-navigation-note">选择模块，专注当前操作</small>
     </aside>
-    <button id="adminNavigationToggle" class="admin-navigation-toggle" type="button" aria-controls="adminNavigation" aria-expanded="false">功能导航</button>
+    <div class="admin-mobile-toolbar">
+        <button id="adminNavigationToggle" class="admin-navigation-toggle" type="button" aria-controls="adminNavigation" aria-expanded="false">功能导航</button>
+        <span>管理控制台</span><a href="/api/v1/media/">返回站点</a>
+    </div>
     <main class="admin-console">
         <section class="admin-module key-panel" data-admin-module="key">
             <button class="module-heading" type="button" aria-expanded="false"><span><strong>Admin Key</strong><small>长期 Key 可轮换；临时 Key 单次使用并建立所选时长的滑动会话。</small></span><b>＋</b></button>
