@@ -21,7 +21,7 @@ func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel
 		u := g.Unit.Unit
 		o := g.Object
 		proof := g.SourceProof
-		if state != "cancelling" || n.ID != h.TargetID || expected != actual || u.State != "cancelled" || u.CommittedAt != 0 || u.CleanupAfter != 0 || !nodeHashPattern.MatchString(g.Unit.UnitVersion) || o.Resource != "media" || u.ID != migrationUnit(o) || u.Resource != o.Resource || u.Parent != o.Parent || !validPeerObject(h, store.MigrationPeerObject{Object: o, Proof: proof.MigrationDiskProof}) {
+		if state != "cancelling" || n.ID != h.TargetID || expected != actual || u.State != "cancelled" || u.CommittedAt != 0 || u.CleanupAfter != 0 || !nodeHashPattern.MatchString(g.Unit.UnitVersion) || o.Resource != "media" && (o.Resource != "recording" || o.Recording == nil) || u.ID != migrationUnit(o) || u.Resource != o.Resource || u.Parent != o.Parent || !validPeerObject(h, store.MigrationPeerObject{Object: o, Proof: proof.MigrationDiskProof}) {
 			return store.ErrMigrationState
 		}
 		bound, e := r.peerObjectBinding(ctx, q, l.TaskID, o.ID)

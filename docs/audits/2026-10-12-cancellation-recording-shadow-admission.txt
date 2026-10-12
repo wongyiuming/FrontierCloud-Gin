@@ -1,0 +1,10 @@
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+--- PASS: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (0.20s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+--- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (0.43s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (0.21s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (0.22s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.657s

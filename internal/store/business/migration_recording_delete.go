@@ -8,11 +8,12 @@ import (
 )
 
 func (r *Repository) peerRecordingDelete(ctx context.Context, q queryer, member, task, id string) (*store.Recording, error) {
-	h, _, e := r.peerHeader(ctx, q, task)
+	h, taskState, e := r.peerHeader(ctx, q, task)
 	if e != nil {
 		return nil, e
 	}
-	if h.SourceID != member {
+	shadow := h.TargetID == member
+	if h.SourceID != member && !shadow || shadow && taskState != "cancelling" {
 		return nil, store.ErrMigrationState
 	}
 	o, e := r.peerObjectBinding(ctx, q, task, id)
@@ -31,10 +32,15 @@ func (r *Repository) peerRecordingDelete(ctx context.Context, q queryer, member,
 		return nil, store.ErrMigrationState
 	}
 	var committed, after int64
-	if e = q.QueryRowContext(ctx, "SELECT committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), task, migrationUnit(o)).Scan(&committed, &after); e != nil {
+	var unitState string
+	if e = q.QueryRowContext(ctx, "SELECT state,committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), task, migrationUnit(o)).Scan(&unitState, &committed, &after); e != nil {
 		return nil, e
 	}
-	if committed <= 0 || after < committed+3600 || after > time.Now().Unix() {
+	if shadow {
+		if unitState != "pending" || committed != 0 || after != 0 {
+			return nil, store.ErrMigrationState
+		}
+	} else if unitState != "cleanup_pending" || committed <= 0 || after < committed+3600 || after > time.Now().Unix() {
 		return nil, store.ErrMigrationState
 	}
 	v, e := scanRecording(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), id))
@@ -69,7 +75,7 @@ func (r *Repository) StagePeerRecordingDeletion(ctx context.Context, relationshi
 		if err != nil {
 			return err
 		}
-		if n.ID != h.SourceID {
+		if n.ID != h.SourceID && n.ID != h.TargetID {
 			return store.ErrMigrationState
 		}
 		v, err = r.peerRecordingDelete(ctx, q, n.ID, l.TaskID, id)
