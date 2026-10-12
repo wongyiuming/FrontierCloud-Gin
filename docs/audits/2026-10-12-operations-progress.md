@@ -363,6 +363,34 @@ This is router-transport evidence, not native-process/TLS fleet acceptance.
 Recording publication, valid encrypted playback, automatic durable orchestration,
 source/anchor cleanup and cancellation reconciliation remain incomplete.
 
+## Immutable peer binding checkpoint
+
+Schema generation 6 adds one resource-only peer binding table, with bounded
+object JSON and a SHA-256, atomically written with follower object registration.
+The previously normalized journal still owns paths, versions, byte proofs and
+phases; admission now checks the persisted full object description against
+those facts. Changed retry descriptions, missing bindings and descriptor
+substitution are refused. Publication rechecks the recorded kind/descriptor,
+and orphan bindings block maintenance capture, business export and identity
+reset. Existing generation-5 journals require authenticated canonical Master
+re-registration before data actions; missing descriptions are not inferred.
+
+Both canonical backend snapshots, current image/provenance labels and release
+manifest gates advance to generation 6. Historical generation 2–5 snapshots and
+manifest vectors remain unchanged. Matching recovery material/images are
+required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
+generation 4/5 upgrades, injected journal failure, idempotent replay, historical
+ID/playback preservation and future-generation refusal. MySQL's legal long
+database-name fixture also exposed the existing 64-character advisory-lock
+limit: only overlong lock names now use a bounded hash suffix, preserving old
+short lock names. See [schema/binding evidence](2026-10-12-peer-bindings-schema6.txt)
+and [full Go regression](2026-10-12-peer-bindings-go.txt). Source CI passed its
+unchanged budget, including 201 Python tests and two optional skips.
+
+This checkpoint strengthens the durable resource description needed by recording
+publication. Recording publication, the Master runner and the required fleet
+acceptance remain incomplete; no full migration capability is advertised.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

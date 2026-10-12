@@ -199,7 +199,7 @@ func (r *Repository) RegisterPeerMigrationObject(ctx context.Context, relationsh
 			if existingVersion != o.Version || existingPath != physical || existingHash != v.Proof.SHA256 || existingSize != o.Bytes || existingObject != o.ObjectID || existingKind != o.Resource || existingUnit != migrationUnit(o) {
 				return store.ErrMigrationState
 			}
-			return nil
+			return r.persistPeerObjectBinding(ctx, q, l.TaskID, o)
 		}
 		if !errors.Is(e, sql.ErrNoRows) {
 			return e
@@ -289,7 +289,10 @@ func (r *Repository) RegisterPeerMigrationObject(ctx context.Context, relationsh
 			}
 		}
 		_, e = q.ExecContext(ctx, "INSERT INTO migration_storage_journal(task_id,logical_id,unit_id,master_id,source_id,target_id,resource_kind,object_id,physical_path,source_version,expected_bytes,sha256,state,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'receiving',?)", l.TaskID, o.ID, migrationUnit(o), h.MasterID, h.SourceID, h.TargetID, o.Resource, o.ObjectID, physical, o.Version, o.Bytes, v.Proof.SHA256, time.Now().Unix())
-		return e
+		if e != nil {
+			return e
+		}
+		return r.persistPeerObjectBinding(ctx, q, l.TaskID, o)
 	})
 }
 func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship string, l store.MigrationLease, id, operation string) (v store.MigrationPeerObject, e error) {
@@ -333,6 +336,22 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		v.Proof.Bytes = v.Object.Bytes
 		v.Header = h
 		v.State = phase
+		bound, e := r.peerObjectBinding(ctx, q, l.TaskID, id)
+		if errors.Is(e, sql.ErrNoRows) {
+			return store.ErrMigrationState
+		}
+		if e != nil {
+			return e
+		}
+		physical := bound.Path
+		if n.ID == h.TargetID {
+			physical = bound.TargetPath
+		}
+		if bound.ObjectID != v.Object.ObjectID || bound.Version != v.Object.Version || bound.Bytes != v.Object.Bytes || bound.Resource != v.Object.Resource || physical != v.Object.Path {
+			return store.ErrMigrationState
+		}
+		v.Object = bound
+		v.Object.Path = physical
 		return nil
 	})
 	return

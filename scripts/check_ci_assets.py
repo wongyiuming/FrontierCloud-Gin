@@ -14,7 +14,7 @@ if issues:
     raise SystemExit("\n".join(issues))
 for path in (root / "protocol").rglob("*.json"):
     json.loads(path.read_text(encoding="utf-8"))
-for generation, tables in ((2, 34), (3, 36), (4, 36), (5, 45)):
+for generation, tables in ((2, 34), (3, 36), (4, 36), (5, 45), (6, 46)):
     documents = [json.loads((root / "migrations" / kind / f"{generation:04d}-schema.json").read_text(encoding="utf-8"))
                  for kind in ("sqlite", "mysql")]
     assert all(document["generation"] == generation for document in documents)
@@ -39,4 +39,12 @@ checksum = hashlib.sha256("\n".join(additions[0]).encode()).hexdigest()
 constant = re.search(r'const ResourceMigrationChecksum = "([a-f0-9]{64})"',
                      (root / "migrations/schema.go").read_text(encoding="utf-8")).group(1)
 assert checksum == constant, "Resource migration journal checksum differs from canonical DDL"
+for kind in ("sqlite", "mysql"):
+    old = json.loads((root / "migrations" / kind / "0005-schema.json").read_text())["statements"]
+    current = json.loads((root / "migrations" / kind / "0006-schema.json").read_text())["statements"]
+    assert current[:-1] == old and current[-1].startswith("CREATE TABLE IF NOT EXISTS migration_peer_bindings")
+    if kind == "sqlite":
+        digest = hashlib.sha256(current[-1].encode()).hexdigest()
+        constant = re.search(r'const PeerBindingsChecksum = "([a-f0-9]{64})"', (root / "migrations/schema.go").read_text()).group(1)
+        assert digest == constant
 print("Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external")

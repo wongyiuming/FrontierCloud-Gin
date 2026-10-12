@@ -23,7 +23,7 @@ func TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals(t *testing.T) {
 	}
 	id := strings.Repeat("e", 32)
 	t.Cleanup(func() {
-		for _, table := range []string{"migration_tasks", "migration_capacity", "migration_scopes", "migration_storage_journal"} {
+		for _, table := range []string{"migration_tasks", "migration_capacity", "migration_scopes", "migration_storage_journal", "migration_peer_bindings"} {
 			raw.Exec("DELETE FROM "+table+" WHERE task_id=?", id)
 		}
 		raw.Exec("UPDATE node_identity SET `role`=? WHERE singleton=1", n.Role)
@@ -36,6 +36,7 @@ func TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals(t *testing.T) {
 		{"migration_capacity", "INSERT INTO migration_capacity(task_id,member_id,reserved_bytes,updated_at) VALUES (?,'target',7,1)", []any{id}},
 		{"migration_scopes", "INSERT INTO migration_scopes(scope_id,task_id,member_id,resource_kind,parent_path,created_at) VALUES ('scope',?,'source','media','music/locked',1)", []any{id}},
 		{"migration_storage_journal", "INSERT INTO migration_storage_journal(task_id,logical_id,unit_id,master_id,source_id,target_id,resource_kind,object_id,physical_path,source_version,expected_bytes,state,updated_at) VALUES (?,'logical','unit','master','source','target','media','object','music/locked/a.mp3','version',7,'verified',1)", []any{id}},
+		{"migration_peer_bindings", "INSERT INTO migration_peer_bindings(task_id,logical_id,binding_sha256,binding_json) VALUES (?,'logical','hash','{}')", []any{id}},
 	} {
 		if _, e = raw.Exec(fixture.sql, fixture.args...); e != nil {
 			t.Fatal(e)

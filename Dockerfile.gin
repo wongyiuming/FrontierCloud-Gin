@@ -22,7 +22,7 @@ RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go te
 FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="5" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="6" \
       frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
 
 RUN apt-get update && \

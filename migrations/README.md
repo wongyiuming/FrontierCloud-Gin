@@ -1,10 +1,10 @@
 # Shared database schema
 
-Schema generation 5 has one logical model and two reviewed physical snapshots:
+Schema generation 6 has one logical model and two reviewed physical snapshots:
 
-- `mysql/0005-schema.json`: existing InnoDB DDL, including binary media paths,
+- `mysql/0006-schema.json`: existing InnoDB DDL, including binary media paths,
   generated active-ban uniqueness, indexes, and preference constraints.
-- `sqlite/0005-schema.json`: corresponding SQLite DDL and indexes. Audit keys
+- `sqlite/0006-schema.json`: corresponding SQLite DDL and indexes. Audit keys
   use `INTEGER PRIMARY KEY`, dates use UTC ISO text, and backup chunks use BLOB.
 
 Each JSON array entry is one SQL statement. There is no runtime SQL translation.
@@ -65,6 +65,20 @@ injects journal failure, retries incomplete MySQL DDL, verifies historical facts
 and tests future-generation refusal. It is development acceptance outside CI.
 Pending migration tasks, reservations, scope locks or Storage journals block both
 native full-deployment capture and journal-free business snapshot export.
+
+Generation 5 -> 6 adds `migration_peer_bindings`, a bounded resource-only object
+description plus its SHA-256, committed with each follower object registration.
+This preserves kind, parent/path mapping and encryption descriptors across
+requests/restarts. It contains no node private keys, credentials or media keys.
+Changing a registered description is rejected even if its byte count and path
+are unchanged. The generation-5 snapshots and release vectors remain immutable.
+Generation-5 binaries refuse this database; matching generation-6 image labels,
+release manifests and recovery records are required. Code rollback does not
+reverse the DDL. SQLite migration is atomic; MySQL creation is resumable before
+the generation-6 journal/marker commit. Both failure windows are tested outside
+hosted CI. Pre-existing generation-5 peer journals have no inferred binding:
+authenticated re-registration from the original Master plan is required before
+data actions are admitted. Unknown state remains fenced.
 
 Gin/Go implements business repositories, independent migration/health commands,
 and both database dialects. Default deployment is Gin + SQLite; the optional

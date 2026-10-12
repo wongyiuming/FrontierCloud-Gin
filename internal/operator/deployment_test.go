@@ -84,7 +84,7 @@ func (i *fakeImages) Prove(_ context.Context, target, component, arch string) (r
 	if target == "latest" {
 		target = strings.Repeat("a", 40)
 	}
-	return release.ImageProof{Image: "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64), Revision: target, Platform: "linux/" + arch, Generation: 5}, nil
+	return release.ImageProof{Image: "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64), Revision: target, Platform: "linux/" + arch, Generation: 6}, nil
 }
 
 type fakeEvidence struct{ valid bool }

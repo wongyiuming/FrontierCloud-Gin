@@ -12,7 +12,7 @@ import urllib.request
 
 ROOT = 'https://ghcr.io'
 SOURCE = 'https://github.com/wongyiuming/FrontierCloud-Gin'
-SCHEMA_GENERATION = '5'
+SCHEMA_GENERATION = '6'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
 ACCEPT = ', '.join(('application/vnd.oci.image.index.v1+json',
                     'application/vnd.docker.distribution.manifest.list.v2+json',

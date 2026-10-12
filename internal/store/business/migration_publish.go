@@ -32,6 +32,16 @@ func (r *Repository) CompletePeerMediaPublication(ctx context.Context, relations
 		if kind != "media" || id != o.ID || name != o.Path || expected != size || hash != sha || (phase != "verified" && phase != "published") {
 			return store.ErrMigrationState
 		}
+		bound, e := r.peerObjectBinding(ctx, q, l.TaskID, logical)
+		if e != nil {
+			return e
+		}
+		if bound.Kind != o.Kind {
+			return store.ErrMigrationState
+		}
+		if (bound.Encryption == nil) != (o.Encryption == nil) || bound.Encryption != nil && *bound.Encryption != *o.Encryption {
+			return store.ErrMigrationState
+		}
 		var actualID, actualName, actualKind string
 		e = q.QueryRowContext(ctx, "SELECT media_id,media_path,object_kind FROM media_objects WHERE media_id=? OR path_locator=?"+r.lock(), o.ID, locator(o.Path)).Scan(&actualID, &actualName, &actualKind)
 		if phase == "published" {

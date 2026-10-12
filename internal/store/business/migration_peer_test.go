@@ -40,7 +40,7 @@ func peerMigrationFixture(t *testing.T, source bool) (store.Store, *sql.DB, stor
 	o := store.MigrationObject{ID: hashPath(t.Name() + "object"), ObjectID: hashPath(t.Name() + "object"), Resource: "media", Path: "music/" + t.Name() + "/track.mp3", TargetPath: "music/" + t.Name() + "/track.mp3", Parent: "music/" + t.Name(), Kind: "audio", Bytes: 7, Version: strings.Repeat("1", 64), ETag: `"` + strings.Repeat("2", 64) + `"`}
 	v := store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: strings.Repeat("2", 64)}}
 	t.Cleanup(func() {
-		for _, table := range []string{"migration_storage_journal", "migration_capacity", "migration_scopes", "migration_runners", "migration_tasks"} {
+		for _, table := range []string{"migration_peer_bindings", "migration_storage_journal", "migration_capacity", "migration_scopes", "migration_runners", "migration_tasks"} {
 			raw.Exec("DELETE FROM "+table+" WHERE task_id=?", task)
 		}
 		raw.Exec("DELETE FROM migration_drains WHERE owner_id=?", task)
@@ -119,6 +119,20 @@ func TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences(t *testing.T) {
 	}
 	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
 		t.Fatal("lost-response retry", e)
+	}
+	changed := v
+	changed.Object.ETag = "changed"
+	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, changed, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("changed immutable object binding accepted", e)
+	}
+	if _, e := raw.Exec("DELETE FROM migration_peer_bindings WHERE task_id=? AND logical_id=?", l.TaskID, v.Object.ID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "append"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("missing historical binding inferred as safe", e)
+	}
+	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
+		t.Fatal("canonical re-registration did not restore binding", e)
 	}
 	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "append"); e != nil {
 		t.Fatal(e)

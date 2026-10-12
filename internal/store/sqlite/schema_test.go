@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,7 @@ func TestPriorityGenerationThreeUpgradePreservesFactsAndRollsBack(t *testing.T) 
 			if err = db.database.QueryRow("SELECT generation FROM frontiercloud_schema").Scan(&generation); err != nil {
 				t.Fatal(err)
 			}
-			want := 5
+			want := migrations.Generation
 			if fail {
 				want = 3
 			}
@@ -112,8 +113,8 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 	if err := store.database.QueryRow("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 45 {
-		t.Fatalf("got %d tables, want 56", count)
+	if count != 46 {
+		t.Fatalf("got %d tables, want 46", count)
 	}
 	if _, err := store.database.Exec("DROP TABLE frontiercloud_schema_migrations"); err != nil {
 		t.Fatal(err)
@@ -128,7 +129,7 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 	if err := store.database.QueryRow("SELECT generation FROM frontiercloud_schema WHERE singleton=1").Scan(&generation); err != nil {
 		t.Fatal(err)
 	}
-	if generation != 5 {
+	if generation != migrations.Generation {
 		t.Fatalf("generation=%d, want 5", generation)
 	}
 	var checksum string
@@ -170,7 +171,7 @@ func TestGenerationTwoUpgradeAddsEncryptionWithoutChangingObjects(t *testing.T) 
 		t.Fatal("upgrade changed historical identity", err)
 	}
 	var generation int
-	if err = store.database.QueryRow("SELECT generation FROM frontiercloud_schema").Scan(&generation); err != nil || generation != 5 {
+	if err = store.database.QueryRow("SELECT generation FROM frontiercloud_schema").Scan(&generation); err != nil || generation != migrations.Generation {
 		t.Fatal(generation, err)
 	}
 	var count int
@@ -183,7 +184,7 @@ func TestGenerationTwoUpgradeAddsEncryptionWithoutChangingObjects(t *testing.T) 
 }
 
 func TestRejectsIncompleteAndFutureSchemas(t *testing.T) {
-	for _, change := range []string{"DROP TABLE karaoke_users", "UPDATE frontiercloud_schema SET generation=6"} {
+	for _, change := range []string{"DROP TABLE karaoke_users", "UPDATE frontiercloud_schema SET generation=7"} {
 		t.Run(change, func(t *testing.T) {
 			store, err := Open(filepath.Join(t.TempDir(), "schema.db"))
 			if err != nil {

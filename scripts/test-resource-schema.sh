@@ -37,7 +37,7 @@ for _ in $(seq 1 90); do
     sleep 1
 done
 [ "$ready" = true ] || { printf 'Isolated MySQL did not become ready\n' >&2; exit 1; }
-printf 'CREATE DATABASE `%spreserve`; CREATE DATABASE `%sinterrupted`; CREATE DATABASE `%sbusiness`;\n' "$prefix" "$prefix" "$prefix" | \
+printf 'CREATE DATABASE `%spreserve`; CREATE DATABASE `%sinterrupted`; CREATE DATABASE `%sbusiness`; CREATE DATABASE `%sbindingspreserve`; CREATE DATABASE `%sbindingsinterrupted`;\n' "$prefix" "$prefix" "$prefix" "$prefix" "$prefix" | \
     docker exec -i "$mysql" sh -c 'MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root'
 # Optional reusable caches affect compiler speed only, never database facts.
 cache=()

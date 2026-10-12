@@ -38,6 +38,7 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 			"SELECT COUNT(*) FROM migration_scopes",
 			"SELECT COUNT(*) FROM migration_drains",
 			"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('deleted','aborted')",
+			"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
 		}
 		if old.Role != "Standalone" {
 			queries = append(queries, "SELECT COUNT(*) FROM karaoke_recordings WHERE state<>'deleted'")

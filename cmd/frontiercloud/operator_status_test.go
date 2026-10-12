@@ -59,7 +59,7 @@ func TestOperatorStatusPreservesIdentityAndReportsOfflineFenceWithoutNewLocks(t 
 		t.Fatal(e)
 	}
 	var fact operator.RuntimeFact
-	if e = json.Unmarshal(out.Bytes(), &fact); e != nil || fact.NodeID != identity.ID || fact.Role != "Standalone" || fact.Database.SchemaGeneration != 5 || !fact.NativeMaintenance || !fact.Maintenance {
+	if e = json.Unmarshal(out.Bytes(), &fact); e != nil || fact.NodeID != identity.ID || fact.Role != "Standalone" || fact.Database.SchemaGeneration != 6 || !fact.NativeMaintenance || !fact.Maintenance {
 		t.Fatal(fact, e)
 	}
 	for _, name := range []string{".site-control.lock", ".native-maintenance-control.lock", ".native-runtime.lock"} {

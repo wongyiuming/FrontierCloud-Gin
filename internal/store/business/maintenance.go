@@ -45,6 +45,7 @@ func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceS
 		{"migration_capacity", "SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0"},
 		{"migration_scopes", "SELECT COUNT(*) FROM migration_scopes"},
 		{"migration_storage", "SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')"},
+		{"migration_binding_orphans", "SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL"},
 	} {
 		var count int64
 		if err := tx.QueryRowContext(ctx, check.query).Scan(&count); err != nil {
