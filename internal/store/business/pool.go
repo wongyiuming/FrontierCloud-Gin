@@ -471,6 +471,10 @@ func (r *Repository) Members(ctx context.Context) ([]store.StorageMember, error)
 	}
 	for i := range result {
 		v := &result[i]
+		v.Draining, err = r.migrationDraining(ctx, r.db, v.ID)
+		if err != nil {
+			return nil, err
+		}
 		v.CurrentAllocation, v.ProjectUsed = v.Allocation, v.Used
 		v.Compute = map[string]any{}
 		v.Backup = map[string]any{}

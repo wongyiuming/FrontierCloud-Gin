@@ -37,6 +37,7 @@ type ResourceConfiguration struct {
 	} `json:"backup"`
 }
 type StorageMember struct {
+	Draining          bool           `json:"draining"`
 	ID                string         `json:"member_id"`
 	RelationshipID    *string        `json:"relationship_id"`
 	Kind              string         `json:"member_kind"`

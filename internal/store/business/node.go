@@ -276,6 +276,28 @@ func (r *Repository) ActivateRelationship(ctx context.Context, id string, a stor
 }
 func (r *Repository) RevokeRelationship(ctx context.Context, id string, confirmed bool, a store.NodeAudit) error {
 	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+		memberID := v.PeerID
+		if node.Role == "Follower" {
+			memberID = node.ID
+		}
+		for _, check := range []struct {
+			query string
+			args  []any
+		}{
+			{"SELECT COUNT(*) FROM migration_tasks WHERE (source_id=? OR target_id=?) AND state NOT IN ('completed','cancelled')", []any{memberID, memberID}},
+			{"SELECT COUNT(*) FROM migration_scopes WHERE member_id=?", []any{memberID}},
+			{"SELECT COUNT(*) FROM migration_capacity WHERE member_id=? AND reserved_bytes<>0", []any{memberID}},
+			{"SELECT COUNT(*) FROM migration_storage_journal WHERE (source_id=? OR target_id=?) AND state NOT IN ('deleted','aborted')", []any{memberID, memberID}},
+			{"SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND expires_at>?", []any{memberID, time.Now().Unix()}},
+		} {
+			var pending int
+			if err := q.QueryRowContext(ctx, check.query, check.args...).Scan(&pending); err != nil {
+				return err
+			}
+			if pending != 0 {
+				return store.ErrMigrationState
+			}
+		}
 		var files int
 		var query string
 		var args []any

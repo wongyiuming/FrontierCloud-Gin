@@ -89,6 +89,26 @@ and current acceptance vectors are aligned; historical vectors remain unchanged.
 Both maintenance inspection and journal-free business export refuse pending
 migration facts. Database tables are foundations, not implemented byte migration.
 
+The next repository checkpoint adds read-only Master catalogs over all owned
+placements (including hidden/encrypted objects) and ready recordings, immediate
+parent units, recording locator mapping, identity/content fingerprints, declared
+backup state and logical/physical capacity checks. Start atomically rechecks the
+catalog, requires complete disk-proof inputs, records tasks/units/objects/scopes,
+reserves target capacity and adds an owned source drain. Identical submissions
+reuse the task; stale/expired/conflicting plans do not change quota. Persistent
+runner epochs fence pause/resume/retry/cancel and lease renewal. Cancel preserves
+reservations and source authority until actual cleanup is implemented. Drain
+release requires exact source identity and a terminal, fully cleaned task.
+
+Ordinary media/recording allocators skip drained members even after heartbeats.
+Conflicting media mutations, recording deletion/account cascades, legacy revoke
+and identity reset respect migration facts; unrelated allocation/local mutation
+and safe direct preference updates continue. This is repository groundwork:
+authenticated peer inventory, streaming, publication/cutover/cleanup, service
+workers and GUI/CLI endpoints remain incomplete. The new capability is deliberately
+not advertised by the runtime yet. Current in-memory catalog snapshots explicitly
+refuse more than 10,000 objects/16 MiB; paginated planning is still required.
+
 ## Executed verification and limits
 
 - Native unit tests of image provenance/hashes/error classification, install
@@ -168,6 +188,20 @@ migration facts. Database tables are foundations, not implemented byte migration
   acceptance. The prior recovery HTTP evidence is generation 4; generation-5
   recovery and migration end-to-end acceptance remains required.
 
+- Repository transaction/race tests passed on actual SQLite and MySQL 8.4.11.
+  They covered 16 repeated starts, one reservation, complete parent grouping,
+  hidden/encrypted metadata, recording/nested inventories and locator mapping,
+  stale/expired plans, unsupported targets, split ownership, concurrent target
+  capacity, drain persistence across heartbeat, mutation/revoke fences and runner
+  epoch replacement after pause. Reconstructed repositories read the durable task.
+  These fixtures supply synthetic peer/disk facts and capacity; no actual byte
+  copying or process/fleet restart is claimed. Captured MySQL output:
+  [task transactions](2026-10-12-resource-task-transactions.txt).
+- `go test -p=2 ./...` and local source CI passed during this checkpoint; expanded
+  SQLite/MySQL repository tests also passed with race checking. Source CI retains
+  201 Python tests/two optional skips and the original three-minute budget.
+  Full external fleet/browser gates remain outstanding.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
@@ -178,14 +212,16 @@ migration facts. Database tables are foundations, not implemented byte migration
    independent recovery point, generation compatibility/migration, pinned switch
    and actual business verification. Cross-generation code rollback is not DDL
    rollback. No upgrade/recovery API belongs in AdminGUI.
-3. Implement repository/service execution over the verified generation-5 task,
-   unit, checkpoint, reservation, draining and lock model, with exact version and
-   runner-epoch fencing at every state-changing commit. Schema is complete only
-   as a foundation, not a working migration protocol.
+3. Finish service execution and object verification/publication/unit cutover over
+   the persisted task model. Carry exact source-version and runner-epoch fences
+   through every peer action and metadata commit; preserve the existing writer
+   coordinator without holding it or SQL transactions across network copying.
 4. Implement read-only whole-node migration plans bound to identities/content
    version, including hidden/encrypted media, directories, owned recordings/other
    managed files, backups, physical/logical capacity and conflict inventories.
    Reject Master Local this round unless the same safe protocol can be proved.
+   The Master catalog foundation exists; authenticated physical inventories,
+   orphan/quarantine/backup details and paginated large-node planning remain.
 5. Add persistent execution with bounded authenticated Master-relayed bytes for
    all Direct/Relay pairs, target task staging, disk SHA-256 proofs, idempotent
    publication journals, complete-parent ownership-unit SQL cutover and cache

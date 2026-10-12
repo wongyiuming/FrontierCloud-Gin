@@ -124,7 +124,7 @@ func memberSite(v store.StorageMember) string {
 	return ""
 }
 func capacity(v store.StorageMember) int64 {
-	if v.Enabled == 0 || v.Writable == 0 || v.Health != "online" {
+	if v.Enabled == 0 || v.Writable == 0 || v.Health != "online" || v.Draining {
 		return 0
 	}
 	// Reserved transfers are not yet reflected in physical free space. Account
@@ -233,6 +233,13 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 		}
 		candidates := []store.StorageMember{}
 		for _, v := range members {
+			draining, err := r.migrationDraining(ctx, q, v.ID)
+			if err != nil {
+				return err
+			}
+			if draining {
+				continue
+			}
 			if v.ID == node.ID && v.Kind == "MasterLocal" {
 				v.PhysicalFree = localPhysicalFree
 			}

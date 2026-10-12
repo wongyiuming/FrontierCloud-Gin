@@ -182,7 +182,13 @@ Resource migration and relation revocation are distinct business operations.
 Neither authorizes stopping hosts, deleting volumes or erasing disks. The
 persistent resource migration/retirement implementation and acceptance are
 ongoing; this manual does not claim that a released node can yet be safely
-migrated through `fc`. Existing owned storage must follow the separate
+migrated through `fc`. The current dev repository has durable tasks, reservations,
+source drains and runner fences; authenticated peer inventory, real copying,
+publication/cutover/cleanup and GUI/CLI integration are still being implemented.
+Planning never reserves capacity. Cancelling a task retains capacity until safe
+staging cleanup, and does not move committed data back or release another drain.
+No host/container/volume deletion is part of this business operation.
+Existing owned storage must follow the separate
 [storage handover](https://github.com/wongyiuming/FrontierCloud-Gin/blob/main/docs/storage-appliance.md) contract.
 
 ## Failure handling
