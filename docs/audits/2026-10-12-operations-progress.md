@@ -225,6 +225,37 @@ receipts, not real byte-copy or authenticated distributed publication acceptance
 See [unit cutover output](2026-10-12-resource-unit-cutover.txt). Full Go tests and
 unchanged-budget local source CI passed for this checkpoint.
 
+## Private byte staging checkpoint
+
+`internal/migrationdata` stages actual opaque bytes in task-isolated hidden files
+with 256 KiB chunks, private fsync/rename journals and per-blob OS leases. The
+binding fixes Master/source/target/object IDs, source version, byte count, full
+SHA and optional ciphertext descriptor. Restart checks the actual persisted
+prefix; crash tails and interrupted private temporary journals are reconciled
+without adopting bytes by length alone. Duplicate chunks compare disk bytes.
+Full-file disk verification is a separate local step, so a short final-chunk
+control timeout cannot repeatedly restart a large full scan. Publication readers
+rehash disk and require verified state. Serialized hash internals stay private.
+An epoch admission callback runs under the lease and after full verification;
+journaled abort removes only that task's private stage, not business files, and
+does not refund quota or delete source data.
+
+Actual local byte/race tests passed, including 64 MiB staging, descriptor binding,
+disk corruption, restart reconstruction, crash tails/initial journal interruption,
+concurrent duplicate chunks, cancellation, epoch rejection, wrong recipients,
+path traversal and bounded private abort. A compiled race test binary passed in
+a one-CPU/512 MiB/no-swap container with GOMAXPROCS=1 and a 128 MiB Go heap target.
+Peak sampled additional Go heap during the 64 MiB append loop was 1,153,376 bytes;
+this is heap sampling, not whole-node RSS or authenticated network acceptance.
+See [byte evidence](2026-10-12-byte-staging.txt). Compilation used the prior
+two-CPU/3 GiB toolchain budget. Full Go tests and unchanged-budget source CI passed.
+
+This library is not yet connected to public node endpoints. Peer task registration,
+authenticated transport, quota integration, ordinary media/recording publication
+coordination, source cleanup and real distributed acceptance remain required.
+Opaque ciphertext bytes/descriptors were tested; valid AES playback was not
+implied by that fixture.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
