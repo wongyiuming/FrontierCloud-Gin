@@ -562,6 +562,50 @@ that unsupported read path or supply a proven equivalent fence. Source file
 transactions, private anchors, task completion/cancellation and retirement remain
 unfinished. There has been no production migration or source data deletion.
 
+## Managed source media deletion adapter
+
+The source media adapter now accepts the existing bound cleanup grant, fences
+new reads, hashes the pinned source inode with a 64 KiB buffer outside the global
+mutation lease, and checks the same inode/length/modification time again under a
+short exclusive lease. Full actual SHA must match the original transfer proof.
+The source repository rechecks the immutable object binding, content descriptor,
+committed unit/grace, active runner and live physical-alias read dependencies.
+The adapter uses the existing managed private quarantine and recovery journals;
+it never recursively removes the source directory or deletes an arbitrary path.
+
+Optional native delete-manifest task/logical fields bind the ordinary durable
+file transaction to the source migration journal. Ordinary preparation rejects
+those fields. Source deletion preparation requires the persisted cleanup grant.
+Quota decrement, metadata/nonce retirement, source journal state, delete commit
+and audit commit together. The audit retains the task/logical binding after the
+short-lived file journal is forgotten. Replayed committed operations refund once.
+A pending journal restores bytes after restart; a committed journal continues
+private cleanup. The adapter checks retained journals before reporting success:
+a committed SQL receipt alone is not physical quarantine removal. Failed private
+cleanup is retried only for the same task/object and keeps cleanup pending.
+Physical-free measurement remains conservative until actual unlink/close and a
+subsequent disk measurement; it is not equated with the logical refund.
+
+Real 131075-byte filesystem fixtures cover SHA corruption, an equal-byte inode
+replacement after hashing, audit rollback, lost commit acknowledgement, retained
+private-cleanup receipt, and restart before/after deletion commit. SQLite/MySQL
+repository tests cover ordinary-entry rejection, missing grant, atomic source
+ledger/quota commit, one refund and durable audit binding. These fixtures supply
+synthetic grants and explicitly advance test-only grace; they do not prove a
+complete authenticated Master-to-source cleanup run or production deletion.
+See [source filesystem/race evidence](2026-10-12-source-media-cleanup.txt),
+[SQLite/MySQL journal transactions](2026-10-12-source-media-cleanup-mysql.txt), and
+[full Go regression](2026-10-12-source-media-cleanup-go.txt). Source CI passed
+201 Python tests (two optional skips) and the existing JavaScript smoke checks
+within the unchanged hosted CI budget.
+
+No new schema generation, process or browser proof-input endpoint was added.
+The adapter is not dispatched by production RPC yet. Recording deletion,
+historical publication anchors, source cleanup receipts/runner reconciliation,
+whole-task completion/cancellation, Nginx read eligibility and independent
+retirement inventories still require implementation and actual fleet acceptance.
+Production does not advertise the unfinished migration capability.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

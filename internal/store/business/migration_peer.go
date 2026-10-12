@@ -326,10 +326,11 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		} else if state == "cancelling" {
 			return store.ErrMigrationState
 		}
-		if operation != "read" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "abort" {
+		if operation != "read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "abort" {
 			return store.ErrMigrationState
 		}
-		if operation == "read" && n.ID != h.SourceID || operation != "read" && n.ID != h.TargetID {
+		sourceAction := operation == "read" || operation == "cleanup"
+		if sourceAction && n.ID != h.SourceID || !sourceAction && n.ID != h.TargetID {
 			return store.ErrMigrationState
 		}
 		var count, total int64
@@ -343,7 +344,10 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		if e = q.QueryRowContext(ctx, "SELECT logical_id,object_id,resource_kind,physical_path,source_version,expected_bytes,sha256,state FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, id).Scan(&v.Object.ID, &v.Object.ObjectID, &v.Object.Resource, &v.Object.Path, &v.Object.Version, &v.Object.Bytes, &v.Proof.SHA256, &phase); e != nil {
 			return e
 		}
-		if phase == "deleted" || phase == "aborted" {
+		if phase == "deleted" && operation != "cleanup" || phase == "aborted" {
+			return store.ErrMigrationState
+		}
+		if operation == "cleanup" && phase != "deleting" && phase != "deleted" {
 			return store.ErrMigrationState
 		}
 		if operation == "read" && phase == "deleting" {

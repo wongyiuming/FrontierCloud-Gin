@@ -3,13 +3,15 @@ package store
 import "context"
 
 type DeleteItem struct {
-	Path      string `json:"relative_path"`
-	Slot      string `json:"slot"`
-	Directory bool   `json:"is_directory"`
-	OwnedID   string `json:"owned_object_id,omitempty"`
-	GlobalID  string `json:"global_media_id,omitempty"`
-	Bytes     int64  `json:"owned_bytes,omitempty"`
-	Absent    bool   `json:"physical_absent,omitempty"`
+	Path             string `json:"relative_path"`
+	Slot             string `json:"slot"`
+	Directory        bool   `json:"is_directory"`
+	OwnedID          string `json:"owned_object_id,omitempty"`
+	GlobalID         string `json:"global_media_id,omitempty"`
+	Bytes            int64  `json:"owned_bytes,omitempty"`
+	Absent           bool   `json:"physical_absent,omitempty"`
+	MigrationTask    string `json:"migration_task_id,omitempty"`
+	MigrationLogical string `json:"migration_logical_id,omitempty"`
 }
 type DeleteOperation struct {
 	ID    string

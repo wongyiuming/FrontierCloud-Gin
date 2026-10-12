@@ -52,6 +52,9 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 	if item.GlobalID != "" {
 		return nodeConflict("Master deletion is not Follower storage deletion")
 	}
+	if item.MigrationTask != "" || item.MigrationLogical != "" {
+		return store.ErrMigrationState
+	}
 	if !nodeIDPattern.MatchString(relationship) {
 		return nodeConflict("invalid owned delete relationship")
 	}
@@ -113,6 +116,11 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 		if operation.State == "committed" {
 			return nil
 		}
+		if item.MigrationTask != "" || item.MigrationLogical != "" {
+			if err = r.checkPeerMediaDelete(ctx, q, row.ID, item); err != nil {
+				return err
+			}
+		}
 		var path string
 		if err = q.QueryRowContext(ctx, "SELECT media_path FROM media_objects WHERE media_id=?"+r.lock(), item.OwnedID).Scan(&path); err != nil {
 			return err
@@ -146,6 +154,16 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 		if _, err = q.ExecContext(ctx, "UPDATE media_delete_operations SET state='committed' WHERE operation_id=?", id); err != nil {
 			return err
 		}
-		return r.nodeAudit(ctx, q, "storage-delete-committed", "", map[string]any{"operation": id, "object_id": item.OwnedID, "bytes": item.Bytes}, a)
+		if item.MigrationTask != "" {
+			if _, err = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE task_id=? AND logical_id=? AND state='deleting'", now, item.MigrationTask, item.MigrationLogical); err != nil {
+				return err
+			}
+		}
+		detail := map[string]any{"operation": id, "object_id": item.OwnedID, "bytes": item.Bytes}
+		if item.MigrationTask != "" {
+			detail["task_id"] = item.MigrationTask
+			detail["logical_id"] = item.MigrationLogical
+		}
+		return r.nodeAudit(ctx, q, "storage-delete-committed", "", detail, a)
 	})
 }

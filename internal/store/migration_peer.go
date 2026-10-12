@@ -32,4 +32,5 @@ type MigrationPeerRepository interface {
 	CompletePeerMediaPublication(context.Context, string, MigrationLease, string, MediaObject, int64, string, int64, NodeAudit) error
 	CompletePeerRecordingPublication(context.Context, string, MigrationLease, string, RecordingReceipt, int64, NodeAudit) error
 	PreparePeerMigrationCleanup(context.Context, string, MigrationLease, MigrationCleanupGrant, NodeAudit) error
+	PreparePeerMediaDelete(context.Context, string, MigrationLease, DeleteOperation, NodeAudit) error
 }

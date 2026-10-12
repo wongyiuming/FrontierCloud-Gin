@@ -1,0 +1,39 @@
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt
+2026/10/12 19:55:42 ERROR committed media delete cleanup deferred operation=515440d91ca19e9a5e3fe8ae09a5485c error="lost private cleanup receipt"
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed
+--- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay (3.17s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none (1.03s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt (0.30s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode (0.30s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit (0.33s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack (0.30s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt (0.31s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending (0.33s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed (0.29s)
+=== RUN   TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry
+=== RUN   TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/concurrent
+=== RUN   TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/audit_failure
+=== RUN   TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/lost_commit
+--- PASS: TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry (1.99s)
+    --- PASS: TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/concurrent (0.65s)
+    --- PASS: TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/audit_failure (0.68s)
+    --- PASS: TestOwnedDeleteAtomicAuditRollbackLostResponseAndConcurrentRetry/lost_commit (0.67s)
+=== RUN   TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending
+=== RUN   TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending/rollback
+=== RUN   TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending/committed_cleanup
+--- PASS: TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending (0.52s)
+    --- PASS: TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending/rollback (0.26s)
+    --- PASS: TestOwnedDeleteInterruptedQuarantineRecoveryRestoresOnlyPending/committed_cleanup (0.26s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	6.719s
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+--- PASS: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (0.21s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.239s
