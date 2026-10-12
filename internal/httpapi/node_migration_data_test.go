@@ -22,6 +22,12 @@ import (
 )
 
 func TestAuthenticatedBytesRelayThroughMasterToPrivateTargetStage(t *testing.T) {
+	authenticatedByteRelay(t, false)
+}
+func TestAuthenticatedCancellationRefundsStagingUnitAfterLostReceipt(t *testing.T) {
+	authenticatedByteRelay(t, true)
+}
+func authenticatedByteRelay(t *testing.T, cancelUnit bool) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, mdb, _, _, master := clusterFixture(t, "https://master.test", transport, true)
@@ -205,6 +211,54 @@ func TestAuthenticatedBytesRelayThroughMasterToPrivateTargetStage(t *testing.T) 
 	g, _ := mdb.Pool().Resource(ctx, o.ID)
 	if g.MemberID != srel.PeerID {
 		t.Fatal("byte receipt switched authority")
+	}
+	if cancelUnit {
+		l.Epoch++
+		request.Lease = l
+		for _, rel := range []store.Relationship{srel, trel} {
+			if _, e = call(rel, "/internal/v1/resource-migration/register", map[string]any{"header": h, "lease": l, "state": "cancelling"}); e != nil {
+				t.Fatal(e)
+			}
+		}
+		var unit string
+		if e = tdb.Database().QueryRow("SELECT unit_id FROM migration_storage_journal WHERE task_id=?", task).Scan(&unit); e != nil {
+			t.Fatal(e)
+		}
+		objectsSHA, e := store.MigrationUnitObjectsSHA([]store.MigrationPeerObject{v})
+		if e != nil {
+			t.Fatal(e)
+		}
+		grant := store.MigrationUnitFinishGrant{Header: h, Unit: store.MigrationUnit{ID: unit, Resource: o.Resource, Parent: o.Parent, State: "cancelled", ObjectCount: 1, Bytes: o.Bytes}, UnitVersion: strings.Repeat("1", 64), ObjectsSHA: objectsSHA}
+		body := map[string]any{"lease": l, "grant": grant}
+		if _, e = call(trel, "/internal/v1/resource-migration/cancel-unit", body); !errors.Is(e, node.ErrRemoteConflict) {
+			t.Fatal("uncleaned staging unit refunded", e)
+		}
+		for range 2 {
+			if _, e = call(trel, prefix+"abort", request); e != nil {
+				t.Fatal("abort replay", e)
+			}
+		}
+		for range 2 {
+			for _, rel := range []store.Relationship{srel, trel} {
+				response, e := call(rel, "/internal/v1/resource-migration/cancel-unit", body)
+				if e != nil || response["complete"] != true {
+					t.Fatal("lost receipt replay", response, e)
+				}
+			}
+		}
+		var used, reserved int64
+		if e = tdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", trel.PeerID).Scan(&used, &reserved); e != nil || used != 0 || reserved != 0 {
+			t.Fatal(used, reserved, e)
+		}
+		g, e = mdb.Pool().Resource(ctx, o.ID)
+		if e != nil || g.MemberID != srel.PeerID {
+			t.Fatal("Master source authority changed", g, e)
+		}
+		if _, e = call(trel, prefix+"begin", request); !errors.Is(e, node.ErrRemoteConflict) {
+			t.Fatal("cancelled stage reopened", e)
+		}
+		t.Logf("cancelled actual staged bytes=%d; both authenticated receipts replayed; source authority retained; target used/reserved=0", len(payload))
+		return
 	}
 	// Publishing is separately admitted and retried. It adopts the same logical
 	// physical ID while Master still owns the source until whole-unit cutover.

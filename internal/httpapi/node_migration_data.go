@@ -548,6 +548,64 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 		c.JSON(200, receipt)
 	})
+	router.POST("/internal/v1/resource-migration/cancel-unit", func(c *gin.Context) {
+		if !nodeHTTPS(c, settings, resolver) {
+			return
+		}
+		body, ok := nodeBody(c)
+		if !ok {
+			return
+		}
+		rel, e := control.Authenticate(c.Request.Context(), c.Request.Header, c.Request.Method, c.Request.URL.RequestURI(), body, false, false)
+		if e != nil {
+			detail(c, 401, "Invalid migration relationship authentication")
+			return
+		}
+		if e = control.RequireFollower(c.Request.Context(), rel); e != nil {
+			detail(c, 403, "Unit cancellation requires the active upstream Master")
+			return
+		}
+		var v struct {
+			Lease store.MigrationLease           `json:"lease"`
+			Grant store.MigrationUnitFinishGrant `json:"grant"`
+		}
+		if controlJSON(body, &v) != nil {
+			detail(c, 400, "Invalid unit cancellation binding")
+			return
+		}
+		objects, e := repo.PeerMigrationUnitCancelWork(c.Request.Context(), rel.ID, v.Lease, v.Grant)
+		if e != nil {
+			detail(c, 409, "Unit cancellation conflicts with task or object state")
+			return
+		}
+		identity, e := volume.IdentityState(c.Request.Context())
+		if e != nil {
+			internalError(c, e)
+			return
+		}
+		if identity.ID == v.Grant.Header.TargetID {
+			for _, object := range objects {
+				o := object.Object
+				spec := migrationdata.Spec{TaskID: v.Lease.TaskID, MasterID: v.Grant.Header.MasterID, SourceID: v.Grant.Header.SourceID, TargetID: v.Grant.Header.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: object.Proof.SHA256, Encryption: o.Encryption, Recording: o.Recording}
+				r, e := receiver(c.Request.Context(), spec)
+				if e != nil {
+					detail(c, 409, "Target cancellation receiver unavailable")
+					return
+				}
+				cp, e := r.Status(c.Request.Context(), spec)
+				if e != nil || cp.State != "aborted" {
+					detail(c, 409, "Target staging cleanup is incomplete")
+					return
+				}
+			}
+		}
+		receipt, e := repo.CompletePeerMigrationUnitCancellation(c.Request.Context(), rel.ID, v.Lease, v.Grant, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		if e != nil {
+			detail(c, 409, "Unit cancellation changed before commit")
+			return
+		}
+		c.JSON(200, receipt)
+	})
 	var once sync.Once
 	return func() error { once.Do(func() { cancel(); workers.Wait() }); return nil }
 }

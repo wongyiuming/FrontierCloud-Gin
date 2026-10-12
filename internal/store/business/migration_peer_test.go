@@ -282,3 +282,67 @@ func TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations(t *test
 		t.Fatal("published journal blindly aborted", e)
 	}
 }
+
+func TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget(t *testing.T) {
+	for _, sourcePeer := range []bool{false, true} {
+		t.Run(map[bool]string{false: "target", true: "source"}[sourcePeer], func(t *testing.T) {
+			_, raw, repo, rel, h, l, v := peerMigrationFixture(t, sourcePeer)
+			ctx := context.Background()
+			if e := repo.RegisterPeerMigration(ctx, rel, h, l, "queued", 20*store.GiB, store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			// Cancellation may interrupt registration before the last object arrives.
+			l.Epoch++
+			if e := repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			var unit string
+			if e := raw.QueryRow("SELECT unit_id FROM migration_storage_journal WHERE task_id=?", h.TaskID).Scan(&unit); e != nil {
+				t.Fatal(e)
+			}
+			sha, e := store.MigrationUnitObjectsSHA([]store.MigrationPeerObject{v})
+			if e != nil {
+				t.Fatal(e)
+			}
+			g := store.MigrationUnitFinishGrant{Header: h, Unit: store.MigrationUnit{ID: unit, Resource: v.Object.Resource, Parent: v.Object.Parent, State: "cancelled", ObjectCount: 1, Bytes: v.Object.Bytes}, UnitVersion: strings.Repeat("1", 64), ObjectsSHA: sha}
+			if !sourcePeer {
+				if _, e = repo.CompletePeerMigrationUnitCancellation(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+					t.Fatal("live stage refunded", e)
+				}
+				if e = repo.CompletePeerMigrationAbort(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+					t.Fatal(e)
+				}
+			}
+			for range 2 {
+				receipt, e := repo.CompletePeerMigrationUnitCancellation(ctx, rel, l, g, store.NodeAudit{})
+				if e != nil || !receipt.Complete {
+					t.Fatal(receipt, e)
+				}
+			}
+			var scopes int
+			if e = raw.QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", h.TaskID).Scan(&scopes); e != nil || scopes != 0 {
+				t.Fatal(scopes, e)
+			}
+			if sourcePeer {
+				var objects, drains int
+				if e = raw.QueryRow("SELECT COUNT(*) FROM media_objects WHERE media_id=?", v.Object.ObjectID).Scan(&objects); e != nil {
+					t.Fatal(e)
+				}
+				if e = raw.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=?", h.TaskID).Scan(&drains); e != nil || drains != 1 || objects != 1 {
+					t.Fatal(objects, drains, e)
+				}
+			} else {
+				var reserved int64
+				if e = raw.QueryRow("SELECT reserved_bytes FROM migration_capacity WHERE task_id=?", h.TaskID).Scan(&reserved); e != nil || reserved != 0 {
+					t.Fatal(reserved, e)
+				}
+			}
+			if _, e = repo.CompletePeerMigrationUnit(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+				t.Fatal("cancel receipt reused as clean", e)
+			}
+		})
+	}
+}

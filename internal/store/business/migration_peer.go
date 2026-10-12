@@ -195,11 +195,11 @@ func validPeerObject(h store.MigrationPeerHeader, v store.MigrationPeerObject) b
 }
 func (r *Repository) RegisterPeerMigrationObject(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, a store.NodeAudit) error {
 	return r.write(ctx, func(q queryer) error {
-		h, n, state, e := r.checkPeerLease(ctx, q, relationship, l)
+		h, n, _, e := r.checkPeerLease(ctx, q, relationship, l)
 		if e != nil {
 			return e
 		}
-		if state == "cancelling" || !validPeerObject(h, v) {
+		if !validPeerObject(h, v) {
 			return store.ErrMigrationState
 		}
 		o := v.Object

@@ -39,6 +39,8 @@ type MigrationPeerRepository interface {
 	StagePeerRecordingDeletion(context.Context, string, MigrationLease, string) (*Recording, error)
 	CompletePeerRecordingDeletion(context.Context, string, string, string, int64, NodeAudit) error
 	ValidatePeerAnchorRetirement(context.Context, string, MigrationLease, MigrationCleanupGrant, bool) error
+	PeerMigrationUnitCancelWork(context.Context, string, MigrationLease, MigrationUnitFinishGrant) ([]MigrationPeerObject, error)
+	CompletePeerMigrationUnitCancellation(context.Context, string, MigrationLease, MigrationUnitFinishGrant, NodeAudit) (MigrationUnitFinishReceipt, error)
 	PeerMigrationUnitFinishWork(context.Context, string, MigrationLease, MigrationUnitFinishGrant) ([]MigrationPeerObject, error)
 	CompletePeerMigrationUnit(context.Context, string, MigrationLease, MigrationUnitFinishGrant, NodeAudit) (MigrationUnitFinishReceipt, error)
 	CompletePeerMigrationTask(context.Context, string, MigrationLease, MigrationTaskFinishGrant, NodeAudit) (MigrationTaskFinishReceipt, error)

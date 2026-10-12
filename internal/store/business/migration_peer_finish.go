@@ -9,14 +9,21 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
-func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant) (objects []store.MigrationPeerObject, e error) {
+func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant, cancelling bool) (objects []store.MigrationPeerObject, e error) {
 	h, n, state, e := r.checkPeerLease(ctx, q, rel, l)
 	if e != nil {
 		return nil, e
 	}
 	expected, _ := store.MigrationDigest(h)
 	actual, _ := store.MigrationDigest(g.Header)
-	if state == "cancelling" || expected != actual || g.Unit.State != "cleanup_pending" || !nodeHashPattern.MatchString(g.UnitVersion) || g.Unit.CommittedAt <= 0 || g.Unit.CleanupAfter < g.Unit.CommittedAt+3600 || g.Unit.CleanupAfter > time.Now().Unix() {
+	if expected != actual || !nodeHashPattern.MatchString(g.UnitVersion) {
+		return nil, store.ErrMigrationState
+	}
+	if cancelling {
+		if state != "cancelling" || g.Unit.State != "cancelled" || g.Unit.CommittedAt != 0 || g.Unit.CleanupAfter != 0 {
+			return nil, store.ErrMigrationState
+		}
+	} else if state == "cancelling" || g.Unit.State != "cleanup_pending" || g.Unit.CommittedAt <= 0 || g.Unit.CleanupAfter < g.Unit.CommittedAt+3600 || g.Unit.CleanupAfter > time.Now().Unix() {
 		return nil, store.ErrMigrationState
 	}
 	var count, total int64
@@ -52,6 +59,12 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 		if n.ID == h.SourceID {
 			phase = "deleted"
 		}
+		if cancelling {
+			phase = "aborted"
+			if n.ID == h.SourceID {
+				phase = "receiving"
+			}
+		}
 		if entry.state != phase {
 			return nil, store.ErrMigrationState
 		}
@@ -64,7 +77,7 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 		}
 		bytes += o.Bytes
 		objects = append(objects, store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
-		if n.ID == h.SourceID {
+		if !cancelling && n.ID == h.SourceID {
 			var reads int
 			if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND (logical_id=? OR object_id=?) AND expires_at>?", n.ID, o.ID, o.ObjectID, time.Now().Unix()).Scan(&reads); e != nil {
 				return nil, e
@@ -86,14 +99,14 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 func (r *Repository) PeerMigrationUnitFinishWork(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant) (objects []store.MigrationPeerObject, e error) {
 	e = r.write(ctx, func(q queryer) error {
 		var err error
-		objects, err = r.peerUnitFinishWork(ctx, q, rel, l, g)
+		objects, err = r.peerUnitFinishWork(ctx, q, rel, l, g, false)
 		return err
 	})
 	return
 }
 func (r *Repository) CompletePeerMigrationUnit(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant, a store.NodeAudit) (receipt store.MigrationUnitFinishReceipt, e error) {
 	e = r.write(ctx, func(q queryer) error {
-		if _, e := r.peerUnitFinishWork(ctx, q, rel, l, g); e != nil {
+		if _, e := r.peerUnitFinishWork(ctx, q, rel, l, g, false); e != nil {
 			return e
 		}
 		n, e := r.ownedStorageNode(ctx, q, rel)

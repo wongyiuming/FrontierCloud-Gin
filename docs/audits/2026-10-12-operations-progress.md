@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2–5 snapshots and
+manifest gates advance to generation 6. Historical generation 2â€“5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -912,3 +912,31 @@ staging material is absent or empty. Nonempty material without a binding journal
 is retained and blocks cleanup. Restart cannot reopen aborted staging. Tests use
 actual filesystem bytes and SQLite/MySQL transactions. Fleet/browser acceptance
 and cancellation of partially committed tasks remain outstanding.
+
+
+## Cancellation unit reconciliation (2026-10-12)
+
+Uncommitted units now have a distinct cancellation grant and authenticated
+`cancel-unit` endpoint. Master and both followers reconstruct the same complete
+unit roster digest. Source journals must remain receiving; target journals and
+filesystem staging checkpoints must be aborted. Published/deleting/deleted
+journals cannot use this path. Cancellation grants have zero commit/grace times,
+and cleanup endpoints reject them. Missing roster entries after interrupted
+registration can be supplied under the cancelling epoch through the existing
+source identity, target collision, count, byte-limit and scope checks; data reads,
+copying and publication remain fenced.
+
+Both peers durably record the unit cancellation; the target refunds only its
+remaining unpublished reservation, exactly once. The Master requires both matching
+member receipts before refunding its reservation and marking the objects/unit
+cancelled. Source business ownership and used capacity are untouched. Completed
+unit receipts can be repeated after locks have been released. The source drain
+remains, and whole-task state remains cancelling until final reconciliation.
+Committed units cannot receive this grant and retain target ownership.
+
+Evidence: `2026-10-12-cancellation-unit-go.txt` contains actual authenticated Gin
+router transfer, disk abort and lost-receipt replay; this is not a real HTTPS
+fleet/browser test. `2026-10-12-cancellation-unit-mysql.txt` covers isolated SQLite
+and MySQL transaction/replay checks. Whole-task cancellation runner/finalization,
+published-but-uncommitted shadow deletion, mixed committed-unit cleanup and
+five-node/browser acceptance remain required work.

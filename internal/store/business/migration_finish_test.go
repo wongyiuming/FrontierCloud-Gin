@@ -128,3 +128,92 @@ func TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain(t 
 		}
 	}
 }
+
+func TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce(t *testing.T) {
+	f := migrationDatabase(t)
+	ctx := context.Background()
+	p := f.plan(t, hashPath(t.Name())[:32])
+	if _, e := f.repo.StartMigration(ctx, p, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	l, e := f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("e", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	w, e := f.repo.MigrationWork(ctx, p.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	u := w.Units[0]
+	if _, e = f.repo.MigrationUnitCancelGrant(ctx, l, u.ID); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("cancel before control", e)
+	}
+	if _, e = f.repo.ControlMigration(ctx, p.ID, "cancel", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.repo.MigrationUnitCancelGrant(ctx, l, u.ID); !errors.Is(e, store.ErrMigrationLease) {
+		t.Fatal("old runner not fenced", e)
+	}
+	l, e = f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("f", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g, e := f.repo.MigrationUnitCancelGrant(ctx, l, u.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	source := store.MigrationUnitFinishReceipt{Grant: g, MemberID: f.source, Complete: true}
+	target := store.MigrationUnitFinishReceipt{Grant: g, MemberID: f.target, Complete: true}
+	wrong := target
+	wrong.Grant.Unit.State = "cleanup_pending"
+	if e = f.repo.CompleteMigrationUnitCancellation(ctx, l, source, wrong, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("wrong receipt", e)
+	}
+	for range 2 {
+		if e = f.repo.CompleteMigrationUnitCancellation(ctx, l, source, target, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	var reserved, drains, scopes int64
+	if e = f.raw.QueryRow("SELECT reserved_bytes FROM migration_capacity WHERE task_id=?", p.ID).Scan(&reserved); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.raw.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=?", p.ID).Scan(&drains); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.raw.QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=? AND resource_kind=? AND parent_path=?", p.ID, u.Resource, u.Parent).Scan(&scopes); e != nil {
+		t.Fatal(e)
+	}
+	if reserved != w.Task.TotalBytes-u.Bytes || drains != 1 || scopes != 0 {
+		t.Fatal(reserved, drains, scopes)
+	}
+	after, e := f.repo.MigrationWork(ctx, p.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if after.Task.State != "cancelling" || after.Task.CommittedBytes != 0 {
+		t.Fatal(after.Task)
+	}
+	for _, cp := range after.Objects {
+		if cp.UnitID != u.ID {
+			continue
+		}
+		if cp.State != "cancelled" {
+			t.Fatal(cp.State)
+		}
+		var owner string
+		if e = f.raw.QueryRow("SELECT storage_member_id FROM global_media_objects WHERE media_id=?", cp.Object.ID).Scan(&owner); e != nil {
+			t.Fatal(e)
+		}
+		if owner != f.source {
+			t.Fatal("source authority changed", owner)
+		}
+	}
+	// A committed unit cannot be given a cancellation grant even in cancelling.
+	if _, e = f.raw.Exec("UPDATE migration_units SET committed_at=1,state='cleanup_pending' WHERE task_id=? AND unit_id=?", p.ID, u.ID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = f.repo.MigrationUnitCancelGrant(ctx, l, u.ID); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("committed unit reversal", e)
+	}
+}
