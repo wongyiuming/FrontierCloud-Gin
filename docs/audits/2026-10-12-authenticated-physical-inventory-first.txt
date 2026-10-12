@@ -1,0 +1,35 @@
+=== RUN   TestSessionsBindIdentityLimitExpiryAndRestartIncarnation
+--- PASS: TestSessionsBindIdentityLimitExpiryAndRestartIncarnation (0.01s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.035s
+=== RUN   TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation
+2026/10/12 22:58:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.256 client_ip=192.0.2.1 request_id=4cf79dd24a384c55b8785c157908c309 trace_id=4cf79dd24a384c55b8785c157908c309
+2026/10/12 22:58:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.117 client_ip=192.0.2.1 request_id=a0e2701d917d48ea83054c5beb12eb14 trace_id=a0e2701d917d48ea83054c5beb12eb14
+2026/10/12 22:58:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.045 client_ip=192.0.2.1 request_id=5011e1beaf334f88bfb9c85ac18d774f trace_id=5011e1beaf334f88bfb9c85ac18d774f
+2026/10/12 22:58:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.033 client_ip=192.0.2.1 request_id=cb505094881549b2ac87df5fbf09e491 trace_id=cb505094881549b2ac87df5fbf09e491
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.594 client_ip=192.0.2.1 request_id=bfb8db7fe5bd4c4b8caefda056eeb9e8 trace_id=bfb8db7fe5bd4c4b8caefda056eeb9e8
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.337 client_ip=192.0.2.1 request_id=97c6ace2128e450fb48a04982e4eb9c1 trace_id=97c6ace2128e450fb48a04982e4eb9c1
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=0.05 client_ip=192.0.2.1 request_id=b75e86d21fed4ba0a4a18710591fc989 trace_id=b75e86d21fed4ba0a4a18710591fc989
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.22 client_ip=192.0.2.1 request_id=8c8e1a6a844f4102ada7a44f8c2fda6e trace_id=8c8e1a6a844f4102ada7a44f8c2fda6e
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.838 client_ip=192.0.2.1 request_id=0bb114d85f5642b19a9bd47a578423f6 trace_id=0bb114d85f5642b19a9bd47a578423f6
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.712 client_ip=192.0.2.1 request_id=ea5a780545ac44ed902e67a204228a3c trace_id=ea5a780545ac44ed902e67a204228a3c
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.807 client_ip=192.0.2.1 request_id=dd64650f466844a9994b36c3a7477f2b trace_id=dd64650f466844a9994b36c3a7477f2b
+2026/10/12 22:58:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.864 client_ip=192.0.2.1 request_id=a39cc60803a74f1fa053ed601d5717db trace_id=a39cc60803a74f1fa053ed601d5717db
+    node_resource_inventory_test.go:87: arbitrary root
+--- FAIL: TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation (1.22s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	1.257s
+=== RUN   TestStorageOnlyRoutesIdentityAndOneUsePackageWithoutBusinessDependencies
+2026/10/12 22:58:28 INFO request_completed method=GET path=/ status=404 duration_ms=0.124 client_ip=192.0.2.1 request_id=183b33dfef8e4f858df022af88ba8803 trace_id=183b33dfef8e4f858df022af88ba8803
+2026/10/12 22:58:28 INFO request_completed method=GET path=/api/v1/media status=404 duration_ms=0.025 client_ip=192.0.2.1 request_id=25972077aeaf46d290c38465cb7436b7 trace_id=25972077aeaf46d290c38465cb7436b7
+2026/10/12 22:58:28 INFO request_completed method=GET path=/api/v1/media/admin status=404 duration_ms=0.019 client_ip=192.0.2.1 request_id=11757f1a9b534713a2b32211ee41f010 trace_id=11757f1a9b534713a2b32211ee41f010
+2026/10/12 22:58:28 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=404 duration_ms=0.018 client_ip=192.0.2.1 request_id=97a9bc872c0b464b80ea7ae2e4760dad trace_id=97a9bc872c0b464b80ea7ae2e4760dad
+2026/10/12 22:58:28 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release status=404 duration_ms=0.023 client_ip=192.0.2.1 request_id=8c25393d4cb74ab288a2af8975826d28 trace_id=8c25393d4cb74ab288a2af8975826d28
+2026/10/12 22:58:28 INFO request_completed method=GET path=/api/v1/karaoke/login status=404 duration_ms=0.018 client_ip=192.0.2.1 request_id=0fba761c5ba34435bb271066ad0a4c04 trace_id=0fba761c5ba34435bb271066ad0a4c04
+2026/10/12 22:58:28 INFO request_completed method=GET path=/static/js/player.js status=404 duration_ms=0.018 client_ip=192.0.2.1 request_id=4f0a903cc05b460182d52f4594c0f495 trace_id=4f0a903cc05b460182d52f4594c0f495
+2026/10/12 22:58:28 INFO request_completed method=GET path=/internal/v1/cluster-update/status status=404 duration_ms=0.02 client_ip=192.0.2.1 request_id=0b20c2fd960c45bcbc73311b07d0e332 trace_id=0b20c2fd960c45bcbc73311b07d0e332
+2026/10/12 22:58:28 INFO request_completed method=GET path=/internal/v1/cluster-update/start status=404 duration_ms=0.018 client_ip=192.0.2.1 request_id=329dfb4c1c5e4180b9d3a7f00463042d trace_id=329dfb4c1c5e4180b9d3a7f00463042d
+--- PASS: TestStorageOnlyRoutesIdentityAndOneUsePackageWithoutBusinessDependencies (1.06s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.105s
+FAIL

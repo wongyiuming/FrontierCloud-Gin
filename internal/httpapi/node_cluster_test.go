@@ -181,6 +181,11 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	}
 	closeMigration := RegisterNodeMigrationData(router, public.settings, resolver, service, public.media, privateRecordings, db.Pool().(store.MigrationPeerRepository))
 	t.Cleanup(func() { closeMigration() })
+	closeInventory, err := RegisterNodePhysicalInventory(router, public.settings, resolver, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeInventory() })
 	transport.routers[origin] = router
 	return router, db, dir, public, service
 }

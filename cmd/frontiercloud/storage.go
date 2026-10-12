@@ -43,9 +43,13 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 		httpapi.RegisterNodeMigrationControl(router, settings, s.Resolver, s.Control, s.Media, peers)
 		closeMigration = httpapi.RegisterNodeMigrationData(router, settings, s.Resolver, s.Control, s.Media, s.Recordings, peers)
 	}
+	closeInventory, err := httpapi.RegisterNodePhysicalInventory(router, settings, s.Resolver, s.Control)
+	if err != nil {
+		return nil, nil, errors.Join(err, closeMigration())
+	}
 	httpapi.RegisterNodeRecordings(router, settings, s.Resolver, s.Control, s.Recordings)
 	httpapi.RegisterNodeBackups(router, settings, s.Resolver, s.Control, s.Database.Backups())
-	return router, closeMigration, nil
+	return router, func() error { return errors.Join(closeInventory(), closeMigration()) }, nil
 }
 
 func printStoragePair(ctx context.Context, service *node.Service, repo store.NodeRepository, output io.Writer) error {
