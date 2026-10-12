@@ -1,0 +1,69 @@
+=== RUN   TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation
+2026/10/12 23:20:58 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.169 client_ip=192.0.2.1 request_id=8c5607cbbdf64cc2977259842aa4f563 trace_id=8c5607cbbdf64cc2977259842aa4f563
+2026/10/12 23:20:58 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.1 client_ip=192.0.2.1 request_id=c420f2ada51b4964b8cb26ca7be78e42 trace_id=c420f2ada51b4964b8cb26ca7be78e42
+2026/10/12 23:20:58 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.051 client_ip=192.0.2.1 request_id=2ee4b66f47df4bd18c99a7734f55b614 trace_id=2ee4b66f47df4bd18c99a7734f55b614
+2026/10/12 23:20:58 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.291 client_ip=192.0.2.1 request_id=cba8e05c0191414db6d815a3b0a9051c trace_id=cba8e05c0191414db6d815a3b0a9051c
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.273 client_ip=192.0.2.1 request_id=afc6354b9dd9464a83bfb207213b73fe trace_id=afc6354b9dd9464a83bfb207213b73fe
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.329 client_ip=192.0.2.1 request_id=814ee9aa55124d2c86ddd7f346fa9793 trace_id=814ee9aa55124d2c86ddd7f346fa9793
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=0.095 client_ip=192.0.2.1 request_id=2595f5a96dff41e8af08c42ee47ef6fb trace_id=2595f5a96dff41e8af08c42ee47ef6fb
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.445 client_ip=192.0.2.1 request_id=bc37f72968e741bb883ac14ce881f39e trace_id=bc37f72968e741bb883ac14ce881f39e
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.905 client_ip=192.0.2.1 request_id=3e07abd0df1f40ba95cc4fd0b500fbac trace_id=3e07abd0df1f40ba95cc4fd0b500fbac
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.763 client_ip=192.0.2.1 request_id=b8828d3f988b4b0e839a4271d68d06e9 trace_id=b8828d3f988b4b0e839a4271d68d06e9
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.842 client_ip=192.0.2.1 request_id=2dfbc391ffed47c3893ecd809ff76d7d trace_id=2dfbc391ffed47c3893ecd809ff76d7d
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.779 client_ip=192.0.2.1 request_id=ff3a1a3d6d324675b3a71b9cad84499a trace_id=ff3a1a3d6d324675b3a71b9cad84499a
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=429 duration_ms=2.775 client_ip=192.0.2.1 request_id=cc802c39a05f4a4e8c1331d2282a2d07 trace_id=cc802c39a05f4a4e8c1331d2282a2d07
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=17.267 client_ip=192.0.2.1 request_id=eb56855bd5644081943d55aadfaacf92 trace_id=eb56855bd5644081943d55aadfaacf92
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.187 client_ip=192.0.2.1 request_id=f8fb898958e847d2a9c897507a7e97dd trace_id=f8fb898958e847d2a9c897507a7e97dd
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=13.16 client_ip=192.0.2.1 request_id=6506cab1efac48a0bf9c88d9d034e14f trace_id=6506cab1efac48a0bf9c88d9d034e14f
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.112 client_ip=192.0.2.1 request_id=4b7aeb46802c46848144cac2164794e7 trace_id=4b7aeb46802c46848144cac2164794e7
+2026/10/12 23:20:58 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=1.603 client_ip=192.0.2.1 request_id=86318684ce524af3a8abb07c35350219 trace_id=86318684ce524af3a8abb07c35350219
+--- PASS: TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation (1.05s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	2.088s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.387s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	44.883s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.008s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	69.728s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	21.740s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	3.302s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	0.057s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	4.270s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.428s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	0.186s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	0.145s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	6.135s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	0.231s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	0.621s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

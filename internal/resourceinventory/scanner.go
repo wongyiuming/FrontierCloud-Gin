@@ -20,6 +20,9 @@ import (
 
 const PageEntries = 64
 const PageBytes = 48 << 10
+
+// Reserve bounded room for native SQL facts without doubling path strings.
+const FactBytes = 400
 const MaxDepth = 64
 const MaxPathBytes = 4096
 
@@ -222,11 +225,11 @@ func (s *Scanner) Next(ctx context.Context, sequence uint64) (page Page, result 
 		if len(raw) > PageBytes {
 			return page, ErrLimit
 		}
-		if encodedBytes+len(raw) > PageBytes {
+		if encodedBytes+len(raw)+FactBytes > PageBytes {
 			s.pending = &entry
 			break
 		}
-		encodedBytes += len(raw)
+		encodedBytes += len(raw) + FactBytes
 		if entry.LogicalBytes < 0 || entry.LogicalBytes > math.MaxInt64-s.bytes || s.count == math.MaxUint64 {
 			return page, ErrLimit
 		}

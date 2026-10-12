@@ -10,6 +10,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"os"
 	"sync"
@@ -19,7 +20,10 @@ import (
 // RegisterNodePhysicalInventory exposes only metadata under the configured
 // data root. It accepts no arbitrary path, URL, role, identity or expiry.
 // This observation endpoint does not grant migration, deletion or retirement.
-func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, resolver *network.Resolver, control *node.Service) (func() error, error) {
+func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, resolver *network.Resolver, control *node.Service, repository store.PhysicalInventoryRepository) (func() error, error) {
+	if repository == nil {
+		return nil, errors.New("physical inventory repository unavailable")
+	}
 	root, e := os.OpenRoot(settings.DataRoot)
 	if e != nil {
 		return nil, e
@@ -41,6 +45,11 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		}
 	}()
 	slots := make(chan struct{}, 1)
+	type classifiedPage struct {
+		resourceinventory.SessionPage
+		Facts []store.PhysicalInventoryFact `json:"facts"`
+	}
+	var last *classifiedPage
 	router.POST("/internal/v1/resource-inventory", func(c *gin.Context) {
 		if !nodeHTTPS(c, settings, resolver) {
 			return
@@ -107,7 +116,42 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			result, e = sessions.Open(ctx, request.SessionID, binding)
 		case "page":
-			result, e = sessions.Page(ctx, request.SessionID, request.Incarnation, binding, request.Sequence)
+			var observed resourceinventory.SessionPage
+			observed, e = sessions.Page(ctx, request.SessionID, request.Incarnation, binding, request.Sequence)
+			if e != nil {
+				break
+			}
+			if last != nil && last.Session == observed.Session && last.Page.Sequence == observed.Page.Sequence {
+				result = last
+				break
+			}
+			entries := make([]store.PhysicalInventoryEntry, 0, len(observed.Page.Entries))
+			for _, entry := range observed.Page.Entries {
+				entries = append(entries, store.PhysicalInventoryEntry{Path: entry.Path, Kind: entry.Kind, LogicalBytes: entry.LogicalBytes})
+			}
+			var facts []store.PhysicalInventoryFact
+			facts, e = repository.ClassifyPhysicalInventory(ctx, rel.ID, identity.ID, rel.PeerID, entries)
+			if e == nil && len(facts) != len(entries) {
+				e = resourceinventory.ErrLimit
+			}
+			if e == nil {
+				for _, fact := range facts {
+					encoded, err := json.Marshal(fact)
+					if err != nil || len(encoded) > resourceinventory.FactBytes {
+						e = resourceinventory.ErrLimit
+						break
+					}
+				}
+			}
+			if e != nil {
+				_ = sessions.Cancel(request.SessionID, request.Incarnation, binding)
+				break
+			}
+			if _, e = sessions.Page(ctx, request.SessionID, request.Incarnation, binding, request.Sequence); e != nil {
+				break
+			}
+			last = &classifiedPage{SessionPage: observed, Facts: facts}
+			result = last
 		case "close":
 			if request.Sequence != 0 {
 				e = resourceinventory.ErrSession

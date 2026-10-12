@@ -43,7 +43,7 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 		httpapi.RegisterNodeMigrationControl(router, settings, s.Resolver, s.Control, s.Media, peers)
 		closeMigration = httpapi.RegisterNodeMigrationData(router, settings, s.Resolver, s.Control, s.Media, s.Recordings, peers)
 	}
-	closeInventory, err := httpapi.RegisterNodePhysicalInventory(router, settings, s.Resolver, s.Control)
+	closeInventory, err := httpapi.RegisterNodePhysicalInventory(router, settings, s.Resolver, s.Control, s.Database.Pool().(store.PhysicalInventoryRepository))
 	if err != nil {
 		return nil, nil, errors.Join(err, closeMigration())
 	}

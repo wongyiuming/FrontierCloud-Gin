@@ -51,6 +51,10 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e = os.WriteFile(filepath.Join(dir, ".business-backups/only-recovery.tar"), []byte("fixture backup; do not transfer content"), 0600); e != nil {
 		t.Fatal(e)
 	}
+	managed := "music/hidden/000.mp3"
+	if _, e = sdb.Media().EnsureObjects(ctx, []store.MediaObject{{Path: managed, Kind: "audio"}}); e != nil {
+		t.Fatal(e)
+	}
 	route := "/internal/v1/resource-inventory"
 	if status := migrationUnsignedStatus(router, route); status != 401 {
 		t.Fatal("unsigned inventory", status)
@@ -95,13 +99,38 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	req["action"] = "page"
 	req["incarnation"] = session.Incarnation
 	seen := map[string]bool{}
+	categories := map[string]string{}
 	for sequence := uint64(0); ; sequence++ {
 		req["sequence"] = sequence
 		value, e := master.Call(ctx, rel, route, req)
 		if e != nil {
 			t.Fatal(e)
 		}
+		// Mutate metadata only in this isolated fixture, after observing the
+		// physical page, to prove acknowledgment replay keeps the original facts.
+		var first struct {
+			Page resourceinventory.Page `json:"page"`
+		}
+		if e = decodeInventory(value, &first); e != nil {
+			t.Fatal(e)
+		}
+		changed := false
+		for _, entry := range first.Page.Entries {
+			if entry.Path == "media/"+managed {
+				changed = true
+			}
+		}
+		if changed {
+			if _, e = sdb.Database().Exec("UPDATE media_objects SET object_kind='lyric' WHERE media_path=?", managed); e != nil {
+				t.Fatal(e)
+			}
+		}
 		replay, e := master.Call(ctx, rel, route, req)
+		if changed {
+			if _, err := sdb.Database().Exec("UPDATE media_objects SET object_kind='audio' WHERE media_path=?", managed); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if e != nil || !reflect.DeepEqual(value, replay) {
 			t.Fatal("page acknowledgment replay", e)
 		}
@@ -112,9 +141,17 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 		if page.Session != session || len(page.Page.Entries) > resourceinventory.PageEntries {
 			t.Fatal("page binding", page)
 		}
-		for _, entry := range page.Page.Entries {
-			seen[entry.Path] = true
+		var annotated struct {
+			Facts []store.PhysicalInventoryFact `json:"facts"`
 		}
+		if e = decodeInventory(value, &annotated); e != nil || len(annotated.Facts) != len(page.Page.Entries) {
+			t.Fatal("missing page facts", e)
+		}
+		for i, entry := range page.Page.Entries {
+			seen[entry.Path] = true
+			categories[entry.Path] = annotated.Facts[i].Category
+		}
+
 		if page.Page.Complete {
 			break
 		}
@@ -123,6 +160,9 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 		if !seen[name] {
 			t.Fatal("physical path omitted", name)
 		}
+	}
+	if categories["media/"+managed] != "managed_media" || categories["media/music/hidden/089.mp3"] != "unmanaged_file" || categories[".business-backups/only-recovery.tar"] != "backup_material" {
+		t.Fatal("incorrect native page classification", categories)
 	}
 	var tasks, drains int
 	if e = sdb.Database().QueryRow("SELECT COUNT(*) FROM migration_tasks").Scan(&tasks); e != nil {
@@ -136,7 +176,12 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = sdb.Nodes().RevokeRelationship(ctx, upstream.ID, false, store.NodeAudit{}); e != nil {
+	if e = sdb.Nodes().RevokeRelationship(ctx, upstream.ID, false, store.NodeAudit{}); e == nil {
+		t.Fatal("managed resource did not block ordinary revocation")
+	}
+	// Inject only a revocation fact in this isolated database to verify that
+	// cached observations never bypass authentication. No resource is deleted.
+	if _, e = sdb.Database().Exec("UPDATE node_relationships SET state='revoked' WHERE relationship_id=?", upstream.ID); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = master.Call(ctx, rel, route, req); e == nil {
