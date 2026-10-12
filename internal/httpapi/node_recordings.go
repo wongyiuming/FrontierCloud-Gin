@@ -70,13 +70,22 @@ func boundedRecordingBody(c *gin.Context, settings config.Config, size int64) fu
 	c.Request.Body = http.MaxBytesReader(c.Writer, &uploadReader{c.Request.Body, controller, inactivity}, size)
 	return func() { controller.SetReadDeadline(time.Time{}) }
 }
-func serveRecording(c *gin.Context, volume *recording.Storage, relationship, user, id, contentType, filename string, download bool) {
+func serveRecording(c *gin.Context, volume *recording.Storage, relationship, user, id, contentType, filename string, download bool, control ...*node.Service) {
 	file, info, release, e := volume.Open(c.Request.Context(), relationship, user, id)
 	if e != nil {
 		recordingError(c, e)
 		return
 	}
 	defer release()
+	if len(control) != 0 {
+		readCtx, done, e := control[0].ProtectOwnedRead(c.Request.Context(), relationship, id, id, "recording", func() { _ = file.Close() })
+		if e != nil {
+			detail(c, 409, "Recording read is fenced by migration or node state")
+			return
+		}
+		defer done()
+		c.Request = c.Request.WithContext(readCtx)
+	}
 	noStore(c)
 	c.Header("Content-Type", contentType)
 	disposition := "inline"
@@ -168,7 +177,7 @@ func RegisterNodeRecordings(router *gin.Engine, settings config.Config, resolver
 		ct, _ := value["ct"].(string)
 		if c.Request.Method != "PUT" {
 			op, _ := value["op"].(string)
-			serveRecording(c, volume, rel.ID, user, c.Param("recording"), ct, filename, op == "download")
+			serveRecording(c, volume, rel.ID, user, c.Param("recording"), ct, filename, op == "download", control)
 			return
 		}
 		number, ok := value["size"].(json.Number)

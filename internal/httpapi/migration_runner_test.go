@@ -13,12 +13,26 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+type migrationReadWriter struct {
+	*httptest.ResponseRecorder
+	started chan struct{}
+	resume  chan struct{}
+	once    sync.Once
+}
+
+func (w *migrationReadWriter) Write(b []byte) (int, error) {
+	w.once.Do(func() { close(w.started); <-w.resume })
+	return w.ResponseRecorder.Write(b)
+}
 
 type runnerFaultCaller struct {
 	client *node.Service
@@ -46,7 +60,7 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
-	_, _, _, _, source := clusterFixture(t, "https://source.test", transport, true)
+	_, sourceDB, _, _, source := clusterFixture(t, "https://source.test", transport, true)
 	_, targetDB, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true)
 	for _, v := range []struct {
 		s          *node.Service
@@ -113,6 +127,45 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 			t.Fatal(e)
 		}
 		ids = append(ids, u.MediaID)
+	}
+	// Hold an actual native Go response open before any migration is registered.
+	// The follower must already expose its durable physical read dependency.
+	first, e := db.Pool().Resource(ctx, ids[0])
+	if e != nil {
+		t.Fatal(e)
+	}
+	token, e := master.MediaCapability(ctx, srid, first.MemberID, first.ObjectID, first.ID, strings.Repeat("1", 32), strings.Repeat("2", 32))
+	if e != nil {
+		t.Fatal(e)
+	}
+	w := &migrationReadWriter{ResponseRecorder: httptest.NewRecorder(), started: make(chan struct{}), resume: make(chan struct{})}
+	req := httptest.NewRequest("GET", "https://source.test/internal/v1/media/"+first.ObjectID, nil)
+	req.Header.Set("X-Media-Capability", token)
+	done := make(chan struct{})
+	go func() { defer close(done); transport.routers["https://source.test"].ServeHTTP(w, req) }()
+	var resumeOnce sync.Once
+	resume := func() { resumeOnce.Do(func() { close(w.resume) }) }
+	defer resume()
+	select {
+	case <-w.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("native read did not start")
+	}
+	var liveReads int
+	if e = sourceDB.Database().QueryRow("SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND object_id=? AND expires_at>?", sr.PeerID, first.ObjectID, time.Now().Unix()).Scan(&liveReads); e != nil || liveReads != 1 {
+		t.Fatal("stream missing durable read lease", liveReads, e)
+	}
+	resume()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("native read did not finish")
+	}
+	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), payloads[first.Path]) {
+		t.Fatal("native stream bytes", w.Code)
+	}
+	if e = sourceDB.Database().QueryRow("SELECT COUNT(*) FROM migration_read_leases WHERE member_id=?", sr.PeerID).Scan(&liveReads); e != nil || liveReads != 0 {
+		t.Fatal("completed stream retained lease", liveReads, e)
 	}
 	if e = db.Media().SetHidden(ctx, []string{"music/RunnerUnit/a.mp3"}, true, store.AdminAudit{}); e != nil {
 		t.Fatal(e)

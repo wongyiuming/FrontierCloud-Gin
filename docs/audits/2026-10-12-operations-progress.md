@@ -526,6 +526,42 @@ See [race/actual byte evidence](2026-10-12-target-disk-recheck.txt),
 [full Go regression](2026-10-12-target-disk-recheck-go.txt). Source CI also passed
 201 Python tests (two optional skips) and the existing JavaScript smoke checks.
 
+## Native follower read dependencies
+
+Native Go media and recording responses now register durable physical read
+leases after capability validation and before response bytes. Reads admitted
+before migration registration are retained, including different logical aliases
+of the same physical object. A short transaction serializes read admission and
+source cleanup authorization under the existing node lock. Deleting/deleted
+source journals reject new reads. Leases expire after 300 seconds, renew every
+30 seconds, cannot revive after expiry, and are released only after the renewal
+worker joins. Failed renewal cancels the response and closes its pinned file;
+failed release leaves a bounded lease rather than a successful cleanup receipt.
+Admission caps persisted active reads at 1024 per follower and removes expired
+rows. No schema change or extra daemon was introduced.
+
+The actual 524351-byte router fixture now holds a source response open before
+migration registration, observes its durable lease while bytes are being served,
+and confirms release and exact response bytes afterward. SQLite/MySQL race
+fixtures verify alias blocking, expired-lease rejection, idempotent close and
+concurrent read/cleanup admission. Repository cleanup fixtures still use
+synthetic grants with explicitly advanced test-only grace timestamps. A focused
+worker test injects renewal failure and checks file closure, cancellation and
+one joined release; it uses a short test interval rather than waiting 30 seconds.
+See [native response/race evidence](2026-10-12-native-read-leases.txt),
+[SQLite/MySQL admission evidence](2026-10-12-native-read-leases-mysql.txt), and
+[renewal failure/full regression](2026-10-12-native-read-leases-go.txt).
+Source CI passed its existing budget (201 Python tests, two optional skips and
+JavaScript smoke checks).
+
+This does not observe a legacy Nginx X-Accel connection after the Go handler
+returns. Media acceleration retains its existing behavior; it is not certified
+for source cleanup. Production still does not advertise the unfinished migration
+capability. Before enabling migration, physical inventory/eligibility must reject
+that unsupported read path or supply a proven equivalent fence. Source file
+transactions, private anchors, task completion/cancellation and retirement remain
+unfinished. There has been no production migration or source data deletion.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
