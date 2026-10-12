@@ -230,7 +230,7 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 			}
 			// Password comes from the existing private mounted file, never an
 			// argv value. mysqldump provides one consistent InnoDB logical snapshot.
-			args := append(d.composeArgs(true), "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_password) exec mysqldump --single-transaction --quick --skip-lock-tables --hex-blob --routines --events --triggers --no-tablespaces -u "$MYSQL_USER" --databases "$MYSQL_DATABASE"`)
+			args := append(d.composeArgs(true), "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysqldump --single-transaction --quick --skip-lock-tables --hex-blob --routines --events --triggers --no-tablespaces -u root --databases "$MYSQL_DATABASE"`)
 			e = stream.RunTo(ctx, dump, "docker", args...)
 			if e == nil {
 				e = dump.Sync()

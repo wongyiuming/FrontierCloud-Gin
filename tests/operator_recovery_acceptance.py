@@ -35,9 +35,19 @@ def command(args, directory=None, timeout=180):
 
 
 def compose(directory, *args):
-    return command(['docker', 'compose', '--project-directory', str(directory), '-f',
-                    str(directory / 'docker-compose.yaml'), '-f', str(directory / '.fc-images.json'),
-                    *args], timeout=700)
+    files = ['docker-compose.yaml']
+    if (directory / 'docker-compose.gin-mysql.yaml').exists():
+        files.append('docker-compose.gin-mysql.yaml')
+    receipt_file = directory / '.fc-deployment.json'
+    if receipt_file.exists():
+        receipt = json.loads(receipt_file.read_text())
+        files = receipt['compose_files']
+    command_args = ['docker', 'compose', '--project-directory', str(directory)]
+    if receipt_file.exists() and receipt.get('recovered'):
+        command_args += ['--project-name', receipt['project']]
+    for filename in files:
+        command_args += ['-f', str(directory / filename)]
+    return command(command_args + ['-f', str(directory / '.fc-images.json'), *args], timeout=700)
 
 
 def fingerprint(configuration):
@@ -153,17 +163,22 @@ def run(args):
     for path in (data / 'media', data / 'media/music', folder, folder / 'song.mp3'):
         os.chown(path, 10001, 10001)
     shutil.copyfile(source / 'docker-compose.yaml', directory / 'docker-compose.yaml')
+    if args.database == 'mysql':
+        shutil.copyfile(source / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')
     # Use an isolated loopback address and the canonical stack. No global host
     # interface, firewall, SELinux or IPv6 setting is changed.
     address = '127.0.0.27'
     for port in (80, 443):
         with socket.socket() as check:
+            check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             check.bind((address, port))
-    (directory / '.env').write_text(f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\n')
+    (directory / '.env').write_text(f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\nDB_TYPE={args.database}\nMYSQL_DATABASE={prefix.replace("-", "_")}\n')
     web_image = json.loads(command(['docker', 'image', 'inspect', args.image]))[0]['Id']
     edge_image = json.loads(command(['docker', 'image', 'inspect', args.edge_image]))[0]['Id']
     raw = command(['docker', 'compose', '--project-directory', str(directory), '-f',
-                   str(directory / 'docker-compose.yaml'), 'config', '--format', 'json'])
+                   str(directory / 'docker-compose.yaml'),
+                   *(['-f', str(directory / 'docker-compose.gin-mysql.yaml')] if args.database == 'mysql' else []),
+                   'config', '--format', 'json'])
     configuration = json.loads(raw)
     overrides = {}
     for name, service in configuration['services'].items():
@@ -179,6 +194,9 @@ def run(args):
                 command(['docker', 'pull', image])
             image = json.loads(command(['docker', 'image', 'inspect', image]))[0]['Id']
         overrides[name] = {'image': image}
+        if name == 'mysql':
+            overrides[name].update(cpus=1, mem_limit='768m', memswap_limit='768m',
+                                  command=['--skip-log-bin', '--innodb-buffer-pool-size=64M', '--performance-schema=OFF', '--max-connections=64'])
         if name == 'nginx':
             # Host loopback publication is a test boundary. Nginx itself must
             # listen on its container interface, as the production contract
@@ -188,18 +206,18 @@ def run(args):
             overrides[name].update(cpus=1, mem_limit='512m', memswap_limit='512m')
     (directory / '.fc-images.json').write_text(json.dumps({'services': overrides}))
     receipt = {'configuration_version': 1, 'role': 'master', 'project': project,
-               'database': 'sqlite', 'revision': REVISION, 'reviewed_source_sha': REVISION,
+               'database': args.database, 'revision': REVISION, 'reviewed_source_sha': REVISION,
                'created_at': '2026-10-12T00:00:00Z', 'selection_sha256': fingerprint(configuration),
                'images': {}, 'service_images': {name: value['image'] for name, value in overrides.items()},
-               'compose_files': ['docker-compose.yaml'], 'state': 'ready'}
+               'compose_files': ['docker-compose.yaml'] + (['docker-compose.gin-mysql.yaml'] if args.database == 'mysql' else []), 'state': 'ready'}
     (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
     os.chmod(directory / '.fc-deployment.json', 0o600)
     restored_project = project + '-restore'
     restored_started = False
     success = False
-    result = {'scope': 'actual private-Compose SQLite deployment backup and offline material restoration',
+    result = {'scope': 'actual private-Compose deployment backup, CLI restoration and gated activation',
               'public_installation_proof': False, 'synthetic_revision': REVISION,
-              'fixture_directory': str(directory), 'database': 'sqlite'}
+              'fixture_directory': str(directory), 'database': args.database}
     try:
         compose(directory, 'up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '120')
         base = 'http://' + address
@@ -211,7 +229,8 @@ def run(args):
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
-                                     '--freeze', '--output', str(archive)], timeout=700))
+                                     '--freeze', '--output', str(archive),
+                                     *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
         assert report['integrity_verified'] and not report['restored_business_verified']
         assert report['manifest']['node_id'] == before_fact['node_id']
         assert (data / '.frontiercloud-native-maintenance').exists()
@@ -220,43 +239,19 @@ def run(args):
                  '--sha256', report['sha256']])
         assert not target.exists(), 'restore check created a target'
         command([str(args.binary), 'restore', 'apply', '--file', str(archive), '--target', str(target),
-                 '--sha256', report['sha256'], '--confirm-node-id', before_fact['node_id']])
-        assert (target / 'data/.frontiercloud-native-maintenance').exists(), 'restore reopened the native fence'
+                 '--sha256', report['sha256'], '--confirm-node-id', before_fact['node_id'],
+                 '--deployment', '--project', restored_project])
+        assert (target / 'data/.frontiercloud-native-maintenance').exists()
         assert (target / 'runtime_secrets/admin_key').read_text().strip() == key
-        # First validate restored SQL/identity while the source and restored
-        # generation both remain offline. Activation is an explicit TEST step.
-        env = ['-e', 'DB_TYPE=sqlite', '-e', 'SQLITE_PATH=/app/data/frontiercloud.db',
-               '-e', 'DATA_ROOT=/app/data', '-e', 'SECRETS_DIR=/run/frontiercloud-secrets',
-               '-e', 'TLS_ENABLED=false', '-e', 'SERVER_NAME=localhost']
-        mounts = ['-v', str(target / 'data') + ':/app/data', '-v',
-                  str(target / 'runtime_secrets') + ':/run/frontiercloud-secrets']
-        restored_fact = json.loads(command(['docker', 'run', '--rm', '--cpus=1', '--memory=512m',
-                                             '--memory-swap=512m', *env, *mounts, web_image, 'operator-status']))
-        assert restored_fact['node_id'] == before_fact['node_id']
-        assert restored_fact['database']['schema_generation'] == before_fact['database']['schema_generation']
-        command(['docker', 'run', '--rm', '--cpus=1', '--memory=512m', '--memory-swap=512m',
-                 *env, *mounts, web_image, 'maintenance', 'resume'])
-        # Restore the canonical stack's state classes through test-only bind
-        # overrides, preserving identities and secret bytes; never run a fresh
-        # initializer against recovery material.
-        restore_dir = directory / 'restored-compose'
-        restore_dir.mkdir()
-        shutil.copyfile(source / 'docker-compose.yaml', restore_dir / 'docker-compose.yaml')
-        (restore_dir / '.env').write_text(f'COMPOSE_PROJECT_NAME={restored_project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\nDATA_DIRECTORY={target / "data"}\n')
-        restored_overrides = json.loads(json.dumps(overrides))
-        for service in ('web',):
-            restored_overrides[service]['volumes'] = [
-                {'type': 'bind', 'source': str(target / 'runtime_secrets'), 'target': '/run/frontiercloud-secrets'}]
-            restored_overrides[service]['depends_on'] = {'redis': {'condition': 'service_healthy'}}
-        restored_overrides['redis']['volumes'] = [{'type': 'bind', 'source': str(target / 'redis_data'), 'target': '/data'}]
-        restored_overrides['certificate-agent']['volumes'] = [
-            {'type': 'bind', 'source': str(target / 'certificate_state'), 'target': '/var/lib/frontiercloud-certificate'},
-            {'type': 'bind', 'source': str(target / 'certificate_published'), 'target': '/run/frontiercloud-tls'}]
-        # certificate-runtime is regenerated independently; its initializer is
-        # safe because it receives only fresh certificate-runtime/state mounts.
-        (restore_dir / '.fc-images.json').write_text(json.dumps({'services': restored_overrides}))
-        compose(restore_dir, 'up', '-d', '--no-build', '--pull', 'never', '--no-deps', 'redis', 'certificate-init')
-        compose(restore_dir, 'up', '-d', '--no-build', '--pull', 'never', '--no-deps', 'certificate-agent', 'web', 'nginx')
+        restore_dir = target / 'deployment'
+        activated = json.loads(command([str(args.binary), '--directory', str(restore_dir),
+                                       'restore', 'activate', '--confirm-node-id', before_fact['node_id'],
+                                       '--confirm-source-offline'], timeout=700))
+        assert activated['phase'] == 'verified'
+        assert activated['recovery']['restored_business_verified']
+        assert (target / 'data/.frontiercloud-maintenance').exists()
+        command([str(args.binary), '--directory', str(restore_dir), 'restore', 'open',
+                 '--confirm-node-id', before_fact['node_id']])
         restored_started = True
         wait_ready(base)
         restored_jar, restored_request = api(base)
@@ -269,7 +264,7 @@ def run(args):
         result.update(status='passed', archive_sha256=report['sha256'], node_identity_preserved=True,
                       media_id_preserved=True, priority_preserved=True, actual_http_range_verified=True,
                       restore_check_read_only=True, offline_fence_preserved_on_apply=True,
-                      test_activation_separate_from_restore_apply=True, no_production_operation=True,
+                      operator_activation_verified=True, no_production_operation=True,
                       web_cpu_limit=host['NanoCpus'], web_memory=host['Memory'], web_memory_swap=host['MemorySwap'],
                       post_business_cpu_samples=cpu, web_image_id=web_image, edge_image_id=edge_image,
                       test_http_client_image_id=client_image)
@@ -278,7 +273,7 @@ def run(args):
     finally:
         # Stop only projects born in this driver. Keep volumes and recovery
         # material on failure; no global pruning or volume deletion is used.
-        for location in (directory / 'restored-compose', directory):
+        for location in (directory / 'restoration/deployment', directory):
             if (location / '.fc-images.json').exists():
                 try:
                     compose(location, 'stop')
@@ -291,6 +286,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--database', choices=('sqlite', 'mysql'), default='sqlite')
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--image', required=True)
     parser.add_argument('--edge-image', required=True)
@@ -300,4 +296,4 @@ if __name__ == '__main__':
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')
-    print('PASS: actual Compose SQLite backup, material restore and separately activated HTTP Range validation')
+    print('PASS: actual Compose backup, CLI restore/activation and HTTP Range validation')

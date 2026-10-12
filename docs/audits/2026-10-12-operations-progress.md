@@ -8,7 +8,9 @@ published, deployed to production or migrated on real nodes.
 
 - Work began on clean `dev` at `a6f8e3a5ec960578bc0d08b070afbddc2370243f`.
 - No branch outside dev/main was created; main was not modified.
-- Implementation presently consists of working-tree changes on dev.
+- Delivery/backup foundations were committed on dev as
+  `a2cc19d7de8c61ab09ed1747916cc0c22b03db8e`. The next checkpoint adds restored
+  deployment activation and its SQLite/MySQL acceptance evidence.
 - The owner supplied access to the development host `192.168.6.201`. Its existing
   checkout and unrelated services were retained. Login material is not in source,
   documents, artifacts or ordinary logs.
@@ -64,9 +66,15 @@ Related-node recovery material is not silently included.
 `backup verify` and `restore check` validate actual archive bytes. Check creates
 no target. Apply requires the trusted checksum and exact source NodeID, rejects
 every existing target, preserves identities/key bytes/offline flags, and publishes
-only synchronized verified recovery material. It does **not** activate an
-instance, and explicitly returns restore/business readiness as false. Full
-instance activation and coordinated cluster restoration remain incomplete.
+only synchronized verified recovery material. Material-only apply explicitly
+returns restore/business readiness as false. Optional deployment preparation
+relocates classified state into a new empty Compose namespace with recorded
+images. Separate activation imports MySQL when needed, verifies the original
+identity/schema and actual managed-file reads, and starts consumers behind manual
+maintenance without fresh identity/media initializers. Separate opening repeats
+verification and removes only maintenance owned by this recovery. Failure keeps
+public maintenance closed and stops Web; material and the persistent journal are
+retained. Coordinated cluster restoration remains incomplete.
 
 ## Executed verification and limits
 
@@ -91,6 +99,28 @@ instance activation and coordinated cluster restoration remain incomplete.
 - Private fixture images deliberately use synthetic revision zero, **not** a
   public source/release proof. Their actual image IDs are in the evidence. No
   assertion of ordinary released-image/HTTPS installation is made.
+- Subsequent actual canonical Compose acceptance exercised `restore apply
+  --deployment`, `restore activate` and `restore open` for both SQLite and MySQL,
+  including actual logical MySQL export/import. Original identity, logical media
+  ID, directory priority and HTTP Range bytes were preserved. Read-only checking
+  and the offline fence were asserted before activation; public maintenance
+  remained closed until explicit opening. See
+  [SQLite activation](2026-10-12-recovery-activation-sqlite.json) and
+  [MySQL activation](2026-10-12-recovery-activation-mysql.json).
+  Web ran with one CPU/512 MiB/no swap. Five post-business CPU samples were
+  SQLite 0.29/0.30/0.28/0.37/0.38% and MySQL 0.29/0.23/0.38/0.41/0.34%.
+  These tests used the above commit plus checkpoint changes and private images;
+  they are not released-image or multi-node restoration proof.
+- Activation fixture failures exposed archived environment project selection,
+  manual-maintenance file ownership and directory metadata being sampled as file
+  media. Explicit recovered project selection, inherited ownership and file-kind
+  sampling corrected them. Failed private material/volumes were retained and
+  failed attempts were not counted as passes. Only task-owned containers were
+  stopped/removed; unrelated host services and configuration were preserved.
+- After these changes, `go test -p=2 -race ./internal/operator ./cmd/fc
+  ./cmd/frontiercloud`, the store recovery-sampling regression test and the
+  unchanged-budget local source CI suite passed. Real MySQL verification is the
+  Compose acceptance above, not an inferred result of the SQLite unit test.
 - Earlier fixture attempts failed because its host-loopback publication had
   been passed into Nginx's container listener setting, HTTP Admin traffic was
   incorrectly sent through a TLS-only edge boundary, a catalog session parameter
@@ -108,10 +138,10 @@ instance activation and coordinated cluster restoration remain incomplete.
 
 ## Required remaining work
 
-1. Finish restore activation/selection rebinding and consistent multi-node recovery
-   sets, with real MySQL backup/import/business verification and failure handling.
-   Add read-only target space/compatibility planning and retain explicit ownership
-   of the maintenance state; never reopen failed recovery automatically.
+1. Finish consistent multi-node recovery sets and broader restored encrypted/
+   recording business acceptance. Local deployment selection rebinding,
+   read-only target space checks, maintenance ownership and real SQLite/MySQL
+   activation are implemented and verified as scoped above.
 2. Add approved upgrade plan/apply using explicit target release, preflight,
    independent recovery point, generation compatibility/migration, pinned switch
    and actual business verification. Cross-generation code rollback is not DDL

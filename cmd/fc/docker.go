@@ -29,6 +29,18 @@ func (d dockerRunner) RunTo(ctx context.Context, output io.Writer, name string, 
 	}
 	return nil
 }
+
+func (d dockerRunner) RunFrom(ctx context.Context, input io.Reader, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = d.Directory
+	cmd.Stdin = input
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if e := cmd.Run(); e != nil {
+		return errors.New("Docker input-stream command failed; credentials and SQL were not logged")
+	}
+	return nil
+}
 func (d dockerRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = d.Directory

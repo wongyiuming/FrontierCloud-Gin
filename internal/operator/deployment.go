@@ -70,6 +70,7 @@ type Receipt struct {
 	ServiceImages map[string]string             `json:"service_images"`
 	Files         []string                      `json:"compose_files"`
 	State         string                        `json:"state"`
+	Recovered     bool                          `json:"recovered,omitempty"`
 }
 type Deployment struct {
 	Directory      string
@@ -77,6 +78,7 @@ type Deployment struct {
 	Files          []string
 	Runner         Runner
 	ImageInspector Images
+	Project        string
 }
 
 func New(directory, role, database string) (*Deployment, error) {
@@ -123,6 +125,10 @@ func Open(directory string) (*Deployment, Receipt, error) {
 	if err != nil {
 		return nil, receipt, err
 	}
+	if receipt.Recovered && equalStrings(receipt.Files, []string{RecoveredCompose}) {
+		dep.Files = append([]string(nil), receipt.Files...)
+		dep.Project = receipt.Project
+	}
 	if !equalStrings(dep.Files, receipt.Files) {
 		return nil, receipt, errors.New("unexpected Compose file selection")
 	}
@@ -141,6 +147,9 @@ func equalStrings(a, b []string) bool {
 }
 func (d *Deployment) composeArgs(pinned bool) []string {
 	args := []string{"compose", "--project-directory", d.Directory}
+	if d.Project != "" {
+		args = append(args, "--project-name", d.Project)
+	}
 	for _, file := range d.Files {
 		args = append(args, "-f", filepath.Join(d.Directory, file))
 	}

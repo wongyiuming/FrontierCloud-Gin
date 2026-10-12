@@ -135,9 +135,29 @@ target, restores original owners/permissions into private staging and publishes
 only after actual byte verification and synchronization. It preserves offline
 flags, identities and key bytes. It restores **recovery material**, does not start
 an instance, and reports `restore_ready=false` / `restored_business_verified=false`.
-Instance activation and coordinated multi-node restore integration remain in
-progress; independently validate an isolated restored instance before approving
-any operational activation. Never regenerate identity as a recovery substitute.
+Use `--deployment --project <new-empty-project>` with `restore apply` to prepare
+a relocated Compose project using the recorded images and verified state classes.
+It refuses target containers/volumes and leaves the original recovery identity
+fenced. The source must no longer run this identity; local running source Web
+containers block activation even with an operator confirmation.
+
+```sh
+./fc --directory /new/recovery-material/deployment restore activate --confirm-node-id <source-node-id> --confirm-source-offline
+./fc --directory /new/recovery-material/deployment restore open --confirm-node-id <source-node-id>
+```
+
+Activation starts restored consumers without fresh identity/media initializers,
+imports MySQL's logical export into a new private target, verifies original
+identity/database generation, resumes only the native fence, and starts services
+behind manual maintenance. It checks readiness and actual managed file reads,
+including ciphertext descriptor lengths. Only then does its persistent journal
+report business verification. `restore open` is separate, repeats verification,
+and removes only maintenance owned by this recovery. Preexisting administrator
+maintenance is retained. A failed activation stops Web, keeps public maintenance
+closed and attempts to restore the native fence; recovery material is retained.
+Coordinated multi-node recovery sets remain in progress. Never regenerate identity
+as a recovery substitute. Actual isolated SQLite/MySQL HTTP Range/identity/priority
+verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 

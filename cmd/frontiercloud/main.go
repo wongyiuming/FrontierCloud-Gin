@@ -122,6 +122,8 @@ func command(arguments []string) error {
 			return errors.New("operator-status accepts no arguments")
 		}
 		return operatorStatusCommand(os.Stdout)
+	case "recovery-verify":
+		if len(arguments)!=1{return errors.New("recovery-verify accepts no arguments")};return recoveryVerifyCommand(os.Stdout)
 	case "storage-endpoint", "storage-rebind":
 		return storageEndpointCommand(name, arguments[1:], os.Stdout)
 	case "delete-storage-recording":
