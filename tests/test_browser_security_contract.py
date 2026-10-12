@@ -41,6 +41,10 @@ class BrowserSecurityContractTests(unittest.TestCase):
             self.assertIn(f"'sha256-{digest}'", config)
         gate = (ROOT / 'nginx/maintenance-gate.conf').read_text(encoding='utf-8')
         self.assertIn('include /etc/nginx/security-headers.conf;', gate)
+        self.assertIn('if (-f /app/data/.frontiercloud-maintenance)', gate)
+        self.assertIn('if (-e /app/data/.frontiercloud-native-maintenance)', gate)
+        self.assertNotIn('/run/frontiercloud-maintenance/enabled', gate)
+        self.assertNotIn('if (-f /app/data/.frontiercloud-force-open)', gate)
         self.assertIn('/__maintenance.html $edge_csp;', config)
 
     def test_tls_default_server_uses_the_same_modern_policy(self):

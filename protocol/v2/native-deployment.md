@@ -28,12 +28,13 @@ allowlisted immutable Git archive paths, never `.env`, data, keys or mutable
 edits. It prepares both public-name and historical local-name image aliases;
 no services are replaced. Pull/network/provenance failures never compile.
 
-The fixed Web commands, initializers and updater use native binaries. The Web
+The fixed Web commands and initializers use native binaries. The Web
 process is UID/GID 10001, has no Docker socket, drops capabilities and has a
-read-only root filesystem. The separately restricted updater uses only the
-local Engine API. It drops all capabilities except CHOWN for the private
-control-socket group and DAC_OVERRIDE for selected-volume maintenance. Web
-receives neither capability nor Docker authority. Its project selector must match the Compose project. Redis,
+read-only root filesystem. Default Compose has no updater service, control
+socket or updater maintenance volume. Online upgrade/status/history/rollback
+HTTP routes and AdminGUI controls are removed. Operator-managed Compose
+releases require a database backup and compatible offline migration; see
+[release procedure](../../docs/master-self-release.md). Redis,
 Nginx and coturn retain their established protocol roles.
 
 ## Database selection is durable configuration
@@ -56,14 +57,14 @@ silently select an unrelated store on the next attempt.
 
 `scripts/test-go-deployment.sh` parses actual Docker Compose JSON and checks
 commands, permissions, source labels, optional database dependency and project
-selection. `scripts/test-go-updater.sh` runs private SQLite and MySQL stacks,
-including native initialization, actual builds, self-handoff and rollback.
-Both database variants have passed, including checks that no Python interpreter
-exists in the Web/updater and MySQL does not create an authoritative SQLite DB.
+selection and rejects updater/Docker/control mounts in normal deployment.
+Historical updater acceptance scripts remain source-only operator tooling;
+they are not the default deployment or an Admin upgrade feature. Web has no
+Python interpreter and MySQL does not create an authoritative SQLite DB.
 
 Compose build labels by themselves do not prove that a mutable build context
 matches the supplied SHA. Reviewed production artifacts require immutable Git
-archive builds and exact CI evidence; the updater already uses that boundary.
+archive builds and exact CI evidence; an operator transition retains this boundary.
 Development acceptance now uses five native nodes (one Master, two Direct, two Relay), repeated for Gin/SQLite and Gin/MySQL. It runs only on the development host, never hosted CI. Historical migration admission and physical ownership proof remain separate requirements; see docs/go-only-completion.md.
 
 ## Native role restart provenance

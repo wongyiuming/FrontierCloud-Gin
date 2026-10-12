@@ -74,8 +74,12 @@ with sync_playwright() as driver:
     assert not any('release-admin.js' in value or 'release-version-ui.js' in value for value in page.locator('script[src]').evaluate_all('(items)=>items.map(item=>item.src)'))
     site_status = call(page, 'site/maintenance')
     assert site_status['maintenance'] is False and 'release' not in site_status
-    assert call(page, 'site/maintenance', {'enabled': True})['maintenance'] is True
-    assert call(page, 'site/maintenance', {'enabled': False})['maintenance'] is False
+    # This loopback fixture is HTTP. Maintenance mutation must keep its HTTPS
+    # requirement; successful TLS changes are exercised by the native API test.
+    csrf = page.evaluate('() => csrf()')
+    response = context.request.post(args.base_url + '/api/v1/media/admin/site/maintenance',
+                                    data={'enabled': True}, headers={'X-CSRF-Token': csrf})
+    assert response.status == 403
     proof.append('retired-upgrade-routes-and-UI-with-independent-site-maintenance')
     page.locator('[data-module-target="priority"]').click()
     page.wait_for_timeout(400)
