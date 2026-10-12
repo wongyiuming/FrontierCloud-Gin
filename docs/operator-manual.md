@@ -183,8 +183,9 @@ Neither authorizes stopping hosts, deleting volumes or erasing disks. The
 persistent resource migration/retirement implementation and acceptance are
 ongoing; this manual does not claim that a released node can yet be safely
 migrated through `fc`. The current dev repository has durable tasks, reservations,
-source drains and runner fences; authenticated peer inventory, real copying,
-publication/cutover/cleanup and GUI/CLI integration are still being implemented.
+source drains and runner fences, with transactional whole-parent ownership
+cutover. Authenticated peer inventory, real copying/publication, source cleanup
+and GUI/CLI integration are still being implemented.
 Planning never reserves capacity. Cancelling a task retains capacity until safe
 staging cleanup, and does not move committed data back or release another drain.
 No host/container/volume deletion is part of this business operation.

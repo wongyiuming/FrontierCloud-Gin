@@ -103,6 +103,30 @@ type MigrationLease struct {
 	Epoch     int64  `json:"epoch"`
 	ExpiresAt int64  `json:"expires_at"`
 }
+type MigrationCheckpoint struct {
+	Object        MigrationObject `json:"object"`
+	UnitID        string          `json:"unit_id"`
+	State         string          `json:"state"`
+	SourceSHA     string          `json:"source_sha256"`
+	TargetSHA     string          `json:"target_sha256"`
+	VerifiedBytes int64           `json:"verified_bytes"`
+}
+type MigrationUnit struct {
+	ID           string `json:"unit_id"`
+	Resource     string `json:"resource_kind"`
+	Parent       string `json:"parent_path"`
+	State        string `json:"state"`
+	ObjectCount  int64  `json:"object_count"`
+	Bytes        int64  `json:"size_bytes"`
+	CommittedAt  int64  `json:"committed_at"`
+	CleanupAfter int64  `json:"cleanup_after"`
+}
+type MigrationWork struct {
+	Task    MigrationTask         `json:"task"`
+	Plan    MigrationPlan         `json:"plan"`
+	Units   []MigrationUnit       `json:"units"`
+	Objects []MigrationCheckpoint `json:"objects"`
+}
 
 // This boundary is shared by server-side GUI/CLI services. It neither opens
 // network connections nor grants a caller permission to bypass peer proofs.
@@ -116,4 +140,9 @@ type MigrationRepository interface {
 	RenewMigration(context.Context, MigrationLease, time.Duration) (MigrationLease, error)
 	ReleaseMigration(context.Context, MigrationLease) error
 	ReleaseMigrationDrain(context.Context, string, string, NodeAudit) error
+	MigrationWork(context.Context, string) (MigrationWork, error)
+	VerifyMigrationObject(context.Context, MigrationLease, string, int64, string) error
+	PrepareMigrationPublication(context.Context, MigrationLease, string) error
+	PublishMigrationObject(context.Context, MigrationLease, string) error
+	CommitMigrationUnit(context.Context, MigrationLease, string, NodeAudit) error
 }

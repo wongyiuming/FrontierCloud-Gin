@@ -366,6 +366,40 @@ func TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata(t *testi
 	if e != nil || global.Preference != 123 {
 		t.Fatal("priority update lost", global, e)
 	}
+	l, e := f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("e", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	w, e := f.repo.MigrationWork(ctx, p.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var recordingUnit string
+	for _, checkpoint := range w.Objects {
+		if checkpoint.Object.Resource == "recording" {
+			recordingUnit = checkpoint.UnitID
+			if e = f.repo.VerifyMigrationObject(ctx, l, checkpoint.Object.ID, checkpoint.Object.Bytes, checkpoint.SourceSHA); e != nil {
+				t.Fatal(e)
+			}
+		}
+	}
+	if e = f.repo.PrepareMigrationPublication(ctx, l, recordingUnit); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.repo.PublishMigrationObject(ctx, l, id); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.repo.CommitMigrationUnit(ctx, l, recordingUnit, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	current, e = f.db.Recordings().Recording(ctx, id)
+	if e != nil || current == nil || current.MemberID != f.target || current.ID != id || current.Title != "original recording" || len(current.Lyrics) != 1 || current.Lyrics[0].Text != "original lyric" {
+		t.Fatal("recording cutover lost metadata", current, e)
+	}
+	var userUsed int64
+	if e = f.raw.QueryRow("SELECT used_bytes FROM karaoke_users WHERE user_id=?", user).Scan(&userUsed); e != nil || userUsed != v.Bytes {
+		t.Fatal("migration changed user quota", userUsed, e)
+	}
 }
 
 func TestResourceMigrationTargetsAndSplitOwnershipAreReported(t *testing.T) {

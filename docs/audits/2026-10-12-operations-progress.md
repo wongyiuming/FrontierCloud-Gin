@@ -202,6 +202,29 @@ refuse more than 10,000 objects/16 MiB; paginated planning is still required.
   201 Python tests/two optional skips and the original three-minute budget.
   Full external fleet/browser gates remain outstanding.
 
+## Cutover repository checkpoint
+
+The subsequent cutover repository checkpoint persists target checksum/length
+verification and per-object publication receipts. Whole-parent publication requires
+every object to be verified; physical publication alone changes no Master owner.
+A bounded row stream rechecks all unit members/source versions/descriptors, then
+one batch update changes owners in the same transaction as source/target
+used/reserved counters, task progress, unit state and audit. Identity bindings and
+runner epochs are rechecked; no network/file I/O runs inside this transaction.
+Committed units retain source-cleanup dependencies and scope locks. The grace
+timestamp is only a minimum delay, not proof that active reads/capabilities drained.
+Cancellation preserves committed target authority.
+
+Actual SQLite race tests and actual MySQL transaction/race tests injected a
+cutover journal failure after ownership updates began and proved rollback of
+ownership/quota/progress. They also covered incomplete publication, wrong SHA,
+changed source, paused worker, idempotent successful commit, cache invalidation,
+recording ID/title/lyrics/user-quota preservation and cleanup-pending retirement
+blocking. These remain repository fixtures with synthetic publication/disk
+receipts, not real byte-copy or authenticated distributed publication acceptance.
+See [unit cutover output](2026-10-12-resource-unit-cutover.txt). Full Go tests and
+unchanged-budget local source CI passed for this checkpoint.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
@@ -212,10 +235,10 @@ refuse more than 10,000 objects/16 MiB; paginated planning is still required.
    independent recovery point, generation compatibility/migration, pinned switch
    and actual business verification. Cross-generation code rollback is not DDL
    rollback. No upgrade/recovery API belongs in AdminGUI.
-3. Finish service execution and object verification/publication/unit cutover over
-   the persisted task model. Carry exact source-version and runner-epoch fences
-   through every peer action and metadata commit; preserve the existing writer
-   coordinator without holding it or SQL transactions across network copying.
+3. Connect the implemented repository verification/publication/unit cutover to
+   authenticated peer facts and the durable service worker. Carry exact source
+   version and runner-epoch fences through each peer action, and integrate the
+   existing writer coordinator without holding it across network copying.
 4. Implement read-only whole-node migration plans bound to identities/content
    version, including hidden/encrypted media, directories, owned recordings/other
    managed files, backups, physical/logical capacity and conflict inventories.
