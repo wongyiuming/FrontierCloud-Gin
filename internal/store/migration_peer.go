@@ -35,6 +35,8 @@ type MigrationPeerRepository interface {
 	PreparePeerMigrationShadowDeletion(context.Context, string, MigrationLease, MigrationShadowGrant, NodeAudit) error
 	PreparePeerMigrationCleanup(context.Context, string, MigrationLease, MigrationCleanupGrant, NodeAudit) error
 	PreparePeerMediaDelete(context.Context, string, MigrationLease, DeleteOperation, NodeAudit) error
+	FailPeerMigrationShadowCleanup(context.Context, string, MigrationLease, string, NodeAudit) error
+	PeerMigrationShadowCleanupFailed(context.Context, string, MigrationLease, string) (bool, error)
 	FailPeerMigrationCleanup(context.Context, string, MigrationLease, string, NodeAudit) error
 	PeerMigrationCleanupFailed(context.Context, string, MigrationLease, string) (bool, error)
 	StagePeerRecordingDeletion(context.Context, string, MigrationLease, string) (*Recording, error)

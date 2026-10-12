@@ -65,7 +65,7 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 				phase = "receiving"
 			}
 		}
-		if entry.state != phase {
+		if entry.state != phase && !(cancelling && n.ID == h.TargetID && entry.state == "deleted") {
 			return nil, store.ErrMigrationState
 		}
 		o, e := r.peerObjectBinding(ctx, q, l.TaskID, entry.id)
@@ -76,7 +76,7 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 			return nil, store.ErrMigrationState
 		}
 		bytes += o.Bytes
-		objects = append(objects, store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
+		objects = append(objects, store.MigrationPeerObject{State: entry.state, Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
 		if !cancelling && n.ID == h.SourceID {
 			var reads int
 			if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND (logical_id=? OR object_id=?) AND expires_at>?", n.ID, o.ID, o.ObjectID, time.Now().Unix()).Scan(&reads); e != nil {

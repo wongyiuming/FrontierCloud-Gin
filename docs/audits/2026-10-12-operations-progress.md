@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 snapshots and
+manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -1096,3 +1096,43 @@ RPC or whole-unit cancellation reconciliation. Recording shadows, publication
 crash windows, large-node inventory, retirement, GUI/CLI, upgrades and remaining
 original fleet/browser/recovery acceptance are still required. No migration
 capability is advertised and no full-goal completion is claimed.
+
+
+## Authenticated published-shadow cancellation runner (2026-10-12)
+
+Published media shadows now use a bounded authenticated `data/shadow` RPC on
+the existing joined single worker/one-job queue. Admission requires the fresh
+source-bound grant; polling alone cannot authorize deletion. Native-only gating
+rejects accelerated Nginx media, recordings and unadmitted publication. Worker
+errors are stored in the follower's existing per-object pending checkpoints,
+including errors after SQL deletion while private material remains. Polling
+reports shadow_failed, and only a newly validated fresh source proof clears
+that failure for explicit retry. The physical journal never rolls back from
+deleted to published or refunds the same bytes again.
+
+The Master cancellation runner falls back from staging Abort to fresh source
+verification and shadow cleanup for published/deleting/deleted media. It accepts
+only exact bound retired-anchor receipts. Dual-peer cancellation unit completion
+accepts aborted unpublished objects and deleted published shadows, but requires
+the private checkpoint and managed quarantine to be finished for deleted
+shadows. Only aborted bytes refund local reservations; published shadow used
+capacity was already refunded by its managed deletion transaction. The Master
+then refunds its unchanged whole-unit reservation once and keeps source business
+owners. Final cancelled receipts retain the source drain for explicit release.
+
+`2026-10-12-cancellation-shadow-runner.txt` records actual authenticated router
+transfer/publication with failed Master cutover, corrupt-target worker failure,
+explicit repair/retry and lost shadow/unit/final-task receipt recovery. Source
+business reads/IDs are retained, target business/private/quarantine bytes are gone
+and target used/reserved capacity is zero. This is an isolated Gin/raw-HMAC
+fixture, not native TLS/fleet/browser acceptance. Durable failures, fresh retry
+and deleted-shadow unit refund replay run against SQLite/MySQL in
+`2026-10-12-cancellation-shadow-runner-mysql.txt`; full Go regression follows in
+the runner evidence file.
+
+Outstanding original scope includes recording shadows, interrupted publication
+before durable peer receipt, initial cancel admission with a now-full/unwritable
+target, mixed shadow/aborted/committed fleet cases, terminal normal-receipt race,
+authenticated large physical inventories/backup/orphan retirement, GUI/CLI,
+upgrade/recovery and five-node/browser/resource-bound acceptance. Production
+migration capability remains unadvertised and the full goal remains active.

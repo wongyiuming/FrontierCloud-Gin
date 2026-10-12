@@ -14,5 +14,6 @@ type Request struct {
 	Data         []byte                       `json:"data,omitempty"`
 	SHA          string                       `json:"chunk_sha256,omitempty"`
 	RecheckID    string                       `json:"recheck_id,omitempty"`
+	ShadowGrant  *store.MigrationShadowGrant  `json:"shadow_grant,omitempty"`
 	CleanupGrant *store.MigrationCleanupGrant `json:"cleanup_grant,omitempty"`
 }

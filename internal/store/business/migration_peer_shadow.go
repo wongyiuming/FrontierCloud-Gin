@@ -112,6 +112,18 @@ func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel
 			}
 		}
 		if phase == "deleting" || phase == "deleted" {
+			var failed int
+			if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", l.TaskID, o.ID).Scan(&failed); e != nil {
+				return e
+			}
+			if failed != 0 {
+				if proof.VerifiedAt < now-30 || proof.VerifiedAt > now+30 {
+					return store.ErrMigrationState
+				}
+				if _, e = q.ExecContext(ctx, "DELETE FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", l.TaskID, o.ID); e != nil {
+					return e
+				}
+			}
 			return nil
 		}
 		var reads int

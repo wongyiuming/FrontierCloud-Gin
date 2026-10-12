@@ -91,7 +91,12 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				return
 			case job := <-jobs:
 				v := job.request
-				if job.operation == "cleanup" {
+				if job.operation == "shadow" {
+					e := volume.MigrationShadowCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{})
+					if e != nil && ctx.Err() == nil {
+						_ = repo.FailPeerMigrationShadowCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
+					}
+				} else if job.operation == "cleanup" {
 					var e error
 					if v.Spec.Resource == "recording" && recordings != nil {
 						e = recordings.MigrationCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo)
@@ -407,6 +412,63 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return gin.H{"state": "waiting"}, nil
 		}
 	})
+	register("shadow", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		if settings.NginxMedia || v.Spec.Resource != "media" {
+			return nil, store.ErrMigrationState
+		}
+		if v.ShadowGrant != nil {
+			if v.ShadowGrant.Object.ID != v.Spec.LogicalID || v.ShadowGrant.Unit.Header.TaskID != v.Lease.TaskID {
+				return nil, store.ErrMigrationState
+			}
+			if e := repo.PreparePeerMigrationShadowDeletion(c.Request.Context(), rel.ID, v.Lease, *v.ShadowGrant, store.NodeAudit{}); e != nil {
+				return nil, e
+			}
+			var e error
+			p, e = repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, "shadow")
+			if e != nil {
+				return nil, e
+			}
+		}
+		if p.State == "published" {
+			return nil, store.ErrMigrationState
+		}
+		failed, e := repo.PeerMigrationShadowCleanupFailed(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID)
+		if e != nil {
+			return nil, e
+		}
+		if failed {
+			return gin.H{"state": "shadow_failed"}, nil
+		}
+		r, e := receiver(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		if p.State == "deleted" {
+			finished, e := volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			if e != nil {
+				return nil, e
+			}
+			cp, e := r.Status(c.Request.Context(), v.Spec)
+			if e != nil {
+				return nil, e
+			}
+			if finished && cp.AnchorRetired && !cp.AnchorRetiring {
+				return gin.H{"state": "shadow_deleted", "checkpoint": cp}, nil
+			}
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"state": "working"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "shadow"}:
+			active[key(v)] = true
+			return gin.H{"state": "working"}, nil
+		default:
+			return gin.H{"state": "waiting"}, nil
+		}
+	})
 	register("cleanup", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		// A legacy accelerated transfer has no proven Go response lifetime.
 		if settings.NginxMedia || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
@@ -597,7 +659,14 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 					return
 				}
 				cp, e := r.Status(c.Request.Context(), spec)
-				if e != nil || cp.State != "aborted" {
+				finished := e == nil && cp.State == "aborted"
+				if object.State == "deleted" {
+					finished = e == nil && cp.State == "published" && cp.AnchorRetired && !cp.AnchorRetiring
+					if finished {
+						finished, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, o.ID)
+					}
+				}
+				if e != nil || !finished {
 					detail(c, 409, "Target staging cleanup is incomplete")
 					return
 				}

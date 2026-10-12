@@ -29,18 +29,23 @@ func (r *Repository) CompletePeerMigrationUnitCancellation(ctx context.Context, 
 		var count, bytes, committed, after int64
 		e = q.QueryRowContext(ctx, "SELECT state,source_version,object_count,total_bytes,committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), l.TaskID, g.Unit.ID).Scan(&phase, &version, &count, &bytes, &committed, &after)
 		if e == nil {
-			if phase != "cancelled" || version != g.UnitVersion || count != g.Unit.ObjectCount || bytes != g.Unit.Bytes || committed != 0 || after != 0 {
+			if phase != "cancelled" && phase != "pending" || version != g.UnitVersion || count != g.Unit.ObjectCount || bytes != g.Unit.Bytes || committed != 0 || after != 0 {
 				return store.ErrMigrationState
 			}
-			receipt = store.MigrationUnitFinishReceipt{Grant: g, MemberID: n.ID, Complete: true}
-			return nil
-		}
-		if !errors.Is(e, sql.ErrNoRows) {
+			if phase == "cancelled" {
+				receipt = store.MigrationUnitFinishReceipt{Grant: g, MemberID: n.ID, Complete: true}
+				return nil
+			}
+		} else if !errors.Is(e, sql.ErrNoRows) {
 			return e
 		}
-		// Publication already converts target reservation into used capacity. Only
-		// unpublished aborts may refund this reservation; published units are blocked.
+		// Unpublished aborted objects still hold reservations. Deleted published
+		// shadows already refunded used capacity in their managed transaction.
 		if n.ID == g.Header.TargetID {
+			var refund int64
+			if e = q.QueryRowContext(ctx, "SELECT COALESCE(SUM(expected_bytes),0) FROM migration_storage_journal WHERE task_id=? AND unit_id=? AND state='aborted'", l.TaskID, g.Unit.ID).Scan(&refund); e != nil {
+				return e
+			}
 			var reserved, memberReserved int64
 			if e = q.QueryRowContext(ctx, "SELECT reserved_bytes FROM migration_capacity WHERE task_id=? AND member_id=?"+r.lock(), l.TaskID, n.ID).Scan(&reserved); e != nil {
 				return e
@@ -48,18 +53,22 @@ func (r *Repository) CompletePeerMigrationUnitCancellation(ctx context.Context, 
 			if e = q.QueryRowContext(ctx, "SELECT reserved_bytes FROM cluster_storage_members WHERE member_id=?"+r.lock(), n.ID).Scan(&memberReserved); e != nil {
 				return e
 			}
-			if reserved < g.Unit.Bytes || memberReserved < g.Unit.Bytes {
+			if reserved < refund || memberReserved < refund {
 				return store.ErrMigrationState
 			}
 			now := time.Now().Unix()
-			if _, e = q.ExecContext(ctx, "UPDATE migration_capacity SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE task_id=?", g.Unit.Bytes, now, l.TaskID); e != nil {
+			if _, e = q.ExecContext(ctx, "UPDATE migration_capacity SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE task_id=?", refund, now, l.TaskID); e != nil {
 				return e
 			}
-			if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE member_id=?", g.Unit.Bytes, now, n.ID); e != nil {
+			if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE member_id=?", refund, now, n.ID); e != nil {
 				return e
 			}
 		}
-		if _, e = q.ExecContext(ctx, "INSERT INTO migration_units(task_id,unit_id,resource_kind,parent_path,source_version,state,object_count,total_bytes) VALUES (?,?,?,?,?,'cancelled',?,?)", l.TaskID, g.Unit.ID, g.Unit.Resource, g.Unit.Parent, g.UnitVersion, g.Unit.ObjectCount, g.Unit.Bytes); e != nil {
+		if phase == "pending" {
+			if _, e = q.ExecContext(ctx, "UPDATE migration_units SET state='cancelled' WHERE task_id=? AND unit_id=?", l.TaskID, g.Unit.ID); e != nil {
+				return e
+			}
+		} else if _, e = q.ExecContext(ctx, "INSERT INTO migration_units(task_id,unit_id,resource_kind,parent_path,source_version,state,object_count,total_bytes) VALUES (?,?,?,?,?,'cancelled',?,?)", l.TaskID, g.Unit.ID, g.Unit.Resource, g.Unit.Parent, g.UnitVersion, g.Unit.ObjectCount, g.Unit.Bytes); e != nil {
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "DELETE FROM migration_scopes WHERE task_id=? AND member_id=? AND resource_kind=? AND parent_path=?", l.TaskID, n.ID, g.Unit.Resource, g.Unit.Parent); e != nil {

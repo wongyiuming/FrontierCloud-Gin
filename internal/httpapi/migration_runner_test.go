@@ -44,6 +44,7 @@ type runnerFaultCaller struct {
 	lostAbort      bool
 	lostCancelUnit bool
 	lostCancelTask bool
+	lostShadow     bool
 	blockBegin     func() bool
 	reads          map[int64]int
 }
@@ -85,6 +86,10 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 			return nil, errors.New("injected lost cancellation acknowledgement")
 		}
 	}
+	if e == nil && c.lostShadow && strings.HasSuffix(path, "/shadow") && result["state"] == "shadow_deleted" {
+		c.lostShadow = false
+		return nil, errors.New("injected lost target shadow receipt")
+	}
 	return result, e
 }
 
@@ -99,6 +104,9 @@ func TestMasterMigrationPartialCommitCancellationPreservesBothOwners(t *testing.
 }
 func TestMasterMigrationShadowGrantRequiresCurrentSourceBytes(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "shadowproof")
+}
+func TestMasterMigrationPublishedShadowCancellationLostReceipts(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "shadowcleanup")
 }
 func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
 	mixed := len(modes) > 0 && modes[0] == "mixed"
@@ -442,7 +450,7 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	if targetUsed != catalog.TotalBytes || targetReserved != 0 {
 		t.Fatal("local publication accounting", targetUsed, targetReserved)
 	}
-	if len(modes) > 0 && modes[0] == "shadowproof" {
+	if len(modes) > 0 && (modes[0] == "shadowproof" || modes[0] == "shadowcleanup") {
 		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
 			t.Fatal(e)
 		}
@@ -485,6 +493,86 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		}
 		if _, e = repo.ControlMigration(ctx, plan.ID, "pause", store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 			t.Fatal("cancel converted to paused", e)
+		}
+		if modes[0] == "shadowcleanup" {
+			if e = repo.ReleaseMigration(ctx, lease); e != nil {
+				t.Fatal(e)
+			}
+			// A disk scan failure must surface from the durable worker checkpoint,
+			// preserve the source owner and require an explicit retry.
+			if e = os.WriteFile(filepath.Join(targetDir, "media", resource.Path), append([]byte("!"), original[1:]...), 0644); e != nil {
+				t.Fatal(e)
+			}
+			if e = engine.Run(ctx, plan.ID, strings.Repeat("9", 32)); e == nil {
+				t.Fatal("corrupt target shadow silently deleted")
+			}
+			var failed int
+			if e = targetDB.Database().QueryRow("SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", plan.ID, ids[0]).Scan(&failed); e != nil || failed != 1 {
+				t.Fatal("worker failure not durable", failed, e)
+			}
+			if e = os.WriteFile(filepath.Join(targetDir, "media", resource.Path), original, 0644); e != nil {
+				t.Fatal(e)
+			}
+			if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			fault.lostShadow = true
+			fault.lostCancelUnit = true
+			fault.lostCancelTask = true
+			for attempt := 0; attempt < 4; attempt++ {
+				e = engine.Run(ctx, plan.ID, strings.Repeat(string(rune('a'+attempt)), 32))
+				if attempt < 3 {
+					if e == nil {
+						t.Fatal("lost shadow cancellation receipt ignored", attempt)
+					}
+					current, e := repo.MigrationTask(ctx, plan.ID)
+					if e != nil || current.State != "cancelling" || current.ErrorCode != "cancel_cleanup" {
+						t.Fatal(current, e)
+					}
+					if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+						t.Fatal(e)
+					}
+				} else if e != nil {
+					t.Fatal("shadow cancellation recovery", e)
+				}
+			}
+			current, e := repo.MigrationWork(ctx, plan.ID)
+			if e != nil || current.Task.State != "cancelled" || current.Task.CommittedBytes != 0 {
+				t.Fatal(current.Task, e)
+			}
+			for _, cp := range current.Objects {
+				row, e := db.Pool().Resource(ctx, cp.Object.ID)
+				if e != nil || row.MemberID != sr.PeerID || cp.State != "cancelled" {
+					t.Fatal(row, cp.State, e)
+				}
+				read, e := master.ReadGlobalMedia(ctx, row)
+				if e != nil {
+					t.Fatal(e)
+				}
+				got, e := io.ReadAll(read)
+				read.Close()
+				if e != nil || !bytes.Equal(got, payloads[row.Path]) {
+					t.Fatal("original source read after shadow cancellation", e)
+				}
+				if _, e = os.Stat(filepath.Join(targetDir, "media", row.Path)); !errors.Is(e, os.ErrNotExist) {
+					t.Fatal("published target shadow remains", e)
+				}
+			}
+			var used, reserved int64
+			if e = targetDB.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", tr.PeerID).Scan(&used, &reserved); e != nil || used != 0 || reserved != 0 {
+				t.Fatal("target double/retained capacity", used, reserved, e)
+			}
+			entries, e := os.ReadDir(filepath.Join(targetDir, "media"))
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, entry := range entries {
+				if strings.HasSuffix(entry.Name(), ".part") || strings.HasPrefix(entry.Name(), ".delete-") {
+					t.Fatal("private target bytes retained", entry.Name())
+				}
+			}
+			t.Logf("published media shadow cancellation recovered lost deletion/unit/task receipts; source business bytes=%d, target used/reserved=0", catalog.TotalBytes)
+			return
 		}
 		t.Logf("published shadow retained while corrupted source blocked authorization; fresh %d-byte authenticated source SHA bound to uncommitted cancellation unit", proof.Bytes)
 		return

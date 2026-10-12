@@ -120,6 +120,23 @@ func TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery(t *testi
 			t.Fatal(e)
 		}
 	}
+	if e = repo.FailPeerMigrationShadowCleanup(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if failed, e := repo.PeerMigrationShadowCleanupFailed(ctx, rel, l, v.Object.ID); e != nil || !failed {
+		t.Fatal("shadow failure not durable", failed, e)
+	}
+	old := g
+	old.SourceProof.VerifiedAt -= 31
+	if e = repo.PreparePeerMigrationShadowDeletion(ctx, rel, l, old, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("stale proof cleared failed shadow", e)
+	}
+	if e = repo.PreparePeerMigrationShadowDeletion(ctx, rel, l, g, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if failed, e := repo.PeerMigrationShadowCleanupFailed(ctx, rel, l, v.Object.ID); e != nil || failed {
+		t.Fatal("fresh retry kept failure", failed, e)
+	}
 	if _, e = reads.AcquireMigrationRead(ctx, rel, v.Object.ID, v.Object.ObjectID, "media"); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("new target read after delete fence", e)
 	}
@@ -177,5 +194,25 @@ func TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery(t *testi
 	}
 	if e = db.Media().ForgetDelete(ctx, op.ID); e != nil {
 		t.Fatal(e)
+	}
+
+	l.Epoch++
+	if e = repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e = repo.FailPeerMigrationShadowCleanup(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+		t.Fatal("post-delete private failure", e)
+	}
+	if failed, e := repo.PeerMigrationShadowCleanupFailed(ctx, rel, l, v.Object.ID); e != nil || !failed {
+		t.Fatal(failed, e)
+	}
+	if e = repo.PreparePeerMigrationShadowDeletion(ctx, rel, l, g, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	for range 2 {
+		receipt, e := repo.CompletePeerMigrationUnitCancellation(ctx, rel, l, g.Unit, store.NodeAudit{})
+		if e != nil || !receipt.Complete {
+			t.Fatal("deleted-shadow unit refund replay", receipt, e)
+		}
 	}
 }
