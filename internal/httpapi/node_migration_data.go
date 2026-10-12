@@ -92,7 +92,13 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			case job := <-jobs:
 				v := job.request
 				if job.operation == "cleanup" {
-					if e := volume.MigrationCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{}); e != nil && ctx.Err() == nil {
+					var e error
+					if v.Spec.Resource == "recording" && recordings != nil {
+						e = recordings.MigrationCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo)
+					} else {
+						e = volume.MigrationCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{})
+					}
+					if e != nil && ctx.Err() == nil {
 						_ = repo.FailPeerMigrationCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
 					}
 				} else if job.operation == "recheck" {
@@ -343,7 +349,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 	})
 	register("cleanup", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		// A legacy accelerated transfer has no proven Go response lifetime.
-		if settings.NginxMedia || v.Spec.Resource != "media" {
+		if settings.NginxMedia || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
 			return nil, store.ErrMigrationState
 		}
 		if v.CleanupGrant != nil {
@@ -371,7 +377,13 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return gin.H{"state": "cleanup_failed"}, nil
 		}
 		if p.State == "deleted" {
-			finished, e := volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			var finished bool
+			var e error
+			if v.Spec.Resource == "recording" {
+				finished, e = recordings.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			} else {
+				finished, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			}
 			if e != nil {
 				return nil, e
 			}

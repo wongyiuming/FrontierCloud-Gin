@@ -38,12 +38,13 @@ type journal struct {
 	Relationship string          `json:"relationship"`
 	Recording    store.Recording `json:"recording"`
 	// User/member/state are not public Recording JSON fields.
-	UserID    string                 `json:"user_id"`
-	MemberID  string                 `json:"member_id"`
-	Receipt   store.RecordingReceipt `json:"receipt"`
-	Audit     store.KaraokeAudit     `json:"audit"`
-	NodeAudit store.NodeAudit        `json:"node_audit"`
-	Absent    bool                   `json:"physical_absent"`
+	UserID        string                 `json:"user_id"`
+	MemberID      string                 `json:"member_id"`
+	Receipt       store.RecordingReceipt `json:"receipt"`
+	Audit         store.KaraokeAudit     `json:"audit"`
+	NodeAudit     store.NodeAudit        `json:"node_audit"`
+	Absent        bool                   `json:"physical_absent"`
+	MigrationTask string                 `json:"migration_task_id,omitempty"`
 }
 
 func New(root *os.Root, repo store.RecordingRepository, nodes store.NodeRepository) (*Storage, error) {
@@ -672,7 +673,15 @@ func (s *Storage) finishDelete(ctx context.Context, j journal) error {
 			return e
 		}
 		if n.Role == "Follower" {
-			e = s.repo.CompleteOwnedRecordingDeletion(ctx, j.Relationship, j.UserID, id, free, j.NodeAudit)
+			if j.MigrationTask != "" {
+				peer, ok := s.repo.(store.MigrationPeerRepository)
+				if !ok {
+					return ErrRecovery
+				}
+				e = peer.CompletePeerRecordingDeletion(ctx, j.Relationship, j.MigrationTask, id, free, j.NodeAudit)
+			} else {
+				e = s.repo.CompleteOwnedRecordingDeletion(ctx, j.Relationship, j.UserID, id, free, j.NodeAudit)
+			}
 		} else if n.Role == "Master" {
 			e = s.repo.CompleteRecordingDeletion(ctx, j.UserID, id, j.Audit)
 		} else {
@@ -768,6 +777,9 @@ func (s *Storage) Recover(ctx context.Context) error {
 				return e
 			}
 			if j.Version != 1 || j.Recording.ID != match[1] || !identifier.MatchString(j.UserID) || !identifier.MatchString(j.MemberID) || !identifier.MatchString(j.Relationship) {
+				return ErrRecovery
+			}
+			if j.MigrationTask != "" && (!identifier.MatchString(j.MigrationTask) || j.Operation != "delete" || j.Absent) {
 				return ErrRecovery
 			}
 			if j.Operation == "upload" {

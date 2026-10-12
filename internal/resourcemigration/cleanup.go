@@ -81,7 +81,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			continue
 		}
 		object = cp.Object.ID
-		if cp.Object.Resource != "media" {
+		if cp.Object.Resource != "media" && (cp.Object.Resource != "recording" || cp.Object.Recording == nil) {
 			return store.ErrMigrationState
 		}
 		proof, e := r.FreshTargetProof(ctx, l, object)

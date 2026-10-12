@@ -41,7 +41,9 @@ func (r *Repository) StageOwnedRecordingDeletion(ctx context.Context, relationsh
 		if e != nil {
 			return e
 		}
-		if e = r.checkMigrationRecording(ctx,q,n.ID,user);e!=nil{return e}
+		if e = r.checkMigrationRecording(ctx, q, n.ID, user); e != nil {
+			return e
+		}
 		v, e := recordingLookup(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), id))
 		if e != nil {
 			return e
@@ -259,53 +261,67 @@ func (r *Repository) CompleteOwnedRecordingDeletion(ctx context.Context, relatio
 		return store.ErrRecordingState
 	}
 	return r.write(ctx, func(q queryer) error {
-		n, e := r.ownedStorageNode(ctx, q, relationship)
-		if e != nil {
-			return e
-		}
-		v, e := recordingLookup(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), id))
-		if e != nil {
-			return e
-		}
-		if v == nil {
-			return nil
-		}
-		if v.UserID != user || v.MemberID != n.ID {
-			return store.ErrRecordingState
-		}
-		if v.State == "deleted" {
-			return nil
-		}
-		if v.State != "deleting" {
-			return store.ErrRecordingState
-		}
-		m, e := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), n.ID))
-		if e != nil {
-			return e
-		}
-		column := "reserved_bytes"
-		if v.SHA256 != nil {
-			column = "used_bytes"
-			if m.Used < v.Bytes {
-				return store.ErrRecordingState
-			}
-		} else if m.Reserved < v.Bytes {
-			return store.ErrRecordingState
-		}
-		now := time.Now().Unix()
-		if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET "+column+"="+column+"-?,physical_free_bytes=?,updated_at=? WHERE member_id=?", v.Bytes, free, now, n.ID); e != nil {
-			return e
-		}
-		// Keep an ownership tombstone. A still-valid upload capability must not
-		// recreate a recording whose physical deletion was already acknowledged.
-		if e = retireEncryptionFor(ctx, q, "recording_lyric", id); e != nil {
-			return e
-		}
-		if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='deleted',lyrics='[]',updated_at=? WHERE recording_id=?", now, id); e != nil {
-			return e
-		}
-		return r.nodeAudit(ctx, q, "recording-deleted", relationship, map[string]any{"recording_id": id, "user_id": user, "size_bytes": v.Bytes}, a)
+		return r.completeOwnedRecordingDeletion(ctx, q, relationship, user, id, free, a, "")
 	})
+}
+
+func (r *Repository) completeOwnedRecordingDeletion(ctx context.Context, q queryer, relationship, user, id string, free int64, a store.NodeAudit, task string) error {
+	n, e := r.ownedStorageNode(ctx, q, relationship)
+	if e != nil {
+		return e
+	}
+	v, e := recordingLookup(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), id))
+	if e != nil {
+		return e
+	}
+	if v == nil {
+		return nil
+	}
+	if v.UserID != user || v.MemberID != n.ID {
+		return store.ErrRecordingState
+	}
+	if v.State == "deleted" {
+		return nil
+	}
+	if v.State != "deleting" {
+		return store.ErrRecordingState
+	}
+	m, e := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), n.ID))
+	if e != nil {
+		return e
+	}
+	column := "reserved_bytes"
+	if v.SHA256 != nil {
+		column = "used_bytes"
+		if m.Used < v.Bytes {
+			return store.ErrRecordingState
+		}
+	} else if m.Reserved < v.Bytes {
+		return store.ErrRecordingState
+	}
+	now := time.Now().Unix()
+	if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET "+column+"="+column+"-?,physical_free_bytes=?,updated_at=? WHERE member_id=?", v.Bytes, free, now, n.ID); e != nil {
+		return e
+	}
+	// Keep an ownership tombstone. A still-valid upload capability must not
+	// recreate a recording whose physical deletion was already acknowledged.
+	if e = retireEncryptionFor(ctx, q, "recording_lyric", id); e != nil {
+		return e
+	}
+	if _, e = q.ExecContext(ctx, "UPDATE karaoke_recordings SET state='deleted',lyrics='[]',updated_at=? WHERE recording_id=?", now, id); e != nil {
+		return e
+	}
+	if _, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE target_id=? AND object_id=? AND resource_kind='recording' AND state='published'", now, n.ID, id); e != nil {
+		return e
+	}
+	detail := map[string]any{"recording_id": id, "user_id": user, "size_bytes": v.Bytes}
+	if task != "" {
+		if _, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE task_id=? AND logical_id=? AND state='deleting'", now, task, id); e != nil {
+			return e
+		}
+		detail["task_id"] = task
+	}
+	return r.nodeAudit(ctx, q, "recording-deleted", relationship, detail, a)
 }
 
 func sameRecordingSnapshot(a, b store.Recording) bool {

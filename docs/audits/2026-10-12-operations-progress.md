@@ -651,6 +651,47 @@ completion/cancellation, physical inventories/eligibility, retirement and GUI/CL
 remain required. Production still does not advertise the unfinished migration
 capability, and no production resource or node was migrated or retired.
 
+## Authenticated source recording cleanup
+
+Recording cleanup now runs through the same Master scheduler and authenticated
+native-only follower worker as media. The source pins and hashes actual complete
+recording bytes outside the global mutation lease, checks its footer descriptor
+and same inode, then uses the existing private recording delete intent. A short
+repository transaction stages only the exact recording from the persisted cleanup
+grant, with current runner/owner/version, complete-unit grace and no live reads.
+
+The private journal carries the migration task. Source recording tombstone,
+used-capacity refund, migration physical journal and audit commit together through
+the existing recording deletion transaction. Ordinary recording deletion cannot
+bypass active migration scopes. Historical target publication journals also become
+deleted when their recording is ordinarily removed. The source keeps its immutable
+identity and original encrypted footer tombstone; Master personal quota is not
+refunded or copied to a Storage account. Retry/recovery removes only the exact
+private recording intent/trash, and a retained intent is not a completed receipt.
+Prepared recording intents follow the existing forward recovery contract, even
+when the old runner has expired. Target authority is retained throughout.
+
+The actual authenticated SQLite/Gin/HMAC tests now migrate and clean both plaintext
+and encrypted-footer recordings, reject active reads, inject audit rollback,
+restore exact source bytes, retry a lost deletion receipt, reconcile source used
+to zero once and read exact target bytes afterward. The encrypted fixture decrypts
+the unchanged footer on the simulated client; it is not browser/audio playback
+acceptance. Test-only grace timestamps are explicitly advanced. Dedicated actual
+file-intent tests restart before/after SQL commit with expired runner and confirm
+one refund/audit, deleted source journal, no resurrection and completed private
+cleanup. SQLite/MySQL repository tests reject missing grants/ordinary scope bypass
+and confirm that unrelated media capacity is retained.
+See [recording byte/RPC and recovery evidence](2026-10-12-source-recording-cleanup.txt)
+and [SQLite/MySQL cleanup facts](2026-10-12-source-recording-cleanup-mysql.txt).
+Source CI passed 201 Python tests (two optional skips) and existing JavaScript
+smoke checks within its unchanged budget. No DDL/schema-generation change was
+introduced.
+
+Units/tasks still remain cleanup pending: historical publication anchors,
+whole-task completion/cancellation, physical eligibility/inventories, retirement,
+GUI/CLI, upgrade and full native five-node/browser acceptance remain required.
+Production still does not advertise the unfinished migration capability.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

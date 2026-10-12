@@ -10,11 +10,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"net/http/httptest"
 	"os"
@@ -33,11 +35,21 @@ func TestAuthenticatedRecordingRelayPublicationPreservesBytesIdentityAndMasterQu
 		t.Run(name, func(t *testing.T) { authenticatedRecordingPublication(t, encrypted) })
 	}
 }
-func authenticatedRecordingPublication(t *testing.T, encrypted bool) {
+func TestAuthenticatedRecordingCleanupPreservesTargetFooterAndPersonalQuota(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		name := "plain"
+		if encrypted {
+			name = "encrypted"
+		}
+		t.Run(name, func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true) })
+	}
+}
+
+func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, mdb, _, _, master := clusterFixture(t, "https://master.test", transport, true, true)
-	_, _, _, _, source := clusterFixture(t, "https://source.test", transport, true, true)
+	_, sdb, sourceDir, _, source := clusterFixture(t, "https://source.test", transport, true, true)
 	targetRouter, tdb, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true, true)
 	for _, v := range []struct {
 		s         *node.Service
@@ -145,6 +157,131 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool) {
 	mid, _ := mdb.Nodes().ReadIdentity(ctx)
 	sum := sha256.Sum256(payload)
 	sha := hex.EncodeToString(sum[:])
+	if len(cleanup) > 0 && cleanup[0] {
+		for _, rid := range []string{srid, trid} {
+			if e = mdb.Nodes().RecordHeartbeat(ctx, rid, true, 1, map[string]any{"capabilities": []string{"storage-v2", store.MigrationCapability}, "storage": map[string]any{"physical_free_bytes": 10 * store.GiB}}, time.Now().Unix()); e != nil {
+				t.Fatal(e)
+			}
+		}
+		repo := mdb.Pool().(store.MigrationRepository)
+		catalog, e := repo.MigrationCatalog(ctx, srel.PeerID, trel.PeerID)
+		if e != nil || len(catalog.Blockers) != 0 || len(catalog.Objects) != 1 {
+			t.Fatal(catalog, e)
+		}
+		o := catalog.Objects[0]
+		plan := store.MigrationPlan{ID: strings.Repeat("c", 32), Catalog: catalog, TargetAbsent: true, TargetFree: 10 * store.GiB, CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + 120, Proofs: []store.MigrationDiskProof{{ID: id, Version: o.Version, Bytes: o.Bytes, SHA256: sha}}}
+		if _, e = repo.StartMigration(ctx, plan, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		fault := &runnerFaultCaller{client: master, reads: map[int64]int{}}
+		engine := &resourcemigration.Runner{Repository: repo, Nodes: mdb.Nodes(), Client: fault}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("e", 32)); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = os.Stat(filepath.Join(sourceDir, "recordings", o.Path)); e != nil {
+			t.Fatal("source removed during grace", e)
+		}
+		now := time.Now().Unix()
+		if _, e = mdb.Database().Exec("UPDATE migration_units SET committed_at=?,cleanup_after=? WHERE task_id=?", now-3601, now-1, plan.ID); e != nil {
+			t.Fatal(e)
+		}
+		reads := sdb.Nodes().(store.MigrationReadRepository)
+		readID, e := reads.AcquireMigrationRead(ctx, srid, id, id, "recording")
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("f", 32)); e == nil {
+			t.Fatal("active recording read crossed cleanup")
+		}
+		if e = reads.ReleaseMigrationRead(ctx, readID); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = sdb.Database().Exec("CREATE TRIGGER block_record_cleanup BEFORE INSERT ON node_audit WHEN NEW.action='recording-deleted' BEGIN SELECT RAISE(FAIL,'record cleanup audit unavailable'); END"); e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("1", 32)); e == nil {
+			t.Fatal("unaudited recording cleanup accepted")
+		}
+		got, e := os.ReadFile(filepath.Join(sourceDir, "recordings", o.Path))
+		if e != nil || !bytes.Equal(got, payload) {
+			t.Fatal("failed recording cleanup did not restore bytes", e)
+		}
+		if _, e = sdb.Database().Exec("DROP TRIGGER block_record_cleanup"); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		fault.lostCleanup = true
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("2", 32)); e == nil {
+			t.Fatal("lost recording cleanup receipt ignored")
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = os.Stat(filepath.Join(sourceDir, "recordings", o.Path)); !errors.Is(e, os.ErrNotExist) {
+			t.Fatal("source recording remains", e)
+		}
+		sourceRow, e := sdb.Recordings().Recording(ctx, id)
+		if e != nil || sourceRow.State != "deleted" {
+			t.Fatal("missing source tombstone", sourceRow, e)
+		}
+		masterRow, e := mdb.Recordings().Recording(ctx, id)
+		if e != nil || masterRow.MemberID != trel.PeerID || masterRow.State != "ready" {
+			t.Fatal("cleanup changed master authority", masterRow, e)
+		}
+		targetMember := store.StorageMember{ID: trel.PeerID, RelationshipID: &trid}
+		token, e := master.RecordingCapability(ctx, *masterRow, targetMember, "download")
+		if e != nil {
+			t.Fatal(e)
+		}
+		r := httptest.NewRequest("GET", "https://target.test/internal/v1/recordings/"+id, nil)
+		r.Header.Set("X-Recording-Capability", token)
+		w := httptest.NewRecorder()
+		targetRouter.ServeHTTP(w, r)
+		if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), payload) {
+			t.Fatal("post-cleanup recording bytes", w.Code)
+		}
+		footer := recording.Metadata(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+		if encrypted {
+			cipherBytes, e := base64.StdEncoding.DecodeString(footer.EncryptedLyrics.Ciphertext)
+			if e != nil {
+				t.Fatal(e)
+			}
+			meta := footer.EncryptedLyrics.Encryption
+			nonce, _ := meta.ChunkNonce(0)
+			decoded, e := aead.Open(nil, nonce, cipherBytes, meta.ChunkAAD(0))
+			if e != nil || !bytes.Equal(decoded, plaintext) {
+				t.Fatal("client footer decryption after cleanup", e)
+			}
+		}
+		var sourceUsed, personalUsed int64
+		if e = sdb.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_id=?", srel.PeerID).Scan(&sourceUsed); e != nil || sourceUsed != 0 {
+			t.Fatal("source recording quota", sourceUsed, e)
+		}
+		if e = mdb.Database().QueryRow("SELECT used_bytes FROM karaoke_users WHERE user_id=?", user.ID).Scan(&personalUsed); e != nil || personalUsed != o.Bytes {
+			t.Fatal("personal quota changed", personalUsed, e)
+		}
+		var audits int
+		if e = sdb.Database().QueryRow("SELECT COUNT(*) FROM node_audit WHERE action='recording-deleted'").Scan(&audits); e != nil || audits != 1 {
+			t.Fatal("duplicate recording refund", audits, e)
+		}
+		work, e := repo.MigrationWork(ctx, plan.ID)
+		if e != nil || work.Objects[0].State != "cleaned" || work.Task.State != "cleanup_pending" {
+			t.Fatal("incorrect whole-task completion", work, e)
+		}
+		t.Logf("authenticated recording cleanup bytes=%d encrypted=%v; audit rollback/lost receipt and client read verified; fixture-only grace advance", len(payload), encrypted)
+		return
+	}
 	task := strings.Repeat("c", 32)
 	h := store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: task, MasterID: mid.ID, SourceID: srel.PeerID, TargetID: trel.PeerID, SourceRelationship: srid, TargetRelationship: trid, PlanSHA: strings.Repeat("1", 64), ObjectCount: 1, Bytes: int64(len(payload))}
 	l := store.MigrationLease{TaskID: task, RunnerID: strings.Repeat("d", 32), Epoch: 1, ExpiresAt: time.Now().Unix() + 60}
