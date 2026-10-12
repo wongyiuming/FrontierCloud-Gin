@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“5 snapshots and
+manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -1067,3 +1067,32 @@ actual target bytes/anchor recovery, cancellation unit reconciliation of deleted
 shadows versus unpublished aborted reservations, recording shadows and publication
 crash windows. No production capability is advertised and no completed-shadow
 cancellation is claimed yet. The full original delivery goal remains active.
+
+
+## Native media shadow files and private anchor cleanup (2026-10-12)
+
+The native media adapter now consumes persisted target-shadow admission using
+the existing managed source-delete file pipeline: pinned inode/full disk SHA,
+short exclusive identity recheck, exact task/object delete manifest, quarantine,
+atomic metadata/quota/journal commit and ordinary restart recovery. It never
+uses a path-only unlink or a new ad hoc physical deletion transaction. Committed
+private quarantine must be gone before success. The target's own original
+publication anchor is then retired with durable unlink intent and full private
+byte verification; business path/metadata absence and the same authenticated
+current deletion fact are rechecked before and after the scan.
+
+`2026-10-12-cancellation-shadow-files.txt` contains actual SQLite/filesystem
+publication and cancellation shadow deletion tests. Cases cover corrupt bytes,
+equal-byte inode replacement, audit/SQL failure restoring quarantined bytes,
+lost commit acknowledgement and restart before/after SQL deletion commit.
+Each successful replay proves target metadata/used capacity are gone, only one
+refund audit exists, no `.part` or quarantine bytes remain and the private anchor
+checkpoint is retired. Existing source media cleanup cases also pass with the
+shared pipeline. Full Go regression is recorded in
+`2026-10-12-cancellation-shadow-files-full-go.txt`.
+
+This native adapter is not yet wired to the bounded authenticated shadow worker
+RPC or whole-unit cancellation reconciliation. Recording shadows, publication
+crash windows, large-node inventory, retirement, GUI/CLI, upgrades and remaining
+original fleet/browser/recovery acceptance are still required. No migration
+capability is advertised and no full-goal completion is claimed.

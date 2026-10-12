@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 
@@ -29,10 +30,27 @@ func (s *Service) MigrationCleanup(ctx context.Context, relationship string, l s
 
 // MigrationCleanupAuthorized consumes only the already-persisted source grant.
 func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	return s.migrationDeleteAuthorized(ctx, relationship, l, id, repo, a, "cleanup")
+}
+func (s *Service) MigrationShadowCleanup(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationShadowGrant, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	if s.owned == nil || repo == nil || g.Object.Resource != "media" {
+		return ErrUnavailable
+	}
+	if e := repo.PreparePeerMigrationShadowDeletion(ctx, relationship, l, g, a); e != nil {
+		return e
+	}
+	return s.MigrationShadowCleanupAuthorized(ctx, relationship, l, g.Object.ID, repo, a)
+}
+func (s *Service) MigrationShadowCleanupAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	return s.migrationDeleteAuthorized(ctx, relationship, l, id, repo, a, "shadow")
+}
+
+// Both paths use the same pinned inode, full SHA, quarantine and SQL recovery.
+func (s *Service) migrationDeleteAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, repo store.MigrationPeerRepository, a store.NodeAudit, operation string) error {
 	if s.owned == nil || repo == nil {
 		return ErrUnavailable
 	}
-	v, e := repo.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup")
+	v, e := repo.AuthorizePeerMigration(ctx, relationship, l, id, operation)
 	if e != nil {
 		return e
 	}
@@ -40,7 +58,7 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		if e = s.finishMigrationCleanup(ctx, l.TaskID, id); e != nil {
 			return e
 		}
-		return s.migrationHistory(ctx, relationship, l, v, repo)
+		return s.finishMigrationHistory(ctx, relationship, l, v, repo, operation)
 	}
 	if v.State != "deleting" || v.Object.Resource != "media" {
 		return store.ErrMigrationState
@@ -111,7 +129,7 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if e = s.ready(); e != nil {
 		return e
 	}
-	v, e = repo.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup")
+	v, e = repo.AuthorizePeerMigration(ctx, relationship, l, id, operation)
 	if e != nil {
 		return e
 	}
@@ -121,7 +139,7 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		}
 		release()
 		held = false
-		return s.migrationHistory(ctx, relationship, l, v, repo)
+		return s.finishMigrationHistory(ctx, relationship, l, v, repo, operation)
 	}
 	current, e := s.safeInfo(v.Object.Path)
 	if e != nil {
@@ -168,7 +186,52 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	}
 	release()
 	held = false
-	return s.migrationHistory(ctx, relationship, l, v, repo)
+	return s.finishMigrationHistory(ctx, relationship, l, v, repo, operation)
+}
+
+// A cancelled target owns only its task-private publication anchor. Its
+// business copy and managed quarantine must already have been removed.
+func (s *Service) finishMigrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository, operation string) error {
+	if operation != "shadow" {
+		return s.migrationHistory(ctx, relationship, l, v, repo)
+	}
+	r, e := migrationdata.New(s.root, v.Header.TargetID, "media")
+	if e != nil {
+		return e
+	}
+	o := v.Object
+	spec := migrationdata.Spec{TaskID: l.TaskID, MasterID: v.Header.MasterID, SourceID: v.Header.SourceID, TargetID: v.Header.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: v.Proof.SHA256, Encryption: o.Encryption, Recording: o.Recording}
+	return r.RetireDeletedAnchor(ctx, spec, func() error {
+		current, e := repo.AuthorizePeerMigration(ctx, relationship, l, o.ID, "shadow")
+		if e != nil {
+			return e
+		}
+		if current.State != "deleted" {
+			return store.ErrMigrationState
+		}
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		if _, e = s.safeInfo(o.TargetPath); !errors.Is(e, os.ErrNotExist) {
+			if e != nil {
+				return e
+			}
+			return store.ErrMigrationState
+		}
+		object, e := s.repository.ObjectByID(ctx, o.ObjectID)
+		if e != nil {
+			return e
+		}
+		if object != nil {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
 }
 
 func (s *Service) migrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository) error {

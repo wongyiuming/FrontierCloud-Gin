@@ -37,7 +37,7 @@ func (r *deferredMigrationCleanup) ForgetDelete(ctx context.Context, id string) 
 
 func (r *replacedMigrationSource) AuthorizePeerMigration(ctx context.Context, rel string, l store.MigrationLease, id, op string) (store.MigrationPeerObject, error) {
 	v, e := r.MigrationPeerRepository.AuthorizePeerMigration(ctx, rel, l, id, op)
-	if e != nil || op != "cleanup" {
+	if e != nil || op != "cleanup" && op != "shadow" {
 		return v, e
 	}
 	r.calls++

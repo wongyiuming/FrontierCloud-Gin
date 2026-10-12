@@ -1,0 +1,37 @@
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt
+2026/10/12 21:53:16 ERROR committed media delete cleanup deferred operation=57c7b4a27b92ce30903a9db9bfecb169 error="lost private cleanup receipt"
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed
+--- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay (2.70s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none (0.90s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt (0.25s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode (0.25s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit (0.28s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack (0.25s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt (0.26s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending (0.27s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed (0.24s)
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/none
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/corrupt
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/audit
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/replaced_inode
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/lost_ack
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/crash_pending
+=== RUN   TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/crash_committed
+--- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor (2.19s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/none (0.30s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/corrupt (0.31s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/audit (0.34s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/replaced_inode (0.31s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/lost_ack (0.30s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/crash_pending (0.32s)
+    --- PASS: TestPublishedMigrationShadowUsesManagedFilesAndRetiresPrivateAnchor/crash_committed (0.31s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	5.924s
