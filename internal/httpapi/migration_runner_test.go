@@ -170,6 +170,69 @@ func loseMigrationPublicationCheckpoint(t *testing.T, root string) {
 func TestMasterMigrationAccountedPublicationCheckpointRecovery(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "checkpoint")
 }
+func TestMasterMigrationNewReverseTaskPreservesMediaIdentity(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "reverse")
+}
+
+// Reverse migration always creates a fresh plan/task; only the isolated
+// fixture's retention clock is advanced, never production grace admission.
+func runReverseMigrationFixture(t *testing.T, ctx context.Context, repo store.MigrationRepository, nodes store.NodeRepository, master *node.Service, database *sql.DB, sourceID, targetID, sourceRoot, targetRoot string) string {
+	t.Helper()
+	catalog, e := repo.MigrationCatalog(ctx, sourceID, targetID)
+	if e != nil || len(catalog.Blockers) != 0 || len(catalog.Objects) == 0 {
+		t.Fatal("reverse catalog", catalog, e)
+	}
+	now := time.Now().Unix()
+	plan := store.MigrationPlan{ID: strings.Repeat("f", 32), Catalog: catalog, TargetAbsent: true, TargetFree: 20 * store.GiB, CreatedAt: now, ExpiresAt: now + 120}
+	for _, o := range catalog.Objects {
+		if _, e = os.Stat(filepath.Join(targetRoot, o.TargetPath)); !errors.Is(e, os.ErrNotExist) {
+			t.Fatal("reverse target still contains business bytes", e)
+		}
+		file, e := os.Open(filepath.Join(sourceRoot, o.Path))
+		if e != nil {
+			t.Fatal(e)
+		}
+		digest := sha256.New()
+		size, e := io.Copy(digest, file)
+		file.Close()
+		if e != nil || size != o.Bytes {
+			t.Fatal("reverse physical proof", size, e)
+		}
+		plan.Proofs = append(plan.Proofs, store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: size, SHA256: hex.EncodeToString(digest.Sum(nil))})
+	}
+	if _, e = repo.StartMigration(ctx, plan, store.NodeAudit{}); e != nil {
+		t.Fatal("reverse start", e)
+	}
+	engine := &resourcemigration.Runner{Repository: repo, Nodes: nodes, Client: master}
+	runctx, stop := context.WithTimeout(ctx, 20*time.Second)
+	defer stop()
+	if e = engine.Run(runctx, plan.ID, strings.Repeat("4", 32)); e != nil {
+		t.Fatal("reverse transfer", e)
+	}
+	work, e := repo.MigrationWork(ctx, plan.ID)
+	if e != nil || work.Task.State != "cleanup_pending" || work.Task.CommittedBytes != catalog.TotalBytes {
+		t.Fatal("reverse commit", work.Task, e)
+	}
+	if _, e = database.Exec("UPDATE migration_units SET committed_at=?,cleanup_after=? WHERE task_id=?", now-3601, now-1, plan.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(runctx, plan.ID, strings.Repeat("5", 32)); e != nil {
+		t.Fatal("reverse cleanup", e)
+	}
+	work, e = repo.MigrationWork(ctx, plan.ID)
+	if e != nil || work.Task.State != "completed" {
+		t.Fatal("reverse final receipts", work.Task, e)
+	}
+	for _, o := range catalog.Objects {
+		if _, e = os.Stat(filepath.Join(sourceRoot, o.Path)); !errors.Is(e, os.ErrNotExist) {
+			t.Fatal("reverse source bytes remain", e)
+		}
+	}
+	if e = engine.ReleaseDrain(ctx, plan.ID, sourceID, store.NodeAudit{}); e != nil {
+		t.Fatal("reverse explicit drain release", e)
+	}
+	return plan.ID
+}
 func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
 	mixed := len(modes) > 0 && modes[0] == "mixed"
 	unpublish := len(modes) > 0 && modes[0] == "unpublish"
@@ -888,6 +951,44 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	}
 	if e = engine.ReleaseDrain(ctx, plan.ID, tr.PeerID, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("wrong source confirmation released drain", e)
+	}
+	if len(modes) > 0 && modes[0] == "reverse" {
+		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		for _, rid := range []string{srid, trid} {
+			if e = db.Nodes().RecordHeartbeat(ctx, rid, true, 1, map[string]any{"capabilities": []string{"storage-v2", store.MigrationCapability}, "storage": map[string]any{"physical_free_bytes": 20 * store.GiB}}, time.Now().Unix()); e != nil {
+				t.Fatal(e)
+			}
+		}
+		reverse := runReverseMigrationFixture(t, ctx, repo, db.Nodes(), master, db.Database(), tr.PeerID, sr.PeerID, filepath.Join(targetDir, "media"), filepath.Join(sourceDir, "media"))
+		for _, id := range ids {
+			row, e := db.Pool().Resource(ctx, id)
+			if e != nil || row.ID != id || row.MemberID != sr.PeerID {
+				t.Fatal("reverse logical owner", row, e)
+			}
+			reader, e := master.ReadGlobalMedia(ctx, row)
+			if e != nil {
+				t.Fatal(e)
+			}
+			got, e := io.ReadAll(reader)
+			reader.Close()
+			if e != nil || !bytes.Equal(got, payloads[row.Path]) {
+				t.Fatal("reverse business bytes", e)
+			}
+		}
+		for _, entry := range []struct {
+			database *sql.DB
+			member   string
+			used     int64
+		}{{db.Database(), sr.PeerID, catalog.TotalBytes}, {db.Database(), tr.PeerID, 0}, {sourceDB.Database(), sr.PeerID, catalog.TotalBytes}, {targetDB.Database(), tr.PeerID, 0}} {
+			var used, reserved int64
+			if e = entry.database.QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", entry.member).Scan(&used, &reserved); e != nil || used != entry.used || reserved != 0 {
+				t.Fatal("reverse quota", used, reserved, e)
+			}
+		}
+		t.Logf("forward task=%s reverse task=%s; original IDs and source business bytes restored through authenticated copy and managed cleanup", plan.ID, reverse)
+		return
 	}
 	adminOwner := strings.Repeat("a", 32)
 	for _, database := range []*sql.DB{db.Database(), sourceDB.Database()} {

@@ -1305,3 +1305,14 @@ Remaining: complete cancellation admission/restart edge cases and reverse migrat
 
 
 The first full regression exposed a fixture ordering error (`2026-10-12-accounted-publication-checkpoint-first-full-go.txt`): immutable logical-ID order differed from fixture filename order. The media interruption fixtures now select the actual target business link and byte count before injecting subsequent faults. Their publication stop condition checks any task-bound fixture path. Production accounting was not changed to accommodate the test assumption. Repeated targeted race tests and the final full regression are recorded separately.
+
+
+### Fresh reverse migration, real bytes and business reads
+
+Verified the existing protocol supports a new reverse plan/task after forward migration finishes. Added media and plain/encrypted-lyrics recording fixtures that complete forward transfer, whole-unit cutover, managed source cleanup and dual final receipts, explicitly release the task-owned source drain, then create a separate reverse task. Fresh reverse plan proofs hash actual source files and check target business paths are absent. Reverse execution reuses authenticated Master relay, native publication, persistent accounting, retention checks, managed deletion and final receipts; it does not directly reverse business ownership in SQL.
+
+The fixtures check original logical IDs and paths, physical relationship mapping for recordings, source business downloads after the round trip, unchanged recording encryption descriptors, client AES decryption and personal quota. Master and both Storage ledgers converge to the round-trip owner/used totals with zero reservations; retired recording descriptors are reused only for the same logical recording and original opaque ciphertext. This reuses implemented behavior rather than adding a second reverse protocol.
+
+Evidence: `2026-10-12-reverse-media.txt`, `2026-10-12-reverse-recordings.txt` (actual files/embedded SQLite/raw-HMAC Gin fixtures with race detection) and `2026-10-12-reverse-migration-full-go.txt`. Source CI preserves existing policy/budget and its two optional skips. Only fixture retention timestamps are advanced; production retains the one-hour grace. Recording encryption here is the existing encrypted-lyrics footer, not an audio encryption or browser acceptance claim. The tested round trip is Direct→Relay→Direct using in-process authenticated transports; it is not a native TLS four-mode fleet acceptance.
+
+Remaining: cancellation admission/restart edge cases; bounded physical inventories and backup/orphan/transaction retirement blockers; safe final revocation and GUI/CLI; approved upgrades/multi-node recovery; required native SQLite/MySQL four-mode TLS/fleet/browser/resource acceptance. Overall goal remains incomplete, and public migration capability is still not advertised.

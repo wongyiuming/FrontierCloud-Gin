@@ -6,6 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -59,6 +60,11 @@ func TestAuthenticatedRecordingInterruptedPublicationCancellation(t *testing.T) 
 func TestAuthenticatedRecordingAccountedPublicationCheckpointRecovery(t *testing.T) {
 	for _, encrypted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, true, false, true) })
+	}
+}
+func TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, false, false, false, true) })
 	}
 }
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
@@ -379,6 +385,62 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 		work, e := repo.MigrationWork(ctx, plan.ID)
 		if e != nil || work.Objects[0].State != "cleaned" || work.Task.State != "completed" {
 			t.Fatal("incorrect whole-task completion", work, e)
+		}
+		if len(cleanup) > 4 && cleanup[4] {
+			if e = engine.ReleaseDrain(ctx, plan.ID, srel.PeerID, store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			for _, rid := range []string{srid, trid} {
+				if e = mdb.Nodes().RecordHeartbeat(ctx, rid, true, 1, map[string]any{"capabilities": []string{"storage-v2", store.MigrationCapability}, "storage": map[string]any{"physical_free_bytes": 20 * store.GiB}}, time.Now().Unix()); e != nil {
+					t.Fatal(e)
+				}
+			}
+			reverse := runReverseMigrationFixture(t, ctx, repo, mdb.Nodes(), master, mdb.Database(), trel.PeerID, srel.PeerID, filepath.Join(targetDir, "recordings"), filepath.Join(sourceDir, "recordings"))
+			row, e := mdb.Recordings().Recording(ctx, id)
+			if e != nil || row.State != "ready" || row.MemberID != srel.PeerID || row.ID != id || row.UserID != user.ID {
+				t.Fatal("reverse recording identity", row, e)
+			}
+			token, e := master.RecordingCapability(ctx, *row, store.StorageMember{ID: srel.PeerID, RelationshipID: &srid}, "download")
+			if e != nil {
+				t.Fatal(e)
+			}
+			request := httptest.NewRequest("GET", "https://source.test/internal/v1/recordings/"+id, nil)
+			request.Header.Set("X-Recording-Capability", token)
+			response := httptest.NewRecorder()
+			transport.routers["https://source.test"].ServeHTTP(response, request)
+			if response.Code != 200 || !bytes.Equal(response.Body.Bytes(), payload) {
+				t.Fatal("reverse recording business bytes", response.Code)
+			}
+			footer := recording.Metadata(bytes.NewReader(response.Body.Bytes()), int64(response.Body.Len()))
+			if encrypted {
+				if footer.EncryptedLyrics == nil || footer.EncryptedLyrics.Encryption != snapshot.EncryptedLyrics.Encryption {
+					t.Fatal("reverse descriptor changed", footer)
+				}
+				meta := footer.EncryptedLyrics.Encryption
+				cipherBytes, e := base64.StdEncoding.DecodeString(footer.EncryptedLyrics.Ciphertext)
+				if e != nil {
+					t.Fatal(e)
+				}
+				nonce, _ := meta.ChunkNonce(0)
+				decoded, e := aead.Open(nil, nonce, cipherBytes, meta.ChunkAAD(0))
+				if e != nil || !bytes.Equal(decoded, plaintext) {
+					t.Fatal("reverse client decryption", e)
+				}
+			}
+			if e = mdb.Database().QueryRow("SELECT used_bytes FROM karaoke_users WHERE user_id=?", user.ID).Scan(&personalUsed); e != nil || personalUsed != o.Bytes {
+				t.Fatal("reverse personal quota", personalUsed, e)
+			}
+			for _, entry := range []struct {
+				database *sql.DB
+				member   string
+				used     int64
+			}{{mdb.Database(), srel.PeerID, o.Bytes}, {mdb.Database(), trel.PeerID, 0}, {sdb.Database(), srel.PeerID, o.Bytes}, {tdb.Database(), trel.PeerID, 0}} {
+				var used, reserved int64
+				if e = entry.database.QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", entry.member).Scan(&used, &reserved); e != nil || used != entry.used || reserved != 0 {
+					t.Fatal("reverse recording quota", used, reserved, e)
+				}
+			}
+			t.Logf("fresh reverse recording task=%s encrypted=%v; original opaque bytes, logical ID, descriptor and personal quota retained", reverse, encrypted)
 		}
 		t.Logf("authenticated recording cleanup bytes=%d encrypted=%v; audit rollback/lost receipt and client read verified; fixture-only grace advance", len(payload), encrypted)
 		return
