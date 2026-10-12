@@ -31,4 +31,5 @@ type MigrationPeerRepository interface {
 	VerifyPeerMigrationObject(context.Context, string, MigrationLease, string, int64, string) error
 	CompletePeerMediaPublication(context.Context, string, MigrationLease, string, MediaObject, int64, string, int64, NodeAudit) error
 	CompletePeerRecordingPublication(context.Context, string, MigrationLease, string, RecordingReceipt, int64, NodeAudit) error
+	PreparePeerMigrationCleanup(context.Context, string, MigrationLease, MigrationCleanupGrant, NodeAudit) error
 }

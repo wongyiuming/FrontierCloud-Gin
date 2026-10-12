@@ -64,6 +64,27 @@ type MigrationDiskProof struct {
 	Bytes   int64  `json:"size_bytes"`
 	SHA256  string `json:"sha256"`
 }
+
+// Supplied only by the service after a fresh authenticated target disk scan.
+// Stored publication facts alone do not prove current target bytes are intact.
+type MigrationCleanupProof struct {
+	MigrationDiskProof
+	VerifiedAt int64 `json:"verified_at"`
+}
+type MigrationCleanupGrant struct {
+	TaskID           string          `json:"task_id"`
+	MasterID         string          `json:"master_id"`
+	SourceID         string          `json:"source_id"`
+	TargetID         string          `json:"target_id"`
+	PlanSHA          string          `json:"plan_sha256"`
+	UnitID           string          `json:"unit_id"`
+	UnitVersion      string          `json:"unit_source_version"`
+	Object           MigrationObject `json:"object"`
+	SHA256           string          `json:"sha256"`
+	CommittedAt      int64           `json:"committed_at"`
+	CleanupAfter     int64           `json:"cleanup_after"`
+	TargetVerifiedAt int64           `json:"target_verified_at"`
+}
 type MigrationPlan struct {
 	ID           string               `json:"plan_id"`
 	Catalog      MigrationCatalog     `json:"catalog"`
@@ -149,4 +170,5 @@ type MigrationRepository interface {
 	MigrationRunState(context.Context, MigrationLease, string, string, string, NodeAudit) error
 	ValidateMigrationLease(context.Context, MigrationLease) error
 	NextMigrationRun(context.Context) (string, error)
+	AuthorizeMigrationCleanup(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
 }

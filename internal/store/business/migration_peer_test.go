@@ -40,7 +40,7 @@ func peerMigrationFixture(t *testing.T, source bool) (store.Store, *sql.DB, stor
 	o := store.MigrationObject{ID: hashPath(t.Name() + "object"), ObjectID: hashPath(t.Name() + "object"), Resource: "media", Path: "music/" + t.Name() + "/track.mp3", TargetPath: "music/" + t.Name() + "/track.mp3", Parent: "music/" + t.Name(), Kind: "audio", Bytes: 7, Version: strings.Repeat("1", 64), ETag: `"` + strings.Repeat("2", 64) + `"`}
 	v := store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: strings.Repeat("2", 64)}}
 	t.Cleanup(func() {
-		for _, table := range []string{"migration_peer_bindings", "migration_storage_journal", "migration_capacity", "migration_scopes", "migration_runners", "migration_tasks"} {
+		for _, table := range []string{"migration_units", "migration_peer_bindings", "migration_storage_journal", "migration_capacity", "migration_scopes", "migration_runners", "migration_tasks"} {
 			raw.Exec("DELETE FROM "+table+" WHERE task_id=?", task)
 		}
 		raw.Exec("DELETE FROM migration_drains WHERE owner_id=?", task)

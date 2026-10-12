@@ -28,9 +28,13 @@ func ownedDeleteItem(operation store.DeleteOperation) (store.DeleteItem, error) 
 func (r *Repository) ownedDeleteAccounting(ctx context.Context, q queryer, member string, item store.DeleteItem) error {
 	var size int64
 	err := q.QueryRowContext(ctx, "SELECT expected_bytes FROM cluster_upload_sessions WHERE media_id=? AND storage_member_id=? AND state='complete'"+r.lock(), item.OwnedID, member).Scan(&size)
-	// Legacy Follower objects need explicit offline physical adoption first.
+	// Migration publication has its own durable accounting journal rather than
+	// an ordinary upload session. It still owns the same stable physical ID.
 	if errors.Is(err, sql.ErrNoRows) {
-		return nodeConflict("owned storage needs offline ledger adoption before refund")
+		err = q.QueryRowContext(ctx, "SELECT expected_bytes FROM migration_storage_journal WHERE target_id=? AND object_id=? AND resource_kind='media' AND state='published' ORDER BY updated_at DESC,task_id DESC LIMIT 1"+r.lock(), member, item.OwnedID).Scan(&size)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nodeConflict("owned storage needs offline ledger adoption before refund")
+		}
 	}
 	if err != nil {
 		return err
@@ -130,6 +134,9 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 			return err
 		}
 		if _, err = q.ExecContext(ctx, "DELETE FROM cluster_upload_sessions WHERE storage_member_id=? AND media_id=? AND state='complete'", row.ID, item.OwnedID); err != nil {
+			return err
+		}
+		if _, err = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE target_id=? AND object_id=? AND resource_kind='media' AND state='published'", time.Now().Unix(), row.ID, item.OwnedID); err != nil {
 			return err
 		}
 		now := time.Now().Unix()

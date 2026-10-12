@@ -470,6 +470,41 @@ existing budget with 201 Python tests and two optional skips. MySQL required
 bounded standalone task error codes; full failing object IDs remain in the
 structured audit rather than exceeding the error-code column.
 
+## Cleanup authorization checkpoint
+
+Master cleanup authorization now requires a committed complete unit, unchanged
+current target authority/physical mapping, matching original bytes/SHA/version,
+an authenticated fresh target disk proof supplied by the service, elapsed
+one-hour capability grace and no unexpired source read lease. A different logical
+alias referencing the source physical ID also blocks cleanup. Current peer
+identity bindings/health are rechecked under the runner epoch. The returned grant
+binds task/plan, unit version, exact object and immutable commit/grace timestamps.
+
+Source repository preparation accepts only its active upstream Master, complete
+registered roster, matching full object binding/bytes/SHA and source role. It
+persists the unit authorization/deleting journal idempotently, blocks additional
+migration reads and leaves source used bytes/draining unchanged. This method does
+not delete files. It is not exposed as a browser/CLI proof-input shortcut or
+automatically dispatched by the worker yet. Fresh disk proof RPC, source file
+transaction adapters, actual read-lease integration, private-anchor cleanup and
+task completion/cancellation reconciliation remain required.
+
+SQLite/MySQL tests rejected precommit cleanup, premature grace, stale/wrong disk
+proofs, active physical-alias read leases, wrong owners/versions and changed replay
+timestamps. Allowed preparation retained source accounting. These repository
+fixtures provide synthetic fresh disk proofs and explicitly advance test-only
+grace timestamps; they are not actual source-delete or fleet acceptance evidence.
+See [cleanup/ledger transactions](2026-10-12-cleanup-authorization-mysql.txt) and
+[full Go regression](2026-10-12-cleanup-authorization-go.txt). Source CI passed
+the unchanged budget with 201 Python tests and two optional skips.
+
+Ordinary managed deletion also recognizes a migrated target's published ledger
+when it has no ordinary upload session. Deletion atomically records the historical
+physical journal as deleted with its usual quota/audit transaction. A repository
+test reconciles target scopes, deletes the migrated object through the ordinary
+path and confirms exactly one refund. This repairs post-migration deletion;
+it does not bypass active migration scopes or authorize source removal.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

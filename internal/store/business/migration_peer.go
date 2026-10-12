@@ -346,6 +346,9 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		if phase == "deleted" || phase == "aborted" {
 			return store.ErrMigrationState
 		}
+		if operation == "read" && phase == "deleting" {
+			return store.ErrMigrationState
+		}
 		if operation == "publish" && phase != "verified" && phase != "publishing" && phase != "published" {
 			return store.ErrMigrationState
 		}

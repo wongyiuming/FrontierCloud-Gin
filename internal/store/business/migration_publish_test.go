@@ -66,6 +66,20 @@ func TestPeerMigrationPublicationRollbackAndReplay(t *testing.T) {
 		}
 		check(v.Object.Bytes, 0)
 	}
+	// After task scopes are reconciled, ordinary managed deletion must consume
+	// the migration ledger without requiring a fabricated upload reservation.
+	if _, e := raw.Exec("DELETE FROM migration_scopes WHERE task_id=?", h.TaskID); e != nil {
+		t.Fatal(e)
+	}
+	operation := store.DeleteOperation{ID: hashPath(t.Name() + "delete")[:32], State: "pending", Items: []store.DeleteItem{{Slot: "0", Path: o.Path, OwnedID: o.ID, Bytes: v.Object.Bytes}}}
+	if e := db.Pool().PrepareOwnedDelete(ctx, rel, operation, store.NodeAudit{}); e != nil {
+		t.Fatal("migrated object cannot use ordinary deletion", e)
+	}
+	if e := db.Pool().CommitOwnedDelete(ctx, operation.ID, 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	check(0, 0)
+	t.Cleanup(func() { raw.Exec("DELETE FROM media_delete_operations WHERE operation_id=?", operation.ID) })
 	o.Path += ".different"
 	if e := publish(); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("replay path changed", e)
