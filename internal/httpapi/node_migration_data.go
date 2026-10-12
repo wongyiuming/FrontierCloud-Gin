@@ -360,7 +360,14 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		if e != nil {
 			return nil, e
 		}
-		return r.Abort(c.Request.Context(), v.Spec, func() error { return admission(c.Request.Context(), rel.ID, v, "abort") })
+		cp, e := r.Abort(c.Request.Context(), v.Spec, func() error { return admission(c.Request.Context(), rel.ID, v, "abort") })
+		if e != nil {
+			return nil, e
+		}
+		if e = repo.CompletePeerMigrationAbort(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, store.NodeAudit{}); e != nil {
+			return nil, e
+		}
+		return cp, nil
 	})
 	register("retire", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		if v.CleanupGrant == nil || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil) {

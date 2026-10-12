@@ -184,8 +184,11 @@ persistent resource migration/retirement implementation and acceptance are
 ongoing; this manual does not claim that a released node can yet be safely
 migrated through `fc`. The current dev repository has durable tasks, reservations,
 source drains and runner fences, with transactional whole-parent ownership
-cutover. Authenticated peer inventory, real copying/publication, source cleanup
-and GUI/CLI integration are still being implemented.
+cutover. The isolated authenticated router tests cover bounded byte copying, media and
+recording publication, source cleanup, private anchor retirement, final task
+receipts and explicit owned-drain release. Authenticated physical inventory,
+whole-task cancellation, independent retirement, GUI/CLI and actual fleet/browser
+acceptance remain incomplete; production migration capability is not advertised.
 Planning never reserves capacity. Cancelling a task retains capacity until safe
 staging cleanup, and does not move committed data back or release another drain.
 No host/container/volume deletion is part of this business operation.

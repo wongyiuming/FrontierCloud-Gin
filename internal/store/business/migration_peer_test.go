@@ -230,3 +230,55 @@ func TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead(t *testing.T
 		t.Fatal("configuration heartbeat erased drain", e)
 	}
 }
+
+func TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations(t *testing.T) {
+	_, raw, repo, rel, h, l, v := peerMigrationFixture(t, false)
+	ctx := context.Background()
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "queued", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e := repo.CompletePeerMigrationAbort(ctx, rel, l, v.Object.ID, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("abort before cancellation", e)
+	}
+	l.Epoch++
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	for range 2 {
+		if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "abort"); e != nil {
+			t.Fatal(e)
+		}
+		if e := repo.CompletePeerMigrationAbort(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	var phase string
+	var capacity, scopes int64
+	if e := raw.QueryRow("SELECT state FROM migration_storage_journal WHERE task_id=? AND logical_id=?", h.TaskID, v.Object.ID).Scan(&phase); e != nil {
+		t.Fatal(e)
+	}
+	if e := raw.QueryRow("SELECT reserved_bytes FROM migration_capacity WHERE task_id=?", h.TaskID).Scan(&capacity); e != nil {
+		t.Fatal(e)
+	}
+	if e := raw.QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", h.TaskID).Scan(&scopes); e != nil {
+		t.Fatal(e)
+	}
+	if phase != "aborted" || capacity != h.Bytes || scopes != 1 {
+		t.Fatal(phase, capacity, scopes)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "append"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("aborted object writable", e)
+	}
+	if _, e := raw.Exec("UPDATE migration_storage_journal SET state='published' WHERE task_id=?", h.TaskID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "abort"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("published shadow blindly aborted", e)
+	}
+	if e := repo.CompletePeerMigrationAbort(ctx, rel, l, v.Object.ID, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("published journal blindly aborted", e)
+	}
+}

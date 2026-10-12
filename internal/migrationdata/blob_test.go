@@ -357,3 +357,44 @@ func TestCheckpointJSONDoesNotExposePrivateHashState(t *testing.T) {
 		t.Fatal("internal hash state serialized", e)
 	}
 }
+
+func TestAbortBeforeBeginPreservesUnknownUnjournaledBytes(t *testing.T) {
+	for _, material := range []string{"absent", "empty", "unknown"} {
+		t.Run(material, func(t *testing.T) {
+			r, s, root := fixture(t, []byte("expected"))
+			name, _, _ := names(s)
+			if material != "absent" {
+				data := []byte{}
+				if material == "unknown" {
+					data = []byte("unknown")
+				}
+				if e := root.WriteFile(name, data, 0600); e != nil {
+					t.Fatal(e)
+				}
+			}
+			cp, e := r.Abort(context.Background(), s, func() error { return nil })
+			if material == "unknown" {
+				if !errors.Is(e, ErrState) {
+					t.Fatal(cp, e)
+				}
+				if data, e := root.ReadFile(name); e != nil || string(data) != "unknown" {
+					t.Fatal("unknown bytes lost", e)
+				}
+				return
+			}
+			if e != nil || cp.State != "aborted" {
+				t.Fatal(cp, e)
+			}
+			r, e = New(root, s.TargetID, s.Resource)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if cp, e = r.Abort(context.Background(), s, func() error { return nil }); e != nil || cp.State != "aborted" {
+				t.Fatal("restart replay", cp, e)
+			}
+			if _, e = r.Begin(context.Background(), s); !errors.Is(e, ErrState) {
+				t.Fatal("cancelled staging resurrected", e)
+			}
+		})
+	}
+}

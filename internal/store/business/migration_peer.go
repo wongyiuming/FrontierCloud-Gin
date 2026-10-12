@@ -344,7 +344,10 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		if e = q.QueryRowContext(ctx, "SELECT logical_id,object_id,resource_kind,physical_path,source_version,expected_bytes,sha256,state FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, id).Scan(&v.Object.ID, &v.Object.ObjectID, &v.Object.Resource, &v.Object.Path, &v.Object.Version, &v.Object.Bytes, &v.Proof.SHA256, &phase); e != nil {
 			return e
 		}
-		if phase == "deleted" && operation != "cleanup" || phase == "aborted" {
+		if phase == "deleted" && operation != "cleanup" || phase == "aborted" && operation != "abort" {
+			return store.ErrMigrationState
+		}
+		if operation == "abort" && phase != "receiving" && phase != "verified" && phase != "aborting" && phase != "aborted" {
 			return store.ErrMigrationState
 		}
 		if operation == "cleanup" && phase != "receiving" && phase != "deleting" && phase != "deleted" {

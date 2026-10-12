@@ -534,7 +534,28 @@ func (r *Receiver) Abort(ctx context.Context, s Spec, admission func() error) (C
 		return Checkpoint{}, e
 	}
 	c, e := r.load(s)
-	if e != nil {
+	if errors.Is(e, os.ErrNotExist) {
+		// Cancellation can precede Begin. Only absent or empty initial staging
+		// material is provably safe without a checkpoint; unknown bytes block.
+		name, _, _ := names(s)
+		f, openErr := r.private(name, os.O_RDONLY)
+		if openErr == nil {
+			info, statErr := f.Stat()
+			closeErr := f.Close()
+			if statErr != nil || closeErr != nil {
+				return c, errors.Join(statErr, closeErr)
+			}
+			if info.Size() != 0 {
+				return c, ErrState
+			}
+		} else if !errors.Is(openErr, os.ErrNotExist) {
+			return c, openErr
+		}
+		c = Checkpoint{Version: 1, Spec: s, State: "aborting"}
+		if e = hashCheckpoint(&c, sha256.New()); e != nil {
+			return c, e
+		}
+	} else if e != nil {
 		return c, e
 	}
 	if c.State == "aborted" {

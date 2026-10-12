@@ -895,3 +895,20 @@ production task, node revocation, publishing, host stop or volume deletion occur
 10. Reconcile the final operator manual/evidence and report implemented, verified,
     unverified, known limitations and blockers separately. Do not mark the goal
     complete until these required items are actually addressed.
+
+
+## Unpublished cancellation receipts (2026-10-12)
+
+The authenticated target abort route now persists a SQLite peer-journal `aborted`
+receipt after the task-private staging checkpoint has durably removed its bytes.
+A lost SQL acknowledgement can repeat this operation. SQL authorization permits
+that replay but rejects publishing/published objects; published shadows require
+separate managed deletion reconciliation. Reservations and scope locks remain
+held until whole-task reconciliation. This is a cancellation protocol primitive,
+not a completed Master cancellation runner.
+
+Cancellation before Begin creates a durable empty-prefix tombstone only when
+staging material is absent or empty. Nonempty material without a binding journal
+is retained and blocks cleanup. Restart cannot reopen aborted staging. Tests use
+actual filesystem bytes and SQLite/MySQL transactions. Fleet/browser acceptance
+and cancellation of partially committed tasks remain outstanding.

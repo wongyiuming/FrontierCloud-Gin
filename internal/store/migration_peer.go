@@ -28,6 +28,7 @@ type MigrationPeerRepository interface {
 	RegisterPeerMigrationObject(context.Context, string, MigrationLease, MigrationPeerObject, NodeAudit) error
 	AuthorizePeerMigration(context.Context, string, MigrationLease, string, string) (MigrationPeerObject, error)
 	FencePeerMigration(context.Context, string, string, int64, string, NodeAudit) error
+	CompletePeerMigrationAbort(context.Context, string, MigrationLease, string, NodeAudit) error
 	VerifyPeerMigrationObject(context.Context, string, MigrationLease, string, int64, string) error
 	CompletePeerMediaPublication(context.Context, string, MigrationLease, string, MediaObject, int64, string, int64, NodeAudit) error
 	CompletePeerRecordingPublication(context.Context, string, MigrationLease, string, RecordingReceipt, int64, NodeAudit) error
