@@ -1168,3 +1168,39 @@ private recording intent/anchor cleanup, authenticated worker/controller wiring
 and actual plaintext/encrypted cancellation reads/recovery acceptance. Original
 publication-window, inventory, retirement, GUI/CLI, upgrade/recovery and fleet/
 browser acceptance remain active; production migration capability is unadvertised.
+
+
+## Native recording shadows and authenticated cancellation (2026-10-12)
+
+Recording shadows now reuse the existing exact-recording-ID deletion pipeline:
+pinned full bytes/SHA/footer check, short inode recheck, durable private recording
+intent, tombstone/quota transaction and forward restart recovery. Target private
+publication anchors are retired only after the target business path and private
+delete intent are gone and the exact tombstone/member/user/bytes/SHA still match.
+No ciphertext is decrypted or re-encrypted by a node; its descriptor/file-ID
+retirement preserves existing nonce/tombstone semantics.
+
+The joined shadow worker, native-only authenticated RPC, cancellation controller
+and dual-peer unit completion now dispatch both media and fully bound recordings.
+Source full-byte proof remains required before target deletion. Cancellation
+keeps the original Master/source recording owner, source ready state and personal
+user quota; target used capacity is refunded once by the recording transaction.
+
+`2026-10-12-cancellation-recording-shadow-files.txt` verifies actual plaintext and
+encrypted footer files, corrupt disk bytes, failed audit recovery and restart
+before/after SQL deletion commit with expired actors. Successful replay proves
+business/private/intended-delete bytes gone, original identity/SHA tombstones
+retained and one refund audit. `2026-10-12-cancellation-recording-shadow-runner.txt`
+records actual authenticated Gin/raw-HMAC copy/publication, failed Master cutover,
+cancellation, lost deletion/unit/final receipts, source business download and
+client AES decryption after cancellation. Full Go regression is in
+`2026-10-12-cancellation-recording-shadow-full-go.txt`. Repository/MySQL admission
+and encrypted refund/tombstone evidence remains in the preceding recording
+admission audit; these router fixtures are SQLite and are not native TLS/fleet/
+browser acceptance.
+
+Original remaining scope is still active: interrupted publication windows,
+full/unwritable initial cancel admission, mixed/reverse/fleet cancellation,
+authenticated physical backup/orphan inventories and independent retirement,
+GUI/CLI, approved upgrade, coordinated recovery and full multi-node/browser/
+resource-bound acceptance. Production migration capability is unadvertised.

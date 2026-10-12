@@ -35,12 +35,21 @@ func readMigrationIntent(f *os.File) (j journal, e error) {
 // Cleanup uses the same private recording journal and tombstone transaction as
 // ordinary deletion. The persisted Master grant is checked again before staging.
 func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, peer store.MigrationPeerRepository) error {
+	return s.migrationDeleteAuthorized(ctx, relationship, l, id, peer, "cleanup")
+}
+func (s *Storage) MigrationShadowCleanupAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, peer store.MigrationPeerRepository) error {
+	return s.migrationDeleteAuthorized(ctx, relationship, l, id, peer, "shadow")
+}
+
+// Source cleanup and cancellation shadows use the same full byte/footer
+// verification and durable recording deletion journal.
+func (s *Storage) migrationDeleteAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, peer store.MigrationPeerRepository, operation string) error {
 	unlock, e := s.Lock(id)
 	if e != nil {
 		return e
 	}
 	defer unlock()
-	v, e := peer.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup")
+	v, e := peer.AuthorizePeerMigration(ctx, relationship, l, id, operation)
 	if e != nil {
 		return e
 	}
@@ -58,7 +67,7 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		if e != nil {
 			return e
 		}
-		return s.migrationHistory(ctx, relationship, l, v, peer)
+		return s.finishMigrationHistory(ctx, relationship, l, v, peer, operation)
 	}
 	if v.State != "deleting" {
 		return store.ErrMigrationState
@@ -132,7 +141,7 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if e = s.ready(); e != nil {
 		return e
 	}
-	if _, e = peer.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup"); e != nil {
+	if _, e = peer.AuthorizePeerMigration(ctx, relationship, l, id, operation); e != nil {
 		return e
 	}
 	current, e := s.info(v.Object.Path)
@@ -156,7 +165,52 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	}
 	release()
 	held = false
-	return s.migrationHistory(ctx, relationship, l, v, peer)
+	return s.finishMigrationHistory(ctx, relationship, l, v, peer, operation)
+}
+
+// Only this target task's private publication anchor is reclaimed after its
+// business file and recording intent are durably gone. Source history is kept.
+func (s *Storage) finishMigrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, peer store.MigrationPeerRepository, operation string) error {
+	if operation != "shadow" {
+		return s.migrationHistory(ctx, relationship, l, v, peer)
+	}
+	r, e := migrationdata.New(s.root, v.Header.TargetID, "recording")
+	if e != nil {
+		return e
+	}
+	o := v.Object
+	spec := migrationdata.Spec{TaskID: l.TaskID, MasterID: v.Header.MasterID, SourceID: v.Header.SourceID, TargetID: v.Header.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: v.Proof.SHA256, Encryption: o.Encryption, Recording: o.Recording}
+	return r.RetireDeletedAnchor(ctx, spec, func() error {
+		current, e := peer.AuthorizePeerMigration(ctx, relationship, l, o.ID, "shadow")
+		if e != nil {
+			return e
+		}
+		if current.State != "deleted" {
+			return store.ErrMigrationState
+		}
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		if _, e = s.info(o.TargetPath); !errors.Is(e, os.ErrNotExist) {
+			if e != nil {
+				return e
+			}
+			return store.ErrMigrationState
+		}
+		row, e := s.repo.Recording(ctx, o.ID)
+		if e != nil {
+			return e
+		}
+		if row == nil || row.State != "deleted" || row.MemberID != v.Header.TargetID || row.UserID != o.Parent || row.Bytes != o.Bytes || row.SHA256 == nil || *row.SHA256 != v.Proof.SHA256 {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
 }
 
 func (s *Storage) migrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository) error {

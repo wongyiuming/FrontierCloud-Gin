@@ -92,7 +92,12 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			case job := <-jobs:
 				v := job.request
 				if job.operation == "shadow" {
-					e := volume.MigrationShadowCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{})
+					var e error
+					if v.Spec.Resource == "recording" && recordings != nil {
+						e = recordings.MigrationShadowCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo)
+					} else {
+						e = volume.MigrationShadowCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{})
+					}
 					if e != nil && ctx.Err() == nil {
 						_ = repo.FailPeerMigrationShadowCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
 					}
@@ -413,7 +418,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 	})
 	register("shadow", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
-		if settings.NginxMedia || v.Spec.Resource != "media" {
+		if settings.NginxMedia || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
 			return nil, store.ErrMigrationState
 		}
 		if v.ShadowGrant != nil {
@@ -444,7 +449,13 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return nil, e
 		}
 		if p.State == "deleted" {
-			finished, e := volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			var finished bool
+			var e error
+			if v.Spec.Resource == "recording" {
+				finished, e = recordings.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			} else {
+				finished, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			}
 			if e != nil {
 				return nil, e
 			}
@@ -663,7 +674,11 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				if object.State == "deleted" {
 					finished = e == nil && cp.State == "published" && cp.AnchorRetired && !cp.AnchorRetiring
 					if finished {
-						finished, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, o.ID)
+						if o.Resource == "recording" && recordings != nil {
+							finished, e = recordings.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, o.ID)
+						} else {
+							finished, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, o.ID)
+						}
 					}
 				}
 				if e != nil || !finished {

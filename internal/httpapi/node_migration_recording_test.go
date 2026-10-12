@@ -45,6 +45,12 @@ func TestAuthenticatedRecordingCleanupPreservesTargetFooterAndPersonalQuota(t *t
 	}
 }
 
+func TestAuthenticatedRecordingPublishedShadowCancellation(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, true) })
+	}
+}
+
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
@@ -175,6 +181,78 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 		}
 		fault := &runnerFaultCaller{client: master, reads: map[int64]int{}}
 		engine := &resourcemigration.Runner{Repository: repo, Nodes: mdb.Nodes(), Client: fault}
+		if len(cleanup) > 1 && cleanup[1] {
+			if _, e = mdb.Database().Exec("CREATE TRIGGER block_record_shadow_cutover BEFORE UPDATE ON migration_units WHEN NEW.state='cleanup_pending' BEGIN SELECT RAISE(ABORT,'cutover unavailable'); END"); e != nil {
+				t.Fatal(e)
+			}
+			t.Cleanup(func() { mdb.Database().Exec("DROP TRIGGER IF EXISTS block_record_shadow_cutover") })
+			if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e == nil {
+				t.Fatal("recording cutover failure ignored")
+			}
+			if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
+			fault.lostShadow = true
+			fault.lostCancelUnit = true
+			fault.lostCancelTask = true
+			for attempt := 0; attempt < 4; attempt++ {
+				e = engine.Run(ctx, plan.ID, strings.Repeat([]string{"e", "f", "1", "2"}[attempt], 32))
+				if attempt < 3 {
+					if e == nil {
+						t.Fatal("record shadow receipt loss ignored", attempt)
+					}
+					if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+						t.Fatal(e)
+					}
+				} else if e != nil {
+					t.Fatal("record shadow recovery", e)
+				}
+			}
+			work, e := repo.MigrationWork(ctx, plan.ID)
+			if e != nil || work.Task.State != "cancelled" || work.Task.CommittedBytes != 0 || work.Objects[0].State != "cancelled" {
+				t.Fatal(work, e)
+			}
+			row, e := mdb.Recordings().Recording(ctx, id)
+			if e != nil || row.MemberID != srel.PeerID || row.State != "ready" {
+				t.Fatal("record cancellation changed source owner", row, e)
+			}
+			token, e := master.RecordingCapability(ctx, *row, store.StorageMember{ID: srel.PeerID, RelationshipID: &srid}, "download")
+			if e != nil {
+				t.Fatal(e)
+			}
+			request := httptest.NewRequest("GET", "https://source.test/internal/v1/recordings/"+id, nil)
+			request.Header.Set("X-Recording-Capability", token)
+			response := httptest.NewRecorder()
+			transport.routers["https://source.test"].ServeHTTP(response, request)
+			if response.Code != 200 || !bytes.Equal(response.Body.Bytes(), payload) {
+				t.Fatal("source recording bytes after cancellation", response.Code)
+			}
+			footer := recording.Metadata(bytes.NewReader(response.Body.Bytes()), int64(response.Body.Len()))
+			if encrypted {
+				cipherBytes, e := base64.StdEncoding.DecodeString(footer.EncryptedLyrics.Ciphertext)
+				if e != nil {
+					t.Fatal(e)
+				}
+				meta := footer.EncryptedLyrics.Encryption
+				nonce, _ := meta.ChunkNonce(0)
+				decoded, e := aead.Open(nil, nonce, cipherBytes, meta.ChunkAAD(0))
+				if e != nil || !bytes.Equal(decoded, plaintext) {
+					t.Fatal("client encrypted footer after cancel", e)
+				}
+			}
+			if _, e = os.Stat(filepath.Join(targetDir, "recordings", o.TargetPath)); !errors.Is(e, os.ErrNotExist) {
+				t.Fatal("target recording shadow remains", e)
+			}
+			var used, reserved, personal int64
+			if e = tdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", trel.PeerID).Scan(&used, &reserved); e != nil || used != 0 || reserved != 0 {
+				t.Fatal(used, reserved, e)
+			}
+			if e = mdb.Database().QueryRow("SELECT used_bytes FROM karaoke_users WHERE user_id=?", user.ID).Scan(&personal); e != nil || personal != o.Bytes {
+				t.Fatal("personal recording quota changed", personal, e)
+			}
+			t.Logf("recording shadow cancellation bytes=%d encrypted=%v; source business read/client decryption and lost receipts recovered", o.Bytes, encrypted)
+			return
+		}
 		if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e != nil {
 			t.Fatal(e)
 		}

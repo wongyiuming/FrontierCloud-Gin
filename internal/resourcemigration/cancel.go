@@ -132,7 +132,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 			o := cp.Object
 			spec := migrationdata.Spec{TaskID: id, MasterID: h.MasterID, SourceID: h.SourceID, TargetID: h.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}
 			response, e := r.request(ctx, target, prefix+"data/abort", migrationdata.Request{Lease: l, Spec: spec})
-			if errors.Is(e, node.ErrRemoteConflict) && o.Resource == "media" {
+			if errors.Is(e, node.ErrRemoteConflict) && (o.Resource == "media" || o.Resource == "recording" && o.Recording != nil) {
 				proof, err := r.FreshCancellationSourceProof(ctx, l, o.ID)
 				if err != nil {
 					return err

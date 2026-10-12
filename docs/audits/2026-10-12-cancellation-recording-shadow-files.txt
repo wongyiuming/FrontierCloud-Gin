@@ -1,0 +1,30 @@
+=== RUN   TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit
+=== RUN   TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit/prepared
+=== RUN   TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit/committed
+--- PASS: TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit (0.53s)
+    --- PASS: TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit/prepared (0.27s)
+    --- PASS: TestRecordingMigrationIntentRecoveryBeforeAndAfterCommit/committed (0.27s)
+=== RUN   TestRecordingShadowFilesFooterAndRecovery
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/plain/none
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/plain/corrupt
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/plain/audit
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/plain/restart_intent
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/plain/restart_committed
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/encrypted/none
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/encrypted/corrupt
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/encrypted/audit
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/encrypted/restart_intent
+=== RUN   TestRecordingShadowFilesFooterAndRecovery/encrypted/restart_committed
+--- PASS: TestRecordingShadowFilesFooterAndRecovery (3.68s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/plain/none (0.36s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/plain/corrupt (0.37s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/plain/audit (0.40s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/plain/restart_intent (0.35s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/plain/restart_committed (0.35s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/encrypted/none (0.36s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/encrypted/corrupt (0.36s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/encrypted/audit (0.42s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/encrypted/restart_intent (0.35s)
+    --- PASS: TestRecordingShadowFilesFooterAndRecovery/encrypted/restart_committed (0.35s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	5.233s
