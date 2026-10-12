@@ -4,6 +4,7 @@ import json
 import pathlib
 import time
 from playwright.sync_api import sync_playwright
+from admin_focus_browser import verify_live_navigation
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--base-url', required=True)
@@ -193,6 +194,9 @@ with sync_playwright() as driver:
     assert phone.locator('[data-module-target="priority"]').get_attribute('aria-current') == 'true'
     phone.screenshot(path=str(args.output / 'mobile.png'))
     proof.append('real-touch-drag-mobile-layout-and-reduced-motion')
+    verify_live_navigation(page)
+    verify_live_navigation(phone)
+    proof.append('bidirectional-live-module-navigation-desktop-and-mobile')
     assert not errors, errors
     context.close(); mobile.close(); browser.close()
 pathlib.Path(args.output, 'result.json').write_text(json.dumps({'passed': proof, 'browser_errors': errors}, ensure_ascii=False, indent=2))
