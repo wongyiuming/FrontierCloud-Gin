@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 snapshots and
+manifest gates advance to generation 6. Historical generation 2ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -1035,3 +1035,35 @@ This is the safety prerequisite for managed target-shadow deletion. The target
 admission, managed file deletion/recovery, private anchor removal and mixed
 used/reserved reconciliation for published shadows are still outstanding.
 Production capability remains unadvertised and the full original goal continues.
+
+
+## Durable published media shadow deletion admission (2026-10-12)
+
+The target repository now validates a cancellation shadow grant against its
+active upstream Master/runner, complete registered roster, immutable full unit
+digest, exact media binding, original source SHA/version/length and fresh source
+proof. Committed units, wrong parents/paths, stale initial proofs and live target
+read leases are rejected. Admission records a pending, zero-commit cancellation
+unit and changes only the exact published target journal to deleting; no bytes,
+capacity or business ownership change at this point. Existing deleting/deleted
+admission can be replayed without renewing an already durable deletion intent.
+
+The normal managed media deletion prepare/commit path accepts this exact durable
+target shadow grant. It consumes only the matching task/object publication ledger
+and refunds local used capacity in the same transaction as metadata retirement,
+physical deletion journal and audit. Ordinary deletion cannot bypass the grant,
+and an expired actor does not prevent recovery of a previously prepared durable
+file transaction. Native read admission now blocks deleting/deleted target
+shadows as well as source copies, including physical aliases.
+
+`2026-10-12-cancellation-shadow-admission-go.txt` tests SQL admission, live/new
+reads, failed refund rollback and repeated commit. The same tests run against real
+SQLite/MySQL in `2026-10-12-cancellation-shadow-admission-mysql.txt`; full Go
+regression is in `2026-10-12-cancellation-shadow-admission-full-go.txt`. These
+backend tests do not prove physical file quarantine or private-anchor removal.
+
+Remaining integration: native media shadow file adapter and bounded worker RPC,
+actual target bytes/anchor recovery, cancellation unit reconciliation of deleted
+shadows versus unpublished aborted reservations, recording shadows and publication
+crash windows. No production capability is advertised and no completed-shadow
+cancellation is claimed yet. The full original delivery goal remains active.

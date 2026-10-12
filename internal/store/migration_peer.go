@@ -32,6 +32,7 @@ type MigrationPeerRepository interface {
 	VerifyPeerMigrationObject(context.Context, string, MigrationLease, string, int64, string) error
 	CompletePeerMediaPublication(context.Context, string, MigrationLease, string, MediaObject, int64, string, int64, NodeAudit) error
 	CompletePeerRecordingPublication(context.Context, string, MigrationLease, string, RecordingReceipt, int64, NodeAudit) error
+	PreparePeerMigrationShadowDeletion(context.Context, string, MigrationLease, MigrationShadowGrant, NodeAudit) error
 	PreparePeerMigrationCleanup(context.Context, string, MigrationLease, MigrationCleanupGrant, NodeAudit) error
 	PreparePeerMediaDelete(context.Context, string, MigrationLease, DeleteOperation, NodeAudit) error
 	FailPeerMigrationCleanup(context.Context, string, MigrationLease, string, NodeAudit) error

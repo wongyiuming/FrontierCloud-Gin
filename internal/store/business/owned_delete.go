@@ -30,6 +30,9 @@ func (r *Repository) ownedDeleteAccounting(ctx context.Context, q queryer, membe
 	err := q.QueryRowContext(ctx, "SELECT expected_bytes FROM cluster_upload_sessions WHERE media_id=? AND storage_member_id=? AND state='complete'"+r.lock(), item.OwnedID, member).Scan(&size)
 	// Migration publication has its own durable accounting journal rather than
 	// an ordinary upload session. It still owns the same stable physical ID.
+	if errors.Is(err, sql.ErrNoRows) && item.MigrationTask != "" && item.MigrationLogical != "" {
+		err = q.QueryRowContext(ctx, "SELECT expected_bytes FROM migration_storage_journal WHERE task_id=? AND logical_id=? AND target_id=? AND object_id=? AND resource_kind='media' AND state='deleting'"+r.lock(), item.MigrationTask, item.MigrationLogical, member, item.OwnedID).Scan(&size)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		err = q.QueryRowContext(ctx, "SELECT expected_bytes FROM migration_storage_journal WHERE target_id=? AND object_id=? AND resource_kind='media' AND state='published' ORDER BY updated_at DESC,task_id DESC LIMIT 1"+r.lock(), member, item.OwnedID).Scan(&size)
 		if errors.Is(err, sql.ErrNoRows) {

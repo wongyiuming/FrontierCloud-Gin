@@ -16,7 +16,7 @@ const migrationReadSeconds = 300
 
 func (r *Repository) migrationReadAllowed(ctx context.Context, q queryer, member, physical string) error {
 	var count int
-	if e := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_storage_journal j JOIN migration_tasks t ON t.task_id=j.task_id WHERE j.source_id=? AND j.object_id=? AND j.state IN ('deleting','deleted') AND t.state NOT IN ('completed','cancelled')", member, physical).Scan(&count); e != nil {
+	if e := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_storage_journal j JOIN migration_tasks t ON t.task_id=j.task_id WHERE (j.source_id=? OR j.target_id=?) AND j.object_id=? AND j.state IN ('deleting','deleted') AND t.state NOT IN ('completed','cancelled')", member, member, physical).Scan(&count); e != nil {
 		return e
 	}
 	if count != 0 {

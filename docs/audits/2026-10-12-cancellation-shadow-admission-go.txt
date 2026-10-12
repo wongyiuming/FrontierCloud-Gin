@@ -1,0 +1,4 @@
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+--- PASS: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (0.23s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.251s

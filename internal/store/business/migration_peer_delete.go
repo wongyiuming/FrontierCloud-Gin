@@ -15,18 +15,26 @@ func (r *Repository) checkPeerMediaDelete(ctx context.Context, q queryer, member
 	if !nodeIDPattern.MatchString(item.MigrationTask) || !nodeHashPattern.MatchString(item.MigrationLogical) || item.Absent || item.GlobalID != "" {
 		return store.ErrMigrationState
 	}
-	h, _, e := r.peerHeader(ctx, q, item.MigrationTask)
+	h, taskState, e := r.peerHeader(ctx, q, item.MigrationTask)
 	if e != nil {
 		return e
 	}
-	if h.SourceID != member {
+	shadow := h.TargetID == member
+	if h.SourceID != member && !shadow {
+		return store.ErrMigrationState
+	}
+	if shadow && taskState != "cancelling" {
 		return store.ErrMigrationState
 	}
 	o, e := r.peerObjectBinding(ctx, q, item.MigrationTask, item.MigrationLogical)
 	if e != nil {
 		return e
 	}
-	if o.Resource != "media" || o.ObjectID != item.OwnedID || o.Path != item.Path || o.Bytes != item.Bytes {
+	physical := o.Path
+	if shadow {
+		physical = o.TargetPath
+	}
+	if o.Resource != "media" || o.ObjectID != item.OwnedID || physical != item.Path || o.Bytes != item.Bytes {
 		return store.ErrMigrationState
 	}
 	var phase, version, hash string
@@ -42,14 +50,18 @@ func (r *Repository) checkPeerMediaDelete(ctx context.Context, q queryer, member
 	if e = q.QueryRowContext(ctx, "SELECT state,committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), item.MigrationTask, migrationUnit(o)).Scan(&unitState, &committed, &after); e != nil {
 		return e
 	}
-	if unitState != "cleanup_pending" || committed <= 0 || after < committed+3600 || after > time.Now().Unix() {
+	if shadow {
+		if unitState != "pending" || committed != 0 || after != 0 {
+			return store.ErrMigrationState
+		}
+	} else if unitState != "cleanup_pending" || committed <= 0 || after < committed+3600 || after > time.Now().Unix() {
 		return store.ErrMigrationState
 	}
 	var name, kind string
 	if e = q.QueryRowContext(ctx, "SELECT media_path,object_kind FROM media_objects WHERE media_id=?"+r.lock(), o.ObjectID).Scan(&name, &kind); e != nil {
 		return e
 	}
-	if name != o.Path || kind != o.Kind {
+	if name != physical || kind != o.Kind {
 		return store.ErrMigrationState
 	}
 	enc, e := readEncryption(ctx, q, o.ObjectID, r.lock())
@@ -86,7 +98,7 @@ func (r *Repository) PreparePeerMediaDelete(ctx context.Context, relationship st
 		if e != nil {
 			return e
 		}
-		if n.ID != h.SourceID {
+		if n.ID != h.SourceID && n.ID != h.TargetID {
 			return store.ErrMigrationState
 		}
 		if e = r.checkPeerMediaDelete(ctx, q, n.ID, item); e != nil {

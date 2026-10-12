@@ -328,10 +328,10 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 			if state != "cancelling" || n.ID != h.TargetID {
 				return store.ErrMigrationState
 			}
-		} else if state == "cancelling" && operation != "cleanup" && operation != "recheck" && operation != "retire" && operation != "status" && operation != "cancel-read" {
+		} else if state == "cancelling" && operation != "cleanup" && operation != "recheck" && operation != "retire" && operation != "status" && operation != "cancel-read" && operation != "shadow" {
 			return store.ErrMigrationState
 		}
-		if operation != "read" && operation != "cancel-read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "retire" && operation != "abort" {
+		if operation != "read" && operation != "cancel-read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "retire" && operation != "abort" && operation != "shadow" {
 			return store.ErrMigrationState
 		}
 		sourceAction := operation == "read" || operation == "cancel-read" || operation == "cleanup"
@@ -349,10 +349,13 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		if e = q.QueryRowContext(ctx, "SELECT logical_id,object_id,resource_kind,physical_path,source_version,expected_bytes,sha256,state FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, id).Scan(&v.Object.ID, &v.Object.ObjectID, &v.Object.Resource, &v.Object.Path, &v.Object.Version, &v.Object.Bytes, &v.Proof.SHA256, &phase); e != nil {
 			return e
 		}
-		if phase == "deleted" && operation != "cleanup" || phase == "aborted" && operation != "abort" {
+		if phase == "deleted" && operation != "cleanup" && operation != "shadow" || phase == "aborted" && operation != "abort" {
 			return store.ErrMigrationState
 		}
 		if operation == "abort" && phase != "receiving" && phase != "verified" && phase != "aborting" && phase != "aborted" {
+			return store.ErrMigrationState
+		}
+		if operation == "shadow" && (state != "cancelling" || phase != "deleting" && phase != "deleted") {
 			return store.ErrMigrationState
 		}
 		if operation == "cancel-read" && (state != "cancelling" || phase != "receiving") {
