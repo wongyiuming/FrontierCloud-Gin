@@ -49,15 +49,17 @@ type Spec struct {
 	Recording     *store.RecordingProof `json:"recording_binding,omitempty"`
 }
 type Checkpoint struct {
-	Version      int    `json:"version"`
-	Spec         Spec   `json:"binding"`
-	Offset       int64  `json:"offset"`
-	PrefixSHA    string `json:"prefix_sha256"`
-	HashState    []byte `json:"-"`
-	State        string `json:"state"`
-	RecheckID    string `json:"recheck_id,omitempty"`
-	RecheckedAt  int64  `json:"rechecked_at,omitempty"`
-	RecheckError string `json:"recheck_error,omitempty"`
+	Version        int    `json:"version"`
+	Spec           Spec   `json:"binding"`
+	Offset         int64  `json:"offset"`
+	PrefixSHA      string `json:"prefix_sha256"`
+	HashState      []byte `json:"-"`
+	State          string `json:"state"`
+	RecheckID      string `json:"recheck_id,omitempty"`
+	RecheckedAt    int64  `json:"rechecked_at,omitempty"`
+	RecheckError   string `json:"recheck_error,omitempty"`
+	AnchorRetiring bool   `json:"anchor_retiring,omitempty"`
+	AnchorRetired  bool   `json:"anchor_retired,omitempty"`
 }
 type journalRecord struct {
 	Checkpoint
@@ -174,6 +176,9 @@ func (r *Receiver) load(s Spec) (Checkpoint, error) {
 		return c, ErrState
 	}
 	var extra any
+	if (c.AnchorRetiring || c.AnchorRetired) && c.State != "published" || c.AnchorRetiring && c.AnchorRetired {
+		return c, ErrState
+	}
 	if d.Decode(&extra) != io.EOF {
 		return c, ErrState
 	}
@@ -291,6 +296,9 @@ func (r contextReader) Read(p []byte) (int, error) {
 }
 func (r *Receiver) inspect(ctx context.Context, c Checkpoint) (Checkpoint, error) {
 	name, _, _ := names(c.Spec)
+	return r.inspectName(ctx, c, name)
+}
+func (r *Receiver) inspectName(ctx context.Context, c Checkpoint, name string) (Checkpoint, error) {
 	f, e := r.private(name, os.O_RDONLY)
 	if e != nil {
 		return c, e
@@ -314,6 +322,79 @@ func (r *Receiver) inspect(ctx context.Context, c Checkpoint) (Checkpoint, error
 		return c, ErrState
 	}
 	return c, nil
+}
+
+// RetireAnchor removes only the private hard-link anchor. The immutable receipt
+// stays published. A durable intent distinguishes an interrupted unlink from an
+// unexplained missing anchor; recovery rehashes the surviving business file.
+func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() error, validate func(string, bool) error) (Checkpoint, error) {
+	if !r.valid(s) || admission == nil || validate == nil {
+		return Checkpoint{}, ErrState
+	}
+	release, e := r.lock(ctx, s)
+	if e != nil {
+		return Checkpoint{}, e
+	}
+	defer release()
+	c, e := r.load(s)
+	if e != nil {
+		return c, e
+	}
+	if c.State != "published" || c.Offset != s.Bytes || c.PrefixSHA != s.SHA256 {
+		return c, ErrState
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	name, _, _ := names(s)
+	_, e = r.root.Lstat(name)
+	exists := e == nil
+	if e != nil && !errors.Is(e, os.ErrNotExist) {
+		return c, e
+	}
+	if !exists && !c.AnchorRetiring && !c.AnchorRetired {
+		return c, ErrState
+	}
+	if c.AnchorRetired && exists {
+		return c, ErrState
+	}
+	if e = validate(name, exists); e != nil {
+		return c, e
+	}
+	if exists {
+		_, e = r.inspect(ctx, c)
+	} else {
+		_, e = r.inspectName(ctx, c, s.TargetPath)
+	}
+	if e != nil {
+		return c, e
+	}
+	if e = validate(name, exists); e != nil {
+		return c, e
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	if c.AnchorRetired {
+		return c, nil
+	}
+	if !c.AnchorRetiring {
+		c.AnchorRetiring = true
+		if e = r.save(c); e != nil {
+			return c, e
+		}
+	}
+	if exists {
+		if e = r.root.Remove(name); e != nil {
+			return c, e
+		}
+	}
+	if e = fsutil.SyncDirectory(r.root, "."); e != nil {
+		return c, e
+	}
+	c.AnchorRetired = true
+	c.AnchorRetiring = false
+	return c, r.save(c)
 }
 
 // Append accepts one fixed bounded chunk. Duplicate requests compare actual
@@ -564,6 +645,9 @@ func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, 
 	if c.State != "verified" && c.State != "publishing" && c.State != "published" {
 		return c, ErrState
 	}
+	if c.AnchorRetiring || c.AnchorRetired {
+		return c, ErrState
+	}
 	if e = admission(); e != nil {
 		return c, e
 	}
@@ -614,10 +698,20 @@ func (r *Receiver) Recheck(ctx context.Context, s Spec, id string, admission fun
 		c.RecheckError = "disk_verification_failed"
 		return c, errors.Join(cause, r.save(c))
 	}
-	if _, e = r.inspect(ctx, c); e != nil {
+	name, _, _ := names(s)
+	if c.AnchorRetired || c.AnchorRetiring {
+		_, err := r.root.Lstat(name)
+		if errors.Is(err, os.ErrNotExist) {
+			name = s.TargetPath
+		} else if err != nil {
+			return failed(err)
+		} else if c.AnchorRetired {
+			return failed(ErrState)
+		}
+	}
+	if _, e = r.inspectName(ctx, c, name); e != nil {
 		return failed(e)
 	}
-	name, _, _ := names(s)
 	if e = published(name); e != nil {
 		return failed(e)
 	}

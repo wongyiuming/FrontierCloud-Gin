@@ -30,6 +30,49 @@ func (s *Service) MigrationReceiver(ctx context.Context) (*migrationdata.Receive
 	return migrationdata.New(s.root, n.ID, "media")
 }
 
+// The caller supplies a fenced post-cutover admission. This retires only the
+// private publication anchor; metadata, business bytes and quota are unchanged.
+func (s *Service) MigrationRetireAnchor(ctx context.Context, spec migrationdata.Spec, admission func() error) (migrationdata.Checkpoint, error) {
+	r, e := s.MigrationReceiver(ctx)
+	if e != nil {
+		return migrationdata.Checkpoint{}, e
+	}
+	return r.RetireAnchor(ctx, spec, admission, func(stage string, exists bool) error {
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		target, e := s.safeInfo(spec.TargetPath)
+		if e != nil {
+			return e
+		}
+		if target.Size() != spec.Bytes {
+			return store.ErrMigrationState
+		}
+		if exists {
+			anchor, e := s.root.Lstat(stage)
+			if e != nil {
+				return e
+			}
+			if !anchor.Mode().IsRegular() || !os.SameFile(anchor, target) {
+				return store.ErrMigrationState
+			}
+		}
+		o, e := s.repository.ObjectByID(ctx, spec.ObjectID)
+		if e != nil {
+			return e
+		}
+		if o == nil || o.Path != spec.TargetPath || (o.Encryption == nil) != (spec.Encryption == nil) || o.Encryption != nil && *o.Encryption != *spec.Encryption {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}
+
 // MigrationPublish adopts verified bytes without another file-sized copy or
 // upload reservation. A private hard-link anchor remains until task cleanup.
 func (s *Service) MigrationPublish(ctx context.Context, spec migrationdata.Spec, admission func() error, complete func(store.MediaObject, int64) error) (migrationdata.Checkpoint, error) {

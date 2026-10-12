@@ -24,6 +24,51 @@ func (s *Storage) MigrationReceiver(ctx context.Context) (*migrationdata.Receive
 	return migrationdata.New(s.root, n.ID, "recording")
 }
 
+func (s *Storage) MigrationRetireAnchor(ctx context.Context, spec migrationdata.Spec, admission func() error) (migrationdata.Checkpoint, error) {
+	if spec.Recording == nil {
+		return migrationdata.Checkpoint{}, store.ErrMigrationState
+	}
+	r, e := s.MigrationReceiver(ctx)
+	if e != nil {
+		return migrationdata.Checkpoint{}, e
+	}
+	return r.RetireAnchor(ctx, spec, admission, func(stage string, exists bool) error {
+		release, e := s.acquire(ctx, false)
+		if e != nil {
+			return e
+		}
+		defer release()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		target, e := s.info(spec.TargetPath)
+		if e != nil {
+			return e
+		}
+		if target.Size() != spec.Bytes {
+			return store.ErrMigrationState
+		}
+		if exists {
+			anchor, e := s.info(stage)
+			if e != nil {
+				return e
+			}
+			if !os.SameFile(anchor, target) {
+				return store.ErrMigrationState
+			}
+		}
+		v, e := s.repo.Recording(ctx, spec.LogicalID)
+		if e != nil {
+			return e
+		}
+		p := spec.Recording
+		if v == nil || v.State != "ready" || v.UserID != p.UserID || v.Filename != p.Filename || v.ContentType != p.ContentType || v.Bytes != spec.Bytes || v.SHA256 == nil || *v.SHA256 != spec.SHA256 || !store.RecordingProofSnapshotMatches(*p, &store.RecordingMetadata{Title: v.Title, Lyrics: v.Lyrics, EncryptedLyrics: v.EncryptedLyrics}) {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}
+
 // MigrationPublish adopts verified opaque recording bytes under the existing
 // volume coordinator; it never copies an account, password or quota authority.
 func (s *Storage) MigrationPublish(ctx context.Context, spec migrationdata.Spec, admission func() error, complete func(store.RecordingReceipt, int64) error) (migrationdata.Checkpoint, error) {

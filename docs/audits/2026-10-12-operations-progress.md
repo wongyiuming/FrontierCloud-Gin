@@ -692,6 +692,40 @@ whole-task completion/cancellation, physical eligibility/inventories, retirement
 GUI/CLI, upgrade and full native five-node/browser acceptance remain required.
 Production still does not advertise the unfinished migration capability.
 
+## Durable publication-anchor retirement component
+
+The byte receiver can now retire a verified published private hard-link anchor
+without changing business metadata, authority or quota. It checks actual complete
+SHA/length and the same business inode through the volume adapter, persists a
+retiring intent before unlink, syncs the directory, then persists retirement.
+Only that exact task/object private file is removed. The published checkpoint
+and small lock/journal files remain as immutable reconciliation evidence.
+
+An unexplained missing anchor is rejected. Restart before unlink rechecks the
+private inode; restart after unlink is accepted only with the durable intent and
+rehashes the actual surviving business file. Replacement by an unrelated inode
+or corruption blocks normal retirement. Replayed retirement verifies bytes and
+never deletes the business path. A fresh recheck after retirement hashes the
+business file and retains the same request-ID freshness contract. Publication
+replay cannot recreate a retiring/retired anchor. Media and recording adapters
+also check current exact ID/path/descriptors under brief shared volume leases.
+
+Actual filesystem/race tests cover normal unlink, missing anchor without intent,
+restart before/after unlink, same-byte different-inode replacement, corruption,
+replay and fresh post-retirement disk recheck. See [anchor recovery/race evidence](2026-10-12-publication-anchor-retirement.txt)
+and [full Go regression](2026-10-12-publication-anchor-retirement-go.txt). Source CI
+passed 201 Python tests (two optional skips) and existing JavaScript smoke checks
+within the unchanged hosted budget.
+The adapters have no public grant-input shortcut and are not yet dispatched by
+the Master runner. These component tests are not complete task, native TLS or
+fleet acceptance. No database constraint or schema generation changed.
+
+Required next work is authenticated post-source-deletion admission, durable
+Master/peer completion receipts, historical source-anchor reconciliation, scope/
+capacity release and explicit drain release, followed by cancellation, inventories,
+retirement, GUI/CLI and the remaining full-scope acceptance. Whole tasks continue
+to remain cleanup pending; production does not advertise the unfinished capability.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
