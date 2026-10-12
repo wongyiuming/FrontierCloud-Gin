@@ -1,0 +1,111 @@
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted
+--- PASS: TestResourceMigrationGenerationFourUpgrade (14.72s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.21s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.25s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (3.35s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (3.53s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve (0.28s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted (0.22s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve (3.29s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted (3.58s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	15.737s
+=== RUN   TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt
+--- PASS: TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt (4.13s)
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+--- PASS: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (0.08s)
+=== RUN   TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain
+--- PASS: TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain (0.44s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+--- PASS: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (0.52s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+--- PASS: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (0.41s)
+=== RUN   TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain
+--- PASS: TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain (0.48s)
+=== RUN   TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce
+--- PASS: TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce (0.42s)
+=== RUN   TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts
+--- PASS: TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts (0.50s)
+=== RUN   TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof
+--- PASS: TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof (0.39s)
+=== RUN   TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund
+--- PASS: TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund (0.16s)
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+--- PASS: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (0.15s)
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+--- PASS: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (0.27s)
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+--- PASS: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.23s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+--- PASS: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (0.18s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+--- PASS: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (0.12s)
+=== RUN   TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations
+--- PASS: TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations (0.12s)
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source
+--- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget (0.28s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target (0.14s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source (0.15s)
+=== RUN   TestPeerMigrationEmptyCancellationReceiptReplay
+--- PASS: TestPeerMigrationEmptyCancellationReceiptReplay (0.09s)
+=== RUN   TestPeerMigrationCancellationSourceProofReadIsTaskStateBound
+--- PASS: TestPeerMigrationCancellationSourceProofReadIsTaskStateBound (0.15s)
+=== RUN   TestPeerMigrationPublicationRollbackAndReplay
+--- PASS: TestPeerMigrationPublicationRollbackAndReplay (0.17s)
+=== RUN   TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive
+--- PASS: TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive (0.18s)
+=== RUN   TestPeerMigrationConcurrentReadAdmissionAndCleanup
+--- PASS: TestPeerMigrationConcurrentReadAdmissionAndCleanup (0.13s)
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+--- PASS: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (0.18s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+--- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (0.49s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (0.24s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (0.25s)
+=== RUN   TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary
+--- PASS: TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary (0.16s)
+=== RUN   TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor
+--- PASS: TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor (0.14s)
+=== RUN   TestResourceMigrationRunnerSchedulingFailureAndEpochFence
+--- PASS: TestResourceMigrationRunnerSchedulingFailureAndEpochFence (0.38s)
+=== RUN   TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority
+--- PASS: TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority (0.46s)
+=== RUN   TestResourceMigrationReadOnlyCatalogAtomicStartAndFences
+--- PASS: TestResourceMigrationReadOnlyCatalogAtomicStartAndFences (0.48s)
+=== RUN   TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof
+--- PASS: TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof (0.20s)
+=== RUN   TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata
+--- PASS: TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata (0.24s)
+=== RUN   TestResourceMigrationTargetsAndSplitOwnershipAreReported
+--- PASS: TestResourceMigrationTargetsAndSplitOwnershipAreReported (0.17s)
+=== RUN   TestResourceMigrationConcurrentPlansCannotOversellTarget
+--- PASS: TestResourceMigrationConcurrentPlansCannotOversellTarget (0.20s)
+=== RUN   TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask
+--- PASS: TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask (0.19s)
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+--- PASS: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.31s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+--- PASS: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.16s)
+=== RUN   TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority
+--- PASS: TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority (0.06s)
+=== RUN   TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation
+--- PASS: TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation (0.08s)
+=== RUN   TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification
+--- PASS: TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification (0.04s)
+=== RUN   TestPeerRetirementLedgerMasterResourcesAndOfflineMember
+--- PASS: TestPeerRetirementLedgerMasterResourcesAndOfflineMember (0.17s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	14.770s
+PASS: SQLite/MySQL schema recovery, MySQL task/reservation/lease transactions and migration backup guards; byte transport remains separate acceptance

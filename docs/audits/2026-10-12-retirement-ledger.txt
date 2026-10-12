@@ -1,0 +1,32 @@
+=== RUN   TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation
+--- PASS: TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation (0.23s)
+=== RUN   TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification
+--- PASS: TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification (0.20s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.460s
+=== RUN   TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation
+2026/10/12 23:42:14 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.186 client_ip=192.0.2.1 request_id=2c1c965908b54779920f9186ae8e828f trace_id=2c1c965908b54779920f9186ae8e828f
+2026/10/12 23:42:14 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.135 client_ip=192.0.2.1 request_id=e514a6f286f74fb7b657780f9247773b trace_id=e514a6f286f74fb7b657780f9247773b
+2026/10/12 23:42:14 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.053 client_ip=192.0.2.1 request_id=8b7c78745c274afdb6ba8c48bd8637b9 trace_id=8b7c78745c274afdb6ba8c48bd8637b9
+2026/10/12 23:42:14 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=2.134 client_ip=192.0.2.1 request_id=4a84520ace4a448f9d53e5db03c9d16b trace_id=4a84520ace4a448f9d53e5db03c9d16b
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=7.221 client_ip=192.0.2.1 request_id=9f2a1a7e46514ce79f0b860eda2ad807 trace_id=9f2a1a7e46514ce79f0b860eda2ad807
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=6.786 client_ip=192.0.2.1 request_id=2dd43092006446aea651137a4dbf097b trace_id=2dd43092006446aea651137a4dbf097b
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=0.072 client_ip=192.0.2.1 request_id=22cd12733934446cae309567aeabbbb4 trace_id=22cd12733934446cae309567aeabbbb4
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.185 client_ip=192.0.2.1 request_id=c4e1fce6ab4246188ae7f4c0cd8c0933 trace_id=c4e1fce6ab4246188ae7f4c0cd8c0933
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.784 client_ip=192.0.2.1 request_id=8fed9ae1fb844b54a137653540469e68 trace_id=8fed9ae1fb844b54a137653540469e68
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.984 client_ip=192.0.2.1 request_id=aa4f3731b4e841718104f4a51b5e977d trace_id=aa4f3731b4e841718104f4a51b5e977d
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.989 client_ip=192.0.2.1 request_id=5ac11dacf2164173878a9b848b7cfaa9 trace_id=5ac11dacf2164173878a9b848b7cfaa9
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.854 client_ip=192.0.2.1 request_id=17725de89b114bd4a42d72c6c21d10e3 trace_id=17725de89b114bd4a42d72c6c21d10e3
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=429 duration_ms=2.982 client_ip=192.0.2.1 request_id=85c1f41a1a714a33ae8467413e2c2559 trace_id=85c1f41a1a714a33ae8467413e2c2559
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=17.774 client_ip=192.0.2.1 request_id=c6fd9b7eb6644fd0a193cdf4c15270d9 trace_id=c6fd9b7eb6644fd0a193cdf4c15270d9
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.33 client_ip=192.0.2.1 request_id=a1560c7e98db4e3c99cf47a092a7667a trace_id=a1560c7e98db4e3c99cf47a092a7667a
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=14.227 client_ip=192.0.2.1 request_id=ce7bc579fcbc4fecb06bafe207787190 trace_id=ce7bc579fcbc4fecb06bafe207787190
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.076 client_ip=192.0.2.1 request_id=79e1c6d563674e38a0c106df2423e28f trace_id=79e1c6d563674e38a0c106df2423e28f
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.69 client_ip=192.0.2.1 request_id=c6aaeee2ff3b43d7ba12478f9f5602a4 trace_id=c6aaeee2ff3b43d7ba12478f9f5602a4
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.89 client_ip=192.0.2.1 request_id=cf037bf6016d48e08dcb31af0afb4cdc trace_id=cf037bf6016d48e08dcb31af0afb4cdc
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.28 client_ip=192.0.2.1 request_id=3c8cad88b9a6462aac74f7fe02d96700 trace_id=3c8cad88b9a6462aac74f7fe02d96700
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.097 client_ip=192.0.2.1 request_id=40726a9905f84d11a96ba46fe6e54fdf trace_id=40726a9905f84d11a96ba46fe6e54fdf
+2026/10/12 23:42:14 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=1.647 client_ip=192.0.2.1 request_id=07064b27dd9b4cc38796eee59da8c5f3 trace_id=07064b27dd9b4cc38796eee59da8c5f3
+--- PASS: TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation (1.17s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	2.212s

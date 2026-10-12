@@ -54,5 +54,5 @@ docker run --rm --name "$run-go" --network "$network" --label "frontiercloud.tes
     -e FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
     -v "$secret_dir:/run/frontiercloud-secrets:ro" -v "$source_root:/src:ro" \
     "${cache[@]}" -w /src golang:1.26.8-bookworm \
-    sh -c 'go test -p=2 -count=1 -race -v ./internal/store/schema && go test -p=2 -count=1 -race -v ./internal/store/business -run "TestMigrationFacts|TestResourceMigration|TestPeerMigration|TestPeerPhysicalInventory|TestPeerExpectedPhysicalInventory"'
+    sh -c 'go test -p=2 -count=1 -race -v ./internal/store/schema && go test -p=2 -count=1 -race -v ./internal/store/business -run "TestMigrationFacts|TestResourceMigration|TestPeerMigration|TestPeerPhysicalInventory|TestPeerExpectedPhysicalInventory|TestPeerRetirementLedger"'
 printf 'PASS: SQLite/MySQL schema recovery, MySQL task/reservation/lease transactions and migration backup guards; byte transport remains separate acceptance\n'

@@ -212,6 +212,23 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			lastExpected = &expectedResponse{Session: session, Manifest: manifest, Presence: observations}
 			result = lastExpected
+		case "ledger":
+			if request.Sequence != 0 {
+				e = resourceinventory.ErrSession
+				break
+			}
+			if _, e = sessions.Validate(request.SessionID, request.Incarnation, binding); e != nil {
+				break
+			}
+			ledgerRepository, ok := repository.(store.RetirementRepository)
+			if !ok {
+				e = resourceinventory.ErrSession
+				break
+			}
+			result, e = ledgerRepository.RetirementLedger(ctx, rel.ID, identity.ID)
+			if e == nil {
+				_, e = sessions.Validate(request.SessionID, request.Incarnation, binding)
+			}
 		case "close":
 			if request.Sequence != 0 {
 				e = resourceinventory.ErrSession

@@ -214,6 +214,24 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e = decodeInventory(value, &backupPage); e != nil || len(backupPage.Manifest.Items) != 1 || len(backupPage.Presence) != 1 || backupPage.Manifest.Items[0].Backing != "database" || backupPage.Presence[0].State != "database_backed_unverified" {
 		t.Fatal("legacy backup backing", backupPage, e)
 	}
+	req["action"] = "ledger"
+	delete(req, "resource")
+	delete(req, "after")
+	value, e = master.Call(ctx, rel, route, req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var ledger store.RetirementLedger
+	if e = decodeInventory(value, &ledger); e != nil || ledger.DatabaseClear || !ledger.RequiresPhysicalVerification {
+		t.Fatal("authenticated ledger", ledger, e)
+	}
+	codes := map[string]bool{}
+	for _, block := range ledger.Blockers {
+		codes[block.Code] = true
+	}
+	if !codes["managed_media"] || !codes["backup_generations"] {
+		t.Fatal("native ledger omitted resources", ledger)
+	}
 	// Authentication is repeated even for a cached terminal page.
 	upstream, e := sdb.Nodes().Relationship(ctx, rid)
 	if e != nil {
