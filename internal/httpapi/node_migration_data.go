@@ -463,6 +463,84 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return gin.H{"state": "waiting"}, nil
 		}
 	})
+	router.POST("/internal/v1/resource-migration/finish-unit", func(c *gin.Context) {
+		if !nodeHTTPS(c, settings, resolver) {
+			return
+		}
+		body, ok := nodeBody(c)
+		if !ok {
+			return
+		}
+		rel, e := control.Authenticate(c.Request.Context(), c.Request.Header, c.Request.Method, c.Request.URL.RequestURI(), body, false, false)
+		if e != nil {
+			detail(c, 401, "Invalid migration relationship authentication")
+			return
+		}
+		if e = control.RequireFollower(c.Request.Context(), rel); e != nil {
+			detail(c, 403, "Unit completion requires the active upstream Master")
+			return
+		}
+		var v struct {
+			Lease store.MigrationLease           `json:"lease"`
+			Grant store.MigrationUnitFinishGrant `json:"grant"`
+		}
+		if controlJSON(body, &v) != nil {
+			detail(c, 400, "Invalid unit completion binding")
+			return
+		}
+		objects, e := repo.PeerMigrationUnitFinishWork(c.Request.Context(), rel.ID, v.Lease, v.Grant)
+		if e != nil {
+			detail(c, 409, "Unit completion conflicts with task or object state")
+			return
+		}
+		identity, e := volume.IdentityState(c.Request.Context())
+		if e != nil {
+			internalError(c, e)
+			return
+		}
+		for _, object := range objects {
+			object.Header = v.Grant.Header
+			if identity.ID == v.Grant.Header.SourceID {
+				var done bool
+				if object.Object.Resource == "recording" && recordings != nil {
+					done, e = recordings.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, object.Object.ID)
+					if e == nil && done {
+						done, e = recordings.MigrationHistoryFinished(c.Request.Context(), object)
+					}
+				} else if object.Object.Resource == "media" {
+					done, e = volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, object.Object.ID)
+					if e == nil && done {
+						done, e = volume.MigrationHistoryFinished(c.Request.Context(), object)
+					}
+				} else {
+					e = store.ErrMigrationState
+				}
+				if e != nil || !done {
+					detail(c, 409, "Source unit has retained cleanup material")
+					return
+				}
+			} else {
+				o := object.Object
+				s := migrationdata.Spec{TaskID: v.Lease.TaskID, MasterID: v.Grant.Header.MasterID, SourceID: v.Grant.Header.SourceID, TargetID: v.Grant.Header.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: object.Proof.SHA256, Encryption: o.Encryption, Recording: o.Recording}
+				r, e := receiver(c.Request.Context(), s)
+				if e != nil {
+					detail(c, 409, "Target unit receiver unavailable")
+					return
+				}
+				cp, e := r.Status(c.Request.Context(), s)
+				if e != nil || !cp.AnchorRetired || cp.AnchorRetiring || cp.AnchorError != "" {
+					detail(c, 409, "Target unit anchors are not retired")
+					return
+				}
+			}
+		}
+		receipt, e := repo.CompletePeerMigrationUnit(c.Request.Context(), rel.ID, v.Lease, v.Grant, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		if e != nil {
+			detail(c, 409, "Unit completion changed before commit")
+			return
+		}
+		c.JSON(200, receipt)
+	})
 	var once sync.Once
 	return func() error { once.Do(func() { cancel(); workers.Wait() }); return nil }
 }

@@ -141,6 +141,15 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		return e
 	}
 	for _, cp := range w.Objects {
+		finished := false
+		for _, unit := range w.Units {
+			if unit.ID == cp.UnitID && unit.State == "cleaned" {
+				finished = true
+			}
+		}
+		if finished {
+			continue
+		}
 		if cp.State != "cleaned" {
 			continue
 		}
@@ -201,6 +210,47 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			if e = delay(ctx); e != nil {
 				return e
 			}
+		}
+	}
+	w, e = r.Repository.MigrationWork(ctx, id)
+	if e != nil {
+		return e
+	}
+	for _, unit := range w.Units {
+		if unit.State == "cleaned" {
+			continue
+		}
+		ready := true
+		for _, cp := range w.Objects {
+			if cp.UnitID == unit.ID && cp.State != "cleaned" {
+				ready = false
+			}
+		}
+		if !ready {
+			continue
+		}
+		if e = ensure(); e != nil {
+			return e
+		}
+		grant, e := r.Repository.MigrationUnitFinishGrant(ctx, l, unit.ID)
+		if e != nil {
+			return e
+		}
+		var receipts [2]store.MigrationUnitFinishReceipt
+		for i, rel := range []store.Relationship{source, target} {
+			if e = ensure(); e != nil {
+				return e
+			}
+			value, e := r.request(ctx, rel, prefix+"finish-unit", map[string]any{"lease": l, "grant": grant})
+			if e != nil {
+				return e
+			}
+			if e = decode(value, &receipts[i]); e != nil {
+				return e
+			}
+		}
+		if e = r.Repository.CompleteMigrationUnitCleanup(ctx, l, receipts[0], receipts[1], store.NodeAudit{}); e != nil {
+			return e
 		}
 	}
 	return nil

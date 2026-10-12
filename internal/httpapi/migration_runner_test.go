@@ -38,6 +38,7 @@ type runnerFaultCaller struct {
 	client      *node.Service
 	lost        bool
 	lostCleanup bool
+	lostUnit    bool
 	reads       map[int64]int
 }
 
@@ -57,6 +58,10 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 	if e == nil && c.lostCleanup && strings.HasSuffix(path, "/cleanup") && result["state"] == "source_deleted" {
 		c.lostCleanup = false
 		return nil, errors.New("injected lost source deletion receipt")
+	}
+	if e == nil && c.lostUnit && strings.HasSuffix(path, "/finish-unit") {
+		c.lostUnit = false
+		return nil, errors.New("injected lost unit completion receipt")
 	}
 	return result, e
 }
@@ -368,7 +373,18 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
 		t.Fatal(e)
 	}
-	if e = engine.Run(ctx, plan.ID, strings.Repeat("5", 32)); e != nil {
+	fault.lostUnit = true
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("5", 32)); e == nil {
+		t.Fatal("lost unit receipt ignored")
+	}
+	var masterScopes int
+	if e = db.Database().QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", plan.ID).Scan(&masterScopes); e != nil || masterScopes == 0 {
+		t.Fatal("Master released scope before dual unit receipt", masterScopes, e)
+	}
+	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e != nil {
 		t.Fatal("source receipt replay failed", e)
 	}
 	work, e := repo.MigrationWork(ctx, plan.ID)
@@ -379,6 +395,14 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 		if cp.State != "cleaned" {
 			t.Fatal("source checkpoint incomplete", cp.State)
 		}
+	}
+	for _, unit := range work.Units {
+		if unit.State != "cleaned" {
+			t.Fatal("unit not durably finished", unit)
+		}
+	}
+	if e = db.Database().QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", plan.ID).Scan(&masterScopes); e != nil || masterScopes != 0 {
+		t.Fatal("completed unit kept Master scope", masterScopes, e)
 	}
 	var sourceUsed int64
 	if e = sourceDB.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_id=?", sr.PeerID).Scan(&sourceUsed); e != nil || sourceUsed != 0 {

@@ -765,6 +765,47 @@ Tasks remain cleanup pending, and no node relation is automatically revoked.
 Inventories, retirement, GUI/CLI, upgrade and the remaining full-scope acceptance
 also remain required; production migration capability is still unadvertised.
 
+## Durable complete-unit cleanup receipts
+
+Master now generates a bounded completion grant for a whole immediate-parent
+unit only after every source object is durably cleaned and current authority
+still belongs to the target. The grant binds the immutable peer header/plan,
+unit version, commit/grace timestamps, resource/parent, count/bytes and canonical
+full-object/proof roster SHA. Each follower independently reconstructs that
+roster from its complete registered physical journal and bindings.
+
+The authenticated follower completion route checks retained managed deletion
+material and historical source anchors, or published target checkpoints with
+retired anchors, before its short SQL completion transaction. Source live
+physical-alias reads block completion. Peer completion persists unit `cleaned`,
+releases only that member/unit scope and emits a durable receipt. Master accepts
+both exact member receipts, rechecks its stored grant/target authority, marks the
+unit cleaned and removes only that unit's scopes in one transaction. Replay
+preserves the same receipt and increments audit/progress once. There is no
+additional refund or reverse owner update.
+
+The actual 524351-byte SQLite/Gin/HMAC test now loses a node unit-completion
+reply after peer commit, confirms Master scopes remain held, explicitly retries,
+then confirms durable unit completion, scope release and unchanged target bytes.
+Plain/encrypted recording byte fixtures also pass unit completion and target
+read/client footer decryption. Isolated grace timestamps are explicitly advanced;
+these are router fixtures, not native TLS/browser/five-node acceptance.
+SQLite/MySQL tests reject unfinished units, one-sided/wrong-roster receipts and
+confirm one completion audit, released unit scopes and retained owned drain.
+See [unit completion/race evidence](2026-10-12-unit-cleanup-completion.txt),
+[SQLite/MySQL completion facts](2026-10-12-unit-cleanup-completion-mysql.txt), and
+[full Go regression](2026-10-12-unit-cleanup-completion-go.txt). Source CI passed
+201 Python tests (two optional skips) and existing JavaScript smoke checks within
+the unchanged hosted budget. No DDL/schema-generation change was introduced.
+
+Whole-task peer/final acknowledgement, capacity/history reconciliation and the
+explicit drain-release handshake still require completion. Master/peer tasks
+continue to remain active cleanup/control facts until that final phase, and
+ordinary drain release remains rejected. Completion does not revoke a node,
+stop a host or remove volumes. Cancellation, independent inventories/retirement,
+GUI/CLI, upgrade and the remaining full-scope acceptance remain required.
+Production still does not advertise the unfinished migration capability.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
