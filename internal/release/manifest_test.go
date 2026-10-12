@@ -52,7 +52,7 @@ func TestHistoricalSchema2ManifestDigestIsPreservedButRuntimeRejectsIt(t *testin
 
 func sharedManifest(t *testing.T) Manifest {
 	t.Helper()
-	raw, err := os.ReadFile("../../protocol/v2/vectors/release-manifest-generation4.json")
+	raw, err := os.ReadFile("../../protocol/v2/vectors/release-manifest-generation5.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func sharedManifest(t *testing.T) Manifest {
 func TestSharedManifestBoundedProtocolAndDistinctPrivatePolicies(t *testing.T) {
 	m := sharedManifest(t)
 	id, err := m.ID()
-	if err != nil || id != "c0107adefeef81cd24093a0641baf9b9022a6ffa808ad25368aace679e6cb841" {
+	if err != nil || id != "9c4dba9a969f2894cae13087c367f855255e562089acac769180bfe895d2ae6e" {
 		t.Fatal(id, err)
 	}
 	reference, err := m.Select(DefaultPolicy())

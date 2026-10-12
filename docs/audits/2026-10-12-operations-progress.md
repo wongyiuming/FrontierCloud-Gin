@@ -11,6 +11,9 @@ published, deployed to production or migrated on real nodes.
 - Delivery/backup foundations were committed on dev as
   `a2cc19d7de8c61ab09ed1747916cc0c22b03db8e`. The next checkpoint adds restored
   deployment activation and its SQLite/MySQL acceptance evidence.
+- Restored deployment activation was committed as `181c92a` on dev. The following
+  checkpoint adds generation-5 persistence foundations; no migration executor,
+  retirement API or GUI is enabled merely by the schema change.
 - The owner supplied access to the development host `192.168.6.201`. Its existing
   checkout and unrelated services were retained. Login material is not in source,
   documents, artifacts or ordinary logs.
@@ -76,6 +79,16 @@ verification and removes only maintenance owned by this recovery. Failure keeps
 public maintenance closed and stops Web; material and the persistent journal are
 retained. Coordinated cluster restoration remains incomplete.
 
+Generation 5 adds nine durable resource migration tables for tasks, ownership
+units, objects/checkpoints, capacity reservations, draining causes, scope locks,
+runner epochs, Storage journals and read leases. Generation-4 statements are
+preserved exactly in both new snapshots, with a checked canonical DDL checksum.
+SQLite applies the migration atomically; MySQL replays additive table creation
+before the atomic journal/marker commit. Runtime/image/release generation labels
+and current acceptance vectors are aligned; historical vectors remain unchanged.
+Both maintenance inspection and journal-free business export refuse pending
+migration facts. Database tables are foundations, not implemented byte migration.
+
 ## Executed verification and limits
 
 - Native unit tests of image provenance/hashes/error classification, install
@@ -136,6 +149,25 @@ retained. Coordinated cluster restoration remains incomplete.
   race checks with isolated SQLite where applicable; external MySQL/fleet/browser
   gates were not configured by this command. The updater Source subset also passed.
 
+- `scripts/test-resource-schema.sh` passed on the isolated development host with
+  real SQLite and MySQL 8.4.11, race checking, original generation-4 media/priority
+  preservation, injected migration-journal failure, SQLite DDL rollback, replay
+  of independently committed MySQL DDL, idempotency and future-generation refusal.
+  It also proved real MySQL maintenance/business-backup guards retain pending
+  migration records and emit no business snapshot. SQLite guards passed their
+  race test. MySQL ran at one CPU/768 MiB/no swap and Go at the compiler budget
+  above. New test databases and ephemeral secrets were isolated; successful
+  fixture containers/networks/secrets were cleaned. Captured output:
+  [schema acceptance](2026-10-12-resource-schema5-acceptance.txt).
+- Development-host `go test -p=2 ./...` passed after generation alignment.
+  The immutable bootstrap fixture was updated for the operator bundle assets
+  required by the earlier archive change. Windows working-copy shell/Go endings
+  were normalized according to the existing `eol=lf` attributes before Linux
+  validation. Local source CI passed again with the same 201 Python tests and
+  two optional fixture skips. This is not full external MySQL/browser/fleet
+  acceptance. The prior recovery HTTP evidence is generation 4; generation-5
+  recovery and migration end-to-end acceptance remains required.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
@@ -146,9 +178,10 @@ retained. Coordinated cluster restoration remains incomplete.
    independent recovery point, generation compatibility/migration, pinned switch
    and actual business verification. Cross-generation code rollback is not DDL
    rollback. No upgrade/recovery API belongs in AdminGUI.
-3. Implement formal shared SQLite/MySQL schema migration for persistent resource
-   migration tasks, ownership units, checkpoints, reservations, draining causes
-   and scope/runner locks. Historical schema assets must remain immutable.
+3. Implement repository/service execution over the verified generation-5 task,
+   unit, checkpoint, reservation, draining and lock model, with exact version and
+   runner-epoch fencing at every state-changing commit. Schema is complete only
+   as a foundation, not a working migration protocol.
 4. Implement read-only whole-node migration plans bound to identities/content
    version, including hidden/encrypted media, directories, owned recordings/other
    managed files, backups, physical/logical capacity and conflict inventories.

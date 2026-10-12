@@ -41,6 +41,10 @@ func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceS
 		{"reserved_storage", "SELECT COUNT(*) FROM cluster_storage_members WHERE reserved_bytes<>0"},
 		{"cold_transfers", "SELECT COUNT(*) FROM cluster_business_backups WHERE state NOT IN ('ready','failed')"},
 		{"worker_leases", "SELECT COUNT(*) FROM cluster_worker_jobs WHERE state NOT IN ('queued','complete')"},
+		{"resource_migrations", "SELECT COUNT(*) FROM migration_tasks WHERE state NOT IN ('completed','cancelled')"},
+		{"migration_capacity", "SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0"},
+		{"migration_scopes", "SELECT COUNT(*) FROM migration_scopes"},
+		{"migration_storage", "SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')"},
 	} {
 		var count int64
 		if err := tx.QueryRowContext(ctx, check.query).Scan(&count); err != nil {

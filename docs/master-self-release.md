@@ -34,6 +34,9 @@ deployment. No new branch or direct main implementation is permitted.
 5. Use the reviewed new runtime's supported offline migration commands. Do not
    manually edit a schema marker or start an old binary against a newer database.
    Generation 3 -> 4 preserves priorities and widens their range to -7..500000;
+   generation 4 -> 5 adds replayable resource migration journals without changing
+   historical media identities or priorities. It does not yet enable migration
+   execution in this development checkpoint;
    see [physical migration](../migrations/README.md).
 6. Keep data/secrets/certificate volume identities and project names. Recreate
    the reviewed services with Compose, then verify database generation, facts,

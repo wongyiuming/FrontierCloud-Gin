@@ -44,6 +44,9 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		"protocol/contract.txt": "committed\n", "static/index.txt": "committed\n",
 		".env": "private-tracked-secret\n", "data/key": "private-tracked-key\n",
 		"app/main.py": "excluded reference runtime\n", "updater/server.py": "excluded reference updater\n",
+		"docker-compose.yaml": "services: {}\n", "docker-compose.gin-mysql.yaml": "services: {}\n",
+		"docker-compose.storage.yaml": "services: {}\n", ".env.example": "SERVER_NAME=fixture.invalid\n",
+		".env.storage.example": "SERVER_NAME=fixture.invalid\n", "docs/operator-manual.md": "Operator fixture\n",
 	}
 	for name, data := range fixture {
 		write(name, data, 0600)

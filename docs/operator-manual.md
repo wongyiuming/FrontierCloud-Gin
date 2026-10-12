@@ -161,6 +161,13 @@ verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 
+This development runtime uses database generation 5. Its additive migration
+preserves existing business data and records durable resource migration facts;
+execution integration is still in progress. Generation-4 binaries reject a
+generation-5 database. Restore archives require their matching runtime generation;
+an old archive must first use its matching operator bundle. See the
+[schema contract](../migrations/README.md) before selecting target images.
+
 Keep the current receipt/digests and an independently verified consistent
 recovery point. Explicitly select the reviewed published target main SHA and
 check schema compatibility before changing any service. Code rollback does not

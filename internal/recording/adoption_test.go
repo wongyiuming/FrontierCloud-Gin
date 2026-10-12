@@ -65,7 +65,7 @@ func testSignedRecordingAdoption(t *testing.T, encrypted bool) {
 		payload = encryptedFooter(t, snapshot)
 	}
 	sum := sha256.Sum256(payload)
-	inventory := store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 4, MasterID: master, FollowerID: local, Relationship: relationship, CreatedAt: now, ExpiresAt: now + 1800, Recordings: []store.RecordingProof{{ID: id, UserID: user.ID, Filename: "录音.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]), CreatedAt: now - 1}}}
+	inventory := store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 5, MasterID: master, FollowerID: local, Relationship: relationship, CreatedAt: now, ExpiresAt: now + 1800, Recordings: []store.RecordingProof{{ID: id, UserID: user.ID, Filename: "录音.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]), CreatedAt: now - 1}}}
 	if encrypted {
 		inventory.Recordings[0].EncryptedLyricsEncryption = &metadata.EncryptedLyrics.Encryption
 		inventory.Recordings[0].MetadataSHA256 = store.RecordingMetadataSHA256(*metadata)
@@ -248,7 +248,7 @@ func (r *adoptionAuthorityRace) AdoptOwnedRecordings(ctx context.Context, v stor
 }
 
 func TestRecordingInventoryParserRejectsAmbiguityAndOversize(t *testing.T) {
-	value := store.SignedRecordingInventory{Payload: store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 4, Recordings: []store.RecordingProof{}}, Signature: "fixture"}
+	value := store.SignedRecordingInventory{Payload: store.RecordingInventory{Kind: "frontiercloud-recording-inventory", Version: 1, SchemaGeneration: 5, Recordings: []store.RecordingProof{}}, Signature: "fixture"}
 	raw, _ := json.Marshal(value)
 	if got, err := ParseInventory(bytes.NewReader(raw)); err != nil || got.Signature != value.Signature {
 		t.Fatal(got, err)
