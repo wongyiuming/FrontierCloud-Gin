@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,7 @@ type runnerFaultCaller struct {
 	lost        bool
 	lostCleanup bool
 	lostUnit    bool
+	lostTask    bool
 	reads       map[int64]int
 }
 
@@ -62,6 +64,10 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 	if e == nil && c.lostUnit && strings.HasSuffix(path, "/finish-unit") {
 		c.lostUnit = false
 		return nil, errors.New("injected lost unit completion receipt")
+	}
+	if e == nil && c.lostTask && strings.HasSuffix(path, "/finish-task") {
+		c.lostTask = false
+		return nil, errors.New("injected lost task completion receipt")
 	}
 	return result, e
 }
@@ -384,7 +390,18 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
 		t.Fatal(e)
 	}
-	if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e != nil {
+	fault.lostTask = true
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e == nil {
+		t.Fatal("lost peer task receipt ignored")
+	}
+	var sourceTaskState string
+	if e = sourceDB.Database().QueryRow("SELECT state FROM migration_tasks WHERE task_id=?", plan.ID).Scan(&sourceTaskState); e != nil || sourceTaskState != "completed" {
+		t.Fatal("source task receipt not durable", sourceTaskState, e)
+	}
+	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("2", 32)); e != nil {
 		t.Fatal("source receipt replay failed", e)
 	}
 	work, e := repo.MigrationWork(ctx, plan.ID)
@@ -427,8 +444,34 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 		}
 	}
 	task, e = repo.MigrationTask(ctx, plan.ID)
-	if e != nil || task.State != "cleanup_pending" || task.ErrorCode != "" {
-		t.Fatal("source phase falsely completed whole task", task, e)
+	if e != nil || task.State != "completed" || task.ErrorCode != "" {
+		t.Fatal("whole task did not complete", task, e)
+	}
+	var drains int
+	if e = db.Database().QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=?", plan.ID).Scan(&drains); e != nil || drains != 1 {
+		t.Fatal("implicit drain release", drains, e)
+	}
+	if e = engine.ReleaseDrain(ctx, plan.ID, tr.PeerID, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("wrong source confirmation released drain", e)
+	}
+	adminOwner := strings.Repeat("a", 32)
+	for _, database := range []*sql.DB{db.Database(), sourceDB.Database()} {
+		if _, e = database.Exec("INSERT INTO migration_drains(member_id,owner_id,reason,created_at) VALUES (?,?,'administrator',?)", sr.PeerID, adminOwner, time.Now().Unix()); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for range 2 {
+		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, database := range []*sql.DB{db.Database(), sourceDB.Database()} {
+		if e = database.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE member_id=? AND reason='administrator'", sr.PeerID).Scan(&drains); e != nil || drains != 1 {
+			t.Fatal("admin restriction overwritten", drains, e)
+		}
+		if e = database.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=? AND reason='migration'", plan.ID).Scan(&drains); e != nil || drains != 0 {
+			t.Fatal("task-owned drain retained", drains, e)
+		}
 	}
 	t.Logf("Master runner moved %d actual bytes across one complete parent; lost acknowledgement, SQL cutover failure and authenticated source cleanup safely retried; fixture-only grace advance", catalog.TotalBytes)
 }

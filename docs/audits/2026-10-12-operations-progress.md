@@ -806,6 +806,51 @@ stop a host or remove volumes. Cancellation, independent inventories/retirement,
 GUI/CLI, upgrade and the remaining full-scope acceptance remain required.
 Production still does not advertise the unfinished migration capability.
 
+## Whole-task confirmation and explicit owned-drain release
+
+Master and followers now complete a whole task using a canonical digest of all
+persisted completed units, their versions/timestamps, full object roster SHA,
+counts/bytes and immutable peer header/plan. Every unit must already be cleaned,
+all task scopes absent and this task's capacity reservation zero. Peer task
+completion retires zero-capacity facts, persists completed state and expires its
+runner; Master commits completed state only after both exact member receipts.
+Neither transaction repeats a used-capacity refund or changes current owners.
+
+A completed peer can return the same bound receipt to a newly fenced Master
+runner after an acknowledgement is lost. That path checks active upstream
+identity, immutable task header, monotonic epoch and completed facts; it never
+reactivates data permissions. The scheduler now finds overdue unit cleanup and
+all-cleaned task finalization, while excluding operator-visible cleanup errors.
+Completed Master runs are idempotent. Retained histories/identity/audit survive.
+
+Owned drain release is an explicit service operation with exact source NodeID
+confirmation. It first obtains an authenticated source receipt, then removes the
+Master's matching task-owned restriction. Each side checks terminal task, scopes,
+units and reservations; the source also rechecks live reads. Replay is harmless.
+Administrator/other-task restrictions, writable configuration, node relationships,
+containers and volumes are preserved. The service is not automatically called by
+task completion, and GUI/CLI exposure remains a later phase.
+
+Actual SQLite/Gin/HMAC fixtures complete media/plain/encrypted-recording tasks,
+lose and replay a peer task receipt under a new epoch, retain identical target
+reads/client footer decryption and preserve owned drains until explicit release.
+The media fixture rejects wrong NodeID, releases both sides twice and confirms
+administrator restrictions remain. Isolated grace timestamps are advanced;
+these are not native TLS/browser/five-node or live production migrations.
+SQLite/MySQL tests reject one-sided/wrong task receipts, reconcile zero-capacity
+facts, retain drain at completion and exercise explicit confirmation/replay.
+See [task/drain RPC and race evidence](2026-10-12-task-completion-drain-release.txt),
+[SQLite/MySQL completion evidence](2026-10-12-task-completion-drain-release-mysql.txt),
+and [full Go regression](2026-10-12-task-completion-drain-release-go.txt).
+Source CI passed 201 Python tests (two optional skips) and its JavaScript smoke
+checks within the unchanged hosted budget. No DDL/schema-generation changed.
+
+Persistent cancellation/reverse-task reconciliation, complete physical inventories,
+independent retirement, node GUI/same-service CLI, approved upgrade, multi-node
+recovery and full native/fleet/browser/resource acceptance remain required.
+Production still does not advertise the unfinished migration capability. No
+production task, node revocation, publishing, host stop or volume deletion occurred.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

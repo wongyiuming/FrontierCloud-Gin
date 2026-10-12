@@ -253,5 +253,42 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			return e
 		}
 	}
+	w, e = r.Repository.MigrationWork(ctx, id)
+	if e != nil {
+		return e
+	}
+	allClean := true
+	for _, unit := range w.Units {
+		if unit.State != "cleaned" {
+			allClean = false
+		}
+	}
+	if allClean {
+		if e = r.Repository.ValidateMigrationLease(ctx, l); e != nil {
+			return e
+		}
+		l, e = r.Repository.RenewMigration(ctx, l, time.Minute)
+		if e != nil {
+			return e
+		}
+		grant, e := r.Repository.MigrationTaskFinishGrant(ctx, l)
+		if e != nil {
+			return e
+		}
+		var receipts [2]store.MigrationTaskFinishReceipt
+		for i, rel := range []store.Relationship{source, target} {
+			if e = r.Repository.ValidateMigrationLease(ctx, l); e != nil {
+				return e
+			}
+			value, e := r.request(ctx, rel, prefix+"finish-task", map[string]any{"lease": l, "grant": grant})
+			if e != nil {
+				return e
+			}
+			if e = decode(value, &receipts[i]); e != nil {
+				return e
+			}
+		}
+		return r.Repository.CompleteMigrationTask(ctx, l, receipts[0], receipts[1], store.NodeAudit{})
+	}
 	return nil
 }

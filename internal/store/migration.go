@@ -176,6 +176,8 @@ type MigrationRepository interface {
 	RecordMigrationSourceDeletion(context.Context, MigrationLease, MigrationSourceReceipt, NodeAudit) error
 	MigrationUnitFinishGrant(context.Context, MigrationLease, string) (MigrationUnitFinishGrant, error)
 	CompleteMigrationUnitCleanup(context.Context, MigrationLease, MigrationUnitFinishReceipt, MigrationUnitFinishReceipt, NodeAudit) error
+	MigrationTaskFinishGrant(context.Context, MigrationLease) (MigrationTaskFinishGrant, error)
+	CompleteMigrationTask(context.Context, MigrationLease, MigrationTaskFinishReceipt, MigrationTaskFinishReceipt, NodeAudit) error
 }
 
 type MigrationSourceReceipt struct {

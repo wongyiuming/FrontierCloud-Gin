@@ -378,8 +378,16 @@ func (r *Repository) ReleaseMigrationDrain(ctx context.Context, id, confirmation
 				return store.ErrMigrationState
 			}
 		}
-		if _, e = q.ExecContext(ctx, "DELETE FROM migration_drains WHERE member_id=? AND owner_id=? AND reason='migration'", confirmation, id); e != nil {
+		result, e := q.ExecContext(ctx, "DELETE FROM migration_drains WHERE member_id=? AND owner_id=? AND reason='migration'", confirmation, id)
+		if e != nil {
 			return e
+		}
+		changed, e := result.RowsAffected()
+		if e != nil {
+			return e
+		}
+		if changed == 0 {
+			return nil
 		}
 		return r.nodeAudit(ctx, q, "resource-migration-drain-released", "", map[string]any{"task_id": id, "source_id": confirmation}, a)
 	})

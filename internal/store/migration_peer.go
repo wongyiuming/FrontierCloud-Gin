@@ -40,4 +40,6 @@ type MigrationPeerRepository interface {
 	ValidatePeerAnchorRetirement(context.Context, string, MigrationLease, MigrationCleanupGrant, bool) error
 	PeerMigrationUnitFinishWork(context.Context, string, MigrationLease, MigrationUnitFinishGrant) ([]MigrationPeerObject, error)
 	CompletePeerMigrationUnit(context.Context, string, MigrationLease, MigrationUnitFinishGrant, NodeAudit) (MigrationUnitFinishReceipt, error)
+	CompletePeerMigrationTask(context.Context, string, MigrationLease, MigrationTaskFinishGrant, NodeAudit) (MigrationTaskFinishReceipt, error)
+	ReleasePeerMigrationDrain(context.Context, string, string, string, NodeAudit) (MigrationDrainReceipt, error)
 }

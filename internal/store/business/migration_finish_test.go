@@ -89,4 +89,42 @@ func TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain(t 
 	if e = f.repo.ReleaseMigrationDrain(ctx, p.ID, f.source, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("unit receipt completed whole task", e)
 	}
+	taskGrant, e := f.repo.MigrationTaskFinishGrant(ctx, l)
+	if e != nil {
+		t.Fatal(e)
+	}
+	sourceTask := store.MigrationTaskFinishReceipt{Grant: taskGrant, MemberID: f.source, Complete: true}
+	targetTask := store.MigrationTaskFinishReceipt{Grant: taskGrant, MemberID: f.target, Complete: true}
+	wrongTask := targetTask
+	wrongTask.Complete = false
+	if e = f.repo.CompleteMigrationTask(ctx, l, sourceTask, wrongTask, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("one-sided task completion", e)
+	}
+	wrongTask = targetTask
+	wrongTask.Grant.UnitsSHA = strings.Repeat("0", 64)
+	if e = f.repo.CompleteMigrationTask(ctx, l, sourceTask, wrongTask, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("wrong task roster", e)
+	}
+	if e = f.repo.CompleteMigrationTask(ctx, l, sourceTask, targetTask, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	task, e := f.repo.MigrationTask(ctx, p.ID)
+	if e != nil || task.State != "completed" {
+		t.Fatal(task, e)
+	}
+	var capacity int
+	if e = f.raw.QueryRow("SELECT COUNT(*) FROM migration_capacity WHERE task_id=?", p.ID).Scan(&capacity); e != nil || capacity != 0 {
+		t.Fatal("zero reservation tombstone not retired", capacity, e)
+	}
+	if e = f.raw.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=?", p.ID).Scan(&drains); e != nil || drains != 1 {
+		t.Fatal("task completion released drain", drains, e)
+	}
+	if e = f.repo.ReleaseMigrationDrain(ctx, p.ID, f.target, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("wrong source confirmation", e)
+	}
+	for range 2 {
+		if e = f.repo.ReleaseMigrationDrain(ctx, p.ID, f.source, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
 }

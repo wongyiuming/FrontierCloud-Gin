@@ -276,7 +276,7 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 			t.Fatal("duplicate recording refund", audits, e)
 		}
 		work, e := repo.MigrationWork(ctx, plan.ID)
-		if e != nil || work.Objects[0].State != "cleaned" || work.Task.State != "cleanup_pending" {
+		if e != nil || work.Objects[0].State != "cleaned" || work.Task.State != "completed" {
 			t.Fatal("incorrect whole-task completion", work, e)
 		}
 		t.Logf("authenticated recording cleanup bytes=%d encrypted=%v; audit rollback/lost receipt and client read verified; fixture-only grace advance", len(payload), encrypted)

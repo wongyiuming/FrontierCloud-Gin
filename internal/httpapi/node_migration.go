@@ -46,7 +46,9 @@ func RegisterNodeMigrationControl(router *gin.Engine, settings config.Config, re
 				}
 				return
 			}
-			c.JSON(200, gin.H{"status": "registered"})
+			if !c.Writer.Written() {
+				c.JSON(200, gin.H{"status": "registered"})
+			}
 		})
 	}
 	register("/internal/v1/resource-migration/register", func(c *gin.Context, rel store.Relationship, body []byte) error {
@@ -84,5 +86,35 @@ func RegisterNodeMigrationControl(router *gin.Engine, settings config.Config, re
 			return store.ErrMigrationState
 		}
 		return repo.FencePeerMigration(c.Request.Context(), rel.ID, v.Task, v.Epoch, v.State, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+	})
+	register("/internal/v1/resource-migration/release-drain", func(c *gin.Context, rel store.Relationship, body []byte) error {
+		var v struct {
+			TaskID       string `json:"task_id"`
+			Confirmation string `json:"confirmation"`
+		}
+		if controlJSON(body, &v) != nil {
+			return store.ErrMigrationState
+		}
+		receipt, e := repo.ReleasePeerMigrationDrain(c.Request.Context(), rel.ID, v.TaskID, v.Confirmation, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		if e != nil {
+			return e
+		}
+		c.JSON(200, receipt)
+		return nil
+	})
+	register("/internal/v1/resource-migration/finish-task", func(c *gin.Context, rel store.Relationship, body []byte) error {
+		var v struct {
+			Lease store.MigrationLease           `json:"lease"`
+			Grant store.MigrationTaskFinishGrant `json:"grant"`
+		}
+		if controlJSON(body, &v) != nil {
+			return store.ErrMigrationState
+		}
+		receipt, e := repo.CompletePeerMigrationTask(c.Request.Context(), rel.ID, v.Lease, v.Grant, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		if e != nil {
+			return e
+		}
+		c.JSON(200, receipt)
+		return nil
 	})
 }

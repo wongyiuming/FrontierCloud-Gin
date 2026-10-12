@@ -54,6 +54,9 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 	if task.State == "cleanup_pending" {
 		return r.cleanup(ctx, id, runner)
 	}
+	if task.State == "completed" {
+		return nil
+	}
 	lease, e := r.Repository.ClaimMigration(ctx, id, runner, time.Minute)
 	if e != nil {
 		return e

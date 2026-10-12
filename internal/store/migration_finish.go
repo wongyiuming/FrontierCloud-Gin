@@ -2,6 +2,30 @@ package store
 
 import "sort"
 
+type MigrationDrainReceipt struct {
+	TaskID   string `json:"task_id"`
+	SourceID string `json:"source_id"`
+	PlanSHA  string `json:"plan_sha256"`
+	Released bool   `json:"released"`
+}
+
+type MigrationTaskFinishGrant struct {
+	Header    MigrationPeerHeader `json:"header"`
+	UnitsSHA  string              `json:"units_sha256"`
+	UnitCount int64               `json:"unit_count"`
+}
+type MigrationTaskFinishReceipt struct {
+	Grant    MigrationTaskFinishGrant `json:"grant"`
+	MemberID string                   `json:"member_id"`
+	Complete bool                     `json:"complete"`
+}
+
+func MigrationTaskUnitsSHA(units []MigrationUnitFinishGrant) (string, error) {
+	copyUnits := append([]MigrationUnitFinishGrant(nil), units...)
+	sort.Slice(copyUnits, func(i, j int) bool { return copyUnits[i].Unit.ID < copyUnits[j].Unit.ID })
+	return MigrationDigest(copyUnits)
+}
+
 type MigrationUnitFinishGrant struct {
 	Header      MigrationPeerHeader `json:"header"`
 	Unit        MigrationUnit       `json:"unit"`
