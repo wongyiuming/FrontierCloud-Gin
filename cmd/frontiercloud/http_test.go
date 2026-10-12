@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -121,10 +122,21 @@ var namedPathParameter = regexp.MustCompile(`\{[^{}]+\}`)
 
 func TestProductionHTTPHasNoOnlineUpgradeRoutes(t *testing.T) {
 	router := nativeHTTPFixture(t)
+	for _, route := range router.Routes() {
+		if strings.HasPrefix(route.Path, "/api/v1/media/admin/nodes/release") || strings.HasPrefix(route.Path, "/internal/v1/cluster-update") {
+			t.Fatal("retired online upgrade route registered", route)
+		}
+	}
+	client := 1
 	for _, endpoint := range []string{"/api/v1/media/admin/nodes/release", "/api/v1/media/admin/nodes/release/history", "/api/v1/media/admin/nodes/release/upgrade", "/api/v1/media/admin/nodes/release/rollback", "/internal/v1/cluster-update/start", "/internal/v1/cluster-update/status"} {
 		for _, method := range []string{"GET", "POST"} {
 			response := httptest.NewRecorder()
-			router.ServeHTTP(response, httptest.NewRequest(method, endpoint, strings.NewReader(`{}`)))
+			request := httptest.NewRequest(method, endpoint, strings.NewReader(`{}`))
+			// Independent clients avoid the real repeated-404 scanner defense;
+			// this test verifies route removal without disabling that defense.
+			request.RemoteAddr = fmt.Sprintf("192.0.2.%d:12345", client)
+			client++
+			router.ServeHTTP(response, request)
 			if response.Code != 404 {
 				t.Fatal("retired online upgrade route reachable", method, endpoint, response.Code)
 			}
