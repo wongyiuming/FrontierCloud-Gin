@@ -49,18 +49,20 @@ type Spec struct {
 	Recording     *store.RecordingProof `json:"recording_binding,omitempty"`
 }
 type Checkpoint struct {
-	Version        int    `json:"version"`
-	Spec           Spec   `json:"binding"`
-	Offset         int64  `json:"offset"`
-	PrefixSHA      string `json:"prefix_sha256"`
-	HashState      []byte `json:"-"`
-	State          string `json:"state"`
-	RecheckID      string `json:"recheck_id,omitempty"`
-	RecheckedAt    int64  `json:"rechecked_at,omitempty"`
-	RecheckError   string `json:"recheck_error,omitempty"`
-	AnchorRetiring bool   `json:"anchor_retiring,omitempty"`
-	AnchorRetired  bool   `json:"anchor_retired,omitempty"`
-	AnchorError    string `json:"anchor_error,omitempty"`
+	PublicationCancelling bool   `json:"publication_cancelling,omitempty"`
+	PublicationUnlinked   bool   `json:"publication_unlinked,omitempty"`
+	Version               int    `json:"version"`
+	Spec                  Spec   `json:"binding"`
+	Offset                int64  `json:"offset"`
+	PrefixSHA             string `json:"prefix_sha256"`
+	HashState             []byte `json:"-"`
+	State                 string `json:"state"`
+	RecheckID             string `json:"recheck_id,omitempty"`
+	RecheckedAt           int64  `json:"rechecked_at,omitempty"`
+	RecheckError          string `json:"recheck_error,omitempty"`
+	AnchorRetiring        bool   `json:"anchor_retiring,omitempty"`
+	AnchorRetired         bool   `json:"anchor_retired,omitempty"`
+	AnchorError           string `json:"anchor_error,omitempty"`
 }
 type journalRecord struct {
 	Checkpoint
@@ -174,6 +176,9 @@ func (r *Receiver) load(s Spec) (Checkpoint, error) {
 	c := saved.Checkpoint
 	c.HashState = saved.SavedHashState
 	if c.Version != 1 || !bindingEqual(c.Spec, s) || c.Offset < 0 || c.Offset > s.Bytes || !digest.MatchString(c.PrefixSHA) || len(c.HashState) > 512 || (c.State != "receiving" && c.State != "received" && c.State != "verified" && c.State != "publishing" && c.State != "published" && c.State != "failed" && c.State != "aborting" && c.State != "aborted") {
+		return c, ErrState
+	}
+	if c.PublicationUnlinked && !c.PublicationCancelling || c.PublicationCancelling && (c.State != "aborting" && c.State != "aborted") || c.PublicationCancelling && c.State == "aborted" && !c.PublicationUnlinked {
 		return c, ErrState
 	}
 	var extra any
@@ -557,6 +562,9 @@ func (r *Receiver) Abort(ctx context.Context, s Spec, admission func() error) (C
 		}
 	} else if e != nil {
 		return c, e
+	}
+	if c.PublicationCancelling && !c.PublicationUnlinked {
+		return c, ErrState
 	}
 	if c.State == "aborted" {
 		return c, nil

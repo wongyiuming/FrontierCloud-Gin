@@ -1,0 +1,72 @@
+=== RUN   TestAbortIsJournaledTaskBoundAndNeverDeletesBusinessPath
+--- PASS: TestAbortIsJournaledTaskBoundAndNeverDeletesBusinessPath (0.05s)
+=== RUN   TestAbortBeforeBeginPreservesUnknownUnjournaledBytes
+=== RUN   TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/absent
+=== RUN   TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/empty
+=== RUN   TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/unknown
+--- PASS: TestAbortBeforeBeginPreservesUnknownUnjournaledBytes (0.04s)
+    --- PASS: TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/absent (0.02s)
+    --- PASS: TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/empty (0.02s)
+    --- PASS: TestAbortBeforeBeginPreservesUnknownUnjournaledBytes/unknown (0.00s)
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/none
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/foreign_inode
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/corrupt
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_unlink
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_stage_unlink
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/changed_retained_stage
+--- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes (0.44s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/none (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/foreign_inode (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/corrupt (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_unlink (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_stage_unlink (0.07s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/changed_retained_stage (0.06s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	1.552s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	4.682s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.007s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	41.415s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	6.439s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

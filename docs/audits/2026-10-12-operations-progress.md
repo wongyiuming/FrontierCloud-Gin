@@ -1204,3 +1204,36 @@ full/unwritable initial cancel admission, mixed/reverse/fleet cancellation,
 authenticated physical backup/orphan inventories and independent retirement,
 GUI/CLI, approved upgrade, coordinated recovery and full multi-node/browser/
 resource-bound acceptance. Production migration capability is unadvertised.
+
+
+## Interrupted publication cancellation byte checkpoints (2026-10-12)
+
+A target can retain a business hard link while its byte checkpoint is publishing
+and its SQL publication receipt is unknown. Ordinary staging Abort continues to
+reject that state. The new cancellation checkpoint primitive records a durable
+publication-cancelling intent before the service's coordinated same-inode unlink,
+then durably records business-link removal before retiring the private staging
+file. A crash after either unlink replays the corresponding recorded phase.
+Published checkpoints are excluded; their existing SQL-accounted shadow deletion
+protocol remains separate. A pending publication cancellation also blocks ordinary
+staging Abort until business unlink has been acknowledged.
+
+The service callback contract requires absent business metadata and only this
+task's same-inode business link; the receiver independently verifies the full
+private original SHA, immutable task/object binding and admission before file
+work. Neither a missing private file without intent nor unrelated equal bytes
+are accepted as recovery proof. This remains a byte-journal primitive, awaiting
+native media/recording metadata checks and authenticated repository/worker wiring.
+
+`2026-10-12-publication-cancel-checkpoints.txt` contains actual filesystem/race
+checks for corruption, foreign equal-byte inode preservation, lost business unlink
+acknowledgement, lost private unlink acknowledgement, restart and replay, plus
+existing staging cancellation cases. Full Go regression is recorded in
+`2026-10-12-publication-cancel-checkpoints-full-go.txt`. These do not claim complete
+SQL/publication-window cancellation or fleet/browser acceptance. Original scope
+and production capability restrictions remain unchanged; the goal is active.
+
+Recovery also rehashes any still-present private material after the business
+unlink checkpoint. The additional changed_retained_stage case in the full-Go
+evidence proves unexpected replacement bytes are preserved rather than reclaimed
+solely because an older unlink intent exists.
