@@ -27,6 +27,12 @@ type PhysicalInventoryRepository interface {
 // Expected items come from local metadata, including objects absent from disk.
 // A nil ExpectedBytes means plaintext media size is owned by Master metadata.
 type ExpectedPhysicalItem struct {
+	Cursor         string `json:"cursor,omitempty"`
+	MasterID       string `json:"master_id,omitempty"`
+	Generation     int64  `json:"generation,omitempty"`
+	ChunkIndex     *int64 `json:"chunk_index,omitempty"`
+	Backing        string `json:"backing,omitempty"`
+	State          string `json:"state,omitempty"`
 	ObjectID       string `json:"object_id"`
 	Path           string `json:"path"`
 	ExpectedBytes  *int64 `json:"expected_bytes,omitempty"`

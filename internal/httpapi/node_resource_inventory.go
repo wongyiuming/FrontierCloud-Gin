@@ -186,6 +186,14 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			observations := make([]resourceinventory.Presence, 0, len(manifest.Items))
 			for _, item := range manifest.Items {
+				if item.Backing == "database" || item.Backing == "pending" {
+					state := "database_backed_unverified"
+					if item.Backing == "pending" {
+						state = "pending_backup"
+					}
+					observations = append(observations, resourceinventory.Presence{State: state})
+					continue
+				}
 				present, err := resourceinventory.PresenceAt(ctx, root, item.Path)
 				if err != nil {
 					e = err

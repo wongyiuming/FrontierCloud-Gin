@@ -10,7 +10,7 @@ import (
 // Keyset pages retain no full roster and include no visibility/page filter.
 func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member, master, resource, after string) (store.ExpectedPhysicalPage, error) {
 	page := store.ExpectedPhysicalPage{Resource: resource, After: after, Next: after, Items: []store.ExpectedPhysicalItem{}}
-	if !nodeIDPattern.MatchString(rel) || !nodeIDPattern.MatchString(member) || !nodeIDPattern.MatchString(master) || resource != "media" && resource != "recording" || after != "" && (resource == "media" && !nodeHashPattern.MatchString(after) || resource == "recording" && !nodeIDPattern.MatchString(after)) {
+	if !nodeIDPattern.MatchString(rel) || !nodeIDPattern.MatchString(member) || !nodeIDPattern.MatchString(master) || resource != "media" && resource != "recording" && resource != "backup" && resource != "backup_chunk" || after != "" && (resource == "media" && !nodeHashPattern.MatchString(after) || resource == "recording" && !nodeIDPattern.MatchString(after)) {
 		return page, store.ErrMigrationState
 	}
 	tx, e := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -60,7 +60,7 @@ func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member,
 			}
 			candidates = append(candidates, item)
 		}
-	} else {
+	} else if resource == "recording" {
 		rows, e := tx.QueryContext(ctx, "SELECT recording_id,user_id,size_bytes,sha256,filename,content_type FROM karaoke_recordings WHERE storage_member_id=? AND state='ready' AND recording_id>? ORDER BY recording_id LIMIT 17", member, after)
 		if e != nil {
 			return page, e
@@ -90,6 +90,12 @@ func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member,
 			return page, e
 		}
 	}
+	if resource == "backup" || resource == "backup_chunk" {
+		candidates, e = r.expectedBackups(ctx, tx, resource, after)
+		if e != nil {
+			return page, e
+		}
+	}
 	encodedBytes := 0
 	for _, item := range candidates {
 		raw, e := json.Marshal(item)
@@ -104,6 +110,9 @@ func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member,
 		}
 		page.Items = append(page.Items, item)
 		page.Next = item.ObjectID
+		if item.Cursor != "" {
+			page.Next = item.Cursor
+		}
 		encodedBytes += len(raw)
 	}
 	page.Complete = len(page.Items) == len(candidates) && len(candidates) < 17

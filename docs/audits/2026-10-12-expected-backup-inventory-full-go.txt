@@ -1,0 +1,47 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	4.747s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	50.169s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.005s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	69.500s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	12.037s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	2.417s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	0.036s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	2.361s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.301s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	0.085s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	4.472s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	0.131s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	0.314s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

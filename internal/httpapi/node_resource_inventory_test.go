@@ -195,6 +195,25 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e != nil || !reflect.DeepEqual(expected, repeated) {
 		t.Fatal("expected page replay", e)
 	}
+	// Legacy SQL-backed generations are reported without inventing a path or
+	// claiming payload integrity from their stored metadata state.
+	owner := session.Binding.MasterID
+	if _, e = sdb.Database().Exec("INSERT INTO cluster_business_backups(master_id,generation,checksum,size_bytes,chunk_count,state,created_at,updated_at) VALUES (?,321,?,7,1,'ready',1,1)", owner, strings.Repeat("7", 64)); e != nil {
+		t.Fatal(e)
+	}
+	req["resource"] = "backup"
+	req["after"] = ""
+	value, e := master.Call(ctx, rel, route, req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var backupPage struct {
+		Manifest store.ExpectedPhysicalPage   `json:"manifest"`
+		Presence []resourceinventory.Presence `json:"presence"`
+	}
+	if e = decodeInventory(value, &backupPage); e != nil || len(backupPage.Manifest.Items) != 1 || len(backupPage.Presence) != 1 || backupPage.Manifest.Items[0].Backing != "database" || backupPage.Presence[0].State != "database_backed_unverified" {
+		t.Fatal("legacy backup backing", backupPage, e)
+	}
 	// Authentication is repeated even for a cached terminal page.
 	upstream, e := sdb.Nodes().Relationship(ctx, rid)
 	if e != nil {
