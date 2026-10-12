@@ -1055,6 +1055,32 @@ function prioritySectionLabel(text, count) {
     return label;
 }
 
+function attachPriorityNumber(control) {
+    const slider = control.querySelector('input[type="range"]');
+    const numeric = document.createElement('input');
+    numeric.type = 'number'; numeric.className = 'priority-number';
+    numeric.min = slider.min; numeric.max = slider.max; numeric.step = '1';
+    numeric.value = slider.value; numeric.inputMode = 'numeric';
+    numeric.required = true;
+    numeric.setAttribute('aria-label', `${slider.getAttribute('aria-label')}精确数值`);
+    const input = slider.oninput;
+    slider.oninput = () => { input?.(); numeric.value = slider.value; };
+    const change = slider.onchange;
+    slider.onchange = async () => {
+        numeric.disabled = true;
+        try { await change(); }
+        finally { numeric.value = slider.value; numeric.disabled = false; }
+    };
+    numeric.onchange = async () => {
+        if (!numeric.checkValidity()) { numeric.reportValidity(); numeric.value = slider.value; return; }
+        slider.value = numeric.value;
+        control.querySelector('output').textContent = slider.value;
+        await slider.onchange();
+    };
+    numeric.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); numeric.blur(); } };
+    control.append(numeric);
+}
+
 function priorityDirectoryButton(directory) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -1075,6 +1101,8 @@ function priorityDirectoryButton(directory) {
 function priorityMediaRow(item, data) {
     const row = document.createElement('div');
     row.className = 'priority-row';
+    row.dataset.priorityPath = item.media_path;
+    row.dataset.priorityKind = 'media';
     const resourceId = item.resource_id || null;
     const fileName = item.media_path.split('/').pop() || item.title;
     const preference = Number(item.preference || 0);
@@ -1106,6 +1134,7 @@ function priorityMediaRow(item, data) {
             item.preference = committed;
             slider.value = String(committed);
             output.textContent = String(committed);
+            await loadMediaPriority(true);
         } catch (error) {
             slider.value = String(committed);
             output.textContent = String(committed);
@@ -1114,6 +1143,7 @@ function priorityMediaRow(item, data) {
             slider.disabled = false;
         }
     };
+    attachPriorityNumber(row.querySelector('.priority-control'));
     return row;
 }
 

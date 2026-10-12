@@ -39,10 +39,13 @@ func (r *Repository) RecordGlobalPlayback(ctx context.Context, id, session strin
 	return
 }
 func (r *Repository) SetGlobalPreference(ctx context.Context, id string, value int, a store.AdminAudit) (result store.PlaybackResult, err error) {
-	if !nodeHashPattern.MatchString(id) || value < -7 || value > 500 {
+	if !nodeHashPattern.MatchString(id) || value < store.PriorityMinimum || value > store.PriorityMaximum {
 		return result, nodeConflict("invalid global media preference")
 	}
 	err = r.write(ctx, func(q queryer) error {
+		if _, err := readNode(ctx, q, r.lock()); err != nil {
+			return err
+		}
 		result = store.PlaybackResult{MediaID: id}
 		path, err := r.globalStatsPath(ctx, q, id)
 		if err != nil {

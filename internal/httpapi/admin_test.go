@@ -127,6 +127,9 @@ func TestAdminHTTPRedisContract(t *testing.T) {
 		{"POST", "/api/v1/media/admin/directory-priority", `{"path":"music/nested","value":500}`, `"directory_path":"music/nested"`, 200},
 		{"GET", "/api/v1/media/admin/directory-priorities?scope=music", "", `"preference":500`, 200},
 		{"POST", "/api/v1/media/admin/media-priority", `{"media_path":"music/artist/song.mp3","value":7}`, `"preference":7`, 200},
+		{"POST", "/api/v1/media/admin/media-priority", `{"media_path":"music/artist/song.mp3","value":500000}`, `"preference":500000`, 200},
+		{"POST", "/api/v1/media/admin/media-priority", `{"media_path":"music/artist/song.mp3","value":500001}`, "", 422},
+		{"POST", "/api/v1/media/admin/media-priority", `{"media_path":"music/artist/song.mp3","value":7}`, `"preference":7`, 200},
 		{"GET", "/api/v1/media/admin/media-priority?path=music/artist", "", `"preference":7`, 200},
 		{"GET", "/api/v1/media/admin/tree/search?path=music&q=song", "", `"name":"song.mp3"`, 200},
 		{"GET", "/api/v1/media/admin/tree/search?q=song", "", "", 400},
@@ -172,6 +175,26 @@ func TestAdminHTTPRedisContract(t *testing.T) {
 		if w.Code != test.status || test.path != "" && !strings.Contains(w.Body.String(), test.path) {
 			t.Fatalf("upload %s: %d %s", test.filename, w.Code, w.Body.String())
 		}
+	}
+	w = perform("GET", "/api/v1/media/admin/priority-order?scope=music&kind=directory", "", "", "", true)
+	var order struct {
+		Revision string `json:"revision"`
+		Items    []struct {
+			Path string `json:"path"`
+		} `json:"items"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &order) != nil || len(order.Items) < 2 {
+		t.Fatal("priority scope", w.Code, w.Body.String())
+	}
+	move, _ := json.Marshal(map[string]any{"scope": "music", "kind": "directory", "revision": order.Revision, "path": order.Items[1].Path, "before": order.Items[0].Path, "after": ""})
+	if w = perform("POST", "/api/v1/media/admin/priority-order", string(move), "application/json", "", false); w.Code != 403 {
+		t.Fatal("reorder bypassed CSRF", w.Code)
+	}
+	if w = perform("POST", "/api/v1/media/admin/priority-order", string(move), "application/json", "", true); w.Code != 200 {
+		t.Fatal("reorder", w.Code, w.Body.String())
+	}
+	if w = perform("POST", "/api/v1/media/admin/priority-order", string(move), "application/json", "", true); w.Code != 409 {
+		t.Fatal("stale reorder", w.Code, w.Body.String())
 	}
 	reader := &countedBody{reader: strings.NewReader(strings.Repeat("large-body", 10000))}
 	client.Del(context.Background(), "webrtc:observation:192.0.2.1")

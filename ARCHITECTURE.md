@@ -104,6 +104,17 @@ Do not turn folder rename into an arbitrary cross-parent move without a new tran
 
 Folders are first-class sorting objects. Directory priority is distinct from media-file priority and uses the same bounded preference range.
 
+The preference range is **-7 through 500000**, inclusive. Existing persisted
+values retain their exact meaning; there is no reset, scaling or rank migration.
+Admin dragging changes only same-parent, same-kind siblings. The Master reads the
+complete scope (including hidden and off-page peers), checks a content revision,
+then plans and audits a bounded integer batch in one transaction. Equal-value
+ties still use the public directory/media comparators. Collisions expand a
+contiguous adjustment window; peers outside it keep their values and order.
+Uploads, pending deletions and renames fence unsafe scopes. Stale pages receive
+409, and an unrepresentable bounded order receives 422 with no partial writes.
+Slider and exact numeric entry use this same range and retain existing APIs.
+
 Public category/subcategory ordering is `directory priority descending -> name`. Priority state is stored as managed metadata and must migrate with a successful folder rename.
 
 Media catalog ordering is `file priority descending -> managed path -> stable media ID`.

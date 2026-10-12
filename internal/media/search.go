@@ -239,7 +239,7 @@ func (s *Service) Priorities(ctx context.Context, scope, query, kind string, pag
 	if err != nil {
 		return PriorityResult{}, err
 	}
-	result := PriorityResult{Items: []PriorityItem{}, Directories: []PriorityDirectory{}, Scope: name, Parent: directoryParent(name), CatalogTotal: len(files), Searching: normalized != "", Minimum: -7, Maximum: 500}
+	result := PriorityResult{Items: []PriorityItem{}, Directories: []PriorityDirectory{}, Scope: name, Parent: directoryParent(name), CatalogTotal: len(files), Searching: normalized != "", Minimum: store.PriorityMinimum, Maximum: store.PriorityMaximum}
 	prefix := ""
 	if name != "" {
 		prefix = name + "/"
@@ -282,8 +282,8 @@ func (s *Service) Priorities(ctx context.Context, scope, query, kind string, pag
 		if a.Preference != b.Preference {
 			return a.Preference > b.Preference
 		}
-		if fold.String(a.MediaPath) != fold.String(b.MediaPath) {
-			return fold.String(a.MediaPath) < fold.String(b.MediaPath)
+		if a.MediaPath != b.MediaPath {
+			return a.MediaPath < b.MediaPath
 		}
 		return a.MediaID < b.MediaID
 	})

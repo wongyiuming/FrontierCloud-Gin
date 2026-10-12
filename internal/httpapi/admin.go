@@ -70,6 +70,8 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.POST("/lyrics/auto-relate", a.lyricAuto)
 	protected.POST("/media-priority", a.mediaPriority)
 	protected.GET("/media-priority", a.mediaPriorities)
+	protected.GET("/priority-order", a.priorityOrder)
+	protected.POST("/priority-order", a.movePriority)
 	return a, nil
 }
 
@@ -256,7 +258,7 @@ func (a *Admin) page(c *gin.Context) {
 		}
 		styles.WriteString(`<link rel="stylesheet" href="` + url + `">` + "\n")
 	}
-	for _, asset := range []string{"js/release-admin.js", "js/release-version-ui.js", "js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/lyrics-directory-counts.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js"} {
+	for _, asset := range []string{"js/release-admin.js", "js/release-version-ui.js", "js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/priority-drag.js", "js/lyrics-directory-counts.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js"} {
 		url, err := a.asset(asset)
 		if err != nil {
 			internalError(c, err)

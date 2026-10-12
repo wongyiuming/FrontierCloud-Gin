@@ -5,6 +5,58 @@
     scrollbar-gutter: stable;
 }
 
+/* Navigation does not change the canonical module DOM or visual order. */
+.admin-navigation {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: 190px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 28px 14px 18px;
+    overflow-y: auto;
+    background: #0c1420;
+    border-right: 1px solid var(--line);
+}
+.admin-navigation-brand { color: var(--text); text-decoration: none; padding: 0 12px; font-size: 19px; font-weight: 700; letter-spacing: .05em; }
+.admin-navigation-brand span { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: .15em; }
+.admin-navigation nav { display: grid; gap: 5px; }
+.admin-navigation nav button { text-align: left; padding: 10px 12px; min-height: 42px; border-color: transparent; background: transparent; box-shadow: none; font-size: 13px; }
+.admin-navigation nav button[aria-current="true"] { color: var(--cyan); border-color: #294354; background: #142a35; }
+.admin-navigation-note { margin-top: auto; padding: 0 12px; color: var(--muted-2); font-size: 11px; }
+.admin-navigation-toggle { display: none; }
+@media (min-width: 1000px) {
+    .admin-console { margin-left: 190px; padding: 14px 22px; gap: 10px; }
+}
+@media (max-width: 999px) {
+    .admin-navigation { display: none; width: min(280px, calc(100vw - 36px)); box-shadow: 12px 0 50px #0008; }
+    .admin-navigation.open { display: flex; }
+    .admin-navigation-toggle { display: block; position: fixed; right: 22px; bottom: 22px; z-index: 30; padding: 10px 15px; min-height: 44px; border-radius: 22px; background: #183548; box-shadow: 0 5px 22px #0006; }
+}
+.admin-console .module-heading strong { font-size: 16px; letter-spacing: .015em; }
+.admin-console .module-heading small { line-height: 1.55; }
+.admin-console .module-content { padding: 16px 18px; }
+.admin-console .priority-content { display: none; }
+.admin-console .priority-panel.expanded .priority-content { display: flex; gap: 10px; }
+.priority-toolbar { padding-bottom: 10px; border-bottom: 1px solid var(--line); gap: 8px; }
+.priority-toolbar input[type="search"] { min-height: 38px; padding: 8px 12px; }
+.priority-pathbar { min-height: 38px; }
+.priority-pathbar code { color: var(--text-soft); }
+.priority-list .priority-row,
+.priority-list .priority-directory-row { padding: 12px; border-radius: 10px; background: #101c29; border: 1px solid #263649; }
+.priority-list .priority-row:hover,
+.priority-list .priority-directory-row:hover { border-color: #425270; background: #142131; }
+.priority-section-label { padding: 8px 2px; color: var(--text-soft); }
+.priority-control input[type="range"] { cursor: pointer; min-height: 24px; }
+.priority-pagination { padding-top: 8px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+    .admin-console .module-content { padding: 12px; }
+    .priority-toolbar { flex-wrap: wrap; }
+    .priority-toolbar input[type="search"] { flex-basis: 100%; min-width: 0; }
+    .priority-pathbar { flex-wrap: wrap; }
+}
+
 /* Canonical Admin module order. Keep related work together even when modules
    such as site/release/brand are injected at runtime after the static page loads. */
 .admin-console > .admin-module[data-admin-module="media"] { order: 10; }

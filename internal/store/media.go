@@ -43,6 +43,7 @@ type AutoLyricResult struct {
 // MediaRepository owns transactions and dialect selection. HTTP and services
 // never receive a SQL connection or choose a database-specific query.
 type MediaRepository interface {
+	PriorityRepository
 	MediaDeletionRepository
 	EnsureObjects(context.Context, []MediaObject) (map[string]string, error)
 	ObjectByID(context.Context, string) (*MediaObject, error)
