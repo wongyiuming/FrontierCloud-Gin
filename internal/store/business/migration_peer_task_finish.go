@@ -11,7 +11,20 @@ import (
 
 // Completed peers return the same receipt to a newly fenced Master runner.
 // This endpoint never reactivates a completed task or its data permissions.
-func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationTaskFinishGrant, a store.NodeAudit) (receipt store.MigrationTaskFinishReceipt, e error) {
+func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationTaskFinishGrant, a store.NodeAudit) (store.MigrationTaskFinishReceipt, error) {
+	return r.completePeerMigrationTask(ctx, relationship, l, g, a, false)
+}
+func (r *Repository) CompletePeerMigrationTaskCancellation(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationTaskFinishGrant, a store.NodeAudit) (store.MigrationTaskFinishReceipt, error) {
+	return r.completePeerMigrationTask(ctx, relationship, l, g, a, true)
+}
+func (r *Repository) completePeerMigrationTask(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationTaskFinishGrant, a store.NodeAudit, cancelling bool) (receipt store.MigrationTaskFinishReceipt, e error) {
+	outcome := "completed"
+	if cancelling {
+		outcome = "cancelled"
+	}
+	if g.Outcome != outcome {
+		return receipt, store.ErrMigrationState
+	}
 	if !peerLeaseValid(l, g.Header.TaskID) {
 		return receipt, store.ErrMigrationLease
 	}
@@ -25,7 +38,14 @@ func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship
 		}
 		expected, _ := store.MigrationDigest(h)
 		actual, _ := store.MigrationDigest(g.Header)
-		if expected != actual || state != "completed" && state != "queued" && state != "cleanup_pending" {
+		if expected != actual {
+			return store.ErrMigrationState
+		}
+		if cancelling {
+			if state != "cancelling" && state != "cancelled" {
+				return store.ErrMigrationState
+			}
+		} else if state != "completed" && state != "queued" && state != "cleanup_pending" {
 			return store.ErrMigrationState
 		}
 		n, e := r.peerIdentity(ctx, q, relationship, h)
@@ -59,11 +79,23 @@ func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship
 				rows.Close()
 				return e
 			}
-			if phase != "cleaned" {
+			if phase != "cleaned" && !(cancelling && phase == "cancelled") {
 				rows.Close()
 				return store.ErrMigrationState
 			}
-			unit.Unit.State = "cleanup_pending"
+			if phase == "cleaned" {
+				if unit.Unit.CommittedAt <= 0 || unit.Unit.CleanupAfter < unit.Unit.CommittedAt+3600 {
+					rows.Close()
+					return store.ErrMigrationState
+				}
+				unit.Unit.State = "cleanup_pending"
+			} else {
+				if unit.Unit.CommittedAt != 0 || unit.Unit.CleanupAfter != 0 {
+					rows.Close()
+					return store.ErrMigrationState
+				}
+				unit.Unit.State = "cancelled"
+			}
 			units = append(units, unit)
 		}
 		e = rows.Err()
@@ -102,6 +134,16 @@ func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship
 				}
 				bindings = append(bindings, store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
 			}
+			var actualBytes int64
+			for _, binding := range bindings {
+				actualBytes += binding.Object.Bytes
+				if migrationUnit(binding.Object) != unit.Unit.ID {
+					return store.ErrMigrationState
+				}
+			}
+			if int64(len(bindings)) != unit.Unit.ObjectCount || actualBytes != unit.Unit.Bytes {
+				return store.ErrMigrationState
+			}
 			unit.ObjectsSHA, e = store.MigrationUnitObjectsSHA(bindings)
 			if e != nil {
 				return e
@@ -125,26 +167,26 @@ func (r *Repository) CompletePeerMigrationTask(ctx context.Context, relationship
 		}
 		var reserved int64
 		e = q.QueryRowContext(ctx, "SELECT reserved_bytes FROM migration_capacity WHERE task_id=?"+r.lock(), l.TaskID).Scan(&reserved)
-		if e != nil && !((state == "completed" || n.ID == h.SourceID) && errors.Is(e, sql.ErrNoRows)) {
+		if e != nil && !((state == outcome || n.ID == h.SourceID) && errors.Is(e, sql.ErrNoRows)) {
 			return e
 		}
 		if reserved != 0 {
 			return store.ErrMigrationState
 		}
 		receipt = store.MigrationTaskFinishReceipt{Grant: g, MemberID: n.ID, Complete: true}
-		if state == "completed" {
+		if state == outcome {
 			return nil
 		}
 		if _, e = q.ExecContext(ctx, "DELETE FROM migration_capacity WHERE task_id=? AND reserved_bytes=0", l.TaskID); e != nil {
 			return e
 		}
-		if _, e = q.ExecContext(ctx, "UPDATE migration_tasks SET state='completed',updated_at=? WHERE task_id=?", time.Now().Unix(), l.TaskID); e != nil {
+		if _, e = q.ExecContext(ctx, "UPDATE migration_tasks SET state=?,updated_at=? WHERE task_id=?", outcome, time.Now().Unix(), l.TaskID); e != nil {
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "UPDATE migration_runners SET runner_id=?,epoch=?,expires_at=0 WHERE task_id=?", l.RunnerID, l.Epoch, l.TaskID); e != nil {
 			return e
 		}
-		return r.nodeAudit(ctx, q, "peer-migration-completed", relationship, map[string]any{"task_id": l.TaskID, "units_sha256": sha}, a)
+		return r.nodeAudit(ctx, q, "peer-migration-"+outcome, relationship, map[string]any{"task_id": l.TaskID, "units_sha256": sha}, a)
 	})
 	return
 }

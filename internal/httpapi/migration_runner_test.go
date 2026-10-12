@@ -36,12 +36,15 @@ func (w *migrationReadWriter) Write(b []byte) (int, error) {
 }
 
 type runnerFaultCaller struct {
-	client      *node.Service
-	lost        bool
-	lostCleanup bool
-	lostUnit    bool
-	lostTask    bool
-	reads       map[int64]int
+	client         *node.Service
+	lost           bool
+	lostCleanup    bool
+	lostUnit       bool
+	lostTask       bool
+	lostAbort      bool
+	lostCancelUnit bool
+	lostCancelTask bool
+	reads          map[int64]int
 }
 
 func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, path string, value any) (map[string]any, error) {
@@ -69,10 +72,25 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		c.lostTask = false
 		return nil, errors.New("injected lost task completion receipt")
 	}
+	for _, fault := range []struct {
+		flag   *bool
+		suffix string
+	}{{&c.lostAbort, "/abort"}, {&c.lostCancelUnit, "/cancel-unit"}, {&c.lostCancelTask, "/cancel-task"}} {
+		if e == nil && *fault.flag && strings.HasSuffix(path, fault.suffix) {
+			*fault.flag = false
+			return nil, errors.New("injected lost cancellation acknowledgement")
+		}
+	}
 	return result, e
 }
 
 func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
+	masterMigrationRunnerFixture(t, false)
+}
+func TestMasterMigrationCancellationRealPrefixAndLostFinalReceipts(t *testing.T) {
+	masterMigrationRunnerFixture(t, true)
+}
+func masterMigrationRunnerFixture(t *testing.T, cancelTask bool) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
@@ -217,6 +235,78 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	}
 	if fault.reads[0] != 1 {
 		t.Fatal("unexpected initial copies", fault.reads)
+	}
+	if cancelTask {
+		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		fault.lostAbort = true
+		fault.lostCancelUnit = true
+		fault.lostCancelTask = true
+		for attempt := 0; attempt < 4; attempt++ {
+			e = engine.Run(ctx, plan.ID, strings.Repeat(string(rune('b'+attempt)), 32))
+			if attempt < 3 {
+				if e == nil {
+					t.Fatal("lost cancellation receipt ignored", attempt)
+				}
+				current, err := repo.MigrationTask(ctx, plan.ID)
+				if err != nil || current.State != "cancelling" || current.ErrorCode != "cancel_cleanup" {
+					t.Fatal(current, err)
+				}
+				if id, err := repo.NextMigrationRun(ctx); err != nil || id != "" {
+					t.Fatal("failed cancellation auto retried", id, err)
+				}
+				if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+					t.Fatal(e)
+				}
+			} else if e != nil {
+				t.Fatal("final cancellation reconciliation", e)
+			}
+		}
+		current, e := repo.MigrationTask(ctx, plan.ID)
+		if e != nil || current.State != "cancelled" || current.CommittedBytes != 0 {
+			t.Fatal(current, e)
+		}
+		for _, database := range []*sql.DB{db.Database(), sourceDB.Database(), targetDB.Database()} {
+			var state string
+			var scopes, capacity int
+			if e = database.QueryRow("SELECT state FROM migration_tasks WHERE task_id=?", plan.ID).Scan(&state); e != nil || state != "cancelled" {
+				t.Fatal(state, e)
+			}
+			if e = database.QueryRow("SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", plan.ID).Scan(&scopes); e != nil {
+				t.Fatal(e)
+			}
+			if e = database.QueryRow("SELECT COUNT(*) FROM migration_capacity WHERE task_id=?", plan.ID).Scan(&capacity); e != nil || scopes != 0 || capacity != 0 {
+				t.Fatal(scopes, capacity, e)
+			}
+		}
+		var used, reserved int64
+		if e = targetDB.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", tr.PeerID).Scan(&used, &reserved); e != nil || used != 0 || reserved != 0 {
+			t.Fatal(used, reserved, e)
+		}
+		for _, id := range ids {
+			resource, e := db.Pool().Resource(ctx, id)
+			if e != nil || resource.MemberID != sr.PeerID {
+				t.Fatal("cancel changed owner", resource, e)
+			}
+			read, e := master.ReadGlobalMedia(ctx, resource)
+			if e != nil {
+				t.Fatal(e)
+			}
+			got, e := io.ReadAll(read)
+			read.Close()
+			if e != nil || !bytes.Equal(got, payloads[resource.Path]) {
+				t.Fatal("source business bytes after cancel", e)
+			}
+		}
+		if fault.reads[0] != 1 {
+			t.Fatal("cancellation recopied prefix", fault.reads)
+		}
+		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
+			t.Fatal("explicit cancel drain release", e)
+		}
+		t.Log("durable prefix aborted; lost abort/unit/task receipts recovered under fresh epochs; original source business reads and quota retained")
+		return
 	}
 	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
 		t.Fatal(e)

@@ -75,7 +75,7 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 		old, phase, e := r.peerHeader(ctx, q, h.TaskID)
 		if e == nil {
 			previous, _ := json.Marshal(old)
-			if string(previous) != string(raw) || phase == "completed" || phase == "cancelled" {
+			if string(previous) != string(raw) || phase == "completed" || phase == "cancelled" && state != "cancelling" {
 				return store.ErrMigrationState
 			}
 			var runner string
@@ -85,6 +85,11 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 			}
 			if l.Epoch < epoch || l.Epoch == epoch && (l.RunnerID != runner || phase == "paused" || phase == "cancelling" && state != "cancelling" || l.ExpiresAt < expiry) {
 				return store.ErrMigrationLease
+			}
+			// Final cancellation registration may be retried after a lost receipt
+			// (including an empty task). Never reactivate its runner/data actions.
+			if phase == "cancelled" {
+				return nil
 			}
 			if _, e = q.ExecContext(ctx, "UPDATE migration_runners SET runner_id=?,epoch=?,expires_at=? WHERE task_id=?", l.RunnerID, l.Epoch, l.ExpiresAt, h.TaskID); e != nil {
 				return e

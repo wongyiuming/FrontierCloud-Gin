@@ -216,4 +216,46 @@ func TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce(t *testing.T
 	if _, e = f.repo.MigrationUnitCancelGrant(ctx, l, u.ID); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("committed unit reversal", e)
 	}
+	if _, e = f.repo.MigrationTaskCancelGrant(ctx, l); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("unfinished task finalized", e)
+	}
+	if _, e = f.raw.Exec("UPDATE migration_units SET committed_at=0,state='cancelled' WHERE task_id=? AND unit_id=?", p.ID, u.ID); e != nil {
+		t.Fatal(e)
+	}
+	for _, unit := range w.Units {
+		if unit.ID == u.ID {
+			continue
+		}
+		grant, e := f.repo.MigrationUnitCancelGrant(ctx, l, unit.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = f.repo.CompleteMigrationUnitCancellation(ctx, l, store.MigrationUnitFinishReceipt{Grant: grant, MemberID: f.source, Complete: true}, store.MigrationUnitFinishReceipt{Grant: grant, MemberID: f.target, Complete: true}, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	final, e := f.repo.MigrationTaskCancelGrant(ctx, l)
+	if e != nil || final.Outcome != "cancelled" {
+		t.Fatal(final, e)
+	}
+	finalSource := store.MigrationTaskFinishReceipt{Grant: final, MemberID: f.source, Complete: true}
+	finalTarget := store.MigrationTaskFinishReceipt{Grant: final, MemberID: f.target, Complete: true}
+	wrongFinal := finalTarget
+	wrongFinal.Grant.Outcome = "completed"
+	if e = f.repo.CompleteMigrationTaskCancellation(ctx, l, finalSource, wrongFinal, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("wrong terminal outcome", e)
+	}
+	if e = f.repo.CompleteMigrationTaskCancellation(ctx, l, finalSource, finalTarget, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	terminal, e := f.repo.MigrationTask(ctx, p.ID)
+	if e != nil || terminal.State != "cancelled" || terminal.CommittedBytes != 0 {
+		t.Fatal(terminal, e)
+	}
+	if e = f.raw.QueryRow("SELECT COUNT(*) FROM migration_drains WHERE owner_id=?", p.ID).Scan(&drains); e != nil || drains != 1 {
+		t.Fatal("cancel released drain implicitly", drains, e)
+	}
+	if e = f.repo.ReleaseMigrationDrain(ctx, p.ID, f.source, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
 }

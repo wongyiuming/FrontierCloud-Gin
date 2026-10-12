@@ -10,6 +10,7 @@ type MigrationDrainReceipt struct {
 }
 
 type MigrationTaskFinishGrant struct {
+	Outcome   string              `json:"outcome"`
 	Header    MigrationPeerHeader `json:"header"`
 	UnitsSHA  string              `json:"units_sha256"`
 	UnitCount int64               `json:"unit_count"`

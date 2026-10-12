@@ -117,4 +117,19 @@ func RegisterNodeMigrationControl(router *gin.Engine, settings config.Config, re
 		c.JSON(200, receipt)
 		return nil
 	})
+	register("/internal/v1/resource-migration/cancel-task", func(c *gin.Context, rel store.Relationship, body []byte) error {
+		var v struct {
+			Lease store.MigrationLease           `json:"lease"`
+			Grant store.MigrationTaskFinishGrant `json:"grant"`
+		}
+		if controlJSON(body, &v) != nil {
+			return store.ErrMigrationState
+		}
+		receipt, e := repo.CompletePeerMigrationTaskCancellation(c.Request.Context(), rel.ID, v.Lease, v.Grant, store.NodeAudit{Actor: rel.PeerID, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")})
+		if e != nil {
+			return e
+		}
+		c.JSON(200, receipt)
+		return nil
+	})
 }

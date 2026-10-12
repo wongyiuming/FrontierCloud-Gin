@@ -343,6 +343,56 @@ func TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget(t *testing.T)
 			if _, e = repo.CompletePeerMigrationUnit(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 				t.Fatal("cancel receipt reused as clean", e)
 			}
+			unitsSHA, e := store.MigrationTaskUnitsSHA([]store.MigrationUnitFinishGrant{g})
+			if e != nil {
+				t.Fatal(e)
+			}
+			final := store.MigrationTaskFinishGrant{Outcome: "cancelled", Header: h, UnitsSHA: unitsSHA, UnitCount: 1}
+			if _, e = repo.CompletePeerMigrationTask(ctx, rel, l, final, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+				t.Fatal("cancel final receipt reused as completed", e)
+			}
+			if receipt, e := repo.CompletePeerMigrationTaskCancellation(ctx, rel, l, final, store.NodeAudit{}); e != nil || !receipt.Complete {
+				t.Fatal(receipt, e)
+			}
+			l.Epoch++
+			if e = repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+				t.Fatal("terminal registration retry", e)
+			}
+			if receipt, e := repo.CompletePeerMigrationTaskCancellation(ctx, rel, l, final, store.NodeAudit{}); e != nil || !receipt.Complete {
+				t.Fatal("final receipt under fresh epoch", receipt, e)
+			}
+			if _, e = repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "abort"); !errors.Is(e, store.ErrMigrationLease) {
+				t.Fatal("terminal task regained data permissions", e)
+			}
+
 		})
+	}
+}
+
+func TestPeerMigrationEmptyCancellationReceiptReplay(t *testing.T) {
+	_, _, repo, rel, h, l, _ := peerMigrationFixture(t, false)
+	ctx := context.Background()
+	h.ObjectCount = 0
+	h.Bytes = 0
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	sha, e := store.MigrationTaskUnitsSHA([]store.MigrationUnitFinishGrant{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	g := store.MigrationTaskFinishGrant{Outcome: "cancelled", Header: h, UnitsSHA: sha, UnitCount: 0}
+	if receipt, e := repo.CompletePeerMigrationTaskCancellation(ctx, rel, l, g, store.NodeAudit{}); e != nil || !receipt.Complete {
+		t.Fatal(receipt, e)
+	}
+	l.Epoch++
+	if e = repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if receipt, e := repo.CompletePeerMigrationTaskCancellation(ctx, rel, l, g, store.NodeAudit{}); e != nil || !receipt.Complete {
+		t.Fatal(receipt, e)
+	}
+	if e = repo.RegisterPeerMigration(ctx, rel, h, l, "queued", 20*store.GiB, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("cancelled empty task reopened", e)
 	}
 }

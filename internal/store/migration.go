@@ -178,6 +178,8 @@ type MigrationRepository interface {
 	CompleteMigrationUnitCancellation(context.Context, MigrationLease, MigrationUnitFinishReceipt, MigrationUnitFinishReceipt, NodeAudit) error
 	MigrationUnitFinishGrant(context.Context, MigrationLease, string) (MigrationUnitFinishGrant, error)
 	CompleteMigrationUnitCleanup(context.Context, MigrationLease, MigrationUnitFinishReceipt, MigrationUnitFinishReceipt, NodeAudit) error
+	MigrationTaskCancelGrant(context.Context, MigrationLease) (MigrationTaskFinishGrant, error)
+	CompleteMigrationTaskCancellation(context.Context, MigrationLease, MigrationTaskFinishReceipt, MigrationTaskFinishReceipt, NodeAudit) error
 	MigrationTaskFinishGrant(context.Context, MigrationLease) (MigrationTaskFinishGrant, error)
 	CompleteMigrationTask(context.Context, MigrationLease, MigrationTaskFinishReceipt, MigrationTaskFinishReceipt, NodeAudit) error
 }

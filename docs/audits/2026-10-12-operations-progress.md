@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2â€“5 snapshots and
+manifest gates advance to generation 6. Historical generation 2Ã¢â‚¬â€œ5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -940,3 +940,34 @@ fleet/browser test. `2026-10-12-cancellation-unit-mysql.txt` covers isolated SQL
 and MySQL transaction/replay checks. Whole-task cancellation runner/finalization,
 published-but-uncommitted shadow deletion, mixed committed-unit cleanup and
 five-node/browser acceptance remain required work.
+
+
+## Whole-task cancellation runner and final receipts (2026-10-12)
+
+The joined Master scheduler now selects cancelling tasks without a persisted
+error. The fenced cancellation runner registers the immutable roster, aborts
+unpublished target staging, reconciles both unit receipts and then both final
+peer receipts. Task final grants bind an explicit completed/cancelled outcome,
+all terminal unit digests, object/byte totals, committed byte accounting, zero
+scope locks and zero remaining reservations. Peers preserve terminal state when
+returning a final receipt to a fresh Master epoch. Empty cancellation registration
+replays do not reactivate task data permissions.
+
+Cancellation failures retain cancelling/cancel_cleanup, exclude automatic
+retries and accept explicit retry without changing back to queued. Durable
+unit cancellations release only their reservation once. Source drains remain
+until explicit task-owned release, and business owners/used bytes are untouched.
+Tests inject lost abort, unit and final acknowledgements after actual successful
+operations, then use fresh runners and real source business reads. Real SQLite
+and MySQL transactions are separately covered. Evidence is in
+`2026-10-12-cancellation-task-go.txt` and
+`2026-10-12-cancellation-task-mysql.txt`; the authenticated router transport is
+an isolated Go fixture, not native TLS/fleet/browser acceptance.
+
+Remaining cancellation work: managed deletion of published-but-uncommitted
+shadows, cleanup of committed units while the task is cancelling, initial peer
+admission when the target has become full/unwritable, mixed/reverse/fleet tests.
+The runner conservatively records an error for these unfinished cases; it does
+not use staging Abort to delete published data or reverse authoritative owners.
+Other original upgrade/recovery/inventory/retirement/GUI/CLI/acceptance scope
+remains active and the production migration capability stays unadvertised.
