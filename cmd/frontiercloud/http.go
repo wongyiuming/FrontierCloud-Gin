@@ -15,7 +15,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -33,7 +32,6 @@ type runtimeHTTP struct {
 	Security   *security.Service
 	Redis      *redis.Client
 	Resolver   *network.Resolver
-	Agent      release.Agent
 }
 
 func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, func() error, error) {
@@ -94,23 +92,12 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	httpapi.RegisterAdminNodes(handler, adminHTTP, controlService)
 	httpapi.RegisterOperational(handler, adminHTTP)
 	httpapi.RegisterPlaybackDiagnostics(handler, settings, resolver, controlService, adminHTTP, diagnostics.New())
-	policy := release.Policy{Branch: settings.ReleaseBranch, Source: settings.ReleaseSourceBranch}
-	verifier, err := release.NewVerifier(policy, settings.GitHubAPIToken)
-	if err != nil {
-		return nil, nil, err
-	}
-	agent := services.Agent
-	if agent == nil {
-		agent = release.SocketAgent{}
-	}
-	siteService, err := sitecontrol.Open(settings.DataRoot, agent)
+	siteService, err := sitecontrol.Open(settings.DataRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	closers = append(closers, siteService.Close)
 	httpapi.RegisterSiteAdmin(handler, adminHTTP, siteService)
-	releases := &release.Coordinator{Agent: agent, Verifier: verifier, Nodes: database.Nodes(), Policy: policy, CDManaged: settings.StagingCD}
-	httpapi.RegisterReleaseAdmin(handler, adminHTTP, releases)
 	httpapi.RegisterSecurityAdmin(handler, adminHTTP, securityService)
 	accountsHTTP := httpapi.RegisterKaraokeAccounts(handler, karaoke.New(database.Karaoke(), database.Nodes(), karaoke.NewRedisCache(redisClient)), public, adminHTTP, resolver)
 	httpapi.RegisterKaraokeRecordings(handler, accountsHTTP, recordingManager, recordingStorage)

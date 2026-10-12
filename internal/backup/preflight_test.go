@@ -266,7 +266,7 @@ func TestBackupPreflightRejectsSchemaIdentityCapacityAndUnsafePayloads(t *testin
 			return r
 		},
 		"preference-constraint": func(r []map[string]any) []map[string]any {
-			preflightRow(r, "media_playback_stats")["preference"] = 501
+			preflightRow(r, "media_playback_stats")["preference"] = 500001
 			return r
 		},
 	}

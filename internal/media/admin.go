@@ -154,7 +154,11 @@ func (s *Service) Tree(ctx context.Context, name string) (Tree, error) {
 		if a.Kind != b.Kind {
 			return a.Kind == "directory"
 		}
-		return fold.String(a.Name) < fold.String(b.Name)
+		fa, fb := fold.String(a.Name), fold.String(b.Name)
+		if fa == fb {
+			return a.Name < b.Name
+		}
+		return fa < fb
 	})
 	return result, nil
 }
@@ -246,7 +250,11 @@ func (s *Service) DirectoryPreferences(ctx context.Context, scope string) ([]Dir
 		if items[i].Preference != items[j].Preference {
 			return items[i].Preference > items[j].Preference
 		}
-		return fold.String(items[i].Path) < fold.String(items[j].Path)
+		fa, fb := fold.String(items[i].Path), fold.String(items[j].Path)
+		if fa == fb {
+			return items[i].Path < items[j].Path
+		}
+		return fa < fb
 	})
 	return items, nil
 }

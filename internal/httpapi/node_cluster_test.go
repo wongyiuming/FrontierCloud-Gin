@@ -365,6 +365,40 @@ func TestClusterHTTPPairCatalogDirectRelayCapabilitiesAndGlobalStats(t *testing.
 	if _, err = volume.Preference(ctx, "music/远端专辑", 30, true, store.AdminAudit{}); err != nil {
 		t.Fatal("remote directory priority", err)
 	}
+	// The same Master-owned reorder works for both delivery transports. It
+	// never asks a Follower to store business preferences or move media bytes.
+	for _, mode := range []string{"Direct", "Relay"} {
+		if err = masterDB.Nodes().SetRelationshipMode(ctx, relationID, mode, false, store.NodeAudit{}); err != nil {
+			t.Fatal(err)
+		}
+		order, e := volume.PriorityOrder(ctx, "music", "directory")
+		if e != nil {
+			t.Fatal(e)
+		}
+		others := []string{}
+		for _, item := range order.Items {
+			if item.Path != "music/远端专辑" {
+				others = append(others, item.Path)
+			}
+		}
+		if len(others) < 2 {
+			t.Fatal("missing sibling fixture", order)
+		}
+		_, e = volume.MovePriority(ctx, "music", "directory", store.PriorityMove{Revision: order.Revision, Path: "music/远端专辑", After: others[0], Before: others[1]}, store.AdminAudit{Action: "priority_reorder"})
+		if e != nil {
+			t.Fatal(mode, e)
+		}
+		remote, e := volume.PriorityOrder(ctx, "music/远端专辑", "media")
+		if e != nil || len(remote.Items) != 1 || remote.Items[0].ID != upload.MediaID || remote.Items[0].Preference != 42 {
+			t.Fatal("placement or media preference changed", remote, e)
+		}
+		if _, e = volume.Preference(ctx, "music/远端专辑", 30, true, store.AdminAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if err = masterDB.Nodes().SetRelationshipMode(ctx, relationID, "Direct", false, store.NodeAudit{}); err != nil {
+		t.Fatal(err)
+	}
 	priorities, err := volume.Priorities(ctx, "music/远端专辑", "", "audio", 1, 100)
 	if err != nil || len(priorities.Items) != 1 || priorities.Items[0].MediaID != upload.MediaID || priorities.Items[0].Preference != 42 {
 		t.Fatal("global priority catalog", priorities, err)

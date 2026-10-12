@@ -1,60 +1,34 @@
-# Runtime-neutral release manifest v1
+# Historical release manifest v1
 
-The optional `release-manifest-v1` feature retains protocol v2. A common
-`release_version` labels one release and a canonical SHA-256 identifies its
-entire manifest. Neither an application version, language nor DB_TYPE determines
-protocol compatibility; `protocol` and `schema_generation` remain explicit.
+Protocol v2 retains the bounded manifest parser and canonical vectors for local
+operator/recovery tooling. Online Admin status/history/upgrade/rollback APIs and
+whole-cluster release dispatch are retired. Ordinary business deployments do not
+mount manifest metadata, launch an updater or distribute release jobs to storage.
+See [operator-managed releases](../../docs/master-self-release.md).
 
-The complete bounded manifest has `main` and `gin_main` publication profiles,
-each mapping to an immutable Git-archive artifact with its own production
-commit, reviewed source commit and tree SHA. Profiles represent the existing
-fixed local publication policies (`main/dev` and `gin_main/gin_dev`). The Master
-must send the whole manifest, never choose a Follower's implementation or copy
-its own target SHA to every peer. Each peer selects only its locally configured
-policy. SQLite/MySQL does not enter artifact selection or wire identity.
+The current native schema gate is generation **4**. The unchanged
+vectors/release-manifest.json is the generation-2 historical fixture, and
+vectors/release-manifest-generation3.json remains generation-3 historical data.
+vectors/release-manifest-generation4.json defines current acceptance, together
+with schemas/release-manifest.json. Current tooling rejects both old generation
+3 and future generation 5. Protocol 2 is not a promise of database compatibility
+across generations, and historical digests do not authorize reverse migrations.
 
-Manifests are at most 8192 bytes. Unknown fields/profiles, duplicate JSON fields,
-trailing input, malformed SHAs, boolean/floating protocol numbers, missing
-artifacts and unsupported protocol/schema are rejected. See the schema and
-historical canonical vectors verified by Go for the exact wire format and canonical digest.
+The retained manifest has a common release_version, protocol,
+schema_generation and main/gin_main historical publication profiles. Each
+artifact binds an immutable Git archive's production commit, reviewed source
+commit and tree SHA. SQLite/MySQL does not enter wire identity. A canonical
+SHA-256 covers the complete manifest; it is not publication evidence by itself.
 
-The current native schema gate is generation 3. The original
-`vectors/release-manifest.json` remains the unchanged generation-2 historical
-fixture; `vectors/release-manifest-generation3.json` defines current acceptance,
-including refusal of generation 2 and future generation 4. Historical bytes and
-their digest do not authorize a current-schema deployment or reverse migration.
+Manifests are at most 8192 bytes. Unknown/duplicate fields or profiles, trailing
+input, malformed SHAs, boolean/floating version numbers, missing artifacts and
+unsupported generations are rejected. Selected artifacts still need exact
+reviewed-source, successful source-push CI and provenance proof. Authentication,
+network or image-proof failure cannot be treated as a missing published image.
 
-Parsing, a Master signature or a manifest digest alone is NOT publication proof.
-Each selected artifact requires independent exact production/source/tree
-evidence, an exact merged same-repository source PR and the newest corresponding
-successful source push CI. An older success cannot supersede a newer failure.
-Rollback additionally requires historical artifact proof and production ancestry;
-it must not pick an unrelated local prior SHA or manufacture a previous manifest.
-
-The native Go runtime implements the parser/resolver, independently verified local
-artifact queue, durable joint history, authenticated whole-manifest dispatch and
-bounded common-digest/private-artifact convergence. Updater status RPC advertises
-the optional feature only when its agent supports it; it remains absent from the
-general node identity/heartbeat baseline during integration acceptance.
-
-Master Admin requests remain empty: a caller cannot select SHAs or send a
-manifest. Set `RELEASE_MANIFEST_PATH` to an absolute container path and explicitly
-mount publication metadata read-only there. Both production artifacts require
-independent exact CI/PR/tree proof and must be current publication HEADs for an
-upgrade. Rollback uses only the durable previous whole manifest and independently
-verifies both historical artifacts; each updater also enforces local production
-ancestry. This optional file is metadata, not proof or a signature bypass.
-
-During convergence polling, temporary verified control HTTP 502/503/504 responses
-from a replacing/draining peer count as not yet converged, within the existing
-deadline. They never count as an acknowledgment or success. Authentication errors,
-malformed responses, capability/private-profile changes and authority/pin changes
-remain failures. Preflight and start dispatch do not inherit this polling retry.
-
-An authenticated Follower status endpoint returns HTTP 503 while its updater
-socket is unavailable, including immutable agent handoff. It must not return a
-successful empty-capability/profile observation for that gap. Native
-endpoints retain their role/authentication checks before probing the agent.
-
-Without that setting, legacy same-SHA releases remain fail-closed across different
-publication branches. Current development acceptance uses five native nodes for Gin/SQLite and Gin/MySQL, including whole-manifest upgrade/rollback, live agent proof and post-release restart. It uses synthetic reviewed CI metadata for real private Git objects through the unchanged HTTPS verifier, not published production CI. No Python artifact may be deployed. Publication-asset automation remains separate; see docs/go-only-completion.md.
+Operators deploy reviewed current-generation images through Compose. Schema
+3 -> 4 needs a consistent independent database backup and supported offline
+migration; older binaries refuse the new database. Code rollback cannot reverse
+DDL. Preserve identities, media metadata and secrets; see
+[physical schema migration](../../migrations/README.md). Native development
+acceptance and successful CI do not imply a completed production deployment.

@@ -19,11 +19,12 @@ cannot conceal it. The node must be able to reach its own advertised entrance.
 ## Existing deployment boundary
 
 Image replacement cannot create the new certificate services and private,
-published and control volumes. The updater refuses this first boundary before
-stopping Web. The first conversion is an operator-maintained Compose migration;
-later automatic-TLS image upgrades include both certificate services and verify
-the actual serving certificate before committing success. Image rollback across
-the old topology is also refused; use the independent old Compose recovery copy.
+published and control volumes. Online upgrade/rollback controls are retired.
+The first conversion and later updates are operator-maintained Compose
+operations; preserve both certificate services and verify the actual serving
+certificate before reopening traffic. Across an old topology or database
+generation, recovery requires the independent old Compose/database copy. See
+[operator-managed releases](master-self-release.md).
 
 Before changing topology, retain an independent cold recovery copy of database,
 media, runtime secrets, node identity, pairing relationships, original Compose
@@ -53,7 +54,9 @@ published revision and backup destination; it accepts no certificate/key paths
 or uploaded material. It refuses an existing target volume, ambiguous replicas,
 unmounted assets, untrusted HTTPS or a certificate different from the live leaf.
 It leaves existing services and certificates intact. Run it on the original
-node with the exact target image already pulled and verified. Go performs final
+node from a reviewed repository checkout, with the exact target image already
+pulled and verified. The script shares the publisher's current schema-generation
+gate and rejects both old and future-generation images. Go performs final
 chain/key validation during adoption; staging alone is not migration success.
 
 Keep the exact Compose project and all business/storage mounts. Remove retired

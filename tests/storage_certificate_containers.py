@@ -117,8 +117,6 @@ def run(work, project, revision):
       - {case / 'ca.pem'}:/etc/ssl/certs/ca-certificates.crt:ro
   stun:
     ports: !reset []
-  updater:
-    image: frontiercloud-go-updater:{revision}
 """
         overlay = case / "fixture.yaml"
         overlay.write_text(agent_override)

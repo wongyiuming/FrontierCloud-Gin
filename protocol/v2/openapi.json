@@ -203,7 +203,10 @@
         "properties": {
           "validation": {
             "type": "string",
-            "enum": ["temporary_port80", "shared_http01"]
+            "enum": [
+              "temporary_port80",
+              "shared_http01"
+            ]
           },
           "auto_renew": {
             "type": "boolean"
@@ -256,7 +259,7 @@
             "type": "string"
           },
           "value": {
-            "maximum": 500,
+            "maximum": 500000,
             "minimum": -7,
             "title": "Value",
             "type": "integer"
@@ -399,7 +402,7 @@
             "title": "Resource Id"
           },
           "value": {
-            "maximum": 500,
+            "maximum": 500000,
             "minimum": -7,
             "title": "Value",
             "type": "integer"
@@ -774,6 +777,114 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "PriorityEntry": {
+        "type": "object",
+        "required": [
+          "path",
+          "preference"
+        ],
+        "properties": {
+          "media_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "preference": {
+            "type": "integer",
+            "minimum": -7,
+            "maximum": 500000
+          }
+        }
+      },
+      "PriorityOrder": {
+        "type": "object",
+        "required": [
+          "scope",
+          "kind",
+          "revision",
+          "items",
+          "changed"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "media",
+              "directory"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriorityEntry"
+            }
+          },
+          "changed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "PriorityMove": {
+        "type": "object",
+        "required": [
+          "scope",
+          "kind",
+          "revision",
+          "path"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "media",
+              "directory"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "before": {
+            "type": "string",
+            "maxLength": 1024,
+            "default": "",
+            "description": "Immediate following sibling after removing the moved item; empty means end of scope."
+          },
+          "after": {
+            "type": "string",
+            "maxLength": 1024,
+            "default": "",
+            "description": "Immediate preceding sibling after removing the moved item; empty means start of scope."
+          }
+        }
       }
     }
   },
@@ -2337,99 +2448,6 @@
           }
         },
         "summary": "Reinitialize",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release": {
-      "get": {
-        "operationId": "release_status_api_v1_media_admin_nodes_release_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "refresh_ci",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Refresh Ci",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Release Status",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/history": {
-      "get": {
-        "operationId": "master_release_history",
-        "responses": {
-          "200": {
-            "description": "Up to ten reviewed PR descriptions; listing is not rollback authorization"
-          }
-        },
-        "summary": "Master-only reviewed release discovery",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/rollback": {
-      "post": {
-        "operationId": "release_rollback_api_v1_media_admin_nodes_release_rollback_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Release Rollback",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/upgrade": {
-      "post": {
-        "operationId": "release_upgrade_api_v1_media_admin_nodes_release_upgrade_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Release Upgrade",
         "tags": [
           "MediaAdmin"
         ]
@@ -4285,6 +4303,132 @@
         "tags": [
           "Internal Nodes"
         ]
+      }
+    },
+    "/api/v1/media/admin/priority-order": {
+      "get": {
+        "operationId": "admin_priority_order",
+        "summary": "Read complete priority snapshot",
+        "tags": [
+          "MediaAdmin"
+        ],
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "media",
+                "directory"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete authoritative same-parent/same-kind order; includes hidden and off-page siblings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityOrder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid managed scope, kind or insertion anchors."
+          },
+          "401": {
+            "description": "Admin session required."
+          },
+          "403": {
+            "description": "Transport or CSRF authorization failed."
+          },
+          "404": {
+            "description": "Managed directory or media not found."
+          },
+          "409": {
+            "description": "Snapshot changed or upload/delete/rename mutation fence conflicts."
+          },
+          "422": {
+            "description": "Invalid payload or bounded priorities cannot express requested order."
+          },
+          "503": {
+            "description": "Media service unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "admin_move_priority",
+        "summary": "Move one same-parent sibling in an atomic audited priority transaction",
+        "tags": [
+          "MediaAdmin"
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriorityMove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Complete authoritative same-parent/same-kind order; includes hidden and off-page siblings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityOrder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid managed scope, kind or insertion anchors."
+          },
+          "401": {
+            "description": "Admin session required."
+          },
+          "403": {
+            "description": "Transport or CSRF authorization failed."
+          },
+          "404": {
+            "description": "Managed directory or media not found."
+          },
+          "409": {
+            "description": "Snapshot changed or upload/delete/rename mutation fence conflicts."
+          },
+          "422": {
+            "description": "Invalid payload or bounded priorities cannot express requested order."
+          },
+          "503": {
+            "description": "Media service unavailable."
+          }
+        }
       }
     }
   }

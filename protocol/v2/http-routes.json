@@ -605,24 +605,6 @@
     ]
   },
   {
-    "path": "/api/v1/media/admin/nodes/release",
-    "methods": [
-      "GET"
-    ]
-  },
-  {
-    "path": "/api/v1/media/admin/nodes/release/upgrade",
-    "methods": [
-      "POST"
-    ]
-  },
-  {
-    "path": "/api/v1/media/admin/nodes/release/rollback",
-    "methods": [
-      "POST"
-    ]
-  },
-  {
     "path": "/api/v1/media/admin/nodes/promote",
     "methods": [
       "POST"
@@ -756,6 +738,13 @@
   },
   {
     "path": "/api/v1/media/admin/nodes/{identifier}/certificate",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "path": "/api/v1/media/admin/priority-order",
     "methods": [
       "GET",
       "POST"

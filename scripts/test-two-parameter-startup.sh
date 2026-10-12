@@ -31,7 +31,7 @@ for mode in ('http','tls','empty','pinned'):
     services=config['services']
     assert 'mysql' not in services
     assert all('build' not in service for service in services.values())
-    for name in ('web','secrets-init','media-init','certificate-init','certificate-agent','updater','nginx'):
+    for name in ('web','secrets-init','media-init','certificate-init','certificate-agent','nginx'):
         component='web' if name.endswith('-init') or name=='certificate-agent' else name
         tag=sys.argv[2] if mode=='pinned' else 'latest'
         assert services[name]['image']=='ghcr.io/wongyiuming/frontiercloud-gin-'+component+':'+tag

@@ -1,10 +1,10 @@
 # Shared database schema
 
-Schema generation 3 has one logical model and two reviewed physical snapshots:
+Schema generation 4 has one logical model and two reviewed physical snapshots:
 
-- `mysql/0003-schema.json`: existing InnoDB DDL, including binary media paths,
+- `mysql/0004-schema.json`: existing InnoDB DDL, including binary media paths,
   generated active-ban uniqueness, indexes, and preference constraints.
-- `sqlite/0003-schema.json`: corresponding SQLite DDL and indexes. Audit keys
+- `sqlite/0004-schema.json`: corresponding SQLite DDL and indexes. Audit keys
   use `INTEGER PRIMARY KEY`, dates use UTC ISO text, and backup chunks use BLOB.
 
 Each JSON array entry is one SQL statement. There is no runtime SQL translation.
@@ -30,6 +30,15 @@ recovery; business backup artifacts contain descriptors and the verifier, never
 that secret. Startup rejects a missing verifier for encrypted data and a restored
 key that does not match it.
 SQLite databases belong to a single host and must not be shared over NFS.
+
+Generation 3 -> 4 widens directory and media priorities to -7..500000. SQLite
+rebuilds only `media_playback_stats` inside the existing migration transaction,
+preserving its columns, rows, indexes and triggers. MySQL uses one atomic ALTER
+to replace the range CHECK and widen SMALLINT to INT; re-running after a crash
+before the journal/marker update is safe. No stored priority or playback value
+is reset or scaled. The historical generation-2/3 snapshots remain immutable.
+Older generation-3 binaries refuse a generation-4 database. Back up the database
+before first activation; code rollback does not reverse the database migration.
 
 ## Native validation
 

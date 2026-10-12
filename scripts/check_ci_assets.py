@@ -12,7 +12,7 @@ if issues:
     raise SystemExit("\n".join(issues))
 for path in (root / "protocol").rglob("*.json"):
     json.loads(path.read_text(encoding="utf-8"))
-for generation, tables in ((2, 34), (3, 36)):
+for generation, tables in ((2, 34), (3, 36), (4, 36)):
     documents = [json.loads((root / "migrations" / kind / f"{generation:04d}-schema.json").read_text(encoding="utf-8"))
                  for kind in ("sqlite", "mysql")]
     assert all(document["generation"] == generation for document in documents)

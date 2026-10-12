@@ -81,13 +81,10 @@ class StorageDeploymentContract(unittest.TestCase):
         self.assertIn("MinVersion: tls.VersionTLS12", text)
         self.assertNotIn("InsecureSkipVerify:", text)
 
-    def test_history_is_master_only_and_untrusted_pr_text_is_not_html(self):
-        text = (ROOT / "static/js/release-admin.js").read_text(encoding="utf-8")
-        self.assertIn("refreshHistory", text)
-        self.assertIn("version.title", text)
-        self.assertIn("systemReleaseNotes').textContent", text)
-        for forbidden in ("value.followers", "cluster_convergence_needed", "整个集群", "升级并分发"):
-            self.assertNotIn(forbidden, text)
+    def test_business_also_has_no_online_upgrade_registration(self):
+        text = (ROOT / "cmd/frontiercloud/http.go").read_text(encoding="utf-8")
+        self.assertNotIn("RegisterReleaseAdmin", text)
+        self.assertNotIn("release.Coordinator", text)
 
 
 if __name__ == "__main__":

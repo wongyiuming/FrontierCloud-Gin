@@ -22,6 +22,12 @@ func (a *Admin) mutationAudit(c *gin.Context, action string, paths []string) sto
 
 func mediaAdminError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, store.ErrPriorityStale):
+		detail(c, 409, "排序已被修改，请刷新后重试")
+	case errors.Is(err, store.ErrPriorityRange):
+		detail(c, 422, "当前 -7～500000 优先级范围无法表达该顺序，请先调整相邻优先级")
+	case errors.Is(err, store.ErrPriorityMove):
+		detail(c, 400, "只能调整同一目录内的同类项目，请刷新排序后重试")
 	case errors.Is(err, store.ErrNodeState):
 		detail(c, 409, "节点状态或存储操作冲突")
 	case errors.Is(err, store.ErrStorageCapacity):
@@ -41,6 +47,47 @@ func mediaAdminError(c *gin.Context, err error) {
 	default:
 		internalError(c, err)
 	}
+}
+
+func (a *Admin) priorityOrder(c *gin.Context) {
+	name, kind := c.Query("scope"), c.Query("kind")
+	if !utf8.ValidString(name) || utf8.RuneCountInString(name) > 1024 {
+		invalid(c, "query", "scope")
+		return
+	}
+	value, err := a.public.media.PriorityOrder(c.Request.Context(), name, kind)
+	if err != nil {
+		mediaAdminError(c, err)
+		return
+	}
+	c.JSON(200, value)
+}
+
+func (a *Admin) movePriority(c *gin.Context) {
+	var body struct {
+		Scope string `json:"scope"`
+		Kind  string `json:"kind"`
+		store.PriorityMove
+	}
+	if !decodeAdmin(c, &body) {
+		return
+	}
+	for _, p := range []string{body.Scope, body.Path, body.Before, body.After} {
+		if !utf8.ValidString(p) || utf8.RuneCountInString(p) > 1024 {
+			invalid(c, "body", "path")
+			return
+		}
+	}
+	if len(body.Revision) != 64 {
+		invalid(c, "body", "revision")
+		return
+	}
+	value, err := a.public.media.MovePriority(c.Request.Context(), body.Scope, body.Kind, body.PriorityMove, a.mutationAudit(c, "priority_reorder", []string{body.Path}))
+	if err != nil {
+		mediaAdminError(c, err)
+		return
+	}
+	c.JSON(200, value)
 }
 
 func (a *Admin) renameDirectory(c *gin.Context) {
@@ -194,7 +241,7 @@ func (a *Admin) directoryPriorities(c *gin.Context) {
 		mediaAdminError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"items": items, "minimum": -7, "maximum": 500})
+	c.JSON(200, gin.H{"items": items, "minimum": store.PriorityMinimum, "maximum": store.PriorityMaximum})
 }
 
 func (a *Admin) directoryPriority(c *gin.Context) {
@@ -217,7 +264,7 @@ func (a *Admin) directoryPriority(c *gin.Context) {
 }
 
 func validPriority(c *gin.Context, path string, value *int) bool {
-	if strings.TrimSpace(path) == "" || !utf8.ValidString(path) || utf8.RuneCountInString(path) > 1024 || value == nil || *value < -7 || *value > 500 {
+	if strings.TrimSpace(path) == "" || !utf8.ValidString(path) || utf8.RuneCountInString(path) > 1024 || value == nil || *value < store.PriorityMinimum || *value > store.PriorityMaximum {
 		invalid(c, "body", "payload")
 		return false
 	}

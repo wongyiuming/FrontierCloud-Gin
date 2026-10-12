@@ -1,65 +1,59 @@
-# Master-only version management
+# Operator-managed releases
 
-Release management controls only the Master's local native updater. Storage
-versions do not participate in permission, progress, completion or rollback.
-There are no signed `/internal/v1/cluster-update/*` routes, release-distribution
-CLI commands or per-storage upgrade jobs.
+Online release management was retired at the owner's request. Business and
+storage deployments expose no release status/history/upgrade/rollback HTTP API.
+AdminGUI has no upgrade buttons, release module or release polling. Default
+business Compose no longer launches an updater, shares its control socket with
+Web, mounts Docker authority or reads its maintenance volume. Site maintenance
+remains authenticated and audited, independent of updater availability; the
+native offline fence cannot be reopened by Admin.
 
-The new repository has only `dev` and `main`. Work is pushed to `dev`; a
-same-repository `dev -> main` PR promotes the reviewed exact tree. Hosted CI
-test jobs remain lightweight and capped at three minutes. A separate exact-CI-success-gated
-compilation workflow publishes public images with ten-minute parallel jobs; native unit/race, real
-database, Docker/updater, five-node and browser gates run on the development
-host. After merge, fast-forward development to the release merge commit;
-never force-rewrite it. Bootstrap history alone is not publishable release
-proof. Native releases pull and validate exact-SHA public images pinned by digest;
-only confirmed missing images/platforms allow bounded local immutable-source
-builds. Auth/network/proof failures stop. See [image delivery](public-image-delivery.md).
+The repository still promotes only reviewed same-repository dev -> main PRs.
+Owner merge authorization, successful exact-source CI and native acceptance
+remain mandatory. Public immutable images and trusted latest promotion remain
+the delivery mechanism. Historical updater code/artifacts and external CD
+scripts remain operator-owned tooling, outside the normal business deployment.
+Removing the GUI does not authorize automatic source promotion or production
+deployment. No new branch or direct main implementation is permitted.
 
-Admin lists up to ten recently merged release PRs, including the merge SHA,
-title, description, date and PR link. History discovery is cached for five
-minutes and obeys API rate-limit backoff. PR text is rendered as text, never
-HTML. Listing a version is not authorization to deploy it.
+## Existing deployment transition
 
-Upgrade targets the verified release HEAD. An explicitly selected historical
-rollback must be listed and independently pass the exact merged PR, source
-tree, newest source push CI and branch-policy checks. The updater additionally
-checks Git ancestry. Local previous-version rollback remains available without
-GitHub access when its durable local release state is valid.
+1. Identify the actual Compose project, overrides, data roots and image digests.
+   Render the combined configuration: old production overrides can reintroduce
+   an updater even after it is removed from the repository default.
+2. Pull and verify the reviewed published Web/Nginx images before maintenance.
+   Record the currently running source/image proofs and compatible restore plan.
+3. Close public maintenance and stop database/filesystem writers, including any
+   legacy updater. Enter the native offline fence before making a cold backup.
+4. Make an independent consistent database backup, including every business
+   table. Verify integrity and preserve node identities, relationships, media
+   metadata, encryption descriptors and exact priorities. Preserve runtime secrets,
+   media premaster and ACME volumes; a database alone is not encrypted-media
+   recovery material. An already verified independent media backup need not be
+   recopied for this metadata-only migration.
+5. Use the reviewed new runtime's supported offline migration commands. Do not
+   manually edit a schema marker or start an old binary against a newer database.
+   Generation 3 -> 4 preserves priorities and widens their range to -7..500000;
+   see [physical migration](../migrations/README.md).
+6. Keep data/secrets/certificate volume identities and project names. Recreate
+   the reviewed services with Compose, then verify database generation, facts,
+   HTTPS, pairing/heartbeat, Local/Direct/Relay playback, Range and Admin behavior
+   before reopening traffic. Remove only the precisely identified legacy updater
+   container and its obsolete configuration; do not delete its recovery journal
+   or use down -v/global volume pruning against an existing deployment.
 
-Rollback changes code, not database contents or media. Schema compatibility
-must be checked separately; an older version is not automatically safe for a
-newer database. The local maintenance, crash-recovery journal, immutable image
-checks and failed-upgrade restore remain enforced. Historical manifest parsing
-is retained only for reading/recovering existing local updater state; no new
-HTTP whole-cluster manifest publication is supported.
+Manual maintenance uses the shared data flag. The legacy force-open flag no
+longer overrides manual maintenance; an explicit authenticated maintenance
+change validates/removes recognized legacy bytes. The native offline marker
+still gates public and Admin traffic and cannot be overridden in the GUI.
 
-## Browser encryption and schema generation 3
+Code rollback does not reverse database DDL. A cross-generation rollback needs
+the maintenance-time independent database backup and matching old containers;
+new writes after reopening must be reconciled before restoring older facts.
+Keep old images and recovery material until the new release is verified.
+Use containers/Compose for product services, never host systemctl components.
 
-Browser media encryption descriptors introduce schema generation 3. Current
-Web, Updater and Nginx image labels, release manifests and
-`prepare-release --confirm-generation 3` must agree. Historical schema-2
-manifest bytes and canonical digests remain preserved but cannot prove a
-current-schema release. Protocol 2 does not imply cross-generation rollback.
-
-A compiled schema-2 updater cannot admit schema-3 images; the first switch is
-operator-managed. Before development or staging migration, verify independent
-database, media metadata and key backups, close maintenance and stop all
-database/filesystem writers, then use the new native runtime's supported
-`Initialize` 2-to-3 migration. Preserve identities, relationships, tokens, file
-IDs and historical plaintext media. Production Master operations remain manual,
-and storage appliances continue to require independent manual upgrades.
-The [first-switch review plan](schema3-first-switch.md) records the separate
-publisher/updater admission boundaries and a scoped staging operation order;
-it does not authorize a gate exception or claim a completed deployment.
-
-After migration, do not start an old schema-2 image against a schema-3 database.
-Automated publication and failed-upgrade recovery accept only the current
-compatible generation; reverse DDL is not implemented. Offline MySQL inventory
-also requires the source and tool to use the same generation; schema-2 evidence
-cannot prove a schema-3 database unchanged. Recovery across that boundary needs
-the independent maintenance-time recovery material and a reviewed procedure.
-
-These are code and deployment boundaries, not proof that staging or production
-was upgraded. Record executed, passed, skipped and undeployed work separately in
-the current validation evidence.
+RN preproduction and external CD are currently retired. Their scripts describe
+historical user-owned integrations and are not a working default CD deployment.
+Native development acceptance and current source CI remain required; no live
+staging or production upgrade is claimed by this document.

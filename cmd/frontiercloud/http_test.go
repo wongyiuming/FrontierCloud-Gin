@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -119,6 +120,30 @@ func nativeHTTPFixtureMode(t *testing.T, mode string) *gin.Engine {
 
 var namedPathParameter = regexp.MustCompile(`\{[^{}]+\}`)
 
+func TestProductionHTTPHasNoOnlineUpgradeRoutes(t *testing.T) {
+	router := nativeHTTPFixture(t)
+	for _, route := range router.Routes() {
+		if strings.HasPrefix(route.Path, "/api/v1/media/admin/nodes/release") || strings.HasPrefix(route.Path, "/internal/v1/cluster-update") {
+			t.Fatal("retired online upgrade route registered", route)
+		}
+	}
+	client := 1
+	for _, endpoint := range []string{"/api/v1/media/admin/nodes/release", "/api/v1/media/admin/nodes/release/history", "/api/v1/media/admin/nodes/release/upgrade", "/api/v1/media/admin/nodes/release/rollback", "/internal/v1/cluster-update/start", "/internal/v1/cluster-update/status"} {
+		for _, method := range []string{"GET", "POST"} {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(method, endpoint, strings.NewReader(`{}`))
+			// Independent clients avoid the real repeated-404 scanner defense;
+			// this test verifies route removal without disabling that defense.
+			request.RemoteAddr = fmt.Sprintf("192.0.2.%d:12345", client)
+			client++
+			router.ServeHTTP(response, request)
+			if response.Code != 404 {
+				t.Fatal("retired online upgrade route reachable", method, endpoint, response.Code)
+			}
+		}
+	}
+}
+
 func pathShape(path string) string {
 	parts := strings.Split(path, "/")
 	for i, v := range parts {
@@ -159,8 +184,10 @@ func TestProductionHTTPRegistrationCoversEffectiveReferenceInventory(t *testing.
 	if err = json.Unmarshal(b, &rows); err != nil {
 		t.Fatal(err)
 	}
+	inventory := map[string]bool{}
 	for _, r := range rows {
 		for _, method := range r.Methods {
+			inventory[method+" "+pathShape(r.Path)] = true
 			if !available[method+" "+pathShape(r.Path)] {
 				t.Errorf("missing effective route: %s %s", method, r.Path)
 			}
@@ -175,6 +202,14 @@ func TestProductionHTTPRegistrationCoversEffectiveReferenceInventory(t *testing.
 			if !available[strings.ToUpper(method)+" "+pathShape(path)] {
 				t.Errorf("published schema has no native implementation: %s %s", method, path)
 			}
+		}
+	}
+	// New Admin operations must be discoverable as well as implemented;
+	// contract-to-router coverage alone misses undocumented live endpoints.
+	for _, method := range []string{"GET", "POST"} {
+		path := "/api/v1/media/admin/priority-order"
+		if !available[method+" "+path] || !inventory[method+" "+path] || schema.Paths[path][strings.ToLower(method)] == nil {
+			t.Fatal("priority operation missing from router or published contracts", method)
 		}
 	}
 }

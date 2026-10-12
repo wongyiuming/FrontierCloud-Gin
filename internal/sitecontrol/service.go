@@ -147,7 +147,13 @@ func (s *Service) status(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	agent := release.AgentStatus(ctx, s.agent)
+	// No updater is connected in the business runtime. A nil agent is an
+	// explicit absence, not an unavailable controller that gates the site.
+	// Non-nil agents remain supported by offline recovery tooling only.
+	agent := map[string]any{}
+	if s.agent != nil {
+		agent = release.AgentStatus(ctx, s.agent)
+	}
 	state, _ := agent["state"].(string)
 	phase, _ := agent["phase"].(string)
 	blocked := release.Busy(state) || state == "failed" || state == "unavailable"
@@ -158,7 +164,7 @@ func (s *Service) status(ctx context.Context) (map[string]any, error) {
 		enabled = true
 		source = "native-offline"
 		detail = "原生离线维护围栏已关闭，管理员开放操作不能覆盖"
-	case force:
+	case force && s.agent != nil:
 		enabled = false
 		source = "manual-open-override"
 		detail = "管理员已显式结束维护；发布失败遗留维护门禁被覆盖"
@@ -172,7 +178,11 @@ func (s *Service) status(ctx context.Context) (map[string]any, error) {
 			detail += " · " + target[:12]
 		}
 	}
-	return map[string]any{"maintenance": enabled, "source": source, "detail": detail, "manual": manual, "force_open": force, "release": agent}, nil
+	value := map[string]any{"maintenance": enabled, "source": source, "detail": detail, "manual": manual, "force_open": force && s.agent != nil}
+	if s.agent != nil {
+		value["release"] = agent
+	}
+	return value, nil
 }
 func (s *Service) Set(ctx context.Context, enabled bool) (map[string]any, error) {
 	done, err := Lease(ctx, s.root, true)
@@ -185,7 +195,10 @@ func (s *Service) Set(ctx context.Context, enabled bool) (map[string]any, error)
 	} else if offline {
 		return nil, errors.New("native offline maintenance cannot be reopened by Admin")
 	}
-	current := release.AgentStatus(ctx, s.agent)
+	current := map[string]any{}
+	if s.agent != nil {
+		current = release.AgentStatus(ctx, s.agent)
+	}
 	state, _ := current["state"].(string)
 	if !enabled && (release.Busy(state) || state == "unavailable") {
 		return nil, errors.New("release execution or unknown updater state prevents reopening")

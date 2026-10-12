@@ -11,10 +11,13 @@ import (
 )
 
 func (r *Repository) SetPreference(ctx context.Context, o store.MediaObject, value int, audit store.AdminAudit) (result store.PlaybackResult, err error) {
-	if value < -7 || value > 500 {
-		return result, errors.New("Preference must be between -7 and 500")
+	if value < store.PriorityMinimum || value > store.PriorityMaximum {
+		return result, errors.New("Preference must be between -7 and 500000")
 	}
 	err = r.write(ctx, func(q queryer) error {
+		if _, err := r.priorityIdentity(ctx, q); err != nil {
+			return err
+		}
 		result = store.PlaybackResult{}
 		id, err := r.ensure(ctx, q, o)
 		if err != nil {

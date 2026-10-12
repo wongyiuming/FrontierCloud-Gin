@@ -15,8 +15,14 @@ import re
 import socket
 import ssl
 import subprocess
+import sys
 import tarfile
 import uuid
+
+# Operator scripts run from a reviewed source checkout, including when the
+# working directory is elsewhere. Share the publisher's generation gate.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.registry_images import SCHEMA_GENERATION
 
 
 def call(arguments, **kwargs):
@@ -45,7 +51,7 @@ def stage(project, revision, backup):
     labels = json.loads(call(["docker", "image", "inspect", image]))[0]["Config"]["Labels"]
     if any(labels.get(name) != value for name, value in {
         "frontiercloud.revision": revision, "frontiercloud.runtime": "go",
-        "frontiercloud.component": "web", "frontiercloud.schema-generation": "3",
+        "frontiercloud.component": "web", "frontiercloud.schema-generation": SCHEMA_GENERATION,
         "frontiercloud.automatic-tls": "1"}.items()):
         raise RuntimeError("published automatic TLS image proof missing")
     ids = call(["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=" + project]).decode().split()

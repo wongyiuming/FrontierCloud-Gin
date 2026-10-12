@@ -130,7 +130,29 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=3 WHERE singleton=1"); err != nil {
 				return err
 			}
-		} else if generation != migrations.Generation {
+			generation = 3
+		}
+		if generation == 3 {
+			if err := widenPriority(ctx, conn, backend, statements); err != nil {
+				return fmt.Errorf("migrate priority range: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=4"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (4,?,?,?)", migrations.PriorityName, migrations.PriorityChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=4 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 4
+		}
+		if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)
 		}
 	}
