@@ -10,7 +10,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
@@ -40,7 +39,6 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		perform func(string, string, string, bool, bool) *httptest.ResponseRecorder
 		control *node.Service
 		id      string
-		agent   *testReleaseAgent
 		db      *storeSQLite.Store
 		root    string
 	}
@@ -69,15 +67,12 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		RegisterOperational(router, a)
 		diagnosticResolver, _ := network.New(cfg.TrustedProxyNetworks)
 		RegisterPlaybackDiagnostics(router, cfg, diagnosticResolver, control, a, diagnostics.New())
-		agent := &testReleaseAgent{status: map[string]any{"release_branch": "main", "current_sha": strings.Repeat("a", 40), "previous_sha": strings.Repeat("b", 40), "state": "success"}}
-		siteService, err := sitecontrol.Open(dir, agent)
+		siteService, err := sitecontrol.Open(dir, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { siteService.Close() })
 		RegisterSiteAdmin(router, a, siteService)
-		coordinator := &release.Coordinator{Agent: agent, Verifier: &testReleaseEvidence{sha: strings.Repeat("c", 40), publishable: true}, Nodes: db.Nodes(), Policy: release.DefaultPolicy()}
-		RegisterReleaseAdmin(router, a, coordinator)
 		cookies := map[string]*http.Cookie{}
 		perform := func(method, path, body string, csrf, secure bool) *httptest.ResponseRecorder {
 			r := httptest.NewRequest(method, origin+"/api/v1/media/admin"+path, strings.NewReader(body))
@@ -120,8 +115,8 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 				t.Fatal("anonymous documentation", path, w.Code)
 			}
 		}
-		if w := perform("GET", "/nodes/release", "", false, true); w.Code != 401 {
-			t.Fatal("anonymous release status", w.Code)
+		if w := perform("GET", "/nodes/release", "", false, true); w.Code != 404 {
+			t.Fatal("retired release status", w.Code)
 		}
 		if w := perform("POST", "/elevate", "token="+url.QueryEscape(key), false, true); w.Code != 200 {
 			t.Fatal(w.Code, w.Body.String())
@@ -179,7 +174,7 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		if w := perform("GET", "/playback-continuity-diagnostics", "", false, true); w.Code != 200 || !strings.Contains(w.Body.String(), `"reports":[]`) {
 			t.Fatal("diagnostic clear ineffective", w.Code, w.Body.String())
 		}
-		return site{perform, control, identity.ID, agent, db, dir}
+		return site{perform, control, identity.ID, db, dir}
 	}
 	m := create("https://admin-master.test")
 	f := create("https://admin-follower.test")
@@ -211,21 +206,8 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	if value := check(m.perform("POST", "/site/maintenance", `{"enabled":true}`, true, true), 200); value["maintenance"] != true || value["source"] != "manual" {
 		t.Fatal(value)
 	}
-	m.agent.mu.Lock()
-	m.agent.status["state"] = "running"
-	m.agent.mu.Unlock()
-	check(m.perform("POST", "/site/maintenance", `{"enabled":false}`, true, true), 409)
-	m.agent.mu.Lock()
-	m.agent.status["state"] = "failed"
-	m.agent.mu.Unlock()
-	if value := check(m.perform("POST", "/site/maintenance", `{"enabled":false}`, true, true), 200); value["force_open"] != true || value["maintenance"] != false {
-		t.Fatal(value)
-	}
-	m.agent.mu.Lock()
-	m.agent.status["state"] = "success"
-	m.agent.mu.Unlock()
-	if value := check(m.perform("POST", "/site/maintenance", `{"enabled":false}`, true, true), 200); value["force_open"] != false {
-		t.Fatal(value)
+	if value := check(m.perform("POST", "/site/maintenance", `{"enabled":false}`, true, true), 200); value["maintenance"] != false || value["force_open"] != false || value["release"] != nil {
+		t.Fatal("site still depends on retired updater", value)
 	}
 	check(m.perform("POST", "/nodes/promote", masterBody, false, true), 403)
 	check(m.perform("POST", "/nodes/promote", masterBody, true, false), 403)
@@ -247,29 +229,17 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	if status := check(f.perform("GET", "/status", "", false, true), 200); status["master_url"] != "https://admin-master.test" {
 		t.Fatal("Follower Admin lost Master navigation", status)
 	}
-	if status := check(m.perform("GET", "/nodes/release", "", false, true), 200); status["can_upgrade"] != true || status["followers"] != nil {
-		t.Fatal("release control must manage only this Master", status)
-	}
-	check(m.perform("POST", "/nodes/release/upgrade", "", false, true), 403)
-	check(m.perform("POST", "/nodes/release/upgrade", "", true, false), 403)
-	check(m.perform("POST", "/nodes/release/upgrade", `{"target_sha":"unverified"}`, true, true), 400)
-	check(f.perform("POST", "/nodes/release/upgrade", "", true, true), 409)
-	if m.agent.starts != 0 || f.agent.starts != 0 {
-		t.Fatal("unauthorized release queued")
-	}
-	if _, err = m.db.Database().Exec("CREATE TRIGGER release_intent_failure BEFORE INSERT ON admin_audit_log WHEN NEW.action='release_upgrade' AND NEW.result='pending' BEGIN SELECT RAISE(ABORT,'injected'); END"); err != nil {
-		t.Fatal(err)
-	}
-	check(m.perform("POST", "/nodes/release/upgrade", "", true, true), 500)
-	if m.agent.starts != 0 {
-		t.Fatal("failed intent audit queued release")
-	}
-	if _, err = m.db.Database().Exec("DROP TRIGGER release_intent_failure"); err != nil {
-		t.Fatal(err)
-	}
-	check(m.perform("POST", "/nodes/release/upgrade", "", true, true), 200)
-	if m.agent.starts != 1 {
-		t.Fatal("verified release not queued")
+	for _, endpoint := range []string{"/nodes/release", "/nodes/release/history", "/nodes/release/upgrade", "/nodes/release/rollback"} {
+		for _, perform := range []func(string, string, string, bool, bool) *httptest.ResponseRecorder{m.perform, f.perform} {
+			for _, method := range []string{"GET", "POST"} {
+				for _, authenticated := range []bool{false, true} {
+					w := perform(method, endpoint, `{}`, authenticated, true)
+					if w.Code != 404 {
+						t.Fatal("retired release route reachable", method, endpoint, w.Code)
+					}
+				}
+			}
+		}
 	}
 	masterRelation, err := m.db.Nodes().Relationship(ctx, relation)
 	if err != nil {
@@ -290,9 +260,6 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 				t.Fatal("retired updater RPC reachable", path, callErr)
 			}
 		}
-	}
-	if f.agent.starts != 0 || m.agent.starts != 1 {
-		t.Fatal("storage update was queued", f.agent.starts, m.agent.starts)
 	}
 	check(m.perform("POST", "/nodes/"+relation+"/mode", `{"mode":"Direct"}`, true, true), 200)
 	check(m.perform("POST", "/nodes/"+relation+"/resources", `{"storage_enabled":true,"storage_capacity_gib":2,"backup_enabled":true}`, true, true), 200)
@@ -369,7 +336,6 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 	if value := check(m.perform("GET", "/nodes/observability", "", false, true), 200); value["role"] != "Standalone" || len(value["members"].([]any)) != 0 {
 		t.Fatal("reset observations stale", value)
 	}
-	check(m.perform("POST", "/nodes/release/rollback", "", true, true), 409)
 	if _, err := m.control.SignedIdentity(ctx, strings.Repeat("a", 32)); err != nil {
 		t.Fatal("rotated key unavailable", err)
 	}

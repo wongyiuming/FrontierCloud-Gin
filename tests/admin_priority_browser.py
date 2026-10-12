@@ -67,6 +67,16 @@ with sync_playwright() as driver:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(args.base_url + '/api/v1/media/admin/')
     page.wait_for_function('() => !!window.FrontierPriorityDrag')
+    assert page.locator('#systemVersionPanel, #systemReleaseUpgrade, #systemReleaseRollback').count() == 0
+    for endpoint in ('nodes/release', 'nodes/release/history', 'nodes/release/upgrade', 'nodes/release/rollback'):
+        response = context.request.get(args.base_url + '/api/v1/media/admin/' + endpoint)
+        assert response.status == 404
+    assert not any('release-admin.js' in value or 'release-version-ui.js' in value for value in page.locator('script[src]').evaluate_all('(items)=>items.map(item=>item.src)'))
+    site_status = call(page, 'site/maintenance')
+    assert site_status['maintenance'] is False and 'release' not in site_status
+    assert call(page, 'site/maintenance', {'enabled': True})['maintenance'] is True
+    assert call(page, 'site/maintenance', {'enabled': False})['maintenance'] is False
+    proof.append('retired-upgrade-routes-and-UI-with-independent-site-maintenance')
     page.locator('[data-module-target="priority"]').click()
     page.wait_for_timeout(400)
     reset(page)
@@ -83,7 +93,7 @@ with sync_playwright() as driver:
     page.locator('[data-module-target="priority"]').click()
     open_scope(page, 'music/drag')
     assert names(page) == public_order
-    expected_modules = ['media','priority','lyrics','users','security','network','nodes','site','release','key','brand']
+    expected_modules = ['media','priority','lyrics','users','security','network','nodes','site','key','brand']
     assert page.locator('.admin-console > .admin-module').evaluate_all('(modules)=>modules.map(module=>module.dataset.adminModule)') == expected_modules
     assert page.locator('#adminModuleLinks button').evaluate_all('(buttons)=>buttons.map(button=>button.dataset.moduleTarget)') == expected_modules
     proof.append('mouse-drag-equal-priority-and-99-neighbour')

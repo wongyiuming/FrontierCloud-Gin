@@ -38,7 +38,8 @@ a lost response may follow a committed transaction.
 
 The UI refresh includes desktop module navigation and a small-screen menu,
 responsive priority controls and consistent spacing. Canonical module order,
-upload, certificate, release and security operations retain their contracts.
+upload, certificate and security operations retain their contracts. Online
+upgrade/rollback APIs and their UI are retired; site maintenance is independent.
 
 Development-host checks: Go unit/race tests, actual MySQL migration/transaction
 tests, authenticated API/CSRF checks and `scripts/test-admin-priority.sh` using
@@ -47,8 +48,9 @@ retains its lightweight source-only budget. This fixture uses loopback HTTP and
 does not expose insecure Admin outside the development host. No public ACME is
 needed for this UI test.
 
-First release needs generation-4 image proofs. A generation-3 updater must not
-mislabel the new images as schema 3 or bypass proof checks. Back up the database,
+First release needs generation-4 image proofs and an operator-managed Compose
+transition. There is no Admin upgrade API. Historical generation-3 updater tooling
+must not mislabel the new images as schema 3 or bypass proof checks. Back up the database,
 close the maintenance fence, start reviewed generation-4 containers and verify
 the migration before reopening service. Old binaries refuse the new database;
 rollback requires restoring its independent database backup. This development

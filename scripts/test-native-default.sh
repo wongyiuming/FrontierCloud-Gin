@@ -20,7 +20,7 @@ cleanup() {
 }
 diagnose() {
   if [[ "$project" == "$prefix-"* && ${#files[@]} -gt 0 ]]; then
-    docker compose --env-file /dev/null -p "$project" "${files[@]}" logs --no-color --tail=15 nginx updater >&2 || true
+    docker compose --env-file /dev/null -p "$project" "${files[@]}" logs --no-color --tail=15 nginx >&2 || true
   fi
 }
 trap diagnose ERR
@@ -40,7 +40,7 @@ for database in sqlite mysql; do
   files+=(-f tests/native-loopback.compose.yaml)
   compose() { docker compose --env-file /dev/null -p "$project" "${files[@]}" "$@"; }
   compose up -d --no-build --wait --wait-timeout 180
-  for component in web updater nginx; do
+  for component in web nginx; do
     cid=$(compose ps -q "$component")
     test "$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$cid")" = "$project"
     image=$(docker inspect --format '{{.Image}}' "$cid")
@@ -48,8 +48,7 @@ for database in sqlite mysql; do
     test "$(docker image inspect --format '{{index .Config.Labels "frontiercloud.runtime"}}' "$image")" = go
   done
   compose exec -T web sh -c 'test "$(id -u)" = 10001; test "$(readlink /proc/1/exe)" = /app/frontiercloud; ! command -v python; ! command -v python3; ! command -v mysql'
-  compose exec -T updater sh -c 'test "$(readlink /proc/1/exe)" = /app/frontiercloud-updater; ! command -v python; ! command -v python3; ! command -v docker'
-  compose exec -T web /app/frontiercloud updater-status | grep -q "\"updater_runtime_sha\":\"$revision\""
+  ! compose config --services | grep -qx updater
   nginx_id=$(compose ps -q nginx)
   address=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_default\"}}{{.IPAddress}}{{end}}" "$nginx_id"):80
   curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 "http://$address/health/ready" >/dev/null

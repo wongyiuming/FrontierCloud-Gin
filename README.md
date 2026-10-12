@@ -22,7 +22,7 @@ require exact-source proof. Bootstrap history alone is not release proof.
   storage modes, session-scoped key envelopes and authenticated streaming decryption.
 - [Abandoned-upload recovery](docs/upload-lifecycle.md): expiry triggers physical
   reconciliation, never blind deletion; live streams and complete files are protected.
-- Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed Master-only releases.
+- Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed operator-managed releases.
 
 ## Quick start
 
@@ -95,6 +95,10 @@ nodes serially. See [storage appliance operations](docs/storage-appliance.md)
 before touching an existing owned disk.
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
+
+Online upgrade and rollback controls have been removed from AdminGUI and the
+business API. Deploy reviewed releases through Compose after a database backup
+and compatibility check; see [operator release procedure](docs/master-self-release.md).
 
 When an operator provisions independent preproduction, its
 [bounded local CD controller](docs/staging-cd.md) receives signed wakeups only

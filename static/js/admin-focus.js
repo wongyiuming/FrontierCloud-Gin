@@ -2,7 +2,7 @@
     const MODULE_ORDER = [
         'media', 'priority', 'lyrics', 'users',
         'security', 'network',
-        'nodes', 'site', 'release', 'key', 'brand',
+        'nodes', 'site', 'key', 'brand',
     ];
     const MODULE_RANK = new Map(MODULE_ORDER.map((name, index) => [name, index]));
     const consoleRoot = document.querySelector('.admin-console');
@@ -117,7 +117,7 @@
         setTimeout(() => focusExpanded(module), 0);
     });
 
-    // Site/release/brand panels may finish asynchronous initialization after
+    // Site/brand panels may finish asynchronous initialization after
     // admin-focus.js starts. Observe only direct Admin module insertion. DOM
     // moves caused by reorderModules() are harmless because the reorder is
     // idempotent and performs no append when the order is already correct.

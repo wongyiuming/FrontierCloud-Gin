@@ -203,7 +203,10 @@
         "properties": {
           "validation": {
             "type": "string",
-            "enum": ["temporary_port80", "shared_http01"]
+            "enum": [
+              "temporary_port80",
+              "shared_http01"
+            ]
           },
           "auto_renew": {
             "type": "boolean"
@@ -2337,99 +2340,6 @@
           }
         },
         "summary": "Reinitialize",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release": {
-      "get": {
-        "operationId": "release_status_api_v1_media_admin_nodes_release_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "refresh_ci",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Refresh Ci",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Release Status",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/history": {
-      "get": {
-        "operationId": "master_release_history",
-        "responses": {
-          "200": {
-            "description": "Up to ten reviewed PR descriptions; listing is not rollback authorization"
-          }
-        },
-        "summary": "Master-only reviewed release discovery",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/rollback": {
-      "post": {
-        "operationId": "release_rollback_api_v1_media_admin_nodes_release_rollback_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Release Rollback",
-        "tags": [
-          "MediaAdmin"
-        ]
-      }
-    },
-    "/api/v1/media/admin/nodes/release/upgrade": {
-      "post": {
-        "operationId": "release_upgrade_api_v1_media_admin_nodes_release_upgrade_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Release Upgrade",
         "tags": [
           "MediaAdmin"
         ]

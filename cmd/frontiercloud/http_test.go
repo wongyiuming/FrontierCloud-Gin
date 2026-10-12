@@ -119,6 +119,19 @@ func nativeHTTPFixtureMode(t *testing.T, mode string) *gin.Engine {
 
 var namedPathParameter = regexp.MustCompile(`\{[^{}]+\}`)
 
+func TestProductionHTTPHasNoOnlineUpgradeRoutes(t *testing.T) {
+	router := nativeHTTPFixture(t)
+	for _, endpoint := range []string{"/api/v1/media/admin/nodes/release", "/api/v1/media/admin/nodes/release/history", "/api/v1/media/admin/nodes/release/upgrade", "/api/v1/media/admin/nodes/release/rollback", "/internal/v1/cluster-update/start", "/internal/v1/cluster-update/status"} {
+		for _, method := range []string{"GET", "POST"} {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(method, endpoint, strings.NewReader(`{}`)))
+			if response.Code != 404 {
+				t.Fatal("retired online upgrade route reachable", method, endpoint, response.Code)
+			}
+		}
+	}
+}
+
 func pathShape(path string) string {
 	parts := strings.Split(path, "/")
 	for i, v := range parts {

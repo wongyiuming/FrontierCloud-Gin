@@ -71,7 +71,6 @@ require('ARG FRONTIERCLOUD_RUNTIME=go' in read("nginx/Dockerfile"), "Edge defaul
 require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
-        and 'ghcr.io/wongyiuming/frontiercloud-gin-updater:${FRONTIERCLOUD_REVISION:-latest}' in compose
         and '  build:' not in compose, "Initializers/updater must be native")
 require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
         and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}' in compose,
@@ -79,12 +78,10 @@ require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
 for token in ("app/", "main.py", "tests/", "scripts/"):
     require(token in read(".dockerignore").splitlines(), f"Build context exclusion missing: {token}")
 
-updater_block = compose.split("  updater:\n", 1)[1].split("\n  web:\n", 1)[0]
-web_block = compose.split("  web:\n", 1)[1].split("\n  redis:\n", 1)[0]
-require('updater_control:/run/frontiercloud-updater\n' in updater_block,
-        "Updater socket volume must be writable")
-require('updater_control:/run/frontiercloud-updater:ro' in web_block,
-        "Web socket volume must be read-only")
+for forbidden in ('  updater:', '/var/run/docker.sock', 'updater_control', 'maintenance_state'):
+    require(forbidden not in compose, f"Retired online updater deployment exists: {forbidden}")
+require('RegisterReleaseAdmin' not in read('cmd/frontiercloud/http.go'),
+        'Retired release HTTP control is reachable')
 for path in ("Dockerfile", "nginx/Dockerfile", "updater/Dockerfile"):
     require("COPY --chmod=" not in read(path) and "RUN --mount=" not in read(path),
             f"Updater-compatible legacy Docker build required: {path}")

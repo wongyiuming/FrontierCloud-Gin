@@ -183,9 +183,8 @@ The Admin console order is an intentional product contract and is tested in both
 6. WebRTC network relations
 7. Nodes
 8. Site access state
-9. System release management
-10. Admin Key
-11. Brand Logo
+9. Admin Key
+10. Brand Logo
 
 Dynamic modules must join this same final DOM/visual order. Reordering code must be idempotent; DOM mutation observers must not create self-triggering reorder loops.
 
@@ -203,10 +202,15 @@ Absolute repository policy:
 - after promotion, fast-forward `dev` to the release merge commit;
 - never force-rewrite a canonical branch. Database selection does not change the release profile.
 
-Release management upgrades only the Master itself. Storage has no updater,
-release synchronization, cluster convergence or remote upgrade API. Historical
-local manifest parsing exists solely for durable updater recovery. See
-[Master-only version management](docs/master-self-release.md).
+Online upgrade/rollback controls are retired for all roles. Admin has no release
+status/history/upgrade/rollback API, polling UI or upgrade module. Default business
+Compose launches no updater and mounts no Docker/control socket or legacy updater
+maintenance volume. Manual site maintenance works independently; its GUI cannot
+reopen the native offline migration fence. Reviewed releases are deployed by the
+operator with Compose after compatible database backup/migration checks. Historical
+updater source, image-publication contracts and user-owned external CD scripts are
+retained for recovery/tooling, not exposed through the business runtime. See
+[operator release procedure](docs/master-self-release.md).
 
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
 
@@ -354,7 +358,7 @@ A future isolated preproduction IP does not inherit the retired deployment.
 A fresh HTTPS business deployment requires only `TLS_ENABLED` and `SERVER_NAME`.
 Certificate paths and ACME webroot are not operator configuration. Every other operator setting
 has a usable default. Plain `docker compose up -d` pulls public GHCR `latest`
-Web/Updater/Nginx images; it must not require a user-supplied source SHA or run
+Web/Nginx images; it must not require a user-supplied source SHA or run
 local builds. Empty optional values retain their defaults. HTTP without `.env`
 also remains supported. Public DNS and reachable standard validation/listening
 ports are prerequisites. Fresh installations never require prepared certificates.
@@ -363,7 +367,7 @@ business while waiting for issuance. Published HTTPS must be verified before
 reporting TLS ready or generating a five-minute storage pairing package.
 
 Only immutable-main workflow code, after successful current-main source CI and
-all three verified exact-SHA publication jobs, may advance `latest`. Candidate
+all verified exact-SHA publication jobs (including the retained legacy tool artifact), may advance `latest`. Candidate
 dev code cannot advance it. Alias promotion executes no candidate code and uses
 one repository-wide serialization lock with current-head/attempt checks before
 each write. Registry tags are not atomic across components: installs overlapping

@@ -258,7 +258,7 @@ func (a *Admin) page(c *gin.Context) {
 		}
 		styles.WriteString(`<link rel="stylesheet" href="` + url + `">` + "\n")
 	}
-	for _, asset := range []string{"js/release-admin.js", "js/release-version-ui.js", "js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/priority-drag.js", "js/lyrics-directory-counts.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js"} {
+	for _, asset := range []string{"js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/priority-drag.js", "js/lyrics-directory-counts.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js"} {
 		url, err := a.asset(asset)
 		if err != nil {
 			internalError(c, err)

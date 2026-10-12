@@ -58,7 +58,7 @@
 }
 
 /* Canonical Admin module order. Keep related work together even when modules
-   such as site/release/brand are injected at runtime after the static page loads. */
+   such as site/brand are injected at runtime after the static page loads. */
 .admin-console > .admin-module[data-admin-module="media"] { order: 10; }
 .admin-console > .admin-module[data-admin-module="priority"] { order: 20; }
 .admin-console > .admin-module[data-admin-module="lyrics"] { order: 30; }
@@ -67,7 +67,6 @@
 .admin-console > .admin-module[data-admin-module="network"] { order: 60; }
 .admin-console > .admin-module[data-admin-module="nodes"] { order: 70; }
 .admin-console > .admin-module[data-admin-module="site"] { order: 80; }
-.admin-console > .admin-module[data-admin-module="release"] { order: 90; }
 .admin-console > .admin-module[data-admin-module="key"] { order: 100; }
 .admin-console > .admin-module[data-admin-module="brand"] { order: 110; }
 
@@ -106,9 +105,6 @@
     overflow: auto;
 }
 
-#nodeReleasePanel { display: none !important; }
-
-.system-version-panel { --module-accent: var(--cyan); }
 .site-access-panel { --module-accent: var(--amber); }
 
 .system-module-content {
@@ -128,14 +124,12 @@
 }
 .system-toolbar .spacer { flex: 1 1 auto; }
 
-.release-overview,
 .site-access-overview {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 12px;
 }
-.release-stat,
 .site-access-stat {
     min-width: 0;
     padding: 12px;
@@ -143,76 +137,9 @@
     border: 1px solid #293d54;
     border-radius: 10px;
 }
-.release-stat small,
 .site-access-stat small { display: block; margin-bottom: 4px; color: var(--muted); }
-.release-stat strong,
 .site-access-stat strong { display: block; overflow-wrap: anywhere; font: 600 13px/1.5 var(--mono); }
 
-.release-progress-shell {
-    position: relative;
-    height: 12px;
-    overflow: hidden;
-    margin: 10px 0 5px;
-    background: #07101a;
-    border: 1px solid #26384d;
-    border-radius: 999px;
-}
-.release-progress-bar {
-    width: 0;
-    height: 100%;
-    background: linear-gradient(90deg, #3988ff, #35d4e8);
-    border-radius: inherit;
-    transition: width .35s ease;
-}
-.release-progress-bar.failed { background: linear-gradient(90deg, #bd4254, #ff7585); }
-.release-progress-caption { color: var(--muted); font-size: 12px; }
-
-.release-steps {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-    margin: 12px 0;
-}
-.release-step {
-    padding: 8px;
-    color: var(--muted);
-    text-align: center;
-    font-size: 11px;
-    background: #0a121d;
-    border: 1px solid #27394e;
-    border-radius: 8px;
-}
-.release-step.done { color: #b8f1d4; border-color: #347057; background: #0e211a; }
-.release-step.active { color: #dff5ff; border-color: #3f87a0; background: #102532; }
-.release-step.failed { color: #ffd6dc; border-color: #864351; background: #29151a; }
-
-.release-node-list { display: grid; gap: 8px; }
-.release-node {
-    display: grid;
-    grid-template-columns: minmax(180px, .9fr) minmax(220px, 1.2fr) minmax(180px, .9fr);
-    gap: 12px;
-    align-items: center;
-    padding: 11px 12px;
-    background: #0b1420;
-    border: 1px solid #293d54;
-    border-radius: 9px;
-}
-.release-node.failed { border-color: #74404a; }
-.release-node.success { border-color: #315f4b; }
-.release-node strong { display: block; overflow-wrap: anywhere; }
-.release-node small { color: var(--muted); overflow-wrap: anywhere; }
-.release-node code { color: #a9c7e8; font: 11px/1.45 var(--mono); overflow-wrap: anywhere; }
-.release-node .release-progress-shell { margin: 0 0 4px; }
-.release-error {
-    margin-top: 10px;
-    padding: 10px;
-    color: #ffd0d7;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    background: #251318;
-    border: 1px solid #663844;
-    border-radius: 8px;
-}
 
 .site-state-pill {
     display: inline-flex;
@@ -230,9 +157,7 @@
 .site-access-actions .danger { color: #ffd9df; border-color: #73404a; background: #2b171c; }
 
 @media (max-width: 820px) {
-    .release-overview, .site-access-overview { grid-template-columns: 1fr; }
-    .release-node { grid-template-columns: 1fr; }
-    .release-steps { grid-template-columns: 1fr; }
+    .site-access-overview { grid-template-columns: 1fr; }
 }
 
 .admin-mobile-toolbar { display: none; }

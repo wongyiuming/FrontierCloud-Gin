@@ -96,12 +96,12 @@ func TestActualComposeSQLiteAndMySQLSelection(t *testing.T) {
 			if memoryErr != nil || memory != 256*1024*1024 || !reflect.DeepEqual(cache.Command, []string{"redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"}) {
 				t.Fatal("Redis memory/security-counter eviction boundary changed", cache)
 			}
-			for _, name := range []string{"web", "secrets-init", "media-init", "updater"} {
+			for _, name := range []string{"web", "secrets-init", "media-init"} {
 				s, ok := spec.Services[name]
 				if !ok || strings.Contains(strings.ToLower(s.Image), "python") || len(s.Command) != 1 {
 					t.Fatal("native service contract", name, s)
 				}
-				want := map[string]string{"web": "serve", "updater": "serve", "secrets-init": "init-secrets", "media-init": "init-media"}[name]
+				want := map[string]string{"web": "serve", "secrets-init": "init-secrets", "media-init": "init-media"}[name]
 				if s.Command[0] != want {
 					t.Fatal("service delegates to a script", name)
 				}
@@ -113,38 +113,25 @@ func TestActualComposeSQLiteAndMySQLSelection(t *testing.T) {
 					t.Fatal("immutable image revision missing", name)
 				}
 			}
-			web, updater := spec.Services["web"], spec.Services["updater"]
-			if web.User != "10001:10001" || updater.User != "0:0" {
-				t.Fatal("runtime/privilege boundary changed")
+			web := spec.Services["web"]
+			if _, found := spec.Services["updater"]; found {
+				t.Fatal("retired updater deployed")
 			}
-			if len(web.CapAdd) != 0 || !reflect.DeepEqual(web.CapDrop, []string{"ALL"}) || !reflect.DeepEqual(updater.CapDrop, []string{"ALL"}) || !reflect.DeepEqual(updater.CapAdd, []string{"CHOWN", "DAC_OVERRIDE"}) {
-				t.Fatal("native Web/agent capability boundary changed")
+			if web.User != "10001:10001" || len(web.CapAdd) != 0 || !reflect.DeepEqual(web.CapDrop, []string{"ALL"}) {
+				t.Fatal("native Web privilege boundary changed")
+			}
+			for _, service := range spec.Services {
+				for _, volume := range service.Volumes {
+					if volume.Target == "/run/frontiercloud-updater" || volume.Target == "/var/run/docker.sock" || volume.Target == "/run/frontiercloud-maintenance" {
+						t.Fatal("retired updater authority mounted")
+					}
+				}
 			}
 			if web.Environment["DB_TYPE"] != kind || web.Environment["SQLITE_PATH"] != "/app/data/frontiercloud.db" || web.Environment["DATA_ROOT"] != "/app/data" {
 				t.Fatal("selected store/data volume mismatch")
 			}
 			if !reflect.DeepEqual(web.Healthcheck.Test, []string{"CMD", "/app/frontiercloud", "healthcheck"}) {
 				t.Fatal("health probe delegates outside native binary")
-			}
-			if updater.Environment["UPDATER_PROJECT"] != spec.Name || updater.Environment["UPDATER_DATA_DIRECTORY"] != "/data" {
-				t.Fatal("updater can target another project or data volume")
-			}
-			for _, pair := range []struct {
-				s  composeService
-				ro bool
-			}{{web, true}, {updater, false}} {
-				found := false
-				for _, v := range pair.s.Volumes {
-					if v.Target == "/run/frontiercloud-updater" {
-						found = v.ReadOnly == pair.ro
-					}
-					if v.Target == "/var/run/docker.sock" && pair.ro {
-						t.Fatal("Web gained Docker authority")
-					}
-				}
-				if !found {
-					t.Fatal("control mount permission boundary changed")
-				}
 			}
 			_, mysql := spec.Services["mysql"]
 			dependency, depends := web.DependsOn["mysql"]
