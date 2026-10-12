@@ -1,0 +1,37 @@
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+--- PASS: TestResourceMigrationGenerationFourUpgrade (2.42s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.16s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.20s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (1.01s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (1.06s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	3.437s
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+--- PASS: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (1.05s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+--- PASS: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (0.23s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+--- PASS: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (0.21s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+--- PASS: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (0.09s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+--- PASS: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (0.06s)
+=== RUN   TestResourceMigrationReadOnlyCatalogAtomicStartAndFences
+--- PASS: TestResourceMigrationReadOnlyCatalogAtomicStartAndFences (0.23s)
+=== RUN   TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof
+--- PASS: TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof (0.14s)
+=== RUN   TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata
+--- PASS: TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata (0.22s)
+=== RUN   TestResourceMigrationTargetsAndSplitOwnershipAreReported
+--- PASS: TestResourceMigrationTargetsAndSplitOwnershipAreReported (0.16s)
+=== RUN   TestResourceMigrationConcurrentPlansCannotOversellTarget
+--- PASS: TestResourceMigrationConcurrentPlansCannotOversellTarget (0.26s)
+=== RUN   TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask
+--- PASS: TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask (0.27s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	3.942s
+PASS: SQLite/MySQL schema recovery, MySQL task/reservation/lease transactions and migration backup guards; byte transport remains separate acceptance

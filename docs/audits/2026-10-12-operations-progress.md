@@ -250,9 +250,10 @@ this is heap sampling, not whole-node RSS or authenticated network acceptance.
 See [byte evidence](2026-10-12-byte-staging.txt). Compilation used the prior
 two-CPU/3 GiB toolchain budget. Full Go tests and unchanged-budget source CI passed.
 
-This library is not yet connected to public node endpoints. Peer task registration,
-authenticated transport, quota integration, ordinary media/recording publication
-coordination, source cleanup and real distributed acceptance remain required.
+At this checkpoint the library was not connected to node endpoints. The later
+authenticated byte checkpoint below connects private staging and verification;
+ordinary media/recording publication, source cleanup and real distributed
+acceptance remain required.
 Opaque ciphertext bytes/descriptors were tested; valid AES playback was not
 implied by that fixture.
 
@@ -284,6 +285,42 @@ requests return 401, a paired key cannot declare a different Master (409), and
 legal duplicate registration charges capacity once. Its transport is a fixture,
 not a real TLS socket/fleet acceptance claim. Full Go tests and unchanged source
 CI also passed; the source suite still has 201 Python tests/two optional skips.
+
+## Authenticated byte checkpoint
+
+Followers now expose bounded read/begin/status/append/verify/abort actions under
+the existing HTTPS, raw-body HMAC, durable nonce and active upstream checks.
+Every action binds the persisted task, runner epoch, source/target identities,
+object identity, version, size and expected full SHA. Source reads use existing
+managed objects; target writes only task-private staging. Media and recording
+roots have adapters, with recording relationship-path mapping retained.
+
+Data requests admit at most two concurrent handlers per follower, chunks are
+limited to 256 KiB, and a shared pacer limits admitted raw read/write bytes to
+8 MiB/s. JSON/base64 wire overhead is additional. Control and heartbeat routes
+do not share these data slots. One joined local worker verifies actual full
+disk contents outside HTTP timeouts and SQL/global mutation locks; only its
+successful result can persist a peer object's verified state. Querying a
+checkpoint does not prove unchanged disk contents or switch business authority.
+
+An actual SQLite/Gin pairing/HMAC fixture uploaded 524,307 bytes through the
+ordinary Direct storage upload path, read them in three chunks through Master,
+and appended/verifiably persisted them at a Relay target. Duplicate chunks,
+wrong source versions, oversized reads, unsigned requests and paused writes
+were checked. Target business used bytes remained zero, its reservation remained
+charged, its ordinary object/path stayed absent and Master retained source
+ownership. See [byte relay output](2026-10-12-migration-relay-bytes.txt).
+The transport directly dispatches routers; this is not real TLS/socket or
+five-node acceptance. Recording transfer and valid encrypted playback are not
+claimed by this fixture.
+
+Actual SQLite/MySQL transaction tests also rejected a false verification SHA
+and persisted the matching local proof before admitting publication. See
+[peer data transaction output](2026-10-12-peer-data-transactions.txt).
+Full Go tests passed; unchanged-budget source CI passed with 201 Python tests
+and two optional skips. The full migration capability remains unadvertised.
+Managed publication, Master worker orchestration, source cleanup, cancel
+capacity reconciliation and distributed restart/fault acceptance remain open.
 
 ## Required remaining work
 

@@ -147,7 +147,7 @@ func (r *Repository) checkPeerLease(ctx context.Context, q queryer, relationship
 	if _, e := readNode(ctx, q, r.lock()); e != nil {
 		return store.MigrationPeerHeader{}, store.NodeIdentity{}, "", e
 	}
-	if !peerLeaseValid(l, l.TaskID) || !nodeIDPattern.MatchString(l.TaskID) {
+	if !nodeIDPattern.MatchString(l.RunnerID) || l.Epoch <= 0 || !nodeIDPattern.MatchString(l.TaskID) {
 		return store.MigrationPeerHeader{}, store.NodeIdentity{}, "", store.ErrMigrationLease
 	}
 	h, state, e := r.peerHeader(ctx, q, l.TaskID)
@@ -305,7 +305,7 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		} else if state == "cancelling" {
 			return store.ErrMigrationState
 		}
-		if operation != "read" && operation != "append" && operation != "verify" && operation != "publish" && operation != "abort" {
+		if operation != "read" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "abort" {
 			return store.ErrMigrationState
 		}
 		if operation == "read" && n.ID != h.SourceID || operation != "read" && n.ID != h.TargetID {
@@ -331,6 +331,8 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 		v.Proof.ID = v.Object.ID
 		v.Proof.Version = v.Object.Version
 		v.Proof.Bytes = v.Object.Bytes
+		v.Header = h
+		v.State = phase
 		return nil
 	})
 	return
@@ -371,3 +373,27 @@ func (r *Repository) FencePeerMigration(ctx context.Context, relationship, task 
 }
 
 var _ store.MigrationPeerRepository = (*Repository)(nil)
+
+// Only the local byte verifier calls this after actual disk SHA/length proof.
+// An incoming control request is never itself evidence of verified bytes.
+func (r *Repository) VerifyPeerMigrationObject(ctx context.Context, relationship string, l store.MigrationLease, id string, size int64, sha string) error {
+	return r.write(ctx, func(q queryer) error {
+		h, n, state, e := r.checkPeerLease(ctx, q, relationship, l)
+		if e != nil {
+			return e
+		}
+		if n.ID != h.TargetID || state == "cancelling" {
+			return store.ErrMigrationState
+		}
+		var expected int64
+		var hash, phase string
+		if e = q.QueryRowContext(ctx, "SELECT expected_bytes,sha256,state FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, id).Scan(&expected, &hash, &phase); e != nil {
+			return e
+		}
+		if expected != size || hash != sha || phase != "receiving" && phase != "verified" {
+			return store.ErrMigrationState
+		}
+		_, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='verified',updated_at=? WHERE task_id=? AND logical_id=?", time.Now().Unix(), l.TaskID, id)
+		return e
+	})
+}

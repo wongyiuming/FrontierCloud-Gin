@@ -63,6 +63,25 @@ type Receiver struct {
 	node, resource string
 }
 
+// Status reports persisted transfer facts. It does not upgrade them to disk
+// verification; publication still requires Verify and VerifiedReader.
+func (r *Receiver) Status(ctx context.Context, s Spec) (Checkpoint, error) {
+	if !r.valid(s) {
+		return Checkpoint{}, ErrState
+	}
+	if e := ctx.Err(); e != nil {
+		return Checkpoint{}, e
+	}
+	c, e := r.load(s)
+	if e != nil {
+		return c, e
+	}
+	if _, e = resumeHash(c); e != nil {
+		return c, e
+	}
+	return c, nil
+}
+
 func New(root *os.Root, node, resource string) (*Receiver, error) {
 	if root == nil || !identifier.MatchString(node) || (resource != "media" && resource != "recording") {
 		return nil, ErrState
