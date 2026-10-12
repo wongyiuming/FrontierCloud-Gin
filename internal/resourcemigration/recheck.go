@@ -27,7 +27,7 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 			break
 		}
 	}
-	if checkpoint == nil || checkpoint.State != "cleanup_pending" || w.Plan.Catalog.Target.RelationshipID == nil || w.Plan.Catalog.Source.RelationshipID == nil {
+	if checkpoint == nil || checkpoint.State != "cleanup_pending" && checkpoint.State != "cleaned" || w.Plan.Catalog.Target.RelationshipID == nil || w.Plan.Catalog.Source.RelationshipID == nil {
 		return proof, store.ErrMigrationState
 	}
 	o := checkpoint.Object

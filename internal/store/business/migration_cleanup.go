@@ -11,6 +11,12 @@ import (
 // authenticate a fresh target disk verification; there is no browser/CLI path
 // that accepts these proof fields directly from an administrator.
 func (r *Repository) AuthorizeMigrationCleanup(ctx context.Context, l store.MigrationLease, id string, proof store.MigrationCleanupProof) (grant store.MigrationCleanupGrant, e error) {
+	return r.authorizeMigrationCleanup(ctx, l, id, proof, false)
+}
+func (r *Repository) AuthorizeMigrationAnchorRetirement(ctx context.Context, l store.MigrationLease, id string, proof store.MigrationCleanupProof) (store.MigrationCleanupGrant, error) {
+	return r.authorizeMigrationCleanup(ctx, l, id, proof, true)
+}
+func (r *Repository) authorizeMigrationCleanup(ctx context.Context, l store.MigrationLease, id string, proof store.MigrationCleanupProof, anchor bool) (grant store.MigrationCleanupGrant, e error) {
 	e = r.write(ctx, func(q queryer) error {
 		t, e := r.checkMigrationLease(ctx, q, l)
 		if e != nil {
@@ -41,7 +47,11 @@ func (r *Repository) AuthorizeMigrationCleanup(ctx context.Context, l store.Migr
 			}
 		}
 		now := time.Now().Unix()
-		if unit == nil || unit.State != "cleanup_pending" || object.State != "cleanup_pending" || unit.CommittedAt <= 0 || unit.CleanupAfter < unit.CommittedAt+3600 || unit.CleanupAfter > now {
+		expectedObjectState := "cleanup_pending"
+		if anchor {
+			expectedObjectState = "cleaned"
+		}
+		if unit == nil || unit.State != "cleanup_pending" || object.State != expectedObjectState || unit.CommittedAt <= 0 || unit.CleanupAfter < unit.CommittedAt+3600 || unit.CleanupAfter > now {
 			return store.ErrMigrationState
 		}
 		o := object.Object
@@ -124,7 +134,7 @@ func (r *Repository) AuthorizeMigrationCleanup(ctx context.Context, l store.Migr
 		if e = q.QueryRowContext(ctx, "SELECT source_version FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), l.TaskID, unit.ID).Scan(&unitVersion); e != nil {
 			return e
 		}
-		grant = store.MigrationCleanupGrant{TaskID: l.TaskID, MasterID: t.MasterID, SourceID: t.SourceID, TargetID: t.TargetID, PlanSHA: t.PlanSHA, UnitID: unit.ID, UnitVersion: unitVersion, Object: o, SHA256: object.SourceSHA, CommittedAt: unit.CommittedAt, CleanupAfter: unit.CleanupAfter, TargetVerifiedAt: proof.VerifiedAt}
+		grant = store.MigrationCleanupGrant{TaskID: l.TaskID, MasterID: t.MasterID, SourceID: t.SourceID, TargetID: t.TargetID, PlanSHA: t.PlanSHA, UnitID: unit.ID, UnitVersion: unitVersion, Object: o, SHA256: object.SourceSHA, CommittedAt: unit.CommittedAt, CleanupAfter: unit.CleanupAfter, TargetVerifiedAt: proof.VerifiedAt, SourceCopyDeleted: anchor}
 		return nil
 	})
 	return

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -36,7 +37,10 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		return e
 	}
 	if v.State == "deleted" {
-		return s.finishMigrationCleanup(ctx, l.TaskID, id)
+		if e = s.finishMigrationCleanup(ctx, l.TaskID, id); e != nil {
+			return e
+		}
+		return s.migrationHistory(ctx, relationship, l, v, repo)
 	}
 	if v.State != "deleting" || v.Object.Resource != "media" {
 		return store.ErrMigrationState
@@ -98,7 +102,12 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if e != nil {
 		return e
 	}
-	defer release()
+	held := true
+	defer func() {
+		if held {
+			release()
+		}
+	}()
 	if e = s.ready(); e != nil {
 		return e
 	}
@@ -107,7 +116,12 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		return e
 	}
 	if v.State == "deleted" {
-		return s.finishMigrationCleanupLocked(ctx, l.TaskID, id)
+		if e = s.finishMigrationCleanupLocked(ctx, l.TaskID, id); e != nil {
+			return e
+		}
+		release()
+		held = false
+		return s.migrationHistory(ctx, relationship, l, v, repo)
 	}
 	current, e := s.safeInfo(v.Object.Path)
 	if e != nil {
@@ -152,7 +166,34 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if remaining != nil {
 		return ErrRecovery
 	}
-	return nil
+	release()
+	held = false
+	return s.migrationHistory(ctx, relationship, l, v, repo)
+}
+
+func (s *Service) migrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository) error {
+	r, e := migrationdata.New(s.root, v.Header.SourceID, "media")
+	if e != nil {
+		return e
+	}
+	return r.HistoricalAnchors(ctx, v.Header.MasterID, v.Object, v.Proof.SHA256, func() error {
+		current, e := repo.AuthorizePeerMigration(ctx, relationship, l, v.Object.ID, "cleanup")
+		if e != nil {
+			return e
+		}
+		if current.State != "deleted" {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}
+
+func (s *Service) MigrationHistoryFinished(ctx context.Context, v store.MigrationPeerObject) (bool, error) {
+	r, e := migrationdata.New(s.root, v.Header.SourceID, "media")
+	if e != nil {
+		return false, e
+	}
+	return r.HistoricalAnchorsFinished(ctx, v.Header.MasterID, v.Object, v.Proof.SHA256)
 }
 
 // A committed SQL receipt does not prove that its private quarantine was

@@ -101,6 +101,21 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 					if e != nil && ctx.Err() == nil {
 						_ = repo.FailPeerMigrationCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
 					}
+				} else if job.operation == "retire" {
+					check := func() error {
+						if v.CleanupGrant == nil {
+							return store.ErrMigrationState
+						}
+						if e := repo.ValidatePeerAnchorRetirement(ctx, job.relationship, v.Lease, *v.CleanupGrant, false); e != nil {
+							return e
+						}
+						return admission(ctx, job.relationship, v, "retire")
+					}
+					if v.Spec.Resource == "recording" && recordings != nil {
+						_, _ = recordings.MigrationRetireAnchor(ctx, v.Spec, check)
+					} else {
+						_, _ = volume.MigrationRetireAnchor(ctx, v.Spec, check)
+					}
 				} else if job.operation == "recheck" {
 					if v.Spec.Resource == "recording" && recordings != nil {
 						_, _ = recordings.MigrationRecheck(ctx, v.Spec, v.RecheckID, func() error { return admission(ctx, job.relationship, v, "recheck") })
@@ -347,6 +362,40 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 		return r.Abort(c.Request.Context(), v.Spec, func() error { return admission(c.Request.Context(), rel.ID, v, "abort") })
 	})
+	register("retire", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		if v.CleanupGrant == nil || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil) {
+			return nil, store.ErrMigrationState
+		}
+		if e := repo.ValidatePeerAnchorRetirement(c.Request.Context(), rel.ID, v.Lease, *v.CleanupGrant, true); e != nil {
+			return nil, e
+		}
+		r, e := receiver(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		cp, e := r.Status(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		if cp.State != "published" {
+			return nil, store.ErrMigrationState
+		}
+		if cp.AnchorRetired {
+			return gin.H{"state": "anchor_retired", "checkpoint": cp}, nil
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"state": "working"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "retire"}:
+			active[key(v)] = true
+			return gin.H{"state": "working"}, nil
+		default:
+			return gin.H{"state": "waiting"}, nil
+		}
+	})
 	register("cleanup", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		// A legacy accelerated transfer has no proven Go response lifetime.
 		if settings.NginxMedia || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
@@ -386,6 +435,16 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			}
 			if e != nil {
 				return nil, e
+			}
+			if finished {
+				if v.Spec.Resource == "recording" {
+					finished, e = recordings.MigrationHistoryFinished(c.Request.Context(), p)
+				} else {
+					finished, e = volume.MigrationHistoryFinished(c.Request.Context(), p)
+				}
+				if e != nil {
+					return nil, e
+				}
 			}
 			if finished {
 				return gin.H{"state": "source_deleted", "receipt": store.MigrationSourceReceipt{TaskID: v.Lease.TaskID, SourceID: p.Header.SourceID, TargetID: p.Header.TargetID, PlanSHA: p.Header.PlanSHA, Proof: p.Proof, ManagedCopyDeleted: true}}, nil

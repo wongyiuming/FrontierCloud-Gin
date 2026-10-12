@@ -72,18 +72,19 @@ type MigrationCleanupProof struct {
 	VerifiedAt int64 `json:"verified_at"`
 }
 type MigrationCleanupGrant struct {
-	TaskID           string          `json:"task_id"`
-	MasterID         string          `json:"master_id"`
-	SourceID         string          `json:"source_id"`
-	TargetID         string          `json:"target_id"`
-	PlanSHA          string          `json:"plan_sha256"`
-	UnitID           string          `json:"unit_id"`
-	UnitVersion      string          `json:"unit_source_version"`
-	Object           MigrationObject `json:"object"`
-	SHA256           string          `json:"sha256"`
-	CommittedAt      int64           `json:"committed_at"`
-	CleanupAfter     int64           `json:"cleanup_after"`
-	TargetVerifiedAt int64           `json:"target_verified_at"`
+	SourceCopyDeleted bool            `json:"source_copy_deleted,omitempty"`
+	TaskID            string          `json:"task_id"`
+	MasterID          string          `json:"master_id"`
+	SourceID          string          `json:"source_id"`
+	TargetID          string          `json:"target_id"`
+	PlanSHA           string          `json:"plan_sha256"`
+	UnitID            string          `json:"unit_id"`
+	UnitVersion       string          `json:"unit_source_version"`
+	Object            MigrationObject `json:"object"`
+	SHA256            string          `json:"sha256"`
+	CommittedAt       int64           `json:"committed_at"`
+	CleanupAfter      int64           `json:"cleanup_after"`
+	TargetVerifiedAt  int64           `json:"target_verified_at"`
 }
 type MigrationPlan struct {
 	ID           string               `json:"plan_id"`
@@ -171,6 +172,7 @@ type MigrationRepository interface {
 	ValidateMigrationLease(context.Context, MigrationLease) error
 	NextMigrationRun(context.Context) (string, error)
 	AuthorizeMigrationCleanup(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
+	AuthorizeMigrationAnchorRetirement(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
 	RecordMigrationSourceDeletion(context.Context, MigrationLease, MigrationSourceReceipt, NodeAudit) error
 }
 

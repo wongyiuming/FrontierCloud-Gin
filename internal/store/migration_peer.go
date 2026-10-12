@@ -37,4 +37,5 @@ type MigrationPeerRepository interface {
 	PeerMigrationCleanupFailed(context.Context, string, MigrationLease, string) (bool, error)
 	StagePeerRecordingDeletion(context.Context, string, MigrationLease, string) (*Recording, error)
 	CompletePeerRecordingDeletion(context.Context, string, string, string, int64, NodeAudit) error
+	ValidatePeerAnchorRetirement(context.Context, string, MigrationLease, MigrationCleanupGrant, bool) error
 }

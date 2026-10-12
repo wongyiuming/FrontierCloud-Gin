@@ -60,6 +60,7 @@ type Checkpoint struct {
 	RecheckError   string `json:"recheck_error,omitempty"`
 	AnchorRetiring bool   `json:"anchor_retiring,omitempty"`
 	AnchorRetired  bool   `json:"anchor_retired,omitempty"`
+	AnchorError    string `json:"anchor_error,omitempty"`
 }
 type journalRecord struct {
 	Checkpoint
@@ -347,6 +348,16 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 		return c, e
 	}
 	name, _, _ := names(s)
+	failed := func(cause error) (Checkpoint, error) {
+		c.AnchorError = "anchor_retirement_failed"
+		return c, errors.Join(cause, r.save(c))
+	}
+	if c.AnchorError != "" {
+		c.AnchorError = ""
+		if e = r.save(c); e != nil {
+			return c, e
+		}
+	}
 	_, e = r.root.Lstat(name)
 	exists := e == nil
 	if e != nil && !errors.Is(e, os.ErrNotExist) {
@@ -359,7 +370,7 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 		return c, ErrState
 	}
 	if e = validate(name, exists); e != nil {
-		return c, e
+		return failed(e)
 	}
 	if exists {
 		_, e = r.inspect(ctx, c)
@@ -367,10 +378,10 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 		_, e = r.inspectName(ctx, c, s.TargetPath)
 	}
 	if e != nil {
-		return c, e
+		return failed(e)
 	}
 	if e = validate(name, exists); e != nil {
-		return c, e
+		return failed(e)
 	}
 	if e = admission(); e != nil {
 		return c, e

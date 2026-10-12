@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -51,8 +52,13 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 		if e != nil {
 			return e
 		}
-		defer release()
-		return s.finishMigrationIntent(ctx, id, l.TaskID)
+		e = s.finishMigrationIntent(ctx, id, l.TaskID)
+		// Historical full-byte scans happen after releasing the volume lease.
+		release()
+		if e != nil {
+			return e
+		}
+		return s.migrationHistory(ctx, relationship, l, v, peer)
 	}
 	if v.State != "deleting" {
 		return store.ErrMigrationState
@@ -117,7 +123,12 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if e != nil {
 		return e
 	}
-	defer release()
+	held := true
+	defer func() {
+		if held {
+			release()
+		}
+	}()
 	if e = s.ready(); e != nil {
 		return e
 	}
@@ -143,7 +154,33 @@ func (s *Storage) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	if e = s.finishDelete(ctx, j); e != nil {
 		return e
 	}
-	return nil
+	release()
+	held = false
+	return s.migrationHistory(ctx, relationship, l, v, peer)
+}
+
+func (s *Storage) migrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository) error {
+	r, e := migrationdata.New(s.root, v.Header.SourceID, "recording")
+	if e != nil {
+		return e
+	}
+	return r.HistoricalAnchors(ctx, v.Header.MasterID, v.Object, v.Proof.SHA256, func() error {
+		current, e := repo.AuthorizePeerMigration(ctx, relationship, l, v.Object.ID, "cleanup")
+		if e != nil {
+			return e
+		}
+		if current.State != "deleted" {
+			return store.ErrMigrationState
+		}
+		return nil
+	})
+}
+func (s *Storage) MigrationHistoryFinished(ctx context.Context, v store.MigrationPeerObject) (bool, error) {
+	r, e := migrationdata.New(s.root, v.Header.SourceID, "recording")
+	if e != nil {
+		return false, e
+	}
+	return r.HistoricalAnchorsFinished(ctx, v.Header.MasterID, v.Object, v.Proof.SHA256)
 }
 
 func (s *Storage) finishMigrationIntent(ctx context.Context, id, task string) error {

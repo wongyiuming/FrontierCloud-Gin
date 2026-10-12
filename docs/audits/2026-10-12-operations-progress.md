@@ -726,6 +726,45 @@ capacity release and explicit drain release, followed by cancellation, inventori
 retirement, GUI/CLI and the remaining full-scope acceptance. Whole tasks continue
 to remain cleanup pending; production does not advertise the unfinished capability.
 
+## Authenticated anchor retirement and historical source copies
+
+Source deletion receipts now also require historical publication anchors for that
+logical object to be retired. The bounded-batch scanner validates each exact
+private checkpoint name, local target identity, same Master, logical/physical ID,
+source physical path, original bytes/SHA and descriptors. It never sweeps a whole
+directory or accepts another Master/version's copy. Removal has its own persisted
+retiring intent, actual SHA verification and idempotent recovery. Retained small
+journals/lock files remain historical control evidence, not data copies. Scans
+and full hashes run outside the global mutation lease.
+
+After a durable source-deletion receipt, Master obtains a new target disk proof
+and creates a grant explicitly asserting the source copy is deleted. The existing
+HTTPS/HMAC endpoint dispatches target anchor retirement to the joined local worker.
+Initial target admission rechecks freshness, full binding, current epoch, source/
+target/plan and published journal; an ongoing job checks current lease/binding
+without requiring its original 30-second proof stamp to stay fresh throughout a
+large local scan. Once queued, Master polls status instead of resubmitting an old
+grant. The private checkpoint preserves a stable retirement error on disk/identity
+failure. Rechecks after retirement hash the actual surviving business file.
+
+Actual filesystem tests cover bound historical source-anchor deletion, rejection
+of other Master/SHA/corrupt copies and restart after unlink. Existing real byte/
+HMAC fixtures now also retire target anchors for media and plaintext/encrypted
+recordings while retaining identical target reads and personal quota. These use
+SQLite/Gin router transport and advanced isolated grace timestamps; they are not
+native TLS, browser playback, reverse-fleet or five-node acceptance. SQLite/MySQL
+repository tests reject unverified/unpublished target, missing source receipt and
+stale initial grants. See [anchor RPC/race and full Go evidence](2026-10-12-authenticated-anchor-cleanup.txt)
+and [SQLite/MySQL grant evidence](2026-10-12-authenticated-anchor-cleanup-mysql.txt).
+Source CI passed 201 Python tests (two optional skips) and its existing JavaScript
+smoke checks within the unchanged budget. No schema constraint/generation changed.
+
+Master/peer durable unit/final-task completion receipts, scope/capacity release,
+explicit drain release and cancellation reconciliation still require completion.
+Tasks remain cleanup pending, and no node relation is automatically revoked.
+Inventories, retirement, GUI/CLI, upgrade and the remaining full-scope acceptance
+also remain required; production migration capability is still unadvertised.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/

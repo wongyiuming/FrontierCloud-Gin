@@ -12,7 +12,7 @@ import (
 // Master. It does not remove bytes, refund capacity or release an owned drain.
 func (r *Repository) PreparePeerMigrationCleanup(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationCleanupGrant, a store.NodeAudit) error {
 	now := time.Now().Unix()
-	if !nodeHashPattern.MatchString(g.UnitVersion) || g.TaskID != l.TaskID || g.CommittedAt <= 0 || g.CleanupAfter < g.CommittedAt+3600 || g.CleanupAfter > now || g.TargetVerifiedAt < g.CommittedAt || g.TargetVerifiedAt < now-30 || g.TargetVerifiedAt > now+30 {
+	if g.SourceCopyDeleted || !nodeHashPattern.MatchString(g.UnitVersion) || g.TaskID != l.TaskID || g.CommittedAt <= 0 || g.CleanupAfter < g.CommittedAt+3600 || g.CleanupAfter > now || g.TargetVerifiedAt < g.CommittedAt || g.TargetVerifiedAt < now-30 || g.TargetVerifiedAt > now+30 {
 		return store.ErrMigrationState
 	}
 	return r.write(ctx, func(q queryer) error {

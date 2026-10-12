@@ -134,5 +134,74 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			}
 		}
 	}
+	// The source checkpoint is durable; private target-anchor retirement can
+	// resume independently after a lost reply or a Master restart.
+	w, e = r.Repository.MigrationWork(ctx, id)
+	if e != nil {
+		return e
+	}
+	for _, cp := range w.Objects {
+		if cp.State != "cleaned" {
+			continue
+		}
+		proof, e := r.FreshTargetProof(ctx, l, cp.Object.ID)
+		if e != nil {
+			return e
+		}
+		grant, e := r.Repository.AuthorizeMigrationAnchorRetirement(ctx, l, cp.Object.ID, proof)
+		if e != nil {
+			return e
+		}
+		l, e = r.Repository.RenewMigration(ctx, l, time.Minute)
+		if e != nil {
+			return e
+		}
+		if e = refresh(); e != nil {
+			return e
+		}
+		o := cp.Object
+		object = o.ID
+		req := migrationdata.Request{Lease: l, CleanupGrant: &grant, Spec: migrationdata.Spec{TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
+		deadline := time.Now().Add(30 * time.Minute)
+		submitted := false
+		for {
+			if e = ensure(); e != nil {
+				return e
+			}
+			req.Lease = l
+			if !submitted {
+				result, err := r.request(ctx, target, prefix+"data/retire", req)
+				if err != nil {
+					return err
+				}
+				submitted = result["state"] != "waiting"
+			}
+			value, e := r.request(ctx, target, prefix+"data/status", req)
+			if e != nil {
+				return e
+			}
+			var checkpoint migrationdata.Checkpoint
+			if e = decode(value["checkpoint"], &checkpoint); e != nil {
+				return e
+			}
+			expected, _ := store.MigrationDigest(req.Spec)
+			actual, _ := store.MigrationDigest(checkpoint.Spec)
+			if expected != actual || checkpoint.State != "published" || value["peer_state"] != "published" {
+				return store.ErrMigrationState
+			}
+			if checkpoint.AnchorError != "" {
+				return store.ErrMigrationState
+			}
+			if checkpoint.AnchorRetired && !checkpoint.AnchorRetiring {
+				break
+			}
+			if time.Now().After(deadline) {
+				return context.DeadlineExceeded
+			}
+			if e = delay(ctx); e != nil {
+				return e
+			}
+		}
+	}
 	return nil
 }
