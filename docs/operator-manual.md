@@ -206,3 +206,21 @@ Do not build as an automatic fallback. Explicit immutable-source developer
 compilation remains a separate workflow. Changing project, mounts, role or
 database after installation is refused by the receipt binding; restore the
 recorded selection or perform a verified takeover/migration.
+
+
+### Development retirement observation
+
+On the current dev implementation, an active downstream Storage member card in
+Master's existing Nodes module offers a read-only retirement check. It requires the
+established Admin session, HTTPS and CSRF protection, and calls
+`POST /api/v1/media/admin/nodes/<relationship-id>/retire/check` with the exact
+`member_id`. Only one observation runs per process. The page displays bounded
+blocker samples, missing expected files, retained backups and suggested repairs.
+Historical results retain their timestamp through page refresh and must be rerun.
+An incomplete/offline observation never becomes a successful check.
+
+This is a preflight report, not final retirement approval. It does not revoke the
+relationship, remove files or stop containers. Final fenced admission, verified
+backup replacement/retention and full transaction/reference reconciliation are
+still under implementation; the development UI must not be used as evidence that
+a disk can be erased. Native browser/fleet acceptance is still outstanding.

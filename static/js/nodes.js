@@ -15,6 +15,7 @@
     let refreshTimer = null;
     let refreshQueue = Promise.resolve();
     const certificateViews = new Map();
+    const retirementViews = new Map();
     const setStatus = text => { $('nodeOperationStatus').textContent = text || ''; };
     const visible = (id, show) => $(id).classList.toggle('hidden', !show);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -300,9 +301,73 @@
         header.append(title, badges);
         const grid = make('div', 'node-card-grid');
         grid.append(connectionPanel(relation, observed), storagePanel(member, observed), backupPanel(member, observed));
-        if (relation?.direction === 'downstream' && relation.state === 'active') grid.append(certificatePanel(relation));
+        if (relation?.direction === 'downstream' && relation.state === 'active') grid.append(certificatePanel(relation), retirementPanel(member, relation));
         card.append(header, grid, controls(member, relation)); cell.append(card); row.append(cell);
         return row;
+    }
+
+    function retirementPanel(member, relation) {
+        const section = make('section', 'node-resource-panel');
+        section.append(make('strong', '', '退役检查'));
+        section.append(make('p', 'node-note', '盘点资源、事务与备份。检查完成后仍需最终复核；不会撤销节点或删除磁盘。'));
+        const saved = retirementViews.get(relation.relationship_id);
+        if (saved) {
+            const report = saved.report;
+            section.append(make('p', '', `${report?.observation_complete ? '盘点已完成' : '检查未完成'} · ${new Date(saved.at).toLocaleString()} · 历史观察，需重新检查`));
+            if (report) {
+                section.append(kv([['物理条目', report.physical_entries], ['逻辑字节', dataSize(report.logical_bytes)], ['预期资源', report.expected_items]]));
+                const list = make('ul');
+                const steps = {
+                    migrate_or_resolve_media: '迁移受管理媒体，或通过业务恢复流程对账。',
+                    migrate_or_resolve_recordings: '迁移录音，或处理未完成录音事务。',
+                    finish_or_cancel_uploads: '等待上传安全完成，或取消未完成上传。',
+                    reconcile_used_and_reserved_bytes: '核对已用容量、预留容量及对应业务事务。',
+                    finish_or_resolve_migration: '完成迁移，或处理失败、取消和清理待办。',
+                    reconcile_task_scope_receipts: '核对迁移范围锁与双方完成回执。',
+                    reconcile_task_reservations: '核对迁移预留与清理回执。',
+                    wait_for_or_resolve_read_dependencies: '等待有效读取结束，再重新检查。',
+                    retain_or_replace_verified_recovery_points: '保留备份，或验证满足保留要求的替代恢复点。',
+                    reconcile_receiving_or_orphan_backup_material: '核对接收中的备份和残留备份分块。',
+                    finish_native_file_recovery: '完成节点文件事务恢复。',
+                    reconcile_peer_task_and_file_receipts: '核对节点任务、文件事务与双方回执。',
+                    verify_replacement_backup_and_stop_delivery: '验证替代备份，并停止向待退役节点继续投递。',
+                    restore_connectivity_for_final_reconciliation: '恢复节点连接后执行最终对账。',
+                };
+                const add = (label, count, samples, advice) => {
+                    const item = make('li');
+                    item.append(make('strong', '', `${label} · ${count}`), make('p', 'node-note', advice));
+                    for (const sample of (samples || []).slice(0, 8)) item.append(make('div', '', String(sample)));
+                    list.append(item);
+                };
+                for (const [label, ledger] of [['Master', report.master], ['Storage', report.peer]]) {
+                    for (const block of (ledger?.blockers || []).slice(0, 32)) add(`${label}: ${block.code}`, block.count, block.sample_ids, steps[block.next_step] || '核对阻断对象，处理后重新检查。');
+                }
+                for (const concern of (report.concerns || []).slice(0, 64)) {
+                    let advice = '核对对象与未完成事务，处理后重新检查。不要直接删除未知文件。';
+                    if (concern.code.includes('backup')) advice = '先验证替代恢复点与保留要求，再处理备份资源。';
+                    else if (concern.code.includes('missing')) advice = '核对挂载和原始数据；缺失文件需要恢复或人工对账。';
+                    else if (concern.code.startsWith('physical_managed_')) advice = '受管理资源需通过迁移或业务事务处理。';
+                    add(concern.code, concern.count, concern.samples, advice);
+                }
+                section.append(list);
+            }
+            if (saved.error) section.append(make('p', 'node-note', saved.error));
+        }
+        const check = make('button', '', '执行只读退役检查'); check.type = 'button';
+        check.onclick = async () => {
+            check.disabled = true; setStatus('正在盘点节点资源');
+            let report, error;
+            try {
+                report = await post(`/${encodeURIComponent(relation.relationship_id)}/retire/check`, {member_id: member.member_id});
+            } catch (failure) {
+                report = failure.responseData?.report; error = failure.message || '退役检查未完成';
+            }
+            retirementViews.set(relation.relationship_id, {at: Date.now(), report, error});
+            section.replaceWith(retirementPanel(member, relation));
+            setStatus(error || '盘点完成；结果不代表最终撤销已获准');
+        };
+        section.append(check);
+        return section;
     }
 
     function certificatePanel(relation) {

@@ -139,7 +139,11 @@ async function api(url, options = {}) {
         throw new Error('特权模式已失效');
     }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(formatErrorDetail(data.detail));
+    if (!response.ok) {
+        const error = new Error(formatErrorDetail(data.detail));
+        error.responseData = data;
+        throw error;
+    }
     return data;
 }
 

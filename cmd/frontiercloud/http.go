@@ -13,6 +13,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
@@ -91,6 +92,7 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return nil, nil, err
 	}
 	httpapi.RegisterAdminNodes(handler, adminHTTP, controlService)
+	httpapi.RegisterAdminRetirement(handler, adminHTTP, &noderetirement.Service{Repository: database.Pool().(store.RetirementRepository), Nodes: database.Nodes(), Client: controlService})
 	httpapi.RegisterOperational(handler, adminHTTP)
 	httpapi.RegisterPlaybackDiagnostics(handler, settings, resolver, controlService, adminHTTP, diagnostics.New())
 	siteService, err := sitecontrol.Open(settings.DataRoot, nil)
