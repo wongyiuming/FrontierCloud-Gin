@@ -56,9 +56,15 @@ func TestAuthenticatedRecordingInterruptedPublicationCancellation(t *testing.T) 
 		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, true, true) })
 	}
 }
+func TestAuthenticatedRecordingAccountedPublicationCheckpointRecovery(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, true, false, true) })
+	}
+}
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
 	unpublish := len(cleanup) > 2 && cleanup[2]
+	checkpoint := len(cleanup) > 3 && cleanup[3]
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, mdb, _, _, master := clusterFixture(t, "https://master.test", transport, true, true)
 	_, sdb, sourceDir, _, source := clusterFixture(t, "https://source.test", transport, true, true)
@@ -198,6 +204,9 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 				}
 				t.Cleanup(func() { tdb.Database().Exec("DROP TRIGGER IF EXISTS fail_record_publication") })
 				fault.stopPublishing = func() bool { _, e := os.Stat(filepath.Join(targetDir, "recordings", o.TargetPath)); return e == nil }
+			}
+			if checkpoint {
+				fault.losePublicationCheckpoint = func() { loseMigrationPublicationCheckpoint(t, filepath.Join(targetDir, "recordings")) }
 			}
 			if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e == nil {
 				t.Fatal("recording cutover failure ignored")

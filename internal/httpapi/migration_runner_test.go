@@ -36,19 +36,20 @@ func (w *migrationReadWriter) Write(b []byte) (int, error) {
 }
 
 type runnerFaultCaller struct {
-	client         *node.Service
-	lost           bool
-	lostCleanup    bool
-	lostUnit       bool
-	lostTask       bool
-	lostAbort      bool
-	lostCancelUnit bool
-	lostCancelTask bool
-	lostShadow     bool
-	lostUnpublish  bool
-	stopPublishing func() bool
-	blockBegin     func() bool
-	reads          map[int64]int
+	client                    *node.Service
+	lost                      bool
+	lostCleanup               bool
+	lostUnit                  bool
+	lostTask                  bool
+	lostAbort                 bool
+	lostCancelUnit            bool
+	lostCancelTask            bool
+	lostShadow                bool
+	lostUnpublish             bool
+	stopPublishing            func() bool
+	losePublicationCheckpoint func()
+	blockBegin                func() bool
+	reads                     map[int64]int
 }
 
 func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, path string, value any) (map[string]any, error) {
@@ -63,6 +64,11 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		}
 	}
 	result, e := c.client.Call(ctx, rel, path, value)
+	if e == nil && c.losePublicationCheckpoint != nil && strings.HasSuffix(path, "/status") && result["peer_state"] == "published" {
+		c.losePublicationCheckpoint()
+		c.losePublicationCheckpoint = nil
+		return nil, errors.New("injected SQL receipt saved without final byte checkpoint")
+	}
 	if e == nil && c.stopPublishing != nil && strings.HasSuffix(path, "/status") && result["peer_state"] == "verified" {
 		raw, _ := json.Marshal(result["checkpoint"])
 		var cp migrationdata.Checkpoint
@@ -124,9 +130,50 @@ func TestMasterMigrationPublishedShadowCancellationLostReceipts(t *testing.T) {
 func TestMasterMigrationInterruptedPublicationCancellation(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "unpublish")
 }
+
+// This isolated fault restores only the prior publishing state; all immutable
+// bindings, prefix proofs and real business bytes/SQL accounting are retained.
+func loseMigrationPublicationCheckpoint(t *testing.T, root string) {
+	t.Helper()
+	entries, e := os.ReadDir(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".migration-data-") || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		name := filepath.Join(root, entry.Name())
+		raw, e := os.ReadFile(name)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var record map[string]any
+		if e = json.Unmarshal(raw, &record); e != nil {
+			t.Fatal(e)
+		}
+		if record["state"] != "published" {
+			continue
+		}
+		record["state"] = "publishing"
+		raw, e = json.Marshal(record)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(name, raw, 0600); e != nil {
+			t.Fatal(e)
+		}
+		return
+	}
+	t.Fatal("missing actual published checkpoint for fault injection")
+}
+func TestMasterMigrationAccountedPublicationCheckpointRecovery(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "checkpoint")
+}
 func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
 	mixed := len(modes) > 0 && modes[0] == "mixed"
 	unpublish := len(modes) > 0 && modes[0] == "unpublish"
+	checkpoint := len(modes) > 0 && modes[0] == "checkpoint"
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
@@ -452,7 +499,17 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 			t.Fatal(e)
 		}
 		t.Cleanup(func() { targetDB.Database().Exec("DROP TRIGGER IF EXISTS fail_native_publication") })
-		fault.stopPublishing = func() bool { _, e := os.Stat(filepath.Join(targetDir, "media", names[0])); return e == nil }
+		fault.stopPublishing = func() bool {
+			for _, name := range names {
+				if _, e := os.Stat(filepath.Join(targetDir, "media", name)); e == nil {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	if checkpoint {
+		fault.losePublicationCheckpoint = func() { loseMigrationPublicationCheckpoint(t, filepath.Join(targetDir, "media")) }
 	}
 	engine = &resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: fault}
 	if e = engine.Run(ctx, plan.ID, strings.Repeat("b", 32)); e == nil {
@@ -469,12 +526,33 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	if fault.reads[0] != 2 {
 		t.Fatal("already saved prefix was copied again", fault.reads)
 	}
+	// The runner orders immutable logical IDs, not fixture filenames. Select
+	// the real first published/link-created object for subsequent fault checks.
+	var interruptedBytes int64
+	if unpublish || checkpoint {
+		found := false
+		for i, id := range ids {
+			row, e := db.Pool().Resource(ctx, id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = os.Stat(filepath.Join(targetDir, "media", row.Path)); e == nil {
+				ids[0], ids[i] = ids[i], ids[0]
+				interruptedBytes = int64(len(payloads[row.Path]))
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatal("no actual business link at interrupted publication")
+		}
+	}
 	var targetUsed, targetReserved int64
 	targetDB.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", tr.PeerID).Scan(&targetUsed, &targetReserved)
-	if !unpublish && (targetUsed != catalog.TotalBytes || targetReserved != 0) || unpublish && (targetUsed != 0 || targetReserved != catalog.TotalBytes) {
+	if !unpublish && !checkpoint && (targetUsed != catalog.TotalBytes || targetReserved != 0) || unpublish && (targetUsed != 0 || targetReserved != catalog.TotalBytes) || checkpoint && (targetUsed != interruptedBytes || targetReserved != catalog.TotalBytes-targetUsed) {
 		t.Fatal("local publication accounting", targetUsed, targetReserved)
 	}
-	if len(modes) > 0 && (modes[0] == "shadowproof" || modes[0] == "shadowcleanup" || unpublish) {
+	if len(modes) > 0 && (modes[0] == "shadowproof" || modes[0] == "shadowcleanup" || unpublish || checkpoint) {
 		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
 			t.Fatal(e)
 		}
@@ -518,7 +596,7 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		if _, e = repo.ControlMigration(ctx, plan.ID, "pause", store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 			t.Fatal("cancel converted to paused", e)
 		}
-		if modes[0] == "shadowcleanup" || unpublish {
+		if modes[0] == "shadowcleanup" || unpublish || checkpoint {
 			if e = repo.ReleaseMigration(ctx, lease); e != nil {
 				t.Fatal(e)
 			}

@@ -1291,3 +1291,17 @@ Added actual raw-HMAC/Gin/files/SQLite runner fixtures injecting an audit-trigge
 Evidence: `2026-10-12-authenticated-publication-abort.txt` (targeted race), `2026-10-12-authenticated-publication-abort-full-go.txt` (full Go). Source CI remains within its existing budget. These are real byte/file/database fixtures, not native TLS fleet or browser acceptance. No public migration capability was enabled.
 
 Remaining: SQL-accounted publication with a lost byte-checkpoint write; full cancellation/fleet/reverse coverage; physical inventories and retirement; GUI/CLI; upgrades/multi-node recovery; required native/browser/resource acceptance. Overall goal remains incomplete.
+
+
+### Accounted publication with an unfinished byte checkpoint
+
+Closed the published SQL / publishing byte-checkpoint cancellation window. `RetireDeletedAnchor` now accepts that exact checkpoint only after its caller proves the current version-bound managed deletion, and after rehashing the retained task-private bytes. It records historical publication and anchor-retirement intent together before unlinking. Verified-only staging, missing anchors without an unlink intent, denied deletion admission and corrupt bytes remain rejected. This does not publish a new business copy, repeat SQL accounting or reopen a task.
+
+Actual file tests exercise the interrupted publishing checkpoint, deletion admission failure, corruption, unexplained missing bytes and verified-only refusal, plus idempotent retirement replay. Raw-HMAC/Gin/SQLite runner fixtures for media and plain/encrypted recordings restore the persisted prior publishing checkpoint after real SQL publication, then cancel and recover lost shadow/unit/task receipts. The original source remains the business owner and its real business reads succeed; recording client AES decryption and personal quota remain intact. Target used/reserved and private bytes reconcile to zero. The disk-checkpoint fault is deliberately injected in isolated test files; it is not a host power-loss acceptance claim.
+
+Evidence: `2026-10-12-accounted-publication-checkpoint.txt` (targeted race) and `2026-10-12-accounted-publication-checkpoint-full-go.txt` (full Go). Source CI retains its original budget and optional skips. No schema change, public capability advertisement, production operation or publication.
+
+Remaining: complete cancellation admission/restart edge cases and reverse migration; bounded physical inventories, backup/orphan/transaction retirement blockers, safe final revocation; GUI/CLI; approved upgrade and multi-node recovery; native SQLite/MySQL TLS/fleet/browser/resource acceptance. Full request remains incomplete.
+
+
+The first full regression exposed a fixture ordering error (`2026-10-12-accounted-publication-checkpoint-first-full-go.txt`): immutable logical-ID order differed from fixture filename order. The media interruption fixtures now select the actual target business link and byte count before injecting subsequent faults. Their publication stop condition checks any task-bound fixture path. Production accounting was not changed to accommodate the test assumption. Repeated targeted race tests and the final full regression are recorded separately.

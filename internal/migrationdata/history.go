@@ -30,7 +30,7 @@ func (r *Receiver) RetireDeletedAnchor(ctx context.Context, s Spec, admission fu
 	if e != nil {
 		return e
 	}
-	if c.State != "published" || c.Offset != s.Bytes || c.PrefixSHA != s.SHA256 {
+	if c.State != "published" && c.State != "publishing" || c.Offset != s.Bytes || c.PrefixSHA != s.SHA256 {
 		return ErrState
 	}
 	if e = admission(); e != nil {
@@ -60,6 +60,11 @@ func (r *Receiver) RetireDeletedAnchor(ctx context.Context, s Spec, admission fu
 		return e
 	}
 	if !c.AnchorRetiring {
+		// A published SQL receipt can outlive the final byte-checkpoint save.
+		// The caller has proved exact managed deletion; actual private bytes were
+		// rehashed above. Persist historical publication and retirement together,
+		// never reopening publication or changing SQL accounting.
+		c.State = "published"
 		c.AnchorRetiring = true
 		if e = r.save(c); e != nil {
 			return e
