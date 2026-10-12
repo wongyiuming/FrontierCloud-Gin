@@ -12,6 +12,7 @@ import (
 	"fmt"
 	driver "github.com/go-sql-driver/mysql"
 	"os"
+	pathpkg "path"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -170,6 +171,12 @@ func (r *Repository) ensure(ctx context.Context, q queryer, o store.MediaObject)
 }
 
 func (r *Repository) ensureWithLock(ctx context.Context, q queryer, o store.MediaObject, lock string) (string, error) {
+	// Serialize discovery with migration registration before reading object rows.
+	// A linked file whose publication SQL has not committed must never acquire
+	// a fresh ID through the historical filesystem discovery path.
+	if _, err := readNode(ctx, q, r.lock()); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
 	path, err := normalize(o.Path)
 	if err != nil {
 		return "", err
@@ -188,6 +195,16 @@ func (r *Repository) ensureWithLock(ctx context.Context, q queryer, o store.Medi
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
+	}
+	if o.Kind == "audio" || o.Kind == "video" {
+		var scope string
+		err := q.QueryRowContext(ctx, "SELECT scope_id FROM migration_scopes WHERE resource_kind='media' AND parent_path=? LIMIT 1"+r.lock(), pathpkg.Dir(path)).Scan(&scope)
+		if err == nil {
+			return "", store.ErrMigrationState
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
 	}
 	var legacy bool
 	query := "SELECT EXISTS(SELECT 1 FROM media_lyric_links WHERE lyric_id=?)"

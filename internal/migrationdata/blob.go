@@ -165,7 +165,7 @@ func (r *Receiver) load(s Spec) (Checkpoint, error) {
 	}
 	c := saved.Checkpoint
 	c.HashState = saved.SavedHashState
-	if c.Version != 1 || !bindingEqual(c.Spec, s) || c.Offset < 0 || c.Offset > s.Bytes || !digest.MatchString(c.PrefixSHA) || len(c.HashState) > 512 || (c.State != "receiving" && c.State != "received" && c.State != "verified" && c.State != "failed" && c.State != "aborting" && c.State != "aborted") {
+	if c.Version != 1 || !bindingEqual(c.Spec, s) || c.Offset < 0 || c.Offset > s.Bytes || !digest.MatchString(c.PrefixSHA) || len(c.HashState) > 512 || (c.State != "receiving" && c.State != "received" && c.State != "verified" && c.State != "publishing" && c.State != "published" && c.State != "failed" && c.State != "aborting" && c.State != "aborted") {
 		return c, ErrState
 	}
 	var extra any
@@ -305,7 +305,7 @@ func (r *Receiver) inspect(ctx context.Context, c Checkpoint) (Checkpoint, error
 	if n != c.Offset || hex.EncodeToString(h.Sum(nil)) != c.PrefixSHA {
 		return c, ErrState
 	}
-	if (c.State == "received" || c.State == "verified") && (c.Offset != c.Spec.Bytes || info.Size() != c.Offset || c.PrefixSHA != c.Spec.SHA256) {
+	if (c.State == "received" || c.State == "verified" || c.State == "publishing" || c.State == "published") && (c.Offset != c.Spec.Bytes || info.Size() != c.Offset || c.PrefixSHA != c.Spec.SHA256) {
 		return c, ErrState
 	}
 	return c, nil
@@ -443,6 +443,9 @@ func (r *Receiver) Abort(ctx context.Context, s Spec, admission func() error) (C
 	if c.State == "aborted" {
 		return c, nil
 	}
+	if c.State == "publishing" || c.State == "published" {
+		return c, ErrState
+	}
 	c.State = "aborting"
 	if e = r.save(c); e != nil {
 		return c, e
@@ -534,4 +537,47 @@ func (r *Receiver) VerifiedReader(ctx context.Context, s Spec) (*os.File, func()
 		return nil, nil, e
 	}
 	return f, func() { f.Close(); release() }, nil
+}
+
+// Publish preserves the verified private hard-link anchor across filesystem and
+// database commit windows. Retrying requires the same binding and actual bytes;
+// callers must never overwrite a different inode at the destination. The local
+// volume coordinator is acquired by commit after the bounded-buffer disk scan.
+func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, commit func(string) error) (Checkpoint, error) {
+	if !r.valid(s) || admission == nil || commit == nil {
+		return Checkpoint{}, ErrState
+	}
+	release, e := r.lock(ctx, s)
+	if e != nil {
+		return Checkpoint{}, e
+	}
+	defer release()
+	c, e := r.load(s)
+	if e != nil {
+		return c, e
+	}
+	if c.State != "verified" && c.State != "publishing" && c.State != "published" {
+		return c, ErrState
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	if _, e = r.inspect(ctx, c); e != nil {
+		return c, e
+	}
+	if e = admission(); e != nil {
+		return c, e
+	}
+	if c.State != "published" {
+		c.State = "publishing"
+		if e = r.save(c); e != nil {
+			return c, e
+		}
+	}
+	name, _, _ := names(s)
+	if e = commit(name); e != nil {
+		return c, e
+	}
+	c.State = "published"
+	return c, r.save(c)
 }

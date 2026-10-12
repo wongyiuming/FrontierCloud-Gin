@@ -322,6 +322,47 @@ and two optional skips. The full migration capability remains unadvertised.
 Managed publication, Master worker orchestration, source cleanup, cancel
 capacity reconciliation and distributed restart/fault acceptance remain open.
 
+## Media publication checkpoint
+
+An authenticated publish action queues a local job rather than scanning a large
+file inside an HTTP request. It rehashes the private disk material while holding
+the object's lease, persists a publishing intent, then acquires the existing
+media volume writer coordinator for the short link/SQL phase. The destination
+is a hard link to the verified private inode; a different existing inode is
+refused even when its name/size match. Replay syncs the destination directory
+again. The private anchor persists across failed SQL and process restart, so
+publication needs neither another file-sized copy nor another reservation.
+Publishing/published material cannot use the private abort path.
+
+The follower transaction registers the original physical ID, validates the
+encryption descriptor without receiving file keys, consumes exactly its owned
+migration reservation and records published state/audit together. Its used
+counter describes local resident storage; Master business authority and Master
+capacity cutover are separate. Master continues to resolve the source until
+the complete-parent unit transaction commits. Partial publication does not
+authorize a node's retirement or source removal.
+
+Ordinary filesystem discovery now locks the node identity before object rows
+and refuses assigning a new media ID within a migration parent scope. This
+covers the crash gap after the filesystem link but before publication SQL,
+including MySQL current-read ordering against scope registration. Existing
+registered IDs remain readable; unrelated parents can still register objects.
+
+Race tests injected a database-unavailable error after linking, recreated the
+receiver, safely replayed publication and rejected changed on-disk contents.
+The authenticated actual-byte fixture published twice without duplicate quota
+charge and read all 524,307 bytes through the ordinary target media capability
+route while Master ownership still referenced the source. SQLite/MySQL trigger
+faults after object/capacity updates verify transaction rollback and retry, and
+ordinary discovery cannot invent a replacement ID during that failure window.
+See [publication race output](2026-10-12-media-publication.txt),
+[actual MySQL output](2026-10-12-media-publication-mysql.txt) and
+[full Go output](2026-10-12-media-publication-go.txt). The unchanged source CI
+also passed with 201 Python tests and two optional skips.
+This is router-transport evidence, not native-process/TLS fleet acceptance.
+Recording publication, valid encrypted playback, automatic durable orchestration,
+source/anchor cleanup and cancellation reconciliation remain incomplete.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
@@ -342,10 +383,11 @@ capacity reconciliation and distributed restart/fault acceptance remain open.
    Reject Master Local this round unless the same safe protocol can be proved.
    The Master catalog foundation exists; authenticated physical inventories,
    orphan/quarantine/backup details and paginated large-node planning remain.
-5. Add persistent execution with bounded authenticated Master-relayed bytes for
-   all Direct/Relay pairs, target task staging, disk SHA-256 proofs, idempotent
-   publication journals, complete-parent ownership-unit SQL cutover and cache
-   invalidation. No network I/O inside long SQL/global-exclusive transactions.
+5. Finish persistent whole-task execution using the implemented authenticated
+   chunk transport, target staging, disk SHA proof and media publication journal.
+   Add recording publication and orchestration of complete-parent SQL cutover
+   and cache invalidation; verify all Direct/Relay pairs. No network I/O inside
+   long SQL/global-exclusive transactions.
 6. Add version-bound managed source cleanup after old capability/read dependencies
    expire; cleanup_pending must retain target authority. Cover failure windows,
    restarts, quota reconciliation, pause/resume/cancel/retry and explicit draining

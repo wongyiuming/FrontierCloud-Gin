@@ -32,6 +32,7 @@ type migrationVerifyJob struct {
 	request      migrationDataRequest
 	relationship string
 	receiver     *migrationdata.Receiver
+	operation    string
 }
 
 func migrationRequestMatches(v migrationDataRequest, p store.MigrationPeerObject) bool {
@@ -95,9 +96,15 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				return
 			case job := <-jobs:
 				v := job.request
-				c, e := job.receiver.Verify(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "verify") })
-				if e == nil {
-					_ = repo.VerifyPeerMigrationObject(ctx, job.relationship, v.Lease, v.Spec.LogicalID, c.Offset, c.PrefixSHA)
+				if job.operation == "publish" {
+					_, _ = volume.MigrationPublish(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "publish") }, func(o store.MediaObject, free int64) error {
+						return repo.CompletePeerMediaPublication(ctx, job.relationship, v.Lease, v.Spec.LogicalID, o, v.Spec.Bytes, v.Spec.SHA256, free, store.NodeAudit{})
+					})
+				} else {
+					c, e := job.receiver.Verify(ctx, v.Spec, func() error { return admission(ctx, job.relationship, v, "verify") })
+					if e == nil {
+						_ = repo.VerifyPeerMigrationObject(ctx, job.relationship, v.Lease, v.Spec.LogicalID, c.Offset, c.PrefixSHA)
+					}
 				}
 				mutex.Lock()
 				delete(active, key(v))
@@ -250,9 +257,37 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return gin.H{"status": "verifying"}, nil
 		}
 		select {
-		case jobs <- migrationVerifyJob{v, rel.ID, r}:
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "verify"}:
 			active[key(v)] = true
 			return gin.H{"status": "verifying"}, nil
+		default:
+			return gin.H{"status": "waiting"}, nil
+		}
+	})
+	register("publish", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		if v.Spec.Resource != "media" {
+			return nil, store.ErrMigrationState
+		}
+		r, e := receiver(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		cp, e := r.Status(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		if cp.State != "verified" && cp.State != "publishing" && cp.State != "published" {
+			return nil, store.ErrMigrationState
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"status": "working"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "publish"}:
+			active[key(v)] = true
+			return gin.H{"status": "publishing"}, nil
 		default:
 			return gin.H{"status": "waiting"}, nil
 		}

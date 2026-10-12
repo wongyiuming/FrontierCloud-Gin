@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,6 +206,38 @@ func TestAuthenticatedBytesRelayThroughMasterToPrivateTargetStage(t *testing.T) 
 	if g.MemberID != srel.PeerID {
 		t.Fatal("byte receipt switched authority")
 	}
+	// Publishing is separately admitted and retried. It adopts the same logical
+	// physical ID while Master still owns the source until whole-unit cutover.
+	for range 2 {
+		if _, e = call(trel, prefix+"publish", request); e != nil {
+			t.Fatal(e)
+		}
+		deadline = time.Now().Add(5 * time.Second)
+		published := false
+		for time.Now().Before(deadline) {
+			status, e := call(trel, prefix+"status", request)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if status["peer_state"] == "published" {
+				published = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !published {
+			t.Fatal("publication not durably registered")
+		}
+	}
+	read, e := master.ReadGlobalMedia(ctx, store.GlobalMedia{ID: o.ID, Path: name, Kind: "audio", MemberID: trel.PeerID, ObjectID: object, Bytes: o.Bytes, RelationshipID: &trid})
+	if e != nil {
+		t.Fatal(e)
+	}
+	got, e := io.ReadAll(read)
+	read.Close()
+	if e != nil || !bytes.Equal(got, payload) {
+		t.Fatal("published business read mismatch", e)
+	}
 	if _, e = call(trel, "/internal/v1/resource-migration/fence", map[string]any{"task_id": task, "epoch": l.Epoch, "state": "paused"}); e != nil {
 		t.Fatal(e)
 	}
@@ -213,11 +246,11 @@ func TestAuthenticatedBytesRelayThroughMasterToPrivateTargetStage(t *testing.T) 
 	}
 	var used, reserved int64
 	tdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", trel.PeerID).Scan(&used, &reserved)
-	if used != 0 || reserved != o.Bytes {
-		t.Fatal("staging counted as business data", used, reserved)
+	if used != o.Bytes || reserved != 0 {
+		t.Fatal("publication quota replay mismatch", used, reserved)
 	}
-	if _, e = os.Stat(filepath.Join(tdir, "media", name)); !errors.Is(e, os.ErrNotExist) {
-		t.Fatal("private stage entered regular media path", e)
+	if _, e = os.Stat(filepath.Join(tdir, "media", name)); e != nil {
+		t.Fatal("published media path absent", e)
 	}
 }
 func migrationUnsignedStatus(router *gin.Engine, path string) int {
