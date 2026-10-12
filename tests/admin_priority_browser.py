@@ -175,6 +175,7 @@ with sync_playwright() as driver:
         return control.top>=r.top && control.bottom<=r.bottom+1;
     })'''), 'mobile priority controls must remain inside their complete row'
     assert phone.locator('#adminNavigationToggle').bounding_box()['y'] < 56
+    assert phone.locator('#priorityPanel .module-heading').bounding_box()['y'] >= 56, 'toolbar must not cover the module title'
     assert phone.locator('[data-module-target="priority"]').get_attribute('aria-current') == 'true'
     phone.screenshot(path=str(args.output / 'mobile.png'))
     proof.append('real-touch-drag-mobile-layout-and-reduced-motion')

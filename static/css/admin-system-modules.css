@@ -253,6 +253,7 @@
     .admin-mobile-toolbar a { color: var(--text-soft); font-size: 12px; text-decoration: none; }
     .admin-navigation-toggle { position: static; min-height: 38px; padding: 8px 12px; border-radius: 7px; box-shadow: none; }
     .admin-navigation.open { top: 56px; z-index: 40; }
-    .admin-console { height: calc(100dvh - 56px); margin-top: 56px; }
+    body { padding-top: 56px; }
+    .admin-console { height: calc(100dvh - 56px); margin-top: 0; }
     .admin-console .admin-module.expanded { min-height: calc(100dvh - 84px); flex-basis: calc(100dvh - 84px); }
 }
