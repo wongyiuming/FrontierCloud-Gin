@@ -79,9 +79,78 @@ func (r *Repository) PreparePeerMigrationCleanup(ctx context.Context, relationsh
 		if phase == "deleted" {
 			return nil
 		}
+		if _, e = q.ExecContext(ctx, "DELETE FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", l.TaskID, bound.ID); e != nil {
+			return e
+		}
 		if _, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleting',updated_at=? WHERE task_id=? AND logical_id=?", now, l.TaskID, bound.ID); e != nil {
 			return e
 		}
 		return r.nodeAudit(ctx, q, "peer-migration-cleanup-authorized", relationship, map[string]any{"task_id": l.TaskID, "unit_id": g.UnitID, "object_id": bound.ID, "sha256": g.SHA256}, a)
 	})
+}
+
+func (r *Repository) FailPeerMigrationCleanup(ctx context.Context, relationship string, l store.MigrationLease, id string, a store.NodeAudit) error {
+	return r.write(ctx, func(q queryer) error {
+		h, n, _, e := r.checkPeerLease(ctx, q, relationship, l)
+		if e != nil {
+			return e
+		}
+		if n.ID != h.SourceID {
+			return store.ErrMigrationState
+		}
+		if _, e = r.peerObjectBinding(ctx, q, l.TaskID, id); e != nil {
+			return e
+		}
+		var phase string
+		if e = q.QueryRowContext(ctx, "SELECT state FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, id).Scan(&phase); e != nil {
+			return e
+		}
+		// SQL deletion may already have committed. Its retained quarantine must
+		// continue forward; never turn it back into an uncommitted source copy.
+		if phase == "deleted" {
+			return nil
+		}
+		if phase != "deleting" {
+			return store.ErrMigrationState
+		}
+		o, e := r.peerObjectBinding(ctx, q, l.TaskID, id)
+		if e != nil {
+			return e
+		}
+		var hash string
+		if e = q.QueryRowContext(ctx, "SELECT sha256 FROM migration_storage_journal WHERE task_id=? AND logical_id=?", l.TaskID, id).Scan(&hash); e != nil {
+			return e
+		}
+		var count int
+		if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=?", l.TaskID, id).Scan(&count); e != nil {
+			return e
+		}
+		if count == 0 {
+			if _, e = q.ExecContext(ctx, "INSERT INTO migration_objects(task_id,unit_id,logical_id,resource_kind,source_object,target_object,source_version,physical_path,expected_bytes,source_sha256,state,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'pending',?)", l.TaskID, migrationUnit(o), id, o.Resource, o.ObjectID, o.ObjectID, o.Version, o.Path, o.Bytes, hash, time.Now().Unix()); e != nil {
+				return e
+			}
+		}
+		return r.nodeAudit(ctx, q, "peer-migration-cleanup-failed", relationship, map[string]any{"task_id": l.TaskID, "logical_id": id, "code": "source_cleanup"}, a)
+	})
+}
+
+// A follower uses the existing per-object pending checkpoint for a failed source
+// scan; its physical journal stays deleting and its audit records the error.
+func (r *Repository) PeerMigrationCleanupFailed(ctx context.Context, relationship string, l store.MigrationLease, id string) (failed bool, e error) {
+	e = r.write(ctx, func(q queryer) error {
+		h, n, _, err := r.checkPeerLease(ctx, q, relationship, l)
+		if err != nil {
+			return err
+		}
+		if n.ID != h.SourceID {
+			return store.ErrMigrationState
+		}
+		var count int
+		if err = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", l.TaskID, id).Scan(&count); err != nil {
+			return err
+		}
+		failed = count != 0
+		return nil
+	})
+	return
 }

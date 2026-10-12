@@ -35,9 +35,10 @@ func (w *migrationReadWriter) Write(b []byte) (int, error) {
 }
 
 type runnerFaultCaller struct {
-	client *node.Service
-	lost   bool
-	reads  map[int64]int
+	client      *node.Service
+	lost        bool
+	lostCleanup bool
+	reads       map[int64]int
 }
 
 func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, path string, value any) (map[string]any, error) {
@@ -53,6 +54,10 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		c.lost = false
 		return nil, errors.New("injected lost append acknowledgement")
 	}
+	if e == nil && c.lostCleanup && strings.HasSuffix(path, "/cleanup") && result["state"] == "source_deleted" {
+		c.lostCleanup = false
+		return nil, errors.New("injected lost source deletion receipt")
+	}
 	return result, e
 }
 
@@ -60,7 +65,7 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
-	_, sourceDB, _, _, source := clusterFixture(t, "https://source.test", transport, true)
+	_, sourceDB, sourceDir, _, source := clusterFixture(t, "https://source.test", transport, true)
 	_, targetDB, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true)
 	for _, v := range []struct {
 		s          *node.Service
@@ -293,5 +298,113 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 	if e != nil || row.MemberID != tr.PeerID {
 		t.Fatal("failed recheck reversed committed authority", row, e)
 	}
-	t.Logf("Master runner moved %d actual bytes across one complete parent; lost acknowledgement and SQL cutover failure safely retried", catalog.TotalBytes)
+	// Advance only this isolated fixture's grace; production still waits an hour.
+	if e = os.WriteFile(filepath.Join(targetDir, "media", row.Path), payloads[row.Path], 0644); e != nil {
+		t.Fatal(e)
+	}
+	if e = repo.ReleaseMigration(ctx, cleanupLease); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("7", 32)); e != nil {
+		t.Fatal("premature cleanup run", e)
+	}
+	if _, e = os.Stat(filepath.Join(sourceDir, "media", row.Path)); e != nil {
+		t.Fatal("source deleted during grace", e)
+	}
+	if id, e := repo.NextMigrationRun(ctx); e != nil || id != "" {
+		t.Fatal("grace task scheduled early", id, e)
+	}
+	now := time.Now().Unix()
+	if _, e = db.Database().Exec("UPDATE migration_units SET committed_at=?,cleanup_after=? WHERE task_id=?", now-3601, now-1, plan.ID); e != nil {
+		t.Fatal(e)
+	}
+	reads := sourceDB.Nodes().(store.MigrationReadRepository)
+	readID, e := reads.AcquireMigrationRead(ctx, srid, strings.Repeat("9", 64), row.ObjectID, "media")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("8", 32)); e == nil {
+		t.Fatal("source live read crossed cleanup")
+	}
+	if _, e = os.Stat(filepath.Join(sourceDir, "media", row.Path)); e != nil {
+		t.Fatal("live read source removed", e)
+	}
+	if e = reads.ReleaseMigrationRead(ctx, readID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(sourceDir, "media", row.Path), append([]byte("!"), payloads[row.Path][1:]...), 0644); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("9", 32)); e == nil {
+		t.Fatal("corrupt source removed")
+	}
+	var failedPhase string
+	if e = sourceDB.Database().QueryRow("SELECT state FROM migration_storage_journal WHERE task_id=? AND logical_id=?", plan.ID, row.ID).Scan(&failedPhase); e != nil || failedPhase != "deleting" {
+		t.Fatal("source failure lost deletion fence", failedPhase, e)
+	}
+	var failures int
+	if e = sourceDB.Database().QueryRow("SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", plan.ID, row.ID).Scan(&failures); e != nil || failures != 1 {
+		t.Fatal("source failure not durable", failures, e)
+	}
+	if id, e := repo.NextMigrationRun(ctx); e != nil || id != "" {
+		t.Fatal("cleanup error auto-retried", id, e)
+	}
+	if e = os.WriteFile(filepath.Join(sourceDir, "media", row.Path), payloads[row.Path], 0644); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	fault.lostCleanup = true
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("4", 32)); e == nil {
+		t.Fatal("lost source receipt ignored")
+	}
+	if _, e = os.Stat(filepath.Join(sourceDir, "media", row.Path)); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("acknowledged physical deletion did not happen", e)
+	}
+	if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("5", 32)); e != nil {
+		t.Fatal("source receipt replay failed", e)
+	}
+	work, e := repo.MigrationWork(ctx, plan.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, cp := range work.Objects {
+		if cp.State != "cleaned" {
+			t.Fatal("source checkpoint incomplete", cp.State)
+		}
+	}
+	var sourceUsed int64
+	if e = sourceDB.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_id=?", sr.PeerID).Scan(&sourceUsed); e != nil || sourceUsed != 0 {
+		t.Fatal("source accounting", sourceUsed, e)
+	}
+	if e = engine.Run(ctx, plan.ID, strings.Repeat("6", 32)); e != nil {
+		t.Fatal("completed source phase replay", e)
+	}
+	for _, id := range ids {
+		row, e := db.Pool().Resource(ctx, id)
+		if e != nil || row.MemberID != tr.PeerID {
+			t.Fatal("cleanup changed authority", row, e)
+		}
+		reader, e := master.ReadGlobalMedia(ctx, row)
+		if e != nil {
+			t.Fatal(e)
+		}
+		got, e := io.ReadAll(reader)
+		reader.Close()
+		if e != nil || !bytes.Equal(got, payloads[row.Path]) {
+			t.Fatal("post-source-cleanup business bytes", e)
+		}
+	}
+	task, e = repo.MigrationTask(ctx, plan.ID)
+	if e != nil || task.State != "cleanup_pending" || task.ErrorCode != "" {
+		t.Fatal("source phase falsely completed whole task", task, e)
+	}
+	t.Logf("Master runner moved %d actual bytes across one complete parent; lost acknowledgement, SQL cutover failure and authenticated source cleanup safely retried; fixture-only grace advance", catalog.TotalBytes)
 }

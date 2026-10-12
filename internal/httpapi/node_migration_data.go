@@ -91,7 +91,11 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				return
 			case job := <-jobs:
 				v := job.request
-				if job.operation == "recheck" {
+				if job.operation == "cleanup" {
+					if e := volume.MigrationCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo, store.NodeAudit{}); e != nil && ctx.Err() == nil {
+						_ = repo.FailPeerMigrationCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
+					}
+				} else if job.operation == "recheck" {
 					if v.Spec.Resource == "recording" && recordings != nil {
 						_, _ = recordings.MigrationRecheck(ctx, v.Spec, v.RecheckID, func() error { return admission(ctx, job.relationship, v, "recheck") })
 					} else {
@@ -336,6 +340,57 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 			return nil, e
 		}
 		return r.Abort(c.Request.Context(), v.Spec, func() error { return admission(c.Request.Context(), rel.ID, v, "abort") })
+	})
+	register("cleanup", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		// A legacy accelerated transfer has no proven Go response lifetime.
+		if settings.NginxMedia || v.Spec.Resource != "media" {
+			return nil, store.ErrMigrationState
+		}
+		if v.CleanupGrant != nil {
+			g := *v.CleanupGrant
+			if g.TaskID != v.Lease.TaskID || g.Object.ID != v.Spec.LogicalID {
+				return nil, store.ErrMigrationState
+			}
+			if e := repo.PreparePeerMigrationCleanup(c.Request.Context(), rel.ID, v.Lease, g, store.NodeAudit{}); e != nil {
+				return nil, e
+			}
+			var e error
+			p, e = repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, "cleanup")
+			if e != nil {
+				return nil, e
+			}
+		}
+		if p.State == "receiving" {
+			return nil, store.ErrMigrationState
+		}
+		failed, e := repo.PeerMigrationCleanupFailed(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID)
+		if e != nil {
+			return nil, e
+		}
+		if failed {
+			return gin.H{"state": "cleanup_failed"}, nil
+		}
+		if p.State == "deleted" {
+			finished, e := volume.MigrationCleanupFinished(c.Request.Context(), v.Lease.TaskID, v.Spec.LogicalID)
+			if e != nil {
+				return nil, e
+			}
+			if finished {
+				return gin.H{"state": "source_deleted", "receipt": store.MigrationSourceReceipt{TaskID: v.Lease.TaskID, SourceID: p.Header.SourceID, TargetID: p.Header.TargetID, PlanSHA: p.Header.PlanSHA, Proof: p.Proof, ManagedCopyDeleted: true}}, nil
+			}
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"state": "working"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, nil, "cleanup"}:
+			active[key(v)] = true
+			return gin.H{"state": "working"}, nil
+		default:
+			return gin.H{"state": "waiting"}, nil
+		}
 	})
 	var once sync.Once
 	return func() error { once.Do(func() { cancel(); workers.Wait() }); return nil }

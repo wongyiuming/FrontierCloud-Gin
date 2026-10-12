@@ -225,6 +225,9 @@ func (r *Repository) ControlMigration(ctx context.Context, id, action string, a 
 			}
 			state = "queued"
 		case "retry":
+			if state == "cleanup_pending" && task.ErrorCode != "" {
+				break
+			}
 			if state != "failed" {
 				return store.ErrMigrationState
 			}

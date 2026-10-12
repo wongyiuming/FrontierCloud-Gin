@@ -34,6 +34,18 @@ func TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund(t *testing.T
 			t.Fatal(e)
 		}
 	}
+	if e := repo.FailPeerMigrationCleanup(ctx, rel, l, g.Object.ID, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if failed, e := repo.PeerMigrationCleanupFailed(ctx, rel, l, g.Object.ID); e != nil || !failed {
+		t.Fatal("peer failure checkpoint missing", failed, e)
+	}
+	if e := repo.PreparePeerMigrationCleanup(ctx, rel, l, g, store.NodeAudit{}); e != nil {
+		t.Fatal("explicit retry grant rejected", e)
+	}
+	if failed, e := repo.PeerMigrationCleanupFailed(ctx, rel, l, g.Object.ID); e != nil || failed {
+		t.Fatal("failure checkpoint not cleared by retry", failed, e)
+	}
 	var phase string
 	var used int64
 	if e := raw.QueryRow("SELECT state FROM migration_storage_journal WHERE task_id=? AND logical_id=?", h.TaskID, v.Object.ID).Scan(&phase); e != nil || phase != "deleting" {

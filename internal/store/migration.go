@@ -171,4 +171,14 @@ type MigrationRepository interface {
 	ValidateMigrationLease(context.Context, MigrationLease) error
 	NextMigrationRun(context.Context) (string, error)
 	AuthorizeMigrationCleanup(context.Context, MigrationLease, string, MigrationCleanupProof) (MigrationCleanupGrant, error)
+	RecordMigrationSourceDeletion(context.Context, MigrationLease, MigrationSourceReceipt, NodeAudit) error
+}
+
+type MigrationSourceReceipt struct {
+	TaskID             string             `json:"task_id"`
+	SourceID           string             `json:"source_id"`
+	TargetID           string             `json:"target_id"`
+	PlanSHA            string             `json:"plan_sha256"`
+	Proof              MigrationDiskProof `json:"proof"`
+	ManagedCopyDeleted bool               `json:"managed_copy_deleted"`
 }

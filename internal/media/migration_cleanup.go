@@ -15,7 +15,7 @@ import (
 // MigrationCleanup uses the ordinary durable quarantine/recovery transaction.
 // It hashes a pinned source file outside the global mutation lease, then checks
 // the exact inode again under a short exclusive lease before preparing deletion.
-// No HTTP endpoint invokes this until its read/inventory eligibility is proved.
+// The authenticated native-only worker uses the persisted-grant entry below.
 func (s *Service) MigrationCleanup(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationCleanupGrant, repo store.MigrationPeerRepository, a store.NodeAudit) error {
 	if s.owned == nil || repo == nil || g.Object.Resource != "media" {
 		return ErrUnavailable
@@ -23,12 +23,23 @@ func (s *Service) MigrationCleanup(ctx context.Context, relationship string, l s
 	if e := repo.PreparePeerMigrationCleanup(ctx, relationship, l, g, a); e != nil {
 		return e
 	}
-	v, e := repo.AuthorizePeerMigration(ctx, relationship, l, g.Object.ID, "cleanup")
+	return s.MigrationCleanupAuthorized(ctx, relationship, l, g.Object.ID, repo, a)
+}
+
+// MigrationCleanupAuthorized consumes only the already-persisted source grant.
+func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	if s.owned == nil || repo == nil {
+		return ErrUnavailable
+	}
+	v, e := repo.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup")
 	if e != nil {
 		return e
 	}
 	if v.State == "deleted" {
-		return s.finishMigrationCleanup(ctx, l.TaskID, g.Object.ID)
+		return s.finishMigrationCleanup(ctx, l.TaskID, id)
+	}
+	if v.State != "deleting" || v.Object.Resource != "media" {
+		return store.ErrMigrationState
 	}
 	release, e := s.acquire(ctx, false)
 	if e != nil {
@@ -91,12 +102,12 @@ func (s *Service) MigrationCleanup(ctx context.Context, relationship string, l s
 	if e = s.ready(); e != nil {
 		return e
 	}
-	v, e = repo.AuthorizePeerMigration(ctx, relationship, l, g.Object.ID, "cleanup")
+	v, e = repo.AuthorizePeerMigration(ctx, relationship, l, id, "cleanup")
 	if e != nil {
 		return e
 	}
 	if v.State == "deleted" {
-		return s.finishMigrationCleanupLocked(ctx, l.TaskID, g.Object.ID)
+		return s.finishMigrationCleanupLocked(ctx, l.TaskID, id)
 	}
 	current, e := s.safeInfo(v.Object.Path)
 	if e != nil {
@@ -173,4 +184,26 @@ func (s *Service) finishMigrationCleanupLocked(ctx context.Context, task, id str
 		}
 	}
 	return nil
+}
+
+// MigrationCleanupFinished distinguishes the SQL deleted phase from retained
+// managed file journals. Historical publication anchors are a separate phase.
+func (s *Service) MigrationCleanupFinished(ctx context.Context, task, id string) (bool, error) {
+	release, e := s.acquire(ctx, false)
+	if e != nil {
+		return false, e
+	}
+	defer release()
+	ops, e := s.repository.DeleteOperations(ctx)
+	if e != nil {
+		return false, e
+	}
+	for _, op := range ops {
+		for _, item := range op.Items {
+			if item.MigrationTask == task && item.MigrationLogical == id {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }

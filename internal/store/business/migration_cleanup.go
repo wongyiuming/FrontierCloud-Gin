@@ -3,6 +3,7 @@ package business
 import (
 	"context"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"math"
 	"time"
 )
 
@@ -127,4 +128,64 @@ func (r *Repository) AuthorizeMigrationCleanup(ctx context.Context, l store.Migr
 		return nil
 	})
 	return
+}
+
+// Only the authenticated runner supplies this peer receipt. This checkpoint
+// means the managed source copy is deleted; private anchors and final scope/
+// drain reconciliation are separate facts and do not become task completion.
+func (r *Repository) RecordMigrationSourceDeletion(ctx context.Context, l store.MigrationLease, receipt store.MigrationSourceReceipt, a store.NodeAudit) error {
+	return r.write(ctx, func(q queryer) error {
+		t, e := r.checkMigrationLease(ctx, q, l)
+		if e != nil {
+			return e
+		}
+		if t.State != "cleanup_pending" || !receipt.ManagedCopyDeleted || receipt.TaskID != l.TaskID || receipt.SourceID != t.SourceID || receipt.TargetID != t.TargetID || receipt.PlanSHA != t.PlanSHA {
+			return store.ErrMigrationState
+		}
+		w, e := r.migrationWork(ctx, q, l.TaskID)
+		if e != nil {
+			return e
+		}
+		var cp *store.MigrationCheckpoint
+		for i := range w.Objects {
+			if w.Objects[i].Object.ID == receipt.Proof.ID {
+				cp = &w.Objects[i]
+				break
+			}
+		}
+		if cp == nil || cp.State != "cleanup_pending" && cp.State != "cleaned" || receipt.Proof.Version != cp.Object.Version || receipt.Proof.Bytes != cp.Object.Bytes || receipt.Proof.SHA256 != cp.SourceSHA || cp.TargetSHA != cp.SourceSHA || cp.VerifiedBytes != cp.Object.Bytes {
+			return store.ErrMigrationState
+		}
+		var committed, after int64
+		if e = q.QueryRowContext(ctx, "SELECT committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), l.TaskID, cp.UnitID).Scan(&committed, &after); e != nil {
+			return e
+		}
+		if committed <= 0 || after < committed+3600 || after > time.Now().Unix() {
+			return store.ErrMigrationState
+		}
+		table, key, state := "global_media_objects", "media_id", "active"
+		if cp.Object.Resource == "recording" {
+			table, key, state = "karaoke_recordings", "recording_id", "ready"
+		}
+		var owner, phase string
+		if e = q.QueryRowContext(ctx, "SELECT storage_member_id,state FROM "+table+" WHERE "+key+"=?"+r.lock(), cp.Object.ID).Scan(&owner, &phase); e != nil {
+			return e
+		}
+		if owner != t.TargetID || phase != state {
+			return store.ErrMigrationState
+		}
+		if cp.State == "cleaned" {
+			return nil
+		}
+		if t.Revision == math.MaxInt64 {
+			return store.ErrMigrationState
+		}
+		if _, e = q.ExecContext(ctx, "UPDATE migration_objects SET state='cleaned',updated_at=? WHERE task_id=? AND logical_id=?", time.Now().Unix(), l.TaskID, cp.Object.ID); e != nil {
+			return e
+		}
+		if _, e = q.ExecContext(ctx, "UPDATE migration_tasks SET revision=revision+1,updated_at=? WHERE task_id=?", time.Now().Unix(), l.TaskID); e != nil {
+			return e
+		}
+		return r.nodeAudit(ctx, q, "resource-migration-source-deleted", "", map[string]any{"task_id": l.TaskID, "logical_id": cp.Object.ID, "source_id": t.SourceID, "target_id": t.TargetID}, a)
+	})
 }

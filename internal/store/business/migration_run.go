@@ -20,7 +20,7 @@ func (r *Repository) NextMigrationRun(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	var id string
-	e = r.db.QueryRowContext(ctx, "SELECT t.task_id FROM migration_tasks t LEFT JOIN migration_runners r ON r.task_id=t.task_id WHERE t.master_id=? AND t.state IN ('queued','copying','verifying','committing') AND (r.task_id IS NULL OR r.expires_at<=?) ORDER BY t.created_at,t.task_id LIMIT 1", n.ID, time.Now().Unix()).Scan(&id)
+	e = r.db.QueryRowContext(ctx, "SELECT t.task_id FROM migration_tasks t LEFT JOIN migration_runners r ON r.task_id=t.task_id WHERE t.master_id=? AND (t.state IN ('queued','copying','verifying','committing') OR (t.state='cleanup_pending' AND t.error_code='' AND EXISTS (SELECT 1 FROM migration_units u JOIN migration_objects o ON o.task_id=u.task_id AND o.unit_id=u.unit_id WHERE u.task_id=t.task_id AND u.state='cleanup_pending' AND u.committed_at>0 AND u.cleanup_after>=u.committed_at+3600 AND u.cleanup_after<=? AND o.state='cleanup_pending'))) AND (r.task_id IS NULL OR r.expires_at<=?) ORDER BY t.created_at,t.task_id LIMIT 1", n.ID, time.Now().Unix(), time.Now().Unix()).Scan(&id)
 	if errors.Is(e, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -40,7 +40,7 @@ func (r *Repository) MigrationRunState(ctx context.Context, l store.MigrationLea
 	if object != "" && !nodeHashPattern.MatchString(object) && !nodeIDPattern.MatchString(object) {
 		return store.ErrMigrationState
 	}
-	if code != "" && code != "peer_transport" && code != "peer_conflict" && code != "target_verification" && code != "target_publication" && code != "unit_commit" {
+	if code != "" && code != "peer_transport" && code != "peer_conflict" && code != "target_verification" && code != "target_publication" && code != "unit_commit" && code != "source_cleanup" {
 		return store.ErrMigrationState
 	}
 	return r.write(ctx, func(q queryer) error {

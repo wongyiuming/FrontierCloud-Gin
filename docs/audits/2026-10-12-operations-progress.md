@@ -606,6 +606,51 @@ whole-task completion/cancellation, Nginx read eligibility and independent
 retirement inventories still require implementation and actual fleet acceptance.
 Production does not advertise the unfinished migration capability.
 
+## Authenticated source media cleanup execution
+
+Master now schedules committed media copies for cleanup only after their persisted
+one-hour grace, using a fresh authenticated target disk recheck and the bound
+cleanup grant. The native-only HTTPS/HMAC follower route dispatches deletion to
+the existing joined worker (one worker, one queued job); it does not hold an HTTP
+request or SQL/global exclusive transaction across hashing. Legacy Nginx media
+acceleration and recording cleanup are explicitly rejected at this stage.
+
+The source reports a managed-copy deletion receipt only when its physical journal
+is deleted and the exact managed delete operation no longer remains. Master
+rechecks task/plan/source/target, original ID/version/length/SHA, target authority
+and elapsed grace before recording its object as `cleaned`. This object checkpoint
+means the managed source copy is removed. Units/tasks stay `cleanup_pending`,
+with scopes/drains held, until private anchors and final reconciliation are also
+finished. Replayed receipts change revision/audit once and cannot reverse owner
+or refund Master quota again.
+
+Source scan failures use the existing per-object `pending` checkpoint plus the
+structured failure audit; the physical journal stays `deleting`, so new source
+reads remain fenced. This is a follower resource fact, not a copy of the Master
+business database. A fresh explicit grant clears the failed checkpoint for retry.
+Master retains `cleanup_pending` with stable `source_cleanup` error code, and the
+scheduler excludes that error until operator retry. A new runner epoch fences
+older jobs. Existing generation-six state constraints remain unchanged; no DDL is needed
+for these resource checkpoints.
+
+The actual 524351-byte SQLite/Gin/HMAC fixture now completes both managed source
+deletions, blocks a live physical-alias read, detects source/target corruption,
+persists source failure, retries a lost deletion receipt, reconciles source used
+to zero once, and reads identical business bytes from the target afterward. The
+fixture explicitly advances only its isolated grace timestamps; it is not a real
+one-hour wait, native TLS/socket, browser or five-node deployment test.
+SQLite/MySQL tests cover due/error scheduling, explicit retry, per-object failure
+checkpoint reset, receipt binding, one progress revision and retained scopes/
+target authority. See [authenticated byte/cleanup and full Go regression](2026-10-12-authenticated-source-cleanup.txt)
+and [SQLite/MySQL execution facts](2026-10-12-authenticated-source-cleanup-mysql.txt).
+Source CI passed 201 Python tests (two optional skips) and its JavaScript smoke
+checks within the unchanged hosted CI budget.
+
+Recording source transactions, historical publication anchors, whole-task
+completion/cancellation, physical inventories/eligibility, retirement and GUI/CLI
+remain required. Production still does not advertise the unfinished migration
+capability, and no production resource or node was migrated or retired.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
