@@ -275,7 +275,11 @@ func (s *Service) Priorities(ctx context.Context, scope, query, kind string, pag
 		if fold.String(a.Name) != fold.String(b.Name) {
 			return fold.String(a.Name) < fold.String(b.Name)
 		}
-		return fold.String(a.Path) < fold.String(b.Path)
+		fa, fb := fold.String(a.Path), fold.String(b.Path)
+		if fa == fb {
+			return a.Path < b.Path
+		}
+		return fa < fb
 	})
 	sort.Slice(result.Items, func(i, j int) bool {
 		a, b := result.Items[i], result.Items[j]

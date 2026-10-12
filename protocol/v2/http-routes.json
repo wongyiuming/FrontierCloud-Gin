@@ -742,5 +742,12 @@
       "GET",
       "POST"
     ]
+  },
+  {
+    "path": "/api/v1/media/admin/priority-order",
+    "methods": [
+      "GET",
+      "POST"
+    ]
   }
 ]

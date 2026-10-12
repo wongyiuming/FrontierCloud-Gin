@@ -303,7 +303,11 @@ func (s *Service) categories(ctx context.Context, kind, parent string, include b
 		if pa != pb {
 			return pa > pb
 		}
-		return fold.String(a.Name) < fold.String(b.Name)
+		fa, fb := fold.String(a.Name), fold.String(b.Name)
+		if fa == fb {
+			return a.Name < b.Name
+		}
+		return fa < fb
 	})
 	return result, nil
 }

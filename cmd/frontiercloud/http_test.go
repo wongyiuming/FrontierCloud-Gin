@@ -184,8 +184,10 @@ func TestProductionHTTPRegistrationCoversEffectiveReferenceInventory(t *testing.
 	if err = json.Unmarshal(b, &rows); err != nil {
 		t.Fatal(err)
 	}
+	inventory := map[string]bool{}
 	for _, r := range rows {
 		for _, method := range r.Methods {
+			inventory[method+" "+pathShape(r.Path)] = true
 			if !available[method+" "+pathShape(r.Path)] {
 				t.Errorf("missing effective route: %s %s", method, r.Path)
 			}
@@ -200,6 +202,14 @@ func TestProductionHTTPRegistrationCoversEffectiveReferenceInventory(t *testing.
 			if !available[strings.ToUpper(method)+" "+pathShape(path)] {
 				t.Errorf("published schema has no native implementation: %s %s", method, path)
 			}
+		}
+	}
+	// New Admin operations must be discoverable as well as implemented;
+	// contract-to-router coverage alone misses undocumented live endpoints.
+	for _, method := range []string{"GET", "POST"} {
+		path := "/api/v1/media/admin/priority-order"
+		if !available[method+" "+path] || !inventory[method+" "+path] || schema.Paths[path][strings.ToLower(method)] == nil {
+			t.Fatal("priority operation missing from router or published contracts", method)
 		}
 	}
 }
