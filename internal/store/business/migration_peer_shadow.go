@@ -11,6 +11,16 @@ import (
 // This admission persists an exact target cancellation deletion fence. It does
 // not delete bytes, change business ownership or refund used/reserved capacity.
 func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationShadowGrant, a store.NodeAudit) error {
+	return r.preparePeerMigrationCancellation(ctx, rel, l, g, a, false)
+}
+func (r *Repository) PreparePeerMigrationPublicationAbort(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationShadowGrant, a store.NodeAudit) error {
+	return r.preparePeerMigrationCancellation(ctx, rel, l, g, a, true)
+}
+func (r *Repository) preparePeerMigrationCancellation(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationShadowGrant, a store.NodeAudit, publicationAbort bool) error {
+	initial, working, terminal, action := "published", "deleting", "deleted", "peer-migration-shadow-delete-authorized"
+	if publicationAbort {
+		initial, working, terminal, action = "verified", "aborting", "aborted", "peer-migration-publication-abort-authorized"
+	}
 	return r.write(ctx, func(q queryer) error {
 		h, n, state, e := r.checkPeerLease(ctx, q, rel, l)
 		if e != nil {
@@ -87,11 +97,11 @@ func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel
 		if e = q.QueryRowContext(ctx, "SELECT state,sha256,source_version,expected_bytes FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, o.ID).Scan(&phase, &hash, &version, &size); e != nil {
 			return e
 		}
-		if hash != proof.SHA256 || version != proof.Version || size != proof.Bytes || proof.ID != o.ID || phase != "published" && phase != "deleting" && phase != "deleted" {
+		if hash != proof.SHA256 || version != proof.Version || size != proof.Bytes || proof.ID != o.ID || phase != initial && phase != working && phase != terminal {
 			return store.ErrMigrationState
 		}
 		now := time.Now().Unix()
-		if phase == "published" && (proof.VerifiedAt < now-30 || proof.VerifiedAt > now+30) {
+		if phase == initial && (proof.VerifiedAt < now-30 || proof.VerifiedAt > now+30) {
 			return store.ErrMigrationState
 		}
 		var unitState, unitVersion string
@@ -104,14 +114,36 @@ func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel
 		} else if !errors.Is(e, sql.ErrNoRows) {
 			return e
 		} else {
-			if phase != "published" {
+			if phase != initial {
 				return store.ErrMigrationState
 			}
 			if _, e = q.ExecContext(ctx, "INSERT INTO migration_units(task_id,unit_id,resource_kind,parent_path,source_version,state,object_count,total_bytes) VALUES (?,?,?,?,?,'pending',?,?)", l.TaskID, u.ID, u.Resource, u.Parent, g.Unit.UnitVersion, u.ObjectCount, u.Bytes); e != nil {
 				return e
 			}
 		}
-		if phase == "deleting" || phase == "deleted" {
+		if publicationAbort {
+			// SQL-accounted publications never enter this path. A business link
+			// can be unlinked only when its metadata is absent or an exact retired
+			// recording tombstone belongs to the same physical binding.
+			if o.Resource == "media" {
+				var present int
+				if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM media_objects WHERE media_id=? OR path_locator=?", o.ObjectID, locator(o.TargetPath)).Scan(&present); e != nil {
+					return e
+				}
+				if present != 0 {
+					return store.ErrMigrationState
+				}
+			} else {
+				row, e := recordingLookup(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), o.ID))
+				if e != nil {
+					return e
+				}
+				if row != nil && (row.State != "deleted" || row.MemberID != h.TargetID || row.UserID != o.Parent || row.Bytes != o.Bytes || row.SHA256 == nil || *row.SHA256 != proof.SHA256 || row.Filename != o.Recording.Filename || row.ContentType != o.Recording.ContentType) {
+					return store.ErrMigrationState
+				}
+			}
+		}
+		if phase == working || phase == terminal {
 			var failed int
 			if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_objects WHERE task_id=? AND logical_id=? AND state='pending'", l.TaskID, o.ID).Scan(&failed); e != nil {
 				return e
@@ -133,9 +165,9 @@ func (r *Repository) PreparePeerMigrationShadowDeletion(ctx context.Context, rel
 		if reads != 0 {
 			return store.ErrMigrationState
 		}
-		if _, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleting',updated_at=? WHERE task_id=? AND logical_id=?", now, l.TaskID, o.ID); e != nil {
+		if _, e = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state=?,updated_at=? WHERE task_id=? AND logical_id=?", working, now, l.TaskID, o.ID); e != nil {
 			return e
 		}
-		return r.nodeAudit(ctx, q, "peer-migration-shadow-delete-authorized", rel, map[string]any{"task_id": l.TaskID, "logical_id": o.ID, "unit_id": u.ID, "source_verified_at": proof.VerifiedAt, "source_sha256": proof.SHA256}, a)
+		return r.nodeAudit(ctx, q, action, rel, map[string]any{"task_id": l.TaskID, "logical_id": o.ID, "unit_id": u.ID, "source_verified_at": proof.VerifiedAt, "source_sha256": proof.SHA256}, a)
 	})
 }

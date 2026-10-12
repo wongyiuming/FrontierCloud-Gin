@@ -563,7 +563,7 @@ func (r *Receiver) Abort(ctx context.Context, s Spec, admission func() error) (C
 	} else if e != nil {
 		return c, e
 	}
-	if c.PublicationCancelling && !c.PublicationUnlinked {
+	if c.PublicationCancelling && c.State != "aborted" {
 		return c, ErrState
 	}
 	if c.State == "aborted" {

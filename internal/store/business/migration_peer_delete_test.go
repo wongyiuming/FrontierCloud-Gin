@@ -216,3 +216,97 @@ func TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery(t *testi
 		}
 	}
 }
+
+func TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished(t *testing.T) {
+	_, raw, repo, rel, h, l, v := peerMigrationFixture(t, false)
+	ctx := context.Background()
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "queued", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e := repo.RegisterPeerMigrationObject(ctx, rel, l, v, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if e := repo.VerifyPeerMigrationObject(ctx, rel, l, v.Object.ID, v.Object.Bytes, v.Proof.SHA256); e != nil {
+		t.Fatal(e)
+	}
+	l.Epoch++
+	if e := repo.RegisterPeerMigration(ctx, rel, h, l, "cancelling", 20*store.GiB, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	var unit string
+	if e := raw.QueryRow("SELECT unit_id FROM migration_storage_journal WHERE task_id=?", h.TaskID).Scan(&unit); e != nil {
+		t.Fatal(e)
+	}
+	sha, e := store.MigrationUnitObjectsSHA([]store.MigrationPeerObject{v})
+	if e != nil {
+		t.Fatal(e)
+	}
+	g := store.MigrationShadowGrant{Unit: store.MigrationUnitFinishGrant{Header: h, Unit: store.MigrationUnit{ID: unit, Resource: v.Object.Resource, Parent: v.Object.Parent, State: "cancelled", ObjectCount: 1, Bytes: v.Object.Bytes}, UnitVersion: hashPath("unpublish-unit"), ObjectsSHA: sha}, Object: v.Object, SourceProof: store.MigrationCleanupProof{MigrationDiskProof: v.Proof, VerifiedAt: time.Now().Unix()}}
+	if _, e = repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "unpublish"); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("unadmitted publishing cancellation", e)
+	}
+	if e = repo.PreparePeerMigrationShadowDeletion(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("verified reservation treated as used capacity", e)
+	}
+	wrong := g
+	wrong.SourceProof.VerifiedAt -= 31
+	if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, wrong, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("stale source proof", e)
+	}
+	if _, e = raw.Exec("INSERT INTO media_objects(media_id,path_locator,media_path,object_kind,created_at,updated_at) VALUES (?,?,?,'audio','2026-10-12','2026-10-12')", v.Object.ObjectID, hashPath(v.Object.TargetPath), v.Object.TargetPath); e != nil {
+		t.Fatal(e)
+	}
+	if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("business metadata bypassed", e)
+	}
+	if _, e = raw.Exec("DELETE FROM media_objects WHERE media_id=?", v.Object.ObjectID); e != nil {
+		t.Fatal(e)
+	}
+	for range 2 {
+		if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, g, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if object, e := repo.AuthorizePeerMigration(ctx, rel, l, v.Object.ID, "unpublish"); e != nil || object.State != "aborting" {
+		t.Fatal(object, e)
+	}
+	if e = repo.FailPeerMigrationShadowCleanup(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if failed, e := repo.PeerMigrationShadowCleanupFailed(ctx, rel, l, v.Object.ID); e != nil || !failed {
+		t.Fatal(failed, e)
+	}
+	if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, wrong, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("old proof cleared error", e)
+	}
+	if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, g, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	var used, reserved int64
+	if e = raw.QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", h.TargetID).Scan(&used, &reserved); e != nil || used != 0 || reserved != v.Object.Bytes {
+		t.Fatal("reservation refunded before file proof", used, reserved, e)
+	}
+	if _, e = raw.Exec("UPDATE migration_storage_journal SET state='published' WHERE task_id=?", h.TaskID); e != nil {
+		t.Fatal(e)
+	}
+	if e = repo.PreparePeerMigrationPublicationAbort(ctx, rel, l, g, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
+		t.Fatal("published receipt reversed", e)
+	}
+	if _, e = raw.Exec("UPDATE migration_storage_journal SET state='aborting' WHERE task_id=?", h.TaskID); e != nil {
+		t.Fatal(e)
+	}
+	// Internal completion represents the receiver's separately verified aborted
+	// checkpoint, not a caller's claim that a file was removed.
+	if e = repo.CompletePeerMigrationAbort(ctx, rel, l, v.Object.ID, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	for range 2 {
+		receipt, e := repo.CompletePeerMigrationUnitCancellation(ctx, rel, l, g.Unit, store.NodeAudit{})
+		if e != nil || !receipt.Complete {
+			t.Fatal(receipt, e)
+		}
+	}
+	if e = raw.QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", h.TargetID).Scan(&used, &reserved); e != nil || used != 0 || reserved != 0 {
+		t.Fatal("abort reservation replay", used, reserved, e)
+	}
+}

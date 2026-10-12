@@ -116,7 +116,7 @@ func (r *Repository) failPeerMigrationCleanup(ctx context.Context, relationship 
 		if phase == "deleted" && !shadow {
 			return nil
 		}
-		if phase != "deleting" && !(shadow && phase == "deleted") {
+		if phase != "deleting" && !(shadow && (phase == "deleted" || phase == "aborting" || phase == "aborted")) {
 			return store.ErrMigrationState
 		}
 		o, e := r.peerObjectBinding(ctx, q, l.TaskID, id)

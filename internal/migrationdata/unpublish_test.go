@@ -147,6 +147,9 @@ func TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes(t *te
 				if _, e = r.CancelPublication(ctx, s, func() error { return nil }, unpublish); !errors.Is(e, ErrState) {
 					t.Fatal("retained unknown staging removed", e)
 				}
+				if _, e = r.Abort(ctx, s, func() error { return nil }); !errors.Is(e, ErrState) {
+					t.Fatal("ordinary abort bypassed publication replay proof", e)
+				}
 				if _, e = root.Lstat(stage); e != nil {
 					t.Fatal("unknown bytes not preserved", e)
 				}

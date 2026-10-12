@@ -1237,3 +1237,33 @@ Recovery also rehashes any still-present private material after the business
 unlink checkpoint. The additional changed_retained_stage case in the full-Go
 evidence proves unexpected replacement bytes are preserved rather than reclaimed
 solely because an older unlink intent exists.
+
+
+## SQL admission for interrupted publication cancellation (2026-10-12)
+
+The target now has a distinct publication-abort admission using the same full
+immutable cancellation unit/object/roster/source-proof validator. It accepts only
+verified, aborting or aborted unaccounted target journals and rejects published
+receipts. Initial fresh source proof, absent live business metadata, local read
+fences and exact target identity are mandatory. An exact retired recording
+ownership tombstone may remain; a live or mismatched recording cannot enter this
+path. Existing deletion-based shadow admission still requires published/deleting/
+deleted receipts, so the two accounting histories cannot be conflated.
+
+Admission persists aborting plus the zero-commit pending unit and leaves target
+reserved bytes untouched. Per-object failures are durable and require a fresh
+validated source proof to clear. Internal byte-abort completion records aborted;
+only dual-peer unit cancellation subsequently refunds the still-held reservation
+once. No used-capacity refund, business ownership reversal or new SQL state/schema
+generation is introduced. Ordinary staging Abort now rejects every unfinished
+publication-cancelling checkpoint, including already-unlinked business paths, so
+it cannot bypass retained private-byte proof on replay.
+
+`2026-10-12-publication-abort-admission.txt` and
+`2026-10-12-publication-abort-admission-mysql.txt` cover actual SQLite/MySQL
+admission/retry/metadata/published-receipt rejection and reservation replay checks.
+`2026-10-12-publication-abort-admission-full-go.txt` includes private checkpoint
+recovery/race checks and full Go regression. These repository tests intentionally
+do not assert that the native service has removed business links; native metadata
+checks and media/recording coordinated unlink plus authenticated worker integration
+remain the next required work. Original full delivery scope remains active.
