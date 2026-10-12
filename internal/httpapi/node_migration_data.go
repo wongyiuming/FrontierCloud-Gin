@@ -91,7 +91,19 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				return
 			case job := <-jobs:
 				v := job.request
-				if job.operation == "shadow" {
+				if job.operation == "unpublish" {
+					var e error
+					if v.ShadowGrant == nil {
+						e = store.ErrMigrationState
+					} else if v.Spec.Resource == "recording" && recordings != nil {
+						e = recordings.MigrationCancelPublication(ctx, job.relationship, v.Lease, *v.ShadowGrant, repo, store.NodeAudit{})
+					} else {
+						e = volume.MigrationCancelPublication(ctx, job.relationship, v.Lease, *v.ShadowGrant, repo, store.NodeAudit{})
+					}
+					if e != nil && ctx.Err() == nil {
+						_ = repo.FailPeerMigrationShadowCleanup(ctx, job.relationship, v.Lease, v.Spec.LogicalID, store.NodeAudit{})
+					}
+				} else if job.operation == "shadow" {
 					var e error
 					if v.Spec.Resource == "recording" && recordings != nil {
 						e = recordings.MigrationShadowCleanupAuthorized(ctx, job.relationship, v.Lease, v.Spec.LogicalID, repo)
@@ -189,7 +201,16 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 				detail(c, 400, "Invalid bounded migration data request")
 				return
 			}
-			p, e := repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, operation)
+			authorizeOperation := operation
+			// Initial unpublish admission needs a verified roster, before persisting
+			// the cancellation fence. Status authorizes no byte or metadata mutation.
+			if operation == "unpublish" && v.ShadowGrant != nil {
+				authorizeOperation = "status"
+			}
+			p, e := repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, authorizeOperation)
+			if operation == "unpublish" && e != nil && v.ShadowGrant != nil {
+				p, e = repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, "unpublish")
+			}
 			if e == nil && !migrationRequestMatches(v, p) {
 				e = store.ErrMigrationState
 			}
@@ -411,6 +432,62 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "retire"}:
+			active[key(v)] = true
+			return gin.H{"state": "working"}, nil
+		default:
+			return gin.H{"state": "waiting"}, nil
+		}
+	})
+	register("unpublish", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		if settings.NginxMedia || v.Spec.Resource != "media" && (v.Spec.Resource != "recording" || recordings == nil || v.Spec.Recording == nil) {
+			return nil, store.ErrMigrationState
+		}
+		if v.ShadowGrant != nil {
+			if v.ShadowGrant.Object.ID != v.Spec.LogicalID || v.ShadowGrant.Unit.Header.TaskID != v.Lease.TaskID {
+				return nil, store.ErrMigrationState
+			}
+			if e := repo.PreparePeerMigrationPublicationAbort(c.Request.Context(), rel.ID, v.Lease, *v.ShadowGrant, store.NodeAudit{}); e != nil {
+				return nil, e
+			}
+		}
+		var e error
+		p, e = repo.AuthorizePeerMigration(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID, "unpublish")
+		if e != nil {
+			return nil, e
+		}
+		failed, e := repo.PeerMigrationShadowCleanupFailed(c.Request.Context(), rel.ID, v.Lease, v.Spec.LogicalID)
+		if e != nil {
+			return nil, e
+		}
+		if failed {
+			return gin.H{"state": "unpublish_failed"}, nil
+		}
+		r, e := receiver(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		cp, e := r.Status(c.Request.Context(), v.Spec)
+		if e != nil {
+			return nil, e
+		}
+		if p.State == "aborted" && cp.State == "aborted" && cp.PublicationCancelling && cp.PublicationUnlinked {
+			return gin.H{"state": "publication_aborted", "checkpoint": cp}, nil
+		}
+		if cp.State != "publishing" && !(cp.State == "aborting" && cp.PublicationCancelling) && !(cp.State == "aborted" && cp.PublicationUnlinked) {
+			return nil, store.ErrMigrationState
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		if active[key(v)] {
+			return gin.H{"state": "working"}, nil
+		}
+		// Storage restart can lose a queued worker, but never its durable intent.
+		// Require a newly authenticated source proof before scheduling it again.
+		if v.ShadowGrant == nil {
+			return gin.H{"state": "grant_required"}, nil
+		}
+		select {
+		case jobs <- migrationVerifyJob{v, rel.ID, r, "unpublish"}:
 			active[key(v)] = true
 			return gin.H{"state": "working"}, nil
 		default:

@@ -1278,3 +1278,16 @@ Executed actual filesystem + embedded SQLite tests in the isolated development c
 Evidence: `2026-10-12-native-publication-abort.txt` and `2026-10-12-native-publication-abort-full-go.txt`. Source CI ran 201 Python tests (two optional skips), policy/schema checks and JavaScript smoke checks. No new schema generation, public capability advertisement, production operations or branch publication.
 
 Remaining: authenticated interrupted-publication worker/runner and accounted-publication checkpoint recovery; complete cancellation edge cases; physical inventories, safe retirement, GUI/CLI, upgrade and multi-node recovery; SQLite/MySQL native TLS/fleet/browser/resource acceptance. Overall request is still incomplete.
+
+
+### Authenticated publication-abort worker and Master reconciliation
+
+Connected the native interrupted-publication cancellation adapters to `data/unpublish` and the existing joined worker (one bounded queue, task/object deduplication, no additional service). Initial requests validate the immutable roster through read-only status authorization, then persist the cancellation fence using the fresh source proof. Polling consumes that fence; a lost queued worker requests a fresh grant before rescheduling. Actual worker failures persist and surface as `unpublish_failed`, requiring explicit task retry. Completion returns the exact aborted/unlinked checkpoint only after the SQL abort receipt. Nginx acceleration remains rejected for destructive migration operations.
+
+The Master cancellation runner first attempts publication abort after ordinary staging abort conflicts. SQL-accounted publications reject that admission and continue through the existing shadow deletion/refund protocol. Both terminal receipts are checked against the exact immutable byte specification. Source ownership stays authoritative for uncommitted units; reserved target capacity is reconciled only by whole-unit cancellation.
+
+Added actual raw-HMAC/Gin/files/SQLite runner fixtures injecting an audit-trigger SQL rollback after native business-link creation, then cancelling media and plain/encrypted recordings. Tests recover lost publication-abort, unit and task acknowledgments under fresh fenced epochs. Media also checks corrupt target rejection/durable failure and repaired retry. Original source business reads remain valid, recording client AES decryption succeeds, and target used/reserved converge to zero without changing personal quota. Existing SQL-accounted media/recording shadow cancellation tests remain green under `-race`.
+
+Evidence: `2026-10-12-authenticated-publication-abort.txt` (targeted race), `2026-10-12-authenticated-publication-abort-full-go.txt` (full Go). Source CI remains within its existing budget. These are real byte/file/database fixtures, not native TLS fleet or browser acceptance. No public migration capability was enabled.
+
+Remaining: SQL-accounted publication with a lost byte-checkpoint write; full cancellation/fleet/reverse coverage; physical inventories and retirement; GUI/CLI; upgrades/multi-node recovery; required native/browser/resource acceptance. Overall goal remains incomplete.

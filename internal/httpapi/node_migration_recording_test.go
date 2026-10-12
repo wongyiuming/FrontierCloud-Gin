@@ -51,8 +51,14 @@ func TestAuthenticatedRecordingPublishedShadowCancellation(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedRecordingInterruptedPublicationCancellation(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, true, true) })
+	}
+}
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
+	unpublish := len(cleanup) > 2 && cleanup[2]
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, mdb, _, _, master := clusterFixture(t, "https://master.test", transport, true, true)
 	_, sdb, sourceDir, _, source := clusterFixture(t, "https://source.test", transport, true, true)
@@ -186,13 +192,21 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 				t.Fatal(e)
 			}
 			t.Cleanup(func() { mdb.Database().Exec("DROP TRIGGER IF EXISTS block_record_shadow_cutover") })
+			if unpublish {
+				if _, e = tdb.Database().Exec("CREATE TRIGGER fail_record_publication BEFORE INSERT ON node_audit WHEN NEW.action='peer-migration-recording-published' BEGIN SELECT RAISE(ABORT,'publication commit unavailable'); END"); e != nil {
+					t.Fatal(e)
+				}
+				t.Cleanup(func() { tdb.Database().Exec("DROP TRIGGER IF EXISTS fail_record_publication") })
+				fault.stopPublishing = func() bool { _, e := os.Stat(filepath.Join(targetDir, "recordings", o.TargetPath)); return e == nil }
+			}
 			if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e == nil {
 				t.Fatal("recording cutover failure ignored")
 			}
 			if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
 				t.Fatal(e)
 			}
-			fault.lostShadow = true
+			fault.lostShadow = !unpublish
+			fault.lostUnpublish = unpublish
 			fault.lostCancelUnit = true
 			fault.lostCancelTask = true
 			for attempt := 0; attempt < 4; attempt++ {

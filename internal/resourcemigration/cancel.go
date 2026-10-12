@@ -149,28 +149,48 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 					return err
 				}
 				req := migrationdata.Request{Lease: l, Spec: spec, ShadowGrant: &grant}
+				operation := "unpublish"
 				deadline := time.Now().Add(30 * time.Minute)
 				for {
 					if err = ensure(); err != nil {
 						return err
 					}
 					req.Lease = l
-					value, err := r.request(ctx, target, prefix+"data/shadow", req)
+					value, err := r.request(ctx, target, prefix+"data/"+operation, req)
+					// A SQL-accounted publication requires managed deletion and a used
+					// refund. It must never be treated as an unaccounted hard link.
+					if operation == "unpublish" && errors.Is(err, node.ErrRemoteConflict) {
+						operation = "shadow"
+						req.ShadowGrant = &grant
+						continue
+					}
 					if err != nil {
 						return err
 					}
 					req.ShadowGrant = nil
-					if value["state"] == "shadow_failed" {
+					if value["state"] == "grant_required" {
+						proof, err := r.FreshCancellationSourceProof(ctx, l, o.ID)
+						if err != nil {
+							return err
+						}
+						grant, err = r.Repository.AuthorizeMigrationShadowDeletion(ctx, l, o.ID, proof)
+						if err != nil {
+							return err
+						}
+						req.ShadowGrant = &grant
+					}
+					if value["state"] == "shadow_failed" || value["state"] == "unpublish_failed" {
 						return store.ErrMigrationState
 					}
-					if value["state"] == "shadow_deleted" {
+					if value["state"] == "shadow_deleted" || value["state"] == "publication_aborted" {
 						var cp migrationdata.Checkpoint
 						if err = decode(value["checkpoint"], &cp); err != nil {
 							return err
 						}
 						expected, _ := store.MigrationDigest(spec)
 						actual, _ := store.MigrationDigest(cp.Spec)
-						if expected != actual || cp.State != "published" || !cp.AnchorRetired || cp.AnchorRetiring {
+						valid := value["state"] == "shadow_deleted" && cp.State == "published" && cp.AnchorRetired && !cp.AnchorRetiring || value["state"] == "publication_aborted" && cp.State == "aborted" && cp.PublicationCancelling && cp.PublicationUnlinked
+						if expected != actual || !valid {
 							return store.ErrMigrationState
 						}
 						break

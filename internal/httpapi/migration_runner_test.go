@@ -45,6 +45,8 @@ type runnerFaultCaller struct {
 	lostCancelUnit bool
 	lostCancelTask bool
 	lostShadow     bool
+	lostUnpublish  bool
+	stopPublishing func() bool
 	blockBegin     func() bool
 	reads          map[int64]int
 }
@@ -61,6 +63,17 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		}
 	}
 	result, e := c.client.Call(ctx, rel, path, value)
+	if e == nil && c.stopPublishing != nil && strings.HasSuffix(path, "/status") && result["peer_state"] == "verified" {
+		raw, _ := json.Marshal(result["checkpoint"])
+		var cp migrationdata.Checkpoint
+		if json.Unmarshal(raw, &cp) == nil && cp.State == "publishing" && c.stopPublishing() {
+			return nil, errors.New("injected stop after link before SQL receipt")
+		}
+	}
+	if e == nil && c.lostUnpublish && strings.HasSuffix(path, "/unpublish") && result["state"] == "publication_aborted" {
+		c.lostUnpublish = false
+		return nil, errors.New("injected lost publication abort receipt")
+	}
 	if e == nil && c.lost && strings.HasSuffix(path, "/append") {
 		c.lost = false
 		return nil, errors.New("injected lost append acknowledgement")
@@ -108,8 +121,12 @@ func TestMasterMigrationShadowGrantRequiresCurrentSourceBytes(t *testing.T) {
 func TestMasterMigrationPublishedShadowCancellationLostReceipts(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "shadowcleanup")
 }
+func TestMasterMigrationInterruptedPublicationCancellation(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "unpublish")
+}
 func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
 	mixed := len(modes) > 0 && modes[0] == "mixed"
+	unpublish := len(modes) > 0 && modes[0] == "unpublish"
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
@@ -430,6 +447,13 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { db.Database().Exec("DROP TRIGGER IF EXISTS block_runner_cutover") })
+	if unpublish {
+		if _, e = targetDB.Database().Exec("CREATE TRIGGER fail_native_publication BEFORE INSERT ON node_audit WHEN NEW.action='peer-migration-media-published' BEGIN SELECT RAISE(ABORT,'publication commit unavailable'); END"); e != nil {
+			t.Fatal(e)
+		}
+		t.Cleanup(func() { targetDB.Database().Exec("DROP TRIGGER IF EXISTS fail_native_publication") })
+		fault.stopPublishing = func() bool { _, e := os.Stat(filepath.Join(targetDir, "media", names[0])); return e == nil }
+	}
 	engine = &resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: fault}
 	if e = engine.Run(ctx, plan.ID, strings.Repeat("b", 32)); e == nil {
 		t.Fatal("injected unit commit failure ignored")
@@ -447,10 +471,10 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	}
 	var targetUsed, targetReserved int64
 	targetDB.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", tr.PeerID).Scan(&targetUsed, &targetReserved)
-	if targetUsed != catalog.TotalBytes || targetReserved != 0 {
+	if !unpublish && (targetUsed != catalog.TotalBytes || targetReserved != 0) || unpublish && (targetUsed != 0 || targetReserved != catalog.TotalBytes) {
 		t.Fatal("local publication accounting", targetUsed, targetReserved)
 	}
-	if len(modes) > 0 && (modes[0] == "shadowproof" || modes[0] == "shadowcleanup") {
+	if len(modes) > 0 && (modes[0] == "shadowproof" || modes[0] == "shadowcleanup" || unpublish) {
 		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
 			t.Fatal(e)
 		}
@@ -494,7 +518,7 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		if _, e = repo.ControlMigration(ctx, plan.ID, "pause", store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 			t.Fatal("cancel converted to paused", e)
 		}
-		if modes[0] == "shadowcleanup" {
+		if modes[0] == "shadowcleanup" || unpublish {
 			if e = repo.ReleaseMigration(ctx, lease); e != nil {
 				t.Fatal(e)
 			}
@@ -516,7 +540,8 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 			if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
 				t.Fatal(e)
 			}
-			fault.lostShadow = true
+			fault.lostShadow = !unpublish
+			fault.lostUnpublish = unpublish
 			fault.lostCancelUnit = true
 			fault.lostCancelTask = true
 			for attempt := 0; attempt < 4; attempt++ {
