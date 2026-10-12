@@ -15,11 +15,11 @@ func (r *Repository) ValidatePeerAnchorRetirement(ctx context.Context, relations
 		return store.ErrMigrationState
 	}
 	return r.write(ctx, func(q queryer) error {
-		h, n, state, e := r.checkPeerLease(ctx, q, relationship, l)
+		h, n, _, e := r.checkPeerLease(ctx, q, relationship, l)
 		if e != nil {
 			return e
 		}
-		if n.ID != h.TargetID || state == "cancelling" || g.MasterID != h.MasterID || g.SourceID != h.SourceID || g.TargetID != h.TargetID || g.PlanSHA != h.PlanSHA {
+		if n.ID != h.TargetID || g.MasterID != h.MasterID || g.SourceID != h.SourceID || g.TargetID != h.TargetID || g.PlanSHA != h.PlanSHA {
 			return store.ErrMigrationState
 		}
 		o, e := r.peerObjectBinding(ctx, q, l.TaskID, g.Object.ID)

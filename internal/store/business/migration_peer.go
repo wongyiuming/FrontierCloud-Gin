@@ -328,7 +328,7 @@ func (r *Repository) AuthorizePeerMigration(ctx context.Context, relationship st
 			if state != "cancelling" || n.ID != h.TargetID {
 				return store.ErrMigrationState
 			}
-		} else if state == "cancelling" {
+		} else if state == "cancelling" && operation != "cleanup" && operation != "recheck" && operation != "retire" && operation != "status" {
 			return store.ErrMigrationState
 		}
 		if operation != "read" && operation != "cleanup" && operation != "begin" && operation != "status" && operation != "append" && operation != "verify" && operation != "publish" && operation != "recheck" && operation != "retire" && operation != "abort" {

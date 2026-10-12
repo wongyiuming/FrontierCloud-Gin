@@ -10,6 +10,25 @@ import (
 
 // Cancellation reconciles persisted units; it never reverses business owners.
 func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) {
+	initial, e := r.Repository.MigrationWork(ctx, id)
+	if e != nil {
+		return e
+	}
+	for _, unit := range initial.Units {
+		if unit.CommittedAt > 0 && unit.State != "cleaned" && unit.CleanupAfter <= time.Now().Unix() {
+			if e = r.cleanup(ctx, id, runner); e != nil {
+				return e
+			}
+			task, e := r.Repository.MigrationTask(ctx, id)
+			if e != nil {
+				return e
+			}
+			if task.State == "cancelled" {
+				return nil
+			}
+			break
+		}
+	}
 	l, e := r.Repository.ClaimMigration(ctx, id, runner, time.Minute)
 	if e != nil {
 		return e
@@ -95,7 +114,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 		// Committed-unit cleanup and published shadows use their distinct managed
 		// deletion protocols. Unknown/published bytes must never use staging Abort.
 		if u.CommittedAt != 0 {
-			return store.ErrMigrationState
+			continue
 		}
 		g, e := r.Repository.MigrationUnitCancelGrant(ctx, l, u.ID)
 		if e != nil {
@@ -142,6 +161,15 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 		}
 		if e = r.Repository.CompleteMigrationUnitCancellation(ctx, l, receipts[0], receipts[1], store.NodeAudit{}); e != nil {
 			return e
+		}
+	}
+	current, e := r.Repository.MigrationWork(ctx, id)
+	if e != nil {
+		return e
+	}
+	for _, unit := range current.Units {
+		if unit.State != "cleaned" && unit.State != "cancelled" {
+			return nil
 		}
 	}
 	allTerminal = true

@@ -22,7 +22,7 @@ func (r *Repository) authorizeMigrationCleanup(ctx context.Context, l store.Migr
 		if e != nil {
 			return e
 		}
-		if t.State != "cleanup_pending" && t.State != "committing" {
+		if t.State != "cleanup_pending" && t.State != "committing" && t.State != "cancelling" {
 			return store.ErrMigrationState
 		}
 		w, e := r.migrationWork(ctx, q, l.TaskID)
@@ -149,7 +149,7 @@ func (r *Repository) RecordMigrationSourceDeletion(ctx context.Context, l store.
 		if e != nil {
 			return e
 		}
-		if t.State != "cleanup_pending" || !receipt.ManagedCopyDeleted || receipt.TaskID != l.TaskID || receipt.SourceID != t.SourceID || receipt.TargetID != t.TargetID || receipt.PlanSHA != t.PlanSHA {
+		if t.State != "cleanup_pending" && t.State != "cancelling" || !receipt.ManagedCopyDeleted || receipt.TaskID != l.TaskID || receipt.SourceID != t.SourceID || receipt.TargetID != t.TargetID || receipt.PlanSHA != t.PlanSHA {
 			return store.ErrMigrationState
 		}
 		w, e := r.migrationWork(ctx, q, l.TaskID)

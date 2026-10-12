@@ -65,11 +65,11 @@ func (r *Repository) peerRecordingDelete(ctx context.Context, q queryer, member,
 
 func (r *Repository) StagePeerRecordingDeletion(ctx context.Context, relationship string, l store.MigrationLease, id string) (v *store.Recording, e error) {
 	e = r.write(ctx, func(q queryer) error {
-		h, n, state, err := r.checkPeerLease(ctx, q, relationship, l)
+		h, n, _, err := r.checkPeerLease(ctx, q, relationship, l)
 		if err != nil {
 			return err
 		}
-		if n.ID != h.SourceID || state == "cancelling" {
+		if n.ID != h.SourceID {
 			return store.ErrMigrationState
 		}
 		v, err = r.peerRecordingDelete(ctx, q, n.ID, l.TaskID, id)

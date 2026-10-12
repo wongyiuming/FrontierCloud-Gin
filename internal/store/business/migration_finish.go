@@ -13,7 +13,7 @@ func (r *Repository) migrationUnitFinishGrant(ctx context.Context, q queryer, l 
 	if e != nil {
 		return g, e
 	}
-	if t.State != "cleanup_pending" {
+	if t.State != "cleanup_pending" && t.State != "cancelling" {
 		return g, store.ErrMigrationState
 	}
 	w, e := r.migrationWork(ctx, q, l.TaskID)

@@ -376,7 +376,7 @@ reset. Existing generation-5 journals require authenticated canonical Master
 re-registration before data actions; missing descriptions are not inferred.
 
 Both canonical backend snapshots, current image/provenance labels and release
-manifest gates advance to generation 6. Historical generation 2Ã¢â‚¬â€œ5 snapshots and
+manifest gates advance to generation 6. Historical generation 2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“5 snapshots and
 manifest vectors remain unchanged. Matching recovery material/images are
 required; reverting code does not reverse DDL. Actual SQLite/MySQL tests cover
 generation 4/5 upgrades, injected journal failure, idempotent replay, historical
@@ -971,3 +971,38 @@ The runner conservatively records an error for these unfinished cases; it does
 not use staging Abort to delete published data or reverse authoritative owners.
 Other original upgrade/recovery/inventory/retirement/GUI/CLI/acceptance scope
 remains active and the production migration capability stays unadvertised.
+
+
+## Partially committed cancellation cleanup (2026-10-12)
+
+Cancellation now reuses the existing committed source cleanup, fresh target disk
+proof, private anchor retirement and dual-peer unit completion protocols. Only
+these cleanup/recheck/status/retire actions remain permitted on cancelling
+followers; source migration reads, appends, verification and publication remain
+fenced. Every deletion still requires the original committed unit grant, exact
+object version, grace, target authority and read-dependency checks. The recording
+source deletion and target anchor admission follow the same rule.
+
+The runner cancels uncommitted units while committed cleanup waits for grace.
+Scheduler selection distinguishes immediate uncommitted reconciliation, due
+committed cleanup and final terminal receipts, so a task waiting only for grace
+is not repeatedly run. Mixed cleaned/cancelled unit digests preserve the exact
+committed byte total and terminal cancelled outcome. Source/target owners are
+never reversed, and an explicit reverse task remains required to move committed
+resources back.
+
+`2026-10-12-cancellation-mixed-go.txt` records actual three-object/two-parent
+router transfer, a fault after the first committed unit, cancellation of remaining
+staging, a lost managed source deletion receipt and recovery. The fixture advances
+only its own stored grace times; it does not establish an elapsed-hour test.
+Post-cancel business reads, logical IDs and both Master/follower used/reserved
+capacity are checked. Backend cancellation cleanup admission and scheduling are
+also checked with SQLite and MySQL in
+`2026-10-12-cancellation-mixed-mysql.txt`; full Go regression is recorded in
+`2026-10-12-cancellation-mixed-full-go.txt`.
+
+Still required: published-but-uncommitted shadow deletion, cancellation before
+peer admission when target is full/unwritable, cancellation after a peer has
+already returned a normal completed receipt, recording cancellation/fleet/browser
+and reverse acceptance, and all remaining original delivery scope. Migration
+capability is still unadvertised in production.

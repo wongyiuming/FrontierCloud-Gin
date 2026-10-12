@@ -82,11 +82,11 @@ func (r *Repository) PreparePeerMediaDelete(ctx context.Context, relationship st
 		return e
 	}
 	return r.write(ctx, func(q queryer) error {
-		h, n, state, e := r.checkPeerLease(ctx, q, relationship, l)
+		h, n, _, e := r.checkPeerLease(ctx, q, relationship, l)
 		if e != nil {
 			return e
 		}
-		if n.ID != h.SourceID || state == "cancelling" {
+		if n.ID != h.SourceID {
 			return store.ErrMigrationState
 		}
 		if e = r.checkPeerMediaDelete(ctx, q, n.ID, item); e != nil {

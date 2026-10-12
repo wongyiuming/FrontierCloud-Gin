@@ -259,3 +259,96 @@ func TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce(t *testing.T
 		t.Fatal(e)
 	}
 }
+
+func TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts(t *testing.T) {
+	f := migrationDatabase(t)
+	ctx := context.Background()
+	p := f.plan(t, hashPath(t.Name())[:32])
+	if _, e := f.repo.StartMigration(ctx, p, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	l, e := f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("e", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	w, e := f.repo.MigrationWork(ctx, p.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, cp := range w.Objects {
+		if e = f.repo.VerifyMigrationObject(ctx, l, cp.Object.ID, cp.Object.Bytes, cp.SourceSHA); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, unit := range w.Units {
+		if e = f.repo.PrepareMigrationPublication(ctx, l, unit.ID); e != nil {
+			t.Fatal(e)
+		}
+		for _, cp := range w.Objects {
+			if cp.UnitID == unit.ID {
+				if e = f.repo.PublishMigrationObject(ctx, l, cp.Object.ID); e != nil {
+					t.Fatal(e)
+				}
+			}
+		}
+		if e = f.repo.CommitMigrationUnit(ctx, l, unit.ID, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, e = f.repo.ControlMigration(ctx, p.ID, "cancel", store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	if id, e := f.repo.NextMigrationRun(ctx); e != nil || id != "" {
+		t.Fatal("cancel grace scheduled early", id, e)
+	}
+	now := time.Now().Unix()
+	if _, e = f.raw.Exec("UPDATE migration_units SET committed_at=?,cleanup_after=? WHERE task_id=?", now-3601, now-1, p.ID); e != nil {
+		t.Fatal(e)
+	}
+	if id, e := f.repo.NextMigrationRun(ctx); e != nil || id != p.ID {
+		t.Fatal("due cancel cleanup not selected", id, e)
+	}
+	l, e = f.repo.ClaimMigration(ctx, p.ID, strings.Repeat("f", 32), time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, cp := range w.Objects {
+		proof := store.MigrationCleanupProof{MigrationDiskProof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}, VerifiedAt: time.Now().Unix()}
+		if _, e = f.repo.AuthorizeMigrationCleanup(ctx, l, cp.Object.ID, proof); e != nil {
+			t.Fatal(e)
+		}
+		receipt := store.MigrationSourceReceipt{TaskID: p.ID, SourceID: f.source, TargetID: f.target, PlanSHA: w.Task.PlanSHA, Proof: proof.MigrationDiskProof, ManagedCopyDeleted: true}
+		if e = f.repo.RecordMigrationSourceDeletion(ctx, l, receipt, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = f.repo.AuthorizeMigrationAnchorRetirement(ctx, l, cp.Object.ID, proof); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, unit := range w.Units {
+		g, e := f.repo.MigrationUnitFinishGrant(ctx, l, unit.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = f.repo.CompleteMigrationUnitCleanup(ctx, l, store.MigrationUnitFinishReceipt{Grant: g, MemberID: f.source, Complete: true}, store.MigrationUnitFinishReceipt{Grant: g, MemberID: f.target, Complete: true}, store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	g, e := f.repo.MigrationTaskCancelGrant(ctx, l)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = f.repo.CompleteMigrationTaskCancellation(ctx, l, store.MigrationTaskFinishReceipt{Grant: g, MemberID: f.source, Complete: true}, store.MigrationTaskFinishReceipt{Grant: g, MemberID: f.target, Complete: true}, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	terminal, e := f.repo.MigrationTask(ctx, p.ID)
+	if e != nil || terminal.State != "cancelled" || terminal.CommittedBytes != terminal.TotalBytes {
+		t.Fatal(terminal, e)
+	}
+	for _, cp := range w.Objects {
+		var owner string
+		if e = f.raw.QueryRow("SELECT storage_member_id FROM global_media_objects WHERE media_id=?", cp.Object.ID).Scan(&owner); e != nil || owner != f.target {
+			t.Fatal("cancel reversed committed owner", owner, e)
+		}
+	}
+}

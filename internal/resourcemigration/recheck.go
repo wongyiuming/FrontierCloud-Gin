@@ -52,9 +52,13 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 		return proof, store.ErrMigrationState
 	}
 	h := store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: l.TaskID, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, SourceRelationship: source.ID, TargetRelationship: target.ID, PlanSHA: w.Task.PlanSHA, ObjectCount: w.Task.ObjectCount, Bytes: w.Task.TotalBytes}
+	peerState := "queued"
+	if w.Task.State == "cancelling" {
+		peerState = "cancelling"
+	}
 	refresh := func() error {
 		for _, rel := range []store.Relationship{source, target} {
-			if _, e := r.request(ctx, rel, prefix+"register", map[string]any{"header": h, "lease": l, "state": "queued"}); e != nil {
+			if _, e := r.request(ctx, rel, prefix+"register", map[string]any{"header": h, "lease": l, "state": peerState}); e != nil {
 				return e
 			}
 		}

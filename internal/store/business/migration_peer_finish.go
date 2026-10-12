@@ -23,7 +23,7 @@ func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel stri
 		if state != "cancelling" || g.Unit.State != "cancelled" || g.Unit.CommittedAt != 0 || g.Unit.CleanupAfter != 0 {
 			return nil, store.ErrMigrationState
 		}
-	} else if state == "cancelling" || g.Unit.State != "cleanup_pending" || g.Unit.CommittedAt <= 0 || g.Unit.CleanupAfter < g.Unit.CommittedAt+3600 || g.Unit.CleanupAfter > time.Now().Unix() {
+	} else if g.Unit.State != "cleanup_pending" || g.Unit.CommittedAt <= 0 || g.Unit.CleanupAfter < g.Unit.CommittedAt+3600 || g.Unit.CleanupAfter > time.Now().Unix() {
 		return nil, store.ErrMigrationState
 	}
 	var count, total int64

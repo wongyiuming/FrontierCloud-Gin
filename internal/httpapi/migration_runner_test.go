@@ -44,10 +44,14 @@ type runnerFaultCaller struct {
 	lostAbort      bool
 	lostCancelUnit bool
 	lostCancelTask bool
+	blockBegin     func() bool
 	reads          map[int64]int
 }
 
 func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, path string, value any) (map[string]any, error) {
+	if strings.HasSuffix(path, "/begin") && c.blockBegin != nil && c.blockBegin() {
+		return nil, errors.New("injected stop after committed unit")
+	}
 	if strings.HasSuffix(path, "/read") {
 		raw, _ := json.Marshal(value)
 		var request migrationdata.Request
@@ -90,7 +94,11 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 func TestMasterMigrationCancellationRealPrefixAndLostFinalReceipts(t *testing.T) {
 	masterMigrationRunnerFixture(t, true)
 }
-func masterMigrationRunnerFixture(t *testing.T, cancelTask bool) {
+func TestMasterMigrationPartialCommitCancellationPreservesBothOwners(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "mixed")
+}
+func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string) {
+	mixed := len(modes) > 0 && modes[0] == "mixed"
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
@@ -143,7 +151,11 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool) {
 	tr, _ := db.Nodes().Relationship(ctx, trid)
 	payloads := map[string][]byte{}
 	ids := []string{}
-	for i, name := range []string{"music/RunnerUnit/a.mp3", "music/RunnerUnit/b.mp3"} {
+	names := []string{"music/RunnerUnit/a.mp3", "music/RunnerUnit/b.mp3"}
+	if mixed {
+		names = append(names, "music/OtherUnit/c.mp3")
+	}
+	for i, name := range names {
 		payload := bytes.Repeat([]byte{byte(0x51 + i)}, migrationdata.ChunkBytes+31+i)
 		copy(payload, []byte("ID3"))
 		payloads[name] = payload
@@ -226,6 +238,98 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool) {
 	}
 	fault := &runnerFaultCaller{client: master, lost: true, reads: map[int64]int{}}
 	engine := &resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: fault}
+	if mixed {
+		fault.lost = false
+		fault.blockBegin = func() bool { task, e := repo.MigrationTask(ctx, plan.ID); return e == nil && task.CommittedBytes > 0 }
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("a", 32)); e == nil {
+			t.Fatal("partial commit fault ignored")
+		}
+		before, e := repo.MigrationWork(ctx, plan.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if before.Task.CommittedBytes <= 0 || before.Task.CommittedBytes >= before.Task.TotalBytes {
+			t.Fatal("fixture not partially committed", before.Task)
+		}
+		owners := map[string]string{}
+		for _, cp := range before.Objects {
+			resource, e := db.Pool().Resource(ctx, cp.Object.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			owners[cp.Object.ID] = resource.MemberID
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("b", 32)); e != nil {
+			t.Fatal("uncommitted unit cancel during grace", e)
+		}
+		if id, e := repo.NextMigrationRun(ctx); e != nil || id != "" {
+			t.Fatal("committed cleanup scheduled before grace", id, e)
+		}
+		// Advance this isolated fixture only; no production grace bypass exists.
+		now := time.Now().Unix()
+		if _, e = db.Database().Exec("UPDATE migration_units SET committed_at=?,cleanup_after=? WHERE task_id=? AND committed_at>0", now-3601, now-1, plan.ID); e != nil {
+			t.Fatal(e)
+		}
+		if id, e := repo.NextMigrationRun(ctx); e != nil || id != plan.ID {
+			t.Fatal("due cancellation cleanup not scheduled", id, e)
+		}
+		fault.lostCleanup = true
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("c", 32)); e == nil {
+			t.Fatal("lost committed source cleanup receipt ignored")
+		}
+		if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+			t.Fatal(e)
+		}
+		if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e != nil {
+			t.Fatal("mixed cancellation recovery", e)
+		}
+		final, e := repo.MigrationWork(ctx, plan.ID)
+		if e != nil || final.Task.State != "cancelled" || final.Task.CommittedBytes != before.Task.CommittedBytes {
+			t.Fatal(final.Task, e)
+		}
+		for _, cp := range final.Objects {
+			resource, e := db.Pool().Resource(ctx, cp.Object.ID)
+			if e != nil || resource.MemberID != owners[cp.Object.ID] {
+				t.Fatal("cancellation reversed owner", resource, e)
+			}
+			reader, e := master.ReadGlobalMedia(ctx, resource)
+			if e != nil {
+				t.Fatal(e)
+			}
+			got, e := io.ReadAll(reader)
+			reader.Close()
+			if e != nil || !bytes.Equal(got, payloads[resource.Path]) {
+				t.Fatal("mixed business read changed", e)
+			}
+			expected := "cancelled"
+			if resource.MemberID == tr.PeerID {
+				expected = "cleaned"
+			}
+			if cp.State != expected {
+				t.Fatal("wrong unit outcome", cp.State, expected)
+			}
+		}
+		for _, entry := range []struct {
+			database *sql.DB
+			member   string
+			used     int64
+		}{
+			{db.Database(), sr.PeerID, final.Task.TotalBytes - final.Task.CommittedBytes},
+			{db.Database(), tr.PeerID, final.Task.CommittedBytes},
+			{sourceDB.Database(), sr.PeerID, final.Task.TotalBytes - final.Task.CommittedBytes},
+			{targetDB.Database(), tr.PeerID, final.Task.CommittedBytes},
+		} {
+			var used, reserved int64
+			if e = entry.database.QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members WHERE member_id=?", entry.member).Scan(&used, &reserved); e != nil || used != entry.used || reserved != 0 {
+				t.Fatal("mixed capacity reconciliation", used, reserved, entry.used, e)
+			}
+		}
+		t.Logf("mixed cancellation: committed=%d total=%d, original logical IDs and both source/target owners retained", final.Task.CommittedBytes, final.Task.TotalBytes)
+		return
+	}
 	if e = engine.Run(ctx, plan.ID, strings.Repeat("a", 32)); e == nil {
 		t.Fatal("lost acknowledgement ignored")
 	}

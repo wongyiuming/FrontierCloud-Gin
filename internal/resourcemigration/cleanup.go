@@ -10,6 +10,14 @@ import (
 )
 
 func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
+	task, e := r.Repository.MigrationTask(ctx, id)
+	if e != nil {
+		return e
+	}
+	phase := "cleanup_pending"
+	if task.State == "cancelling" {
+		phase = "cancelling"
+	}
 	l, e := r.Repository.ClaimMigration(ctx, id, runner, time.Minute)
 	if e != nil {
 		return e
@@ -19,7 +27,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		finish, stop := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stop()
 		if err != nil && ctx.Err() == nil && !errors.Is(err, store.ErrMigrationLease) {
-			_ = r.Repository.MigrationRunState(finish, l, "cleanup_pending", object, "source_cleanup", store.NodeAudit{})
+			_ = r.Repository.MigrationRunState(finish, l, phase, object, "source_cleanup", store.NodeAudit{})
 		}
 		_ = r.Repository.ReleaseMigration(finish, l)
 	}()
@@ -27,7 +35,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 	if e != nil {
 		return e
 	}
-	if w.Task.State != "cleanup_pending" || w.Plan.Catalog.Source.RelationshipID == nil || w.Plan.Catalog.Target.RelationshipID == nil {
+	if w.Task.State != "cleanup_pending" && w.Task.State != "cancelling" || w.Plan.Catalog.Source.RelationshipID == nil || w.Plan.Catalog.Target.RelationshipID == nil {
 		return store.ErrMigrationState
 	}
 	source, e := r.Nodes.Relationship(ctx, *w.Plan.Catalog.Source.RelationshipID)
@@ -42,9 +50,13 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		return store.ErrMigrationState
 	}
 	h := store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, SourceRelationship: source.ID, TargetRelationship: target.ID, PlanSHA: w.Task.PlanSHA, ObjectCount: w.Task.ObjectCount, Bytes: w.Task.TotalBytes}
+	peerState := "queued"
+	if phase == "cancelling" {
+		peerState = "cancelling"
+	}
 	refresh := func() error {
 		for _, rel := range []store.Relationship{source, target} {
-			if _, e := r.request(ctx, rel, prefix+"register", map[string]any{"header": h, "lease": l, "state": "queued"}); e != nil {
+			if _, e := r.request(ctx, rel, prefix+"register", map[string]any{"header": h, "lease": l, "state": peerState}); e != nil {
 				return e
 			}
 		}
@@ -69,6 +81,9 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			continue
 		}
 		if cp.State != "cleanup_pending" {
+			if phase == "cancelling" {
+				continue
+			}
 			return store.ErrMigrationState
 		}
 		eligible := false
@@ -217,7 +232,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		return e
 	}
 	for _, unit := range w.Units {
-		if unit.State == "cleaned" {
+		if unit.State == "cleaned" || phase == "cancelling" && unit.CommittedAt == 0 {
 			continue
 		}
 		ready := true
@@ -259,7 +274,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 	}
 	allClean := true
 	for _, unit := range w.Units {
-		if unit.State != "cleaned" {
+		if unit.State != "cleaned" && !(phase == "cancelling" && unit.State == "cancelled") {
 			allClean = false
 		}
 	}
@@ -272,6 +287,9 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			return e
 		}
 		grant, e := r.Repository.MigrationTaskFinishGrant(ctx, l)
+		if phase == "cancelling" {
+			grant, e = r.Repository.MigrationTaskCancelGrant(ctx, l)
+		}
 		if e != nil {
 			return e
 		}
@@ -280,13 +298,20 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			if e = r.Repository.ValidateMigrationLease(ctx, l); e != nil {
 				return e
 			}
-			value, e := r.request(ctx, rel, prefix+"finish-task", map[string]any{"lease": l, "grant": grant})
+			endpoint := "finish-task"
+			if phase == "cancelling" {
+				endpoint = "cancel-task"
+			}
+			value, e := r.request(ctx, rel, prefix+endpoint, map[string]any{"lease": l, "grant": grant})
 			if e != nil {
 				return e
 			}
 			if e = decode(value, &receipts[i]); e != nil {
 				return e
 			}
+		}
+		if phase == "cancelling" {
+			return r.Repository.CompleteMigrationTaskCancellation(ctx, l, receipts[0], receipts[1], store.NodeAudit{})
 		}
 		return r.Repository.CompleteMigrationTask(ctx, l, receipts[0], receipts[1], store.NodeAudit{})
 	}
