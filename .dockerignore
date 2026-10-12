@@ -39,3 +39,8 @@ pyproject.toml
 tests/
 scripts/
 docs/
+!docs/operator-manual.md
+.fc-deployment.json
+.fc-images.json
+.fc-install.lock/
+.fc-operation.lock/

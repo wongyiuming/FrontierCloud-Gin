@@ -216,6 +216,25 @@ GitHub-side ref creation cannot be fully prevented by a unit test. The repositor
 
 ## 12. Supported runtime and validation
 
+### Operator installation boundary
+
+The short-lived `fc` host client is distributed inside the public Web image's
+operator bundle, alongside the canonical Compose files and environment examples.
+It is not a resident service or a Web request handler. Docker subprocess access
+exists only in `cmd/fc`, never in a linked Web service package. No business
+container receives a Docker socket. Storage ordinary installation pulls the same
+public Web component as Master; source compilation is a separate developer path.
+
+Fresh installation verifies one reviewed main revision and all selected runtime
+manifest/config digests, persists every service digest and a project/role/mount/
+database binding before startup, and refuses existing identity/data/volumes.
+Installation pull failure never authorizes compilation. Restart uses only those
+fixed images and rejects changed deployment selection. Doctor does not create
+directories/locks, initialize a database, bind ports, pull or execute images;
+registry/DNS observations do not establish public inbound reachability or write
+permission. Diagnostics use allowlisted facts, excluding arbitrary raw peer
+summaries, errors, credentials, pairing envelopes and signed URLs.
+
 Only Gin/Go may serve business APIs or run the updater. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
 No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.

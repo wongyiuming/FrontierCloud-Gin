@@ -26,6 +26,13 @@ require exact-source proof. Bootstrap history alone is not release proof.
 
 ## Quick start
 
+For the guarded installation path without a source checkout, use the public
+[operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
+one published main release, configure the domain and run `./fc doctor` followed
+by `./fc install master` (or `storage`). Its receipt pins all component digests
+and rejects existing state. Bundle availability requires this change's normal
+reviewed main publication; no publication is claimed by the source checkout.
+
 For a fresh HTTPS node, point public DNS at this host and create `.env` with
 only these two values (replace the example hostname):
 
@@ -84,7 +91,8 @@ there are no upload, path, manual renewal or automatic-renewal toggle controls.
 Storage exports are encrypted to a fresh browser key before crossing the Master.
 
 Fresh storage deployments use `.env.storage.example` and
-`docker-compose.storage.yaml` alone. Run `bash scripts/deploy-storage.sh`.
+`docker-compose.storage.yaml` alone. Use `./fc install storage` from the public
+operator bundle; the repository's `scripts/deploy-storage.sh` delegates to it.
 `STORAGE_TRANSPORT=direct` uses public HTTPS 443. Relay deployments explicitly set
 `STORAGE_TRANSPORT=relay`, `STORAGE_PORT=8443` and the corresponding HTTPS endpoint;
 8443 carries authenticated Master communication without idle listeners on 80/443.

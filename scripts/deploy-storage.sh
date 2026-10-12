@@ -2,20 +2,9 @@
 # Storage only; never selects the business Compose stack or production data.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-docker compose -f docker-compose.storage.yaml config --quiet
-# Compose resolves the operator's .env. Read only the non-sensitive image SHA,
-# then build that exact Git archive rather than relabeling a mutable checkout.
-revision="$(docker compose -f docker-compose.storage.yaml config --images | sort -u)"
-revision="${revision#frontiercloud-go-web:}"
-if ! [[ "$revision" =~ ^[0-9a-f]{40}$ ]]; then
-  printf '%s\n' 'Storage requires one exact committed native image SHA' >&2
-  exit 1
+client="${FC_OPERATOR_CLIENT:-./fc}"
+if [[ ! -x "$client" ]]; then
+  printf '%s\n' 'Download the public operator bundle with scripts/get-fc.sh; an installed fc client is required. No local compilation fallback.' >&2
+  exit 2
 fi
-bash scripts/build-native-images.sh "$revision" web-only
-if ! docker compose -f docker-compose.storage.yaml up -d --no-build --wait --wait-timeout 600; then
-  docker compose -f docker-compose.storage.yaml exec -T certificate-agent /app/frontiercloud certificate-status || true
-  printf '%s\n' 'Storage HTTPS is not ready. Inspect automatic TLS status and DNS/public 80; pairing was not generated. The controller continues bounded retries.' >&2
-  exit 1
-fi
-printf '%s\n' 'Storage ready. Import the following one-use package on the Master within five minutes.'
-docker compose -f docker-compose.storage.yaml exec -T web /app/frontiercloud storage-pair < /dev/null
+exec "$client" install storage

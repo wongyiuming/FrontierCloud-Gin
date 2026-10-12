@@ -78,6 +78,12 @@ certs/*.pem
 # Storage appliance state is never a build/source artifact.
 /storage-data/
 
+# Operator deployment receipts are host state, never source/build artifacts.
+/.fc-deployment.json
+/.fc-images.json
+/.fc-install.lock/
+/.fc-operation.lock/
+
 # Precompiled CI binaries are build inputs, never source-controlled files.
 /.ci-out/
 

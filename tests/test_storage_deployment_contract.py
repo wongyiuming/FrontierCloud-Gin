@@ -17,7 +17,7 @@ class StorageDeploymentContract(unittest.TestCase):
     def test_certificate_services_are_compose_only_with_persistent_socket_volume(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         for value in ("certificate-init:", "certificate-agent:", "command: [init-certificate]",
-                      "build:", "cpus: 0.05", "mem_limit: 128m", "memswap_limit: 128m",
+                      "cpus: 0.05", "mem_limit: 128m", "memswap_limit: 128m",
                       "cap_drop: [ALL]", "read_only: true", 'tmpfs: ["/tmp:size=16m,mode=1777"]',
                       "certificate_runtime:/run/frontiercloud-certificate:ro",
                       "certificate_published:/run/frontiercloud-tls:ro"):
@@ -65,11 +65,15 @@ class StorageDeploymentContract(unittest.TestCase):
         self.assertIn('value.StorageTransport == "direct" && value.StoragePort != 443', config)
         self.assertIn('"relay"', config)
 
-    def test_operator_builds_immutable_web_only_and_never_deletes_data(self):
+    def test_operator_pulls_public_images_without_build_fallback_or_data_deletion(self):
         script = (ROOT / "scripts/deploy-storage.sh").read_text(encoding="utf-8")
-        self.assertIn('build-native-images.sh "$revision" web-only', script)
-        self.assertIn("up -d --no-build --wait", script)
-        self.assertIn("storage-pair < /dev/null", script)
+        self.assertIn('exec "$client" install storage', script)
+        self.assertNotIn('build-native-images', script)
+        compose = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
+        self.assertIn('ghcr.io/wongyiuming/frontiercloud-gin-web:${FRONTIERCLOUD_REVISION:-latest}', compose)
+        self.assertNotIn('build:', compose)
+        self.assertIn('FC_OPERATOR_CLIENT:-./fc', script)
+        self.assertNotIn('storage-pair', script)
         self.assertNotIn("down", script)
         self.assertNotIn("prune", script)
 

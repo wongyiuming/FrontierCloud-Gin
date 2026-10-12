@@ -191,7 +191,18 @@ or proof of registry CAS. The verified `linux/amd64` runtime digests were:
 
 ## Fresh-install defaults
 
-With the five host-specific HTTPS settings in README.md, ordinary startup is:
+The guarded ordinary entry is the [operator bundle](operator-manual.md), extracted
+from a single public Web digest with `scripts/get-fc.sh` without running that image.
+Its `fc install` independently verifies reviewed main/source CI, manifest/config
+hashes and component provenance, then pins all application and infrastructure
+digests before initializing an empty deployment. This avoids component aliases
+crossing releases. `fc restart` validates the recorded configuration and never
+pulls a moving alias. Storage now shares this public-image path and has no build
+definition. These bundle bytes require normal reviewed main publication; this
+source change is not evidence that the new bundle has been published.
+
+The low-level Compose compatibility path still accepts the two HTTPS settings
+in README.md:
 
 ```bash
 docker compose up -d --wait
@@ -228,6 +239,8 @@ docker compose up -d --pull never --wait
 
 The helper prepares immutable public-name and historical local-name aliases.
 Storage appliance operations retain their separate role/identity prerequisites.
+`scripts/deploy-storage.sh` uses the guarded `fc` installer; it never invokes this
+developer compilation helper, even after a missing image or failed network check.
 Host-side Python is only an advanced resolver/test driver, not a default-startup
 or Web runtime dependency. Compose no longer contains local build definitions.
 

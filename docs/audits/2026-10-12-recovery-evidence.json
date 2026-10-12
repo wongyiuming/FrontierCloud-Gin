@@ -1,0 +1,30 @@
+{
+  "scope": "actual private-Compose SQLite deployment backup and offline material restoration",
+  "public_installation_proof": false,
+  "synthetic_revision": "0000000000000000000000000000000000000000",
+  "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/recovery/fc-ops-recovery-674b9cb513ae45c9-24i295o9",
+  "database": "sqlite",
+  "status": "passed",
+  "archive_sha256": "62694f081e423a5bfc8548935fbe4d6ea7bef9b7b3fdff856ad85d8987583681",
+  "node_identity_preserved": true,
+  "media_id_preserved": true,
+  "priority_preserved": true,
+  "actual_http_range_verified": true,
+  "restore_check_read_only": true,
+  "offline_fence_preserved_on_apply": true,
+  "test_activation_separate_from_restore_apply": true,
+  "no_production_operation": true,
+  "web_cpu_limit": 1000000000,
+  "web_memory": 536870912,
+  "web_memory_swap": 536870912,
+  "post_business_cpu_samples": [
+    0.3,
+    0.31,
+    0.26,
+    0.33,
+    0.26
+  ],
+  "web_image_id": "sha256:2774ef363be02915d4d80c1cbbe0d2317dcbfee550b30dc69cf3d808f2d25e02",
+  "edge_image_id": "sha256:8109ee6e2692a29d6050df7f2d542fc1f760c8f75ae06f0632c7787a71b3d30e",
+  "test_http_client_image_id": "sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72"
+}

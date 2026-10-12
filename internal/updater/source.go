@@ -74,7 +74,7 @@ func (s Source) Validate(ctx context.Context, target, mode string) error {
 	return err
 }
 
-var archivePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin"}
+var archivePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin", "docker-compose.yaml", "docker-compose.gin-mysql.yaml", "docker-compose.storage.yaml", ".env.example", ".env.storage.example", "docs/operator-manual.md"}
 
 func (s Source) publicImages(ctx context.Context) (bool, error) {
 	origin, err := s.git(ctx, 20*time.Second, "remote", "get-url", "origin")

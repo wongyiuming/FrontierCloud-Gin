@@ -24,7 +24,7 @@ type jointSourceFixture struct {
 	current           *release.Manifest
 }
 
-var jointSourcePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin"}
+var jointSourcePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin", "docker-compose.yaml", "docker-compose.gin-mysql.yaml", "docker-compose.storage.yaml", ".env.example", ".env.storage.example", "docs/operator-manual.md"}
 
 func newJointSourceFixture(t *testing.T, ctx context.Context, source, root string, publication *nativePublicationFixture) *jointSourceFixture {
 	t.Helper()
