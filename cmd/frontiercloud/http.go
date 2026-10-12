@@ -108,6 +108,9 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	httpapi.RegisterNodeBackups(handler, settings, resolver, controlService, database.Backups())
 	httpapi.RegisterNodeMedia(handler, settings, resolver, controlService, mediaService)
 	httpapi.RegisterNodeStorage(handler, settings, resolver, controlService, mediaService)
+	if peers, ok := database.Pool().(store.MigrationPeerRepository); ok {
+		httpapi.RegisterNodeMigrationControl(handler, settings, resolver, controlService, mediaService, peers)
+	}
 	httpapi.RegisterObservations(handler, adminHTTP, observation.New(database.Observations(), redisClient, settings.WebRTCCooldown), resolver)
 
 	ready = true

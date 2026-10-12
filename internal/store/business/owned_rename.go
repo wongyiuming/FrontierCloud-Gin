@@ -18,6 +18,9 @@ func (r *Repository) checkOwnedRename(ctx context.Context, q queryer, relationsh
 	if _, err := r.ownedStorageNode(ctx, q, relationship); err != nil {
 		return err
 	}
+	if err := r.checkMigrationScopes(ctx, q, "media", []store.DeleteItem{{Path: old, Directory: true}, {Path: target, Directory: true}}); err != nil {
+		return err
+	}
 	for _, name := range []string{old, target} {
 		where, args := r.pathScope("media_path", name, true)
 		var count int

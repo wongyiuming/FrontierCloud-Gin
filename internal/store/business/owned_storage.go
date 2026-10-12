@@ -41,6 +41,16 @@ func (r *Repository) ReserveOwnedUpload(ctx context.Context, operation, relation
 		if err != nil {
 			return err
 		}
+		draining, err := r.migrationDraining(ctx, q, row.ID)
+		if err != nil {
+			return err
+		}
+		if draining {
+			return store.ErrMigrationState
+		}
+		if err = r.checkMigrationScopes(ctx, q, "media", []store.DeleteItem{{Path: o.Path}}); err != nil {
+			return err
+		}
 		member, err := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), row.ID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return store.ErrStorageCapacity

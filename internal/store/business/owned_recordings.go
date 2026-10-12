@@ -41,6 +41,7 @@ func (r *Repository) StageOwnedRecordingDeletion(ctx context.Context, relationsh
 		if e != nil {
 			return e
 		}
+		if e = r.checkMigrationRecording(ctx,q,n.ID,user);e!=nil{return e}
 		v, e := recordingLookup(q.QueryRowContext(ctx, "SELECT "+recordingColumns+" FROM karaoke_recordings WHERE recording_id=?"+r.lock(), id))
 		if e != nil {
 			return e
@@ -80,6 +81,16 @@ func (r *Repository) ReserveOwnedRecording(ctx context.Context, relationship str
 	return r.write(ctx, func(q queryer) error {
 		n, e := r.ownedStorageNode(ctx, q, relationship)
 		if e != nil {
+			return e
+		}
+		draining, e := r.migrationDraining(ctx, q, n.ID)
+		if e != nil {
+			return e
+		}
+		if draining {
+			return store.ErrMigrationState
+		}
+		if e = r.checkMigrationRecording(ctx, q, n.ID, v.UserID); e != nil {
 			return e
 		}
 		var blocked int
@@ -135,6 +146,13 @@ func (r *Repository) StageOwnedUserDeletion(ctx context.Context, relationship, u
 	return r.write(ctx, func(q queryer) error {
 		if _, e := r.ownedStorageNode(ctx, q, relationship); e != nil {
 			return e
+		}
+		var count int
+		if e := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_scopes WHERE resource_kind='recording' AND parent_path=?", user).Scan(&count); e != nil {
+			return e
+		}
+		if count != 0 {
+			return store.ErrMigrationState
 		}
 		now := time.Now().Unix()
 		// A Follower has no interactive account service. This private ownership

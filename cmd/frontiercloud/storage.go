@@ -38,6 +38,9 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 	httpapi.RegisterNodeCertificate(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeMedia(router, settings, s.Resolver, s.Control, s.Media)
 	httpapi.RegisterNodeStorage(router, settings, s.Resolver, s.Control, s.Media)
+	if peers, ok := s.Database.Pool().(store.MigrationPeerRepository); ok {
+		httpapi.RegisterNodeMigrationControl(router, settings, s.Resolver, s.Control, s.Media, peers)
+	}
 	httpapi.RegisterNodeRecordings(router, settings, s.Resolver, s.Control, s.Recordings)
 	httpapi.RegisterNodeBackups(router, settings, s.Resolver, s.Control, s.Database.Backups())
 	return router, func() error { return nil }, nil

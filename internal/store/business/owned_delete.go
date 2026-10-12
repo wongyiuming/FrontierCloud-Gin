@@ -60,6 +60,9 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 		if err != nil {
 			return err
 		}
+		if err := r.checkMigrationScopes(ctx, q, "media", []store.DeleteItem{{Path: item.Path}}); err != nil {
+			return err
+		}
 		var path string
 		if err = q.QueryRowContext(ctx, "SELECT media_path FROM media_objects WHERE media_id=?"+r.lock(), item.OwnedID).Scan(&path); err != nil {
 			return err

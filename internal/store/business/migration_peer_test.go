@@ -1,0 +1,72 @@
+package business_test
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+)
+
+func peerMigrationFixture(t *testing.T,source bool)(store.Store,*sql.DB,store.MigrationPeerRepository,string,store.MigrationPeerHeader,store.MigrationLease,store.MigrationPeerObject){
+	t.Helper();db:=database(t);raw:=db.(interface{Database()*sql.DB}).Database();ctx:=context.Background();n,e:=db.Nodes().InitializeIdentity(ctx,store.NodeIdentity{ID:strings.Repeat("a",32),Role:"Standalone",PrivateKey:"private-fixture"});if e!=nil{t.Fatal(e)}
+	if _,e=raw.Exec("UPDATE node_identity SET `role`='Follower',endpoint='https://peer.test' WHERE singleton=1");e!=nil{t.Fatal(e)}
+	master:=strings.Repeat("9",32);rel:=hashPath(t.Name()+"rel")[:32];nonce:=hashPath(t.Name()+"nonce")[:32];task:=hashPath(t.Name()+"task")[:32];other:=strings.Repeat("b",32)
+	h:=store.MigrationPeerHeader{Format:"frontiercloud-peer-migration",Version:1,TaskID:task,MasterID:master,SourceID:other,TargetID:n.ID,SourceRelationship:strings.Repeat("c",32),TargetRelationship:rel,PlanSHA:strings.Repeat("e",64),ObjectCount:1,Bytes:7}
+	if source{h.SourceID=n.ID;h.TargetID=other;h.SourceRelationship=rel;h.TargetRelationship=strings.Repeat("c",32)}
+	l:=store.MigrationLease{TaskID:task,RunnerID:strings.Repeat("d",32),Epoch:1,ExpiresAt:time.Now().Unix()+60}
+	o:=store.MigrationObject{ID:hashPath(t.Name()+"object"),ObjectID:hashPath(t.Name()+"object"),Resource:"media",Path:"music/"+t.Name()+"/track.mp3",TargetPath:"music/"+t.Name()+"/track.mp3",Parent:"music/"+t.Name(),Kind:"audio",Bytes:7,Version:strings.Repeat("1",64),ETag:`"`+strings.Repeat("2",64)+`"`}
+	v:=store.MigrationPeerObject{Object:o,Proof:store.MigrationDiskProof{ID:o.ID,Version:o.Version,Bytes:o.Bytes,SHA256:strings.Repeat("2",64)}}
+	t.Cleanup(func(){
+		for _,table:=range []string{"migration_storage_journal","migration_capacity","migration_scopes","migration_runners","migration_tasks"}{raw.Exec("DELETE FROM "+table+" WHERE task_id=?",task)}
+		raw.Exec("DELETE FROM migration_drains WHERE owner_id=?",task);raw.Exec("DELETE FROM media_objects WHERE media_id=?",o.ObjectID);raw.Exec("DELETE FROM cluster_upload_sessions WHERE storage_member_id=?",n.ID)
+		for _,table:=range []string{"cluster_storage_members","cluster_compute_members","cluster_backup_members"}{raw.Exec("DELETE FROM "+table+" WHERE member_id=?",n.ID)}
+		raw.Exec("DELETE FROM node_relationships WHERE relationship_id=?",rel);raw.Exec("DELETE FROM node_pair_packages WHERE nonce=?",nonce);raw.Exec("UPDATE node_identity SET `role`=?,endpoint=? WHERE singleton=1",n.Role,n.Endpoint)
+	})
+	now:=time.Now().Unix();pair:=store.PairPackage{Nonce:nonce,TokenHash:strings.Repeat("f",64),ExpiresAt:now+300};if _,e=db.Nodes().IssuePair(ctx,pair,now,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if e=db.Nodes().ConsumePair(ctx,pair,store.Relationship{ID:rel,PeerID:master,Endpoint:"https://master.test",PublicKey:strings.Repeat("A",43),Credential:"private-fixture-credential",Direction:"upstream",Mode:"Relay",State:"pending",Protocol:2,CreatedAt:now},now,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if e=db.Nodes().ActivateRelationship(ctx,rel,store.NodeAudit{});e!=nil{t.Fatal(e)};cfg:=store.ResourceConfiguration{};cfg.Storage.Enabled=true;cfg.Storage.Allocation=10*store.GiB;if e=db.Pool().AcceptFollowerConfiguration(ctx,rel,cfg,20*store.GiB);e!=nil{t.Fatal(e)}
+	if source{operation:=hashPath(t.Name()+"upload")[:32];m:=store.MediaObject{ID:o.ObjectID,Path:o.Path,Kind:o.Kind};if e=db.Pool().ReserveOwnedUpload(ctx,operation,rel,m,7,20*store.GiB,store.NodeAudit{});e!=nil{t.Fatal(e)};if e=db.Pool().CompleteOwnedUpload(ctx,operation,m,7,o.ETag,20*store.GiB,store.NodeAudit{});e!=nil{t.Fatal(e)}}
+	return db,raw,db.Pool().(store.MigrationPeerRepository),rel,h,l,v
+}
+
+func TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences(t *testing.T){
+	db,raw,repo,rel,h,l,v:=peerMigrationFixture(t,false);ctx:=context.Background()
+	wrong:=h;wrong.MasterID=strings.Repeat("8",32);if e:=repo.RegisterPeerMigration(ctx,rel,wrong,l,"queued",20*store.GiB,store.NodeAudit{});!errors.Is(e,store.ErrMigrationState){t.Fatal("foreign Master",e)}
+	if e:=repo.RegisterPeerMigration(ctx,rel,h,l,"queued",store.PhysicalReserve,store.NodeAudit{});!errors.Is(e,store.ErrStorageCapacity){t.Fatal("insufficient physical space",e)}
+	var wg sync.WaitGroup;errs:=make(chan error,8);for range 8{wg.Go(func(){errs<-repo.RegisterPeerMigration(ctx,rel,h,l,"queued",20*store.GiB,store.NodeAudit{})})};wg.Wait();close(errs);for e:=range errs{if e!=nil{t.Fatal(e)}}
+	var reserved int64;raw.QueryRow("SELECT reserved_bytes FROM cluster_storage_members WHERE member_id=?",h.TargetID).Scan(&reserved);if reserved!=7{t.Fatal("duplicate capacity charge",reserved)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"append");!errors.Is(e,store.ErrMigrationState){t.Fatal("incomplete roster authorized",e)}
+	if e:=repo.RegisterPeerMigrationObject(ctx,rel,l,v,store.NodeAudit{});e!=nil{t.Fatal(e)};if e:=repo.RegisterPeerMigrationObject(ctx,rel,l,v,store.NodeAudit{});e!=nil{t.Fatal("lost-response retry",e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"append");e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"read");!errors.Is(e,store.ErrMigrationState){t.Fatal("target used source read operation",e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"publish");!errors.Is(e,store.ErrMigrationState){t.Fatal("unverified publication authorized",e)}
+	if e:=db.Pool().ReserveOwnedUpload(ctx,hashPath(t.Name()+"bad")[:32],rel,store.MediaObject{ID:strings.Repeat("3",64),Path:v.Object.Parent+"/new.mp3",Kind:"audio"},7,20*store.GiB,store.NodeAudit{});!errors.Is(e,store.ErrMigrationState){t.Fatal("ordinary upload bypassed target scope",e)}
+	if e:=repo.FencePeerMigration(ctx,rel,h.TaskID,l.Epoch,"paused",store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"append");!errors.Is(e,store.ErrMigrationLease){t.Fatal("paused command authorized",e)}
+	if e:=repo.RegisterPeerMigration(ctx,rel,h,l,"queued",20*store.GiB,store.NodeAudit{});!errors.Is(e,store.ErrMigrationLease){t.Fatal("old epoch resumed task",e)}
+	newLease:=l;newLease.Epoch++;if e:=repo.RegisterPeerMigration(ctx,rel,h,newLease,"queued",20*store.GiB,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,newLease,v.Object.ID,"append");e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"append");!errors.Is(e,store.ErrMigrationLease){t.Fatal("old runner retained authority",e)}
+	if e:=repo.FencePeerMigration(ctx,rel,h.TaskID,newLease.Epoch,"cancelling",store.NodeAudit{});e!=nil{t.Fatal(e)}
+	newLease.Epoch++;if e:=repo.RegisterPeerMigration(ctx,rel,h,newLease,"cancelling",20*store.GiB,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,newLease,v.Object.ID,"abort");e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,newLease,v.Object.ID,"append");!errors.Is(e,store.ErrMigrationState){t.Fatal("cancel continued copy",e)}
+	raw.QueryRow("SELECT reserved_bytes FROM cluster_storage_members WHERE member_id=?",h.TargetID).Scan(&reserved);if reserved!=7{t.Fatal("cancel refunded before disk cleanup",reserved)}
+}
+
+func TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead(t *testing.T){
+	db,raw,repo,rel,h,l,v:=peerMigrationFixture(t,true);ctx:=context.Background();if e:=repo.RegisterPeerMigration(ctx,rel,h,l,"queued",20*store.GiB,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if e:=repo.RegisterPeerMigrationObject(ctx,rel,l,v,store.NodeAudit{});e!=nil{t.Fatal(e)}
+	if _,e:=repo.AuthorizePeerMigration(ctx,rel,l,v.Object.ID,"read");e!=nil{t.Fatal(e)}
+	if e:=db.Pool().ReserveOwnedUpload(ctx,hashPath(t.Name()+"bad")[:32],rel,store.MediaObject{ID:strings.Repeat("3",64),Path:"music/unrelated/new.mp3",Kind:"audio"},7,20*store.GiB,store.NodeAudit{});!errors.Is(e,store.ErrMigrationState){t.Fatal("source allocation bypassed drain",e)}
+	if e:=db.Pool().CheckOwnedRename(ctx,rel,v.Object.Parent,v.Object.Parent+"-new");!errors.Is(e,store.ErrMigrationState){t.Fatal("rename bypassed source scope",e)}
+	if e:=db.Nodes().RevokeRelationship(ctx,rel,false,store.NodeAudit{});!errors.Is(e,store.ErrMigrationState){t.Fatal("revoke bypassed source journal",e)}
+	var reserved int64;raw.QueryRow("SELECT reserved_bytes FROM cluster_storage_members WHERE member_id=?",h.SourceID).Scan(&reserved);if reserved!=0{t.Fatal("source was charged target capacity",reserved)}
+	if e:=db.Pool().AcceptFollowerConfiguration(ctx,rel,store.ResourceConfiguration{Storage:struct{Enabled bool `json:"enabled"`;Allocation int64 `json:"allocated_bytes"`}{true,10*store.GiB}},20*store.GiB);e!=nil{t.Fatal(e)}
+	if e:=db.Pool().ReserveOwnedUpload(ctx,hashPath(t.Name()+"after")[:32],rel,store.MediaObject{ID:strings.Repeat("4",64),Path:"music/unrelated/after.mp3",Kind:"audio"},7,20*store.GiB,store.NodeAudit{});!errors.Is(e,store.ErrMigrationState){t.Fatal("configuration heartbeat erased drain",e)}
+}

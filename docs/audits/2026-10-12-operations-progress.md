@@ -256,6 +256,35 @@ coordination, source cleanup and real distributed acceptance remain required.
 Opaque ciphertext bytes/descriptors were tested; valid AES playback was not
 implied by that fixture.
 
+## Peer registration checkpoint
+
+Followers now persist resource-only migration headers and normalized object
+bindings under their active upstream Master. Registration checks local/remote
+identities, relationship IDs, plan fingerprint, expected roster/bytes, source or
+target role, and a bounded monotonic runner epoch/expiry. Source registration
+adds an owned drain and refuses pending writers. Target registration reserves
+capacity once; object registration locks parents, refuses conflicting existing
+media/ordinary reservations and binds source versions/disk proofs. Incomplete
+rosters, stale epochs, paused commands, wrong operations/roles and unverified
+publication are rejected. Native upload/delete/rename/recording/account paths
+respect these peer scopes; heartbeat configuration does not erase drains.
+
+Small register/object/fence endpoints are integrated into existing node HTTP
+surfaces, using HTTPS, raw-body HMAC, durable nonce protection and active-Follower
+authorization. No new secret, Docker authority, business Master database copy or
+resident control plane was introduced. The full migration capability is still
+unadvertised; data transport/publication/cleanup handlers are not complete.
+
+Actual SQLite race and actual MySQL repository/race checks passed for foreign
+Master rejection, full-roster admission, capacity/refund boundaries, duplicate
+registration, source-read/target-write roles, pause/resume epoch fencing, cancel
+and legacy writer protection. See [peer transaction output](2026-10-12-peer-registration.txt).
+A Gin routing/raw-body HMAC test with actual pairing credentials proved unsigned
+requests return 401, a paired key cannot declare a different Master (409), and
+legal duplicate registration charges capacity once. Its transport is a fixture,
+not a real TLS socket/fleet acceptance claim. Full Go tests and unchanged source
+CI also passed; the source suite still has 201 Python tests/two optional skips.
+
 ## Required remaining work
 
 1. Finish consistent multi-node recovery sets and broader restored encrypted/
