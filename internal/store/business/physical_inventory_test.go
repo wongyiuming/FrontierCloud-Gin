@@ -57,6 +57,22 @@ func TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority(t *test
 	if len(facts[0].MetadataSHA256) != 64 || facts[1].ObjectID != id || facts[2].Generation != gen {
 		t.Fatal("missing metadata facts", facts)
 	}
+	expected, e := db.Pool().(store.ExpectedPhysicalRepository).ExpectedPhysicalInventory(ctx, rel, h.SourceID, h.MasterID, "recording", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, item := range expected.Items {
+		if item.ObjectID == id {
+			found = true
+			if item.Path != "recordings/"+rel+"/"+user+"/"+id+".bin" || item.ExpectedBytes == nil || *item.ExpectedBytes != 7 {
+				t.Fatal("recording expected mapping", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("recording omitted from expected inventory")
+	}
 	entries[1].LogicalBytes++
 	entries[2].LogicalBytes++
 	facts, e = repo.ClassifyPhysicalInventory(ctx, rel, h.SourceID, h.MasterID, entries)

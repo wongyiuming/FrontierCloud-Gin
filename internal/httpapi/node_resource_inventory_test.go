@@ -171,6 +171,30 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e = sdb.Database().QueryRow("SELECT COUNT(*) FROM migration_drains").Scan(&drains); e != nil || tasks != 0 || drains != 0 {
 		t.Fatal("observation mutated business", tasks, drains, e)
 	}
+	// Remove one exact fixture file, retaining its managed metadata. The
+	// independent expected manifest must report the missing resource.
+	if e = os.Remove(filepath.Join(dir, "media", managed)); e != nil {
+		t.Fatal(e)
+	}
+	req["action"] = "expected"
+	req["resource"] = "media"
+	req["after"] = ""
+	req["sequence"] = uint64(0)
+	expected, e := master.Call(ctx, rel, route, req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var expectedPage struct {
+		Manifest store.ExpectedPhysicalPage   `json:"manifest"`
+		Presence []resourceinventory.Presence `json:"presence"`
+	}
+	if e = decodeInventory(expected, &expectedPage); e != nil || len(expectedPage.Manifest.Items) != 1 || len(expectedPage.Presence) != 1 || expectedPage.Presence[0].State != "missing" {
+		t.Fatal("expected missing resource omitted", expectedPage, e)
+	}
+	repeated, e := master.Call(ctx, rel, route, req)
+	if e != nil || !reflect.DeepEqual(expected, repeated) {
+		t.Fatal("expected page replay", e)
+	}
 	// Authentication is repeated even for a cached terminal page.
 	upstream, e := sdb.Nodes().Relationship(ctx, rid)
 	if e != nil {

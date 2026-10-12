@@ -179,3 +179,16 @@ func (s *Sessions) Close() error {
 	}
 	return nil
 }
+
+func (s *Sessions) Validate(id, incarnation string, b Binding) (Session, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	o, e := s.bound(id, incarnation, b)
+	if e != nil {
+		return Session{}, e
+	}
+	if o.closed {
+		return Session{}, ErrSession
+	}
+	return o.session, nil
+}

@@ -28,6 +28,11 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 	if e != nil {
 		return nil, e
 	}
+	expectedRepository, ok := repository.(store.ExpectedPhysicalRepository)
+	if !ok {
+		root.Close()
+		return nil, errors.New("expected physical inventory repository unavailable")
+	}
 	sessions := resourceinventory.NewSessions(root, nil)
 	shutdown, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -50,6 +55,12 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		Facts []store.PhysicalInventoryFact `json:"facts"`
 	}
 	var last *classifiedPage
+	type expectedResponse struct {
+		Session  resourceinventory.Session    `json:"session"`
+		Manifest store.ExpectedPhysicalPage   `json:"manifest"`
+		Presence []resourceinventory.Presence `json:"presence"`
+	}
+	var lastExpected *expectedResponse
 	router.POST("/internal/v1/resource-inventory", func(c *gin.Context) {
 		if !nodeHTTPS(c, settings, resolver) {
 			return
@@ -83,6 +94,8 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			SessionID   string `json:"session_id"`
 			Incarnation string `json:"incarnation"`
 			Sequence    uint64 `json:"sequence"`
+			Resource    string `json:"resource"`
+			After       string `json:"after"`
 		}
 		decoder := json.NewDecoder(bytes.NewReader(body))
 		decoder.DisallowUnknownFields()
@@ -91,7 +104,7 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		if decodeError == nil && decoder.Decode(&tail) != io.EOF {
 			decodeError = resourceinventory.ErrSession
 		}
-		if decodeError != nil || request.MemberID != identity.ID || request.Scope != "data" {
+		if decodeError != nil || request.MemberID != identity.ID || request.Scope != "data" || request.Action != "expected" && (request.Resource != "" || request.After != "") {
 			detail(c, 400, "Invalid identity-bound inventory request")
 			return
 		}
@@ -152,6 +165,45 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			last = &classifiedPage{SessionPage: observed, Facts: facts}
 			result = last
+		case "expected":
+			if request.Sequence != 0 {
+				e = resourceinventory.ErrSession
+				break
+			}
+			var session resourceinventory.Session
+			session, e = sessions.Validate(request.SessionID, request.Incarnation, binding)
+			if e != nil {
+				break
+			}
+			if lastExpected != nil && lastExpected.Session == session && lastExpected.Manifest.Resource == request.Resource && lastExpected.Manifest.After == request.After {
+				result = lastExpected
+				break
+			}
+			var manifest store.ExpectedPhysicalPage
+			manifest, e = expectedRepository.ExpectedPhysicalInventory(ctx, rel.ID, identity.ID, rel.PeerID, request.Resource, request.After)
+			if e != nil {
+				break
+			}
+			observations := make([]resourceinventory.Presence, 0, len(manifest.Items))
+			for _, item := range manifest.Items {
+				present, err := resourceinventory.PresenceAt(ctx, root, item.Path)
+				if err != nil {
+					e = err
+					break
+				}
+				if present.State == "present" && item.ExpectedBytes != nil && present.LogicalBytes != *item.ExpectedBytes {
+					present.State = "length_mismatch"
+				}
+				observations = append(observations, present)
+			}
+			if e != nil {
+				break
+			}
+			if _, e = sessions.Validate(request.SessionID, request.Incarnation, binding); e != nil {
+				break
+			}
+			lastExpected = &expectedResponse{Session: session, Manifest: manifest, Presence: observations}
+			result = lastExpected
 		case "close":
 			if request.Sequence != 0 {
 				e = resourceinventory.ErrSession

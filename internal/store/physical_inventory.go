@@ -23,3 +23,22 @@ type PhysicalInventoryFact struct {
 type PhysicalInventoryRepository interface {
 	ClassifyPhysicalInventory(context.Context, string, string, string, []PhysicalInventoryEntry) ([]PhysicalInventoryFact, error)
 }
+
+// Expected items come from local metadata, including objects absent from disk.
+// A nil ExpectedBytes means plaintext media size is owned by Master metadata.
+type ExpectedPhysicalItem struct {
+	ObjectID       string `json:"object_id"`
+	Path           string `json:"path"`
+	ExpectedBytes  *int64 `json:"expected_bytes,omitempty"`
+	MetadataSHA256 string `json:"metadata_sha256"`
+}
+type ExpectedPhysicalPage struct {
+	Resource string                 `json:"resource"`
+	After    string                 `json:"after"`
+	Next     string                 `json:"next"`
+	Complete bool                   `json:"complete"`
+	Items    []ExpectedPhysicalItem `json:"items"`
+}
+type ExpectedPhysicalRepository interface {
+	ExpectedPhysicalInventory(context.Context, string, string, string, string, string) (ExpectedPhysicalPage, error)
+}

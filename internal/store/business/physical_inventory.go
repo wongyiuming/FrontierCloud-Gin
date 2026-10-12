@@ -29,16 +29,8 @@ func (r *Repository) ClassifyPhysicalInventory(ctx context.Context, relationship
 		return nil, e
 	}
 	defer tx.Rollback()
-	var nodeID, role, peer, direction, state string
-	var protocol int
-	if e = tx.QueryRowContext(ctx, "SELECT node_id,role FROM node_identity WHERE singleton=1").Scan(&nodeID, &role); e != nil {
+	if e = inventoryIdentity(ctx, tx, relationship, member, master); e != nil {
 		return nil, e
-	}
-	if e = tx.QueryRowContext(ctx, "SELECT peer_id,direction,state,protocol FROM node_relationships WHERE relationship_id=?", relationship).Scan(&peer, &direction, &state, &protocol); e != nil {
-		return nil, e
-	}
-	if nodeID != member || role != "Follower" || peer != master || state != "active" || direction != "upstream" || protocol != 2 {
-		return nil, store.ErrNodeState
 	}
 	facts := make([]store.PhysicalInventoryFact, 0, len(entries))
 	for _, entry := range entries {
@@ -205,4 +197,20 @@ func (r *Repository) inventoryColdBackup(ctx context.Context, q queryer, master,
 		return fact, e
 	}
 	return store.PhysicalInventoryFact{Category: "managed_backup", ObjectID: master, State: m.State, ExpectedBytes: expected, Generation: gen, Blocking: true, Reason: "retain_or_replace_verified_backup", MetadataSHA256: digest}, nil
+}
+
+func inventoryIdentity(ctx context.Context, q queryer, relationship, member, master string) error {
+	var e error
+	var nodeID, role, peer, direction, state string
+	var protocol int
+	if e = q.QueryRowContext(ctx, "SELECT node_id,role FROM node_identity WHERE singleton=1").Scan(&nodeID, &role); e != nil {
+		return e
+	}
+	if e = q.QueryRowContext(ctx, "SELECT peer_id,direction,state,protocol FROM node_relationships WHERE relationship_id=?", relationship).Scan(&peer, &direction, &state, &protocol); e != nil {
+		return e
+	}
+	if nodeID != member || role != "Follower" || peer != master || state != "active" || direction != "upstream" || protocol != 2 {
+		return store.ErrNodeState
+	}
+	return nil
 }
