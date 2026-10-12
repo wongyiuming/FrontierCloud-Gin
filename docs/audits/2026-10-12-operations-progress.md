@@ -1267,3 +1267,14 @@ recovery/race checks and full Go regression. These repository tests intentionall
 do not assert that the native service has removed business links; native metadata
 checks and media/recording coordinated unlink plus authenticated worker integration
 remain the next required work. Original full delivery scope remains active.
+
+
+### Native interrupted-publication cancellation adapters
+
+Added media and recording `MigrationCancelPublication` adapters for the verified SQL / publishing byte-checkpoint window. Each derives the byte specification from the authenticated immutable peer binding, repeats publication-abort admission under the existing volume mutation coordinator, and removes only a regular business hard link sharing the private anchor inode. The receiver persists cancellation intent, rehashes actual private bytes, and records business unlink before removing private bytes. SQL abort completion occurs only after an aborted checkpoint and a final coordinated business-path absence check. Live/accounted metadata, foreign inodes and corrupt bytes are retained and rejected. Target used stays zero and reservation remains until whole-unit reconciliation.
+
+Executed actual filesystem + embedded SQLite tests in the isolated development checkout, using bounded Docker Go runtime and `-race`. Media cases cover normal cancellation, same-byte foreign inode, corrupt bytes and missing business link; recording cases cover the same faults for plain and encrypted-lyrics footer snapshots. Successful cases replay a lost acknowledgment. These adapters do not yet connect the interrupted-publication window to the authenticated HTTP worker or Master runner. The encrypted recording fixture checks opaque footer-bound transfer bytes; it is not browser encryption playback acceptance.
+
+Evidence: `2026-10-12-native-publication-abort.txt` and `2026-10-12-native-publication-abort-full-go.txt`. Source CI ran 201 Python tests (two optional skips), policy/schema checks and JavaScript smoke checks. No new schema generation, public capability advertisement, production operations or branch publication.
+
+Remaining: authenticated interrupted-publication worker/runner and accounted-publication checkpoint recovery; complete cancellation edge cases; physical inventories, safe retirement, GUI/CLI, upgrade and multi-node recovery; SQLite/MySQL native TLS/fleet/browser/resource acceptance. Overall request is still incomplete.

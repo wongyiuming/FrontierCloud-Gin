@@ -1,0 +1,32 @@
+=== RUN   TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles
+=== RUN   TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/none
+=== RUN   TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/foreign
+=== RUN   TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/corrupt
+=== RUN   TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/missing
+--- PASS: TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles (2.16s)
+    --- PASS: TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/none (1.08s)
+    --- PASS: TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/foreign (0.35s)
+    --- PASS: TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/corrupt (0.33s)
+    --- PASS: TestInterruptedMigrationPublicationUnlinksOnlyOwnUnaccountedFiles/missing (0.40s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	3.188s
+=== RUN   TestInterruptedRecordingPublicationCancellation
+=== RUN   TestInterruptedRecordingPublicationCancellation/plain/none
+=== RUN   TestInterruptedRecordingPublicationCancellation/plain/foreign
+=== RUN   TestInterruptedRecordingPublicationCancellation/plain/corrupt
+=== RUN   TestInterruptedRecordingPublicationCancellation/plain/missing
+=== RUN   TestInterruptedRecordingPublicationCancellation/encrypted/none
+=== RUN   TestInterruptedRecordingPublicationCancellation/encrypted/foreign
+=== RUN   TestInterruptedRecordingPublicationCancellation/encrypted/corrupt
+=== RUN   TestInterruptedRecordingPublicationCancellation/encrypted/missing
+--- PASS: TestInterruptedRecordingPublicationCancellation (2.77s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/plain/none (0.39s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/plain/foreign (0.31s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/plain/corrupt (0.30s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/plain/missing (0.40s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/encrypted/none (0.41s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/encrypted/foreign (0.32s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/encrypted/corrupt (0.27s)
+    --- PASS: TestInterruptedRecordingPublicationCancellation/encrypted/missing (0.37s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	3.791s
