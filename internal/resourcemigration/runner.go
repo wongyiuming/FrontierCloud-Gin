@@ -46,6 +46,20 @@ func delay(ctx context.Context) error {
 	}
 }
 
+// Short peer jobs should not pay a fixed quarter-second per object. Longer
+// jobs back off to the existing interval, keeping control polling bounded.
+func peerJobDelay(ctx context.Context, interval *time.Duration) error {
+	*interval = min(max(50*time.Millisecond, *interval*2), 250*time.Millisecond)
+	timer := time.NewTimer(*interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // Run executes one stored task under its monotonic SQL lease. On restart the
 // peer's persisted offset/hash and publication receipt determine the next step.
 // Source removal and cancellation reconciliation are distinct later phases.
@@ -303,6 +317,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			}
 			deadline := time.Now().Add(30 * time.Minute)
 			waitingAtStart := scheduler.waited
+			var verificationPoll time.Duration
 			for phase != "verified" && phase != "published" {
 				if e = waitTraffic("verifying", object); e != nil {
 					return e
@@ -313,7 +328,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 				if _, e = call(target, "verify", &req); e != nil {
 					return e
 				}
-				if e = delay(ctx); e != nil {
+				if e = peerJobDelay(ctx, &verificationPoll); e != nil {
 					return e
 				}
 				cp, phase, e = status(&req)
@@ -354,6 +369,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			req := migrationdata.Request{Spec: migrationdata.Spec{TaskID: id, MasterID: h.MasterID, SourceID: h.SourceID, TargetID: h.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: c.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
 			deadline := time.Now().Add(30 * time.Minute)
 			waitingAtStart := scheduler.waited
+			var publicationPoll time.Duration
 			for {
 				if e = waitTraffic("committing", object); e != nil {
 					return e
@@ -368,7 +384,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 				if _, e = call(target, "publish", &req); e != nil {
 					return e
 				}
-				if e = delay(ctx); e != nil {
+				if e = peerJobDelay(ctx, &publicationPoll); e != nil {
 					return e
 				}
 				if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {

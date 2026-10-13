@@ -163,3 +163,16 @@ it still asserts one complete 1,024-object source or target owner. Actual upload
 migration execution, final tree/read/Range, encryption and browser operations
 remain on real authenticated APIs. No product traffic exclusions or timeouts
 are relaxed. A corrected fresh run is required.
+
+The corrected HTTP-free observer let copying advance, but the 1,024-file unit
+exposed fixed per-object asynchronous waits: verification and publication each
+always slept 250 ms, accumulating at least 512 seconds before other work. The
+six-minute native window failed with 947 additional files verified. A live
+sample showed Master at 6.60% of one CPU and 73.29 MiB, Target at 16.93% and
+77.07 MiB; this was not memory/CPU exhaustion. The fixture stopped and retained
+source authority for the unpublished unit and target authority for committed
+units. No acceptance timeout is increased. Peer job waits now begin at 50 ms
+and back off to the existing 250-ms ceiling while jobs remain pending. Data,
+verification, publication, lease, traffic and ownership checks are unchanged.
+Both migration and HTTP race packages pass in
+`2026-10-13-peer-job-backoff-race.txt`. Fresh native acceptance remains required.

@@ -274,3 +274,9 @@ fixture database during copying. Repeated full-directory HTTP observations are
 real business traffic and can correctly keep the quiet gate closed; acceptance
 does not exempt them or relax traffic thresholds. Final directory and byte reads
 still exercise the authenticated business APIs.
+
+Transfer verification and publication remain asynchronous peer jobs. Their
+control observation begins with a 50-ms wait and backs off to 100/200/250 ms
+while pending, instead of imposing two fixed 250-ms delays on every small file.
+Long-running jobs retain the 250-ms polling ceiling. Traffic admission and
+durable verification/publication facts remain required before ownership commit.
