@@ -1,0 +1,25 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-sqlite-rr
+    native_migration_real_test.go:96: pairing private follower 1 go sqlite
+    native_migration_real_test.go:96: pairing private follower 2 go sqlite
+    native_migration_real_test.go:96: pairing private follower 3 go sqlite
+    native_migration_real_test.go:96: pairing private follower 4 go sqlite
+    native_migration_real_test.go:96: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-sqlite 2 Direct / 2 Relay
+    native_migration_real_test.go:96: real native five-node certificate observation and sequential UDP STUN passed go-sqlite
+    native_migration_real_test.go:96: real native matrix SQLite/MySQL revocation and re-pair passed go-sqlite
+    native_migration_real_test.go:96: native fixture awaits isolated Chromium result during /home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-native-matrix-r11h3bjv/go-sqlite-rr/go-sqlite/browser-during-fixture.json
+    native_migration_real_test.go:96: actual Chromium Admin task rendering and post-restart encrypted native byte/Range verification passed
+    native_migration_real_test.go:96: direct-only native network proof: master total=5354737 source tx=190412157 target rx=188632093 payload=137768329
+    native_migration_real_test.go:96: native migration committed real bytes, kept IDs/encryption and grace copies across restart rr objects 50 bytes 137768329 peak cgroup bytes map[08000e63821499ad5b403ebd95c52d6f7c66015170ab28a7993fb97aa5c0e040:75317248 451807a1c46ce3dc197277456159217a586103d3619a7cd97f0dd261d8d3d372:224112640 4a475d88f1b98169952d161578c1d32d6d6d6922f41e8c64593a4d7900ae6389:221032448]
+    native_migration_real_test.go:870: native fixture awaits isolated Chromium result after /home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-native-matrix-r11h3bjv/go-sqlite-rr/go-sqlite/browser-fixture.json
+    native_migration_real_test.go:870: actual Chromium Admin task rendering and post-restart encrypted native byte/Range verification passed
+    native_migration_real_test.go:96: real one-hour cleanup not awaited in this cutover run
+    native_migration_real_test.go:96: five Web idle CPU (one-core percent): [2.870 4.255 4.065 4.464 4.194]
+    native_migration_real_test.go:96: five Web idle CPU (one-core percent): [2.951 3.988 4.114 4.114 4.115]
+    native_migration_real_test.go:96: five Web idle CPU (one-core percent): [5.188 5.875 6.111 6.090 5.050]
+    native_migration_real_test.go:96: five Web idle CPU (one-core percent): [3.851 5.862 0.997 5.734 4.709]
+    native_migration_real_test.go:96: five Web idle CPU (one-core percent): [3.780 5.906 4.961 5.617 5.801]
+    native_migration_real_test.go:96: five Web services passed five consecutive one-second idle CPU samples below 20 percent
+--- PASS: TestRealNativeMatrixFleetMigrations (248.39s)
+    --- PASS: TestRealNativeMatrixFleetMigrations/go-sqlite-rr (248.39s)
+PASS

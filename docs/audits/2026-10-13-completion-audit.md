@@ -176,3 +176,37 @@ and back off to the existing 250-ms ceiling while jobs remain pending. Data,
 verification, publication, lease, traffic and ownership checks are unchanged.
 Both migration and HTTP race packages pass in
 `2026-10-13-peer-job-backoff-race.txt`. Fresh native acceptance remains required.
+
+The fixed-commit `abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133` Web and Nginx
+images have clean-clone/binary/revision provenance in
+`2026-10-13-exact-abc15db-provenance.json`. Source CI run 38415565284 and asset
+CI run 38415564631 both passed. Its SQLite Direct→Direct case now passes with
+1,074 actual objects / 187,886,985 bytes, including the full 1,024-file parent.
+Ownership committed within the unchanged six-minute copy window; byte hashes,
+restart, actual Chromium MP3/lyrics/encrypted Range and five-node idle CPU pass.
+The whole scenario takes 484.875 seconds including setup, upload and browser
+checks. SQLite Direct→Relay additionally passes during/after Chromium and native
+cutover/restart in 215.081 seconds. These are cutover passes, not new one-hour
+cleanup runs. The remaining six fixed-commit combinations remain pending under
+`2026-10-13-exact-abc15db-serial-matrix.json`.
+
+SQLite Relay→Direct and Relay→Relay also pass on that fixed commit in 250.097
+and 249.038 seconds. Both include during-copy and after-cutover/restart actual
+Chromium decryption, MP3 continuation, lyric relations and blocked premature
+retirement. All four SQLite combinations are now passed with native bytes,
+logical metadata, cgroups and five consecutive one-second idle CPU samples.
+The corresponding MySQL four-case run is still pending.
+
+The first fixed-commit MySQL many-file run completed its 1,074-object ownership
+cutover and 51 complete-parent observations, but the raw Master network ratio
+assertion failed: 204,207,783 total Master bytes included its remote MySQL
+metadata queries, while payload was 187,886,985 bytes. It is a failed acceptance,
+not a claim of completed browser/cgroup gates. The observer now measures the
+exact dedicated fixture database's before/after network counterpart separately,
+retaining both raw totals and control-only accounting. The database only serves
+that private Master and the bounded SELECT-only test observer; ownership labels
+are checked and an explicit one-MiB accounting tolerance rejects unexplained
+excess. The original control/payload ratio, peer payload counts and authenticated
+direct-only protocol checks remain enforced. No product routing, traffic limits,
+resource limits or acceptance timeouts change. Corrected MySQL acceptance is
+required; prior failed evidence remains retained.

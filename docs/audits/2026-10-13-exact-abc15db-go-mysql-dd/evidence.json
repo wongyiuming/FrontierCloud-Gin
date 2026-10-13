@@ -1,0 +1,25 @@
+{
+  "status": "failed",
+  "database": "go-mysql",
+  "combination": "dd",
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-native-matrix-lzd1xcht",
+  "project": "fc-matrix-40656707-5792-456f-b0ba-421f033f74ac-dd-go-mysql",
+  "image_ids": {
+    "native": "sha256:eb9a2b8e6a9827bdcd49aec5c854143bf4d13061f6eadfbd4a4867ccbeef9a6e",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:64f232db6aeb425d9ba3ec0abace2af9fb19a2843c8dc4b6bfd5ec51e1a09b29"
+  },
+  "test_binary_sha256": "b4d25e2e17a7f82c0bc0df5577ac98eaf4cc4a93ef085c7ecd24bbffe8cbf45f",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": false,
+  "unreachable_peer_selected": false,
+  "generated_mp3_selected": true,
+  "during_copy_browser_selected": false,
+  "additional_actual_small_files": 1024,
+  "error_type": "RuntimeError",
+  "actual_chromium": null,
+  "chromium_phases": {},
+  "owned_cleanup_complete": true
+}

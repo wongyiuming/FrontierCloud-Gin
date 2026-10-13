@@ -308,6 +308,21 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		fixtures[i].targetPath = object.TargetPath
 	}
 	networkBefore := map[string][2]uint64{}
+	mysqlContainer := ""
+	var mysqlNetworkBefore [2]uint64
+	if master.database == "mysql" {
+		web, err := e.Inspect(ctx, master.web)
+		if err != nil {
+			t.Fatal("private Master network ownership unavailable")
+		}
+		project := web.label("com.docker.compose.project")
+		database, err := e.Inspect(ctx, project+"-mysql")
+		if project == "" || err != nil || database.label("com.docker.compose.project") != project || database.label("com.docker.compose.service") != "mysql" {
+			t.Fatal("private SQL network counterpart ownership unavailable")
+		}
+		mysqlContainer = database.ID
+		mysqlNetworkBefore = fleetMigrationNetworkBytes(t, ctx, e, mysqlContainer)
+	}
 	for _, site := range []*fleetSite{master, sites[sourceIndex], sites[targetIndex]} {
 		networkBefore[site.web] = fleetMigrationNetworkBytes(t, ctx, e, site.web)
 	}
@@ -397,12 +412,27 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		}
 	}
 	masterBytes := networkAfter[master.web][0] - networkBefore[master.web][0] + networkAfter[master.web][1] - networkBefore[master.web][1]
+	masterControlBytes, sqlCounterpartBytes := masterBytes, uint64(0)
+	if mysqlContainer != "" {
+		after := fleetMigrationNetworkBytes(t, ctx, e, mysqlContainer)
+		if after[0] < mysqlNetworkBefore[0] || after[1] < mysqlNetworkBefore[1] {
+			t.Fatal("private SQL network counters reset")
+		}
+		// This fresh database serves only its Master and the SELECT-only test
+		// observer. SQL metadata is not migration payload. Keep the observer's
+		// bounded accounting tolerance explicit rather than hiding SQL traffic.
+		sqlCounterpartBytes = after[0] - mysqlNetworkBefore[0] + after[1] - mysqlNetworkBefore[1]
+		if sqlCounterpartBytes > masterBytes+1<<20 {
+			t.Fatal("private SQL network accounting mismatch")
+		}
+		masterControlBytes = masterBytes - min(masterBytes, sqlCounterpartBytes)
+	}
 	sourceTx := networkAfter[sites[sourceIndex].web][1] - networkBefore[sites[sourceIndex].web][1]
 	targetRx := networkAfter[sites[targetIndex].web][0] - networkBefore[sites[targetIndex].web][0]
-	if masterBytes >= uint64(status.Task.TotalBytes)/4 || sourceTx < uint64(status.Task.TotalBytes) || targetRx < uint64(status.Task.TotalBytes) {
-		t.Fatal("migration payload was not confined to peer data path", masterBytes, sourceTx, targetRx, status.Task.TotalBytes)
+	if masterControlBytes >= uint64(status.Task.TotalBytes)/4 || sourceTx < uint64(status.Task.TotalBytes) || targetRx < uint64(status.Task.TotalBytes) {
+		t.Fatal("migration payload was not confined to peer data path", masterControlBytes, sourceTx, targetRx, status.Task.TotalBytes)
 	}
-	t.Logf("direct-only native network proof: master total=%d source tx=%d target rx=%d payload=%d", masterBytes, sourceTx, targetRx, status.Task.TotalBytes)
+	t.Logf("direct-only native network proof: master total=%d SQL counterpart=%d control=%d source tx=%d target rx=%d payload=%d", masterBytes, sqlCounterpartBytes, masterControlBytes, sourceTx, targetRx, status.Task.TotalBytes)
 	checkedParents := map[string]bool{}
 	owned := map[string]media.TreeItem{}
 	for _, fixture := range fixtures {
