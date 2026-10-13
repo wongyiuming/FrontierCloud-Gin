@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"io"
@@ -14,7 +13,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
@@ -163,17 +161,4 @@ func inspectReleaseSource(ctx context.Context, db store.Store, expected int) err
 		}
 	}
 	return tx.Commit()
-}
-func updaterStatusCommand(output io.Writer) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	value, err := (release.SocketAgent{}).Request(ctx, map[string]any{"action": "status"})
-	if err != nil || value["ok"] != true {
-		return errors.New("updater status unavailable")
-	}
-	status, ok := value["status"].(map[string]any)
-	if !ok {
-		return errors.New("invalid updater status")
-	}
-	return json.NewEncoder(output).Encode(status)
 }

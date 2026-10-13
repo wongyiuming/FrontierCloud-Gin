@@ -74,12 +74,12 @@ class RegistryImagesTests(unittest.TestCase):
         def request(path, token=''):
             calls.append((path, token))
             if path.startswith('/token?'):
-                self.assertIn('repository%3Awongyiuming%2Ffrontiercloud-gin-updater%3Apull', path)
+                self.assertIn('repository%3Awongyiuming%2Ffrontiercloud-gin-web%3Apull', path)
                 return 200, {}, b'{"token":"public-read-only"}'
             if not token:
                 return 401, {'WWW-Authenticate': 'Bearer realm="http://127.0.0.1/secret"'}, b'{}'
             return response(manifest)
-        self.assertIn('frontiercloud-gin-updater@sha256:', resolve(SHA, 'updater', request=request))
+        self.assertIn('frontiercloud-gin-web@sha256:', resolve(SHA, 'web', request=request))
         self.assertEqual(len(calls), 3)
         self.assertEqual(calls[-1][1], 'public-read-only')
 
@@ -111,7 +111,7 @@ class RegistryImagesTests(unittest.TestCase):
         self.assertLess(compile_part.index('actions/checkout'), compile_part.index('go build'))
         self.assertNotIn('secrets.', compile_part)
         self.assertNotIn('go test', workflow)
-        self.assertNotIn('STAGING_CD_SECRET', workflow.split('  notify-staging:\n')[0])
+        self.assertNotIn('STAGING_CD_SECRET', workflow)
         self.assertIn('scripts/trusted_native_publish.py publish', workflow)
         fallback = (ROOT / 'scripts/build-native-images.sh').read_text(encoding='utf-8')
         self.assertIn('if (( code != 3 )); then exit', fallback)
@@ -160,18 +160,18 @@ class RegistryImagesTests(unittest.TestCase):
 
     def test_publication_reads_all_components_and_resumes_valid_partial_release(self):
         calls = []
-        fixtures = {c: publication_fixture(c)[0] for c in ('web', 'updater', 'nginx')}
+        fixtures = {c: publication_fixture(c)[0] for c in ('web', 'nginx')}
         def request(path, token=''):
             component = next(c for c in fixtures if 'gin-' + c + '/' in path)
             calls.append(component)
-            if component == 'updater':
+            if component == 'nginx':
                 return 404, {}, b'{"errors":[{"code":"MANIFEST_UNKNOWN"}]}'
             return fixtures[component](path, token)
         plan = publication_plan(SHA, request)
-        self.assertEqual(set(calls), {'web', 'updater', 'nginx'})
-        self.assertTrue(plan['components']['updater']['missing'])
+        self.assertEqual(set(calls), {'web', 'nginx'})
+        self.assertTrue(plan['components']['nginx']['missing'])
         self.assertFalse(plan['components']['web']['missing'])
-        self.assertFalse(plan['components']['nginx']['missing'])
+        self.assertNotIn('updater', plan['components'])
 
     def test_config_digest_size_and_child_digest_fail_closed(self):
         request, tag, runtime, raw = publication_fixture()

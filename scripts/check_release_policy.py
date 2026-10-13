@@ -17,12 +17,9 @@ def require(condition: bool, message: str) -> None:
         raise SystemExit(message)
 
 release = read("internal/release/verification.go")
-updater = read("internal/updater/source.go")
-executor = read("internal/updater/executor.go")
 workflow = read(".github/workflows/docker.yml")
 compose = read("docker-compose.yaml")
 web = read("Dockerfile")
-agent = read("updater/Dockerfile")
 require('Policy{"main", "dev"}' in release and 'Policy{"gin_main", "gin_dev"}' in release,
         "Release policy must retain both authorized provenance pairs")
 for token in ('p.MergeSHA == sha', 'p.Base.Ref == v.policy.Branch',
@@ -30,14 +27,14 @@ for token in ('p.MergeSHA == sha', 'p.Base.Ref == v.policy.Branch',
               'reviewed.Commit.Tree.SHA != tree', 'head_sha="+source',
               'r.Branch != v.policy.Source', 'r.Event != "push"', 'r.SHA != source'):
     require(token in release, f"Exact reviewed source provenance missing: {token}")
-require('refs/remotes/origin/' in updater and '"+refs/heads/"' in updater,
-        "Updater must fetch an explicit production remote-tracking ref")
-require('target != head' in updater and '"merge-base", "--is-ancestor"' in updater,
-        "Upgrade HEAD and rollback ancestry must fail closed")
-require('clearForceOpen' in executor, "Release maintenance must remove stale open override")
-require('cluster_convergence_needed' not in read("internal/release/coordinator.go")
-        and 'hold_maintenance":false' in read("internal/release/coordinator.go").replace(" ", ""),
-        "Master upgrades must never distribute to storage")
+for path in ("internal/updater", "cmd/frontiercloud-updater", "updater", "ci/Dockerfile.updater",
+             "scripts/test-go-updater.sh", "cmd/frontiercloud/staging.go"):
+    require(not (ROOT / path).exists(), f"Retired update controller source exists: {path}")
+for path in ("scripts/registry_images.py", "scripts/trusted_native_publish.py"):
+    require("'web', 'nginx'" in read(path) and "'web', 'updater', 'nginx'" not in read(path),
+            f"Publication must require only Web and Nginx: {path}")
+for path in ("internal/operator/deployment.go", "internal/operator/upgrade.go"):
+    require('[]string{"web", "nginx"}' in read(path), f"Operator component proof drift: {path}")
 for token in ('promote-main:', 'reviewed.data.commit.tree.sha !== commit.data.commit.tree.sha',
               'head_sha: source', 'head_sha: context.sha', "pr?.base?.ref === 'main'",
               "pr?.head?.ref === 'dev'", 'listPullRequestsAssociatedWithCommit'):
@@ -46,7 +43,6 @@ require('github.paginate' not in workflow, "Promotion lookup must remain bounded
 
 require(web == read("Dockerfile.gin") and compose == read("docker-compose.gin.yaml"),
         "Native aliases must match defaults")
-require(agent == read("updater/Dockerfile.gin"), "Updater alias must be native")
 for path in ("Dockerfile.python", "docker-compose.python.yaml",
              "scripts/test-mixed-runtime.sh", "scripts/test-mixed-release.sh",
              "scripts/test-store-interop.sh", "tests/store.Dockerfile"):
@@ -60,7 +56,7 @@ for path in ROOT.rglob("*.py"):
         continue
     require(relative.parts[0] in {"scripts", "tests"},
             f"Python is restricted to script/test drivers: {relative}")
-require('FROM golang:1.26.8-bookworm' in web and 'FROM golang:1.26.8-bookworm' in agent,
+require('FROM golang:1.26.8-bookworm' in web,
         "Native builder base must remain patch-pinned")
 for token, path in (('FROM nginx:1.30.4-alpine', "nginx/Dockerfile"),
                     ('image: redis:7.4.11-alpine', "docker-compose.yaml"),
@@ -71,7 +67,7 @@ require('ARG FRONTIERCLOUD_RUNTIME=go' in read("nginx/Dockerfile"), "Edge defaul
 require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
-        and '  build:' not in compose, "Initializers/updater must be native")
+        and '  build:' not in compose, "Initializers must be native")
 require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
         and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}' in compose,
         "Default release profile must be native main/dev in FrontierCloud-Gin")
@@ -82,9 +78,9 @@ for forbidden in ('  updater:', '/var/run/docker.sock', 'updater_control', 'main
     require(forbidden not in compose, f"Retired online updater deployment exists: {forbidden}")
 require('RegisterReleaseAdmin' not in read('cmd/frontiercloud/http.go'),
         'Retired release HTTP control is reachable')
-for path in ("Dockerfile", "nginx/Dockerfile", "updater/Dockerfile"):
+for path in ("Dockerfile", "nginx/Dockerfile"):
     require("COPY --chmod=" not in read(path) and "RUN --mount=" not in read(path),
-            f"Updater-compatible legacy Docker build required: {path}")
+            f"Bounded legacy Docker build required: {path}")
 for path in (ROOT / "tests").glob("*.py"):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
@@ -96,7 +92,7 @@ for path in (ROOT / "tests").glob("*.py"):
                     and node.func.attr in {"spec_from_file_location", "exec_module"}
                     for node in ast.walk(tree)),
             f"Test dynamically loads Python application code: {path.name}")
-fleet = read("internal/updater/native_matrix_real_test.go")
+fleet = read("internal/nativeacceptance/native_matrix_real_test.go")
 require('const fleetNodeCount = 5' in fleet and 'go-sqlite' in fleet and 'go-mysql' in fleet,
         "Acceptance requires five native nodes and both database combinations")
 require('python-' not in fleet.lower() and 'referenceWeb' not in fleet,

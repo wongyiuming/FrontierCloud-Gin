@@ -106,7 +106,7 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	httpapi.RegisterAdminRetirement(handler, adminHTTP, &noderetirement.Service{Repository: database.Pool().(store.RetirementRepository), Nodes: database.Nodes(), Client: controlService})
 	httpapi.RegisterOperational(handler, adminHTTP)
 	httpapi.RegisterPlaybackDiagnostics(handler, settings, resolver, controlService, adminHTTP, diagnostics.New())
-	siteService, err := sitecontrol.Open(settings.DataRoot, nil)
+	siteService, err := sitecontrol.Open(settings.DataRoot)
 	if err != nil {
 		return nil, nil, err
 	}

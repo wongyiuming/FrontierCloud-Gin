@@ -14,7 +14,7 @@ development host. A green lightweight CI check alone is not migration authority.
 
 ## Preconditions
 
-Stop/fence all application, updater, filesystem and database writers. Hold public
+Stop/fence all application and filesystem and database writers. Hold public
 HTTPS on an independent static maintenance responder. Use fresh private SQL,
 configuration/secrets, Redis and complete media backups. Independently restore
 them and compare `master-migration snapshot` inventories byte-for-byte against

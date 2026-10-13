@@ -18,7 +18,7 @@ func TestNativeCompilationBudgetDoesNotChangeRuntimeEnvironment(t *testing.T) {
 	if err != nil || strings.ReplaceAll(string(root), "\r\n", "\n") != strings.ReplaceAll(string(alias), "\r\n", "\n") {
 		t.Fatal("native root and explicit alias diverged", err)
 	}
-	for _, file := range []string{"Dockerfile", filepath.Join("updater", "Dockerfile.gin")} {
+	for _, file := range []string{"Dockerfile", "Dockerfile.gin"} {
 		contents, err := os.ReadFile(filepath.Join("..", "..", file))
 		if err != nil {
 			t.Fatal(err)

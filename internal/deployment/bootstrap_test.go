@@ -36,10 +36,8 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		}
 	}
 	fixture := map[string]string{
-		"Dockerfile":     "FROM committed-native\n",
-		"Dockerfile.gin": "FROM committed-native\n", "updater/Dockerfile.gin": "FROM committed-updater\n",
-		"updater/Dockerfile": "FROM committed-updater\n",
-		"nginx/Dockerfile":   "FROM committed-edge\n", "go.mod": "module fixture\n", "go.sum": "committed-sum\n",
+		"Dockerfile":       "FROM committed-native\n",
+		"nginx/Dockerfile": "FROM committed-edge\n", "go.mod": "module fixture\n", "go.sum": "committed-sum\n",
 		"cmd/entry.txt": "committed\n", "internal/core.txt": "committed\n", "migrations/schema.txt": "committed\n",
 		"protocol/contract.txt": "committed\n", "static/index.txt": "committed\n",
 		".env": "private-tracked-secret\n", "data/key": "private-tracked-key\n",
@@ -88,7 +86,6 @@ tar xf - -C "$dest"
 test "$(cat "$dest/cmd/entry.txt")" = committed
 test "$(cat "$dest/Dockerfile")" = FROM\ committed-native
 test "$(cat "$dest/Dockerfile.gin")" = FROM\ committed-native
-test "$(cat "$dest/updater/Dockerfile.gin")" = FROM\ committed-updater
 test "$(cat "$dest/docs/operator-upgrade.md")" = Approved\ upgrade\ fixture
 test "$(cat "$dest/docs/operator-recovery-sets.md")" = Recovery\ set\ fixture
 for excluded in .env data .git app updater/server.py cmd/untracked.txt; do
@@ -130,15 +127,15 @@ done
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(args)), "\n")
-	if len(lines) != 3 {
-		t.Fatal("bootstrap did not build exactly three images")
+	if len(lines) != 2 {
+		t.Fatal("bootstrap did not build exactly two images")
 	}
-	for index, component := range []string{"web", "updater", "nginx"} {
+	for index, component := range []string{"web", "nginx"} {
 		if !strings.Contains(lines[index], "REVISION="+revision) || !strings.Contains(lines[index], "frontiercloud-go-"+component+":"+revision) || !strings.HasSuffix(lines[index], " -") {
 			t.Fatal("immutable component context/label mismatch", component)
 		}
 	}
-	if !strings.Contains(lines[2], "FRONTIERCLOUD_RUNTIME=go") {
+	if !strings.Contains(lines[1], "FRONTIERCLOUD_RUNTIME=go") {
 		t.Fatal("edge lost explicit native runtime label")
 	}
 }

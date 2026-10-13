@@ -62,7 +62,7 @@ def fetch(path, token=''):
         # GHCR serves config blobs through this fixed public GitHub artifact
         # host. Never follow arbitrary redirects or forward its Bearer token.
         # Callers additionally verify the descriptor size and SHA256 bytes.
-        if response.status == 307 and re.fullmatch(r'/v2/wongyiuming/frontiercloud-gin-(web|updater|nginx)/blobs/sha256:[0-9a-f]{64}', path):
+        if response.status == 307 and re.fullmatch(r'/v2/wongyiuming/frontiercloud-gin-(web|nginx)/blobs/sha256:[0-9a-f]{64}', path):
             location = response.headers.get('Location', '')
             target = urllib.parse.urlsplit(location)
             if (target.scheme != 'https' or target.hostname != 'pkg-containers.githubusercontent.com'
@@ -79,7 +79,7 @@ def fetch(path, token=''):
 
 
 def resolve(revision, component, architecture=None, request=fetch):
-    if not re.fullmatch(r'[0-9a-f]{40}', revision) or component not in ('web', 'updater', 'nginx'):
+    if not re.fullmatch(r'[0-9a-f]{40}', revision) or component not in ('web', 'nginx'):
         raise ValueError('An exact committed SHA and native component are required')
     name = 'wongyiuming/frontiercloud-gin-' + component
     path = '/v2/' + name + '/manifests/' + revision
@@ -128,7 +128,7 @@ def publication_probe(revision, component, request=fetch):
     Runtime fallback may support another host platform; publication is stricter:
     an existing SHA without our linux/amd64 runtime is invalid, never "missing".
     """
-    if not re.fullmatch(r'[0-9a-f]{40}', revision) or component not in ('web', 'updater', 'nginx'):
+    if not re.fullmatch(r'[0-9a-f]{40}', revision) or component not in ('web', 'nginx'):
         raise ValueError('Exact native publication identity required')
     name = 'wongyiuming/frontiercloud-gin-' + component
     prefix = '/v2/' + name
@@ -200,7 +200,7 @@ def publication_probe(revision, component, request=fetch):
 def publication_plan(revision, request=fetch):
     """All components are checked before any build; partial valid releases resume."""
     components = {}
-    for component in ('web', 'updater', 'nginx'):
+    for component in ('web', 'nginx'):
         try:
             components[component] = {'missing': False, **publication_probe(revision, component, request)}
         except ManifestUnknown:
@@ -237,7 +237,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=('--resolve', '--ensure', '--publication-plan'))
     parser.add_argument('revision')
-    parser.add_argument('component', choices=('web', 'updater', 'nginx'))
+    parser.add_argument('component', choices=('web', 'nginx'))
     # Treat the explicit operation switch as a positional mode.
     args = parser.parse_args(['--', *sys.argv[1:]])
     try:

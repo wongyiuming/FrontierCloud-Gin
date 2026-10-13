@@ -39,7 +39,7 @@ func (r *RegistryClient) Close() {
 }
 
 func ImageRepository(component string) (string, error) {
-	if component != "web" && component != "updater" && component != "nginx" {
+	if component != "web" && component != "nginx" {
 		return "", errors.New("invalid native image component")
 	}
 	return "ghcr.io/wongyiuming/frontiercloud-gin-" + component, nil

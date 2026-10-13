@@ -11,14 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class NativeOperatorTests(unittest.TestCase):
     def test_inventory_has_exact_native_five_nodes(self):
-        source = (ROOT / "scripts/ops/dev_cluster.py").read_text(encoding="utf-8")
-        module = ast.parse(source)
-        assignment = next(node for node in module.body if isinstance(node, ast.Assign)
-                          and any(isinstance(t, ast.Name) and t.id == "NAMES" for t in node.targets))
-        names = eval(compile(ast.Expression(assignment.value), "inventory", "eval"), {"range": range})
-        self.assertEqual(names, ["master", "direct-1", "direct-2", "relay-1", "relay-2"])
-        self.assertIn('choices=("sqlite", "mysql")', source)
-        self.assertIn('re.fullmatch(r"[0-9a-f]{40}", args.initial_sha)', source)
+        source = (ROOT / "internal/nativeacceptance/native_matrix_real_test.go").read_text()
+        self.assertIn("const fleetNodeCount = 5", source)
+        self.assertIn('"go-sqlite"', source)
+        self.assertIn('"go-mysql"', source)
+        self.assertNotIn("UPDATER_PROJECT", source)
+        self.assertNotIn("updater-control", source)
 
     def test_chaos_resource_driver_uses_native_tree_contract(self):
         source = (ROOT / "scripts/ops/dev_chaos.py").read_text(encoding="utf-8")

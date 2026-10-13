@@ -59,7 +59,7 @@ export PUBLIC_BIND_ADDRESS=127.0.0.1 WEBRTC_STUN_PORT=0
 export FRONTIERCLOUD_TEST_TLS_WORK="$work"
 export SECURITY_CONTACT=https://reports.example.test/security
 export PUBLIC_ORIGIN=
-export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev STAGING_CD=false
+export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev
 mkdir -p "$work/private" "$work/published" "$work/data/media/music/security-fixture"
 mkdir -p "$work/crypto/encrypted-fixture" "$work/crypto/encrypted-video" "$work/crypto-results"
 command -v ffmpeg >/dev/null

@@ -75,7 +75,7 @@ func TestPublicRegistryReadTokenNeverUsesArbitraryRealm(t *testing.T) {
 			t.Fatal("untrusted realm", r.URL)
 		}
 		if r.URL.Path == "/token" {
-			if r.URL.Query().Get("scope") != "repository:wongyiuming/frontiercloud-gin-updater:pull" {
+			if r.URL.Query().Get("scope") != "repository:wongyiuming/frontiercloud-gin-web:pull" {
 				t.Fatal(r.URL)
 			}
 			return registryReply(200, `{"token":"public-read-only"}`, false), nil
@@ -88,7 +88,18 @@ func TestPublicRegistryReadTokenNeverUsesArbitraryRealm(t *testing.T) {
 		}
 		return registryReply(200, `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`, false), nil
 	})
-	if _, err := registry.Resolve(context.Background(), strings.Repeat("a", 40), "updater"); err != nil || calls != 3 {
+	if _, err := registry.Resolve(context.Background(), strings.Repeat("a", 40), "web"); err != nil || calls != 3 {
 		t.Fatal(err, calls)
+	}
+}
+
+func TestRemovedComponentCannotResolveOrRequireNetwork(t *testing.T) {
+	if _, err := ImageRepository("updater"); err == nil {
+		t.Fatal("retired component accepted")
+	}
+	registry := NewRegistryClient()
+	defer registry.Close()
+	if _, err := registry.Resolve(context.Background(), strings.Repeat("a", 40), "updater"); err == nil {
+		t.Fatal("retired component resolved")
 	}
 }

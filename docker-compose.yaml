@@ -25,7 +25,6 @@ x-app-environment: &app-environment
   RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}
   RELEASE_MANIFEST_PATH: ${RELEASE_MANIFEST_PATH:-}
   TLS_ENABLED: ${TLS_ENABLED:-false}
-  STAGING_CD: ${STAGING_CD:-false}
 
 x-logging: &service-logging
   driver: json-file

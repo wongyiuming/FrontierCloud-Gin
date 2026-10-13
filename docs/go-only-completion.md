@@ -2,7 +2,7 @@
 
 ## Supported combinations
 
-Only Gin/Go serves the backend and updater. The default is Gin + SQLite; the
+Only Gin/Go serves the backend and certificate controller. The default is Gin + SQLite; the
 only database alternative is Gin + MySQL. .env selects DB_TYPE and the MySQL
 Compose overlay; it does not migrate existing data. Python deployment is
 prohibited. The retired application tree app/, main.py, updater/server.py and
@@ -38,7 +38,7 @@ and the [dated repair audit](audits/2026-10-08-native-repairs.md).
 | Karaoke users/quota/recording lifecycle | internal/recording, internal/store/business, internal/httpapi |
 | Pair/role/heartbeat/resource transport | internal/node, five-node native matrix |
 | Backup/protocol/token/capabilities | internal/backup, internal/protocol, protocol/v2/vectors |
-| Release/updater/handoff/rollback/cleanup | internal/release, internal/updater, native release matrix |
+| Release proof/manual upgrade/recovery | internal/release, internal/operator, native operator acceptance |
 | HTTP black-box in Python | tests/test_gin_http.py, both SQLite/MySQL real native processes |
 | Browser/UI/continuous audio | retained Python UI contracts, JS smoke, isolated real Chromium |
 
@@ -56,9 +56,9 @@ bash scripts/test-native-api.sh
 bash scripts/test-go-deployment.sh
 bash scripts/test-go-business.sh
 bash scripts/test-native-default.sh
-bash scripts/test-go-updater.sh
+bash tests/operator_recovery_acceptance.py
 bash scripts/test-native-matrix.sh
-bash scripts/test-native-release.sh
+python3 tests/operator_recovery_acceptance.py --help
 ```
 
 Fleet acceptance uses exactly five native nodes: one Master, two Direct, two
@@ -66,7 +66,7 @@ Relay, repeated with SQLite and MySQL Master selection. Follower database choice
 alternate, so both drivers participate in each fleet. Fixtures use private CA
 HTTPS, exact private source artifacts, disposable namespaces and independent
 data. They never reuse or stop a deployed node and never globally prune Docker.
-The release matrix retains upgrade/rollback, updater handoff, business/data
+The release matrix retains manual upgrades and explicit recovery, business/data
 transport, backup and restart assertions at the smaller fleet size.
 
 Hosted test CI only runs scripts/test-ci-source.sh and bounded metadata promotion

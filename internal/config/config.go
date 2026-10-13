@@ -67,7 +67,6 @@ type Config struct {
 	GitHubAPIToken         string
 	ReleaseBranch          string
 	ReleaseSourceBranch    string
-	StagingCD              bool
 }
 
 // Load reads configuration from the process environment.
@@ -159,10 +158,7 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("TLS_ENABLED: %w", err)
 	}
-	value.StagingCD, err = boolean(getenv("STAGING_CD"), false)
-	if err != nil || value.StagingCD && (value.DeploymentMode != DeploymentBusiness || !value.TLSEnabled || value.ServerName != "www4399.sbs") {
-		return Config{}, errors.New("STAGING_CD requires the isolated TLS business site www4399.sbs")
-	}
+
 	value.NginxMedia, err = boolean(getenv("NGINX_MEDIA_ACCEL"), true)
 	if err != nil {
 		return Config{}, fmt.Errorf("NGINX_MEDIA_ACCEL: %w", err)

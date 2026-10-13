@@ -1,278 +1,56 @@
 # Public native image delivery
 
-The original `docker.yml` test/promotion CI keeps its three-minute hard limit.
-Heavyweight acceptance runs on the development host with bounded parallelism,
-not inside hosted test CI. Compilation
-is a **separate** `Publish native images` workflow (`publish-images.yml`), not a
-longer test CI or a background test workaround.
+Public releases comprise `ghcr.io/wongyiuming/frontiercloud-gin-web` and
+`ghcr.io/wongyiuming/frontiercloud-gin-nginx`, built from the same explicit main
+commit. Web contains the native application, `fc` and certificate controller.
+No update-daemon image is built, published or required by installation or upgrade.
 
-## Gates and budgets
+## Reviewed source and CI
 
-1. Push a development-host-accepted exact commit to `dev`.
-2. A **completed** `docker.yml` event starts `publish-images.yml` on default main.
-   Its read-only trusted plan validates the real newest successful
-   same-repository push for the exact source SHA/branch and the current HEAD.
-   No candidate checkout or compilation precedes that proof. There is no
-   195-second polling race against a separately queued source workflow.
-3. Three parallel compilation jobs without package-write credentials (Web,
-   Updater, Nginx), each
-   with a ten-minute hard deadline, produce bounded OCI archives. Web/Updater compile
-   on the GitHub runner (Go 1.26.8, CGO off, four compiler workers, 2 GiB Go memory
-   limit). Runtime Dockerfiles copy those binaries, not source/compiler/tests.
-   No `go test`, databases, fleet or browser acceptance runs in compilation CI.
-4. Separate publication jobs use immutable default-main code and the automatic
-   `GITHUB_TOKEN`, with `packages: write` granted only to these publisher jobs.
-   Plan, compilation and notification have no package-write permission. The
-   trusted publisher reads OCI data without extraction, executing a Dockerfile,
-   loading/running a container or invoking candidate scripts. It binds the
-   archive, source CI, current workflow attempt, component, platform, labels and
-   SHA256 bytes, then writes only that verified source SHA tag. Existing accepted
-   bytes are reused, never replaced. All three packages must remain public and
-   independently pass anonymous manifest/configuration verification.
-5. Only then a separate `notify-staging` job in the same trusted publication run
-   handles the signed CD wakeup (three-minute limit). It verifies the trusted plan,
-   the three completed publication jobs and anonymous image proofs, not an
-   attacker-supplied publication receipt. It does not read candidate artifacts
-   or execute candidate code. The signing key is restricted to `staging-cd-main`,
-   with its own main-only Branch rule, and is never shared with compilation.
-6. The receiver keeps the **original test CI** run identity for replay ordering.
-   RN independently verifies exact current dev HEAD/test CI, performs native
-   deployment and must pass live acceptance before opening/merging dev -> main.
-7. A main merge verifies identical reviewed source tree/provenance, passes its
-   source CI and publishes its own exact-merge-SHA images. Production remains a
-   separate operator-controlled upgrade. Storage is never auto-upgraded.
+The authorized provenance pair is dev -> main in this repository. Release proof
+requires exact-source successful CI and equality of reviewed and merged Git trees.
+The immutable-main publication workflow runs only after successful source CI.
+The trusted plan verifies the source run number/attempt, current main head and
+anonymous exact-version registry evidence. Candidate code never executes with
+package-write credentials.
 
-Both credential-bearing jobs use only immutable default-main code. Their
-dependency chain is an isolated delivery exception, not a relaxation of test CI.
-The REST uploader accepts the registry's returned upload location in both
-GHCR's singular `/blobs/upload/` and distribution's `/blobs/uploads/` forms.
-It retains the opaque upload identifier and query state, while requiring the
-same fixed repository and verified `https://ghcr.io` origin (or a local absolute
-path). Foreign hosts, credentials, insecure schemes, fragments, traversal and
-pre-existing digest parameters fail closed. It streams only hash-verified OCI
-blob bytes; publication still requires the exact revision manifest and digest.
-The [OCI distribution specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md)
-describes upload locations returned by the registry, not a client-constructed
-UUID endpoint. This transfer compatibility does not broaden the package scope.
+Compilation uses parallel jobs with ten-minute hard limits, no acceptance work,
+no registry credentials and no writable shared build cache. Go builders are
+patch-pinned. The separate three-minute publishers validate bounded OCI archives,
+platform/config/source/schema labels and descriptors before publishing. Existing
+verified exact-version bytes are reused; only proven manifest absence admits
+creation. Network, authentication and integrity failures stop publication.
 
-No personal package PAT or publisher Environment is required. For each public
-Web/Updater/Nginx package, grant repository **`FrontierCloud-Gin` Write** under
-**Manage Actions access**; do not revoke that grant as a prerequisite. Public
-image reads remain anonymous and require no runtime registry credentials.
-Source code cannot apply or certify these external package settings.
+Only exact publish and main-alias jobs receive automatic `GITHUB_TOKEN`
+`packages: write`. Each package must grant this repository Actions Write and
+allow anonymous pulls. Personal PATs and a publisher Environment are unnecessary.
+Repository workflow writers remain trusted; this is not protection against an
+authorized workflow writer replacing registry tags.
 
-This is an explicitly accepted repository-writer trust model: a contributor
-able to change repository workflows can add another job requesting
-`packages: write`. Default read permissions are not a ceiling, and package
-write-once checks in our trusted publisher do not prevent a different authorized
-workflow or package administrator from changing old tags. Immutable-main code
-and job isolation keep candidate execution out of this publisher's credentials;
-they are not an ACL denying all dev-authored workflows package writes. Deployment
-still independently verifies exact-SHA provenance and pins content digests.
-See GitHub's [package Actions access](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+## Immutable selection and aliases
 
-The separate **CD signing secret** still belongs only to `staging-cd-main` with
-its exact main Branch deployment rule; no repository/organization signing-key
-copy may remain available to dev. Any previously created package PAT secret or
-publisher Environment may remain unreferenced; this workflow does not consume
-them, their presence does not trigger deployment, and their cleanup is a
-separate administrator choice.
+Exact 40-character commit tags are discovery references. Deployments pin manifest
+digests after verifying image/config digests, Linux platform, source revision,
+database generation and Web release contract. Tag text alone is not proof.
 
-Before this workflow exists on default main, the owner has explicitly authorized
-one initial publication exception: `bootstrap-images.yml`, restricted to the
-existing same-repository **PR #5, dev -> main**. Only an owner-applied
-`bootstrap:<full 40-character dev SHA>` label starts its proof job. This is an
-authorized PR workflow snapshot, **not immutable-main code**. It independently
-checks owner actor/sender, current PR/head/base/merge snapshot and the newest
-successful exact-source push CI before compiling. The first matching run claims
-that label; only its newest owner-triggered attempt may recover. Removing and
-reapplying the label cannot grant a second run the same authorization.
+The `publish-latest` job validates both successful exact component publication
+jobs in the current workflow attempt, rechecks reviewed main proof and public
+image bytes, then promotes those verified manifests to fresh-install aliases.
+It never builds or runs candidate code. Existing installations require an explicit
+published target revision and do not re-resolve `latest` on restart.
 
-The exception retains three-minute plan/publication and ten-minute parallel
-compilation limits. Only its isolated REST publisher gets automatic package
-write; it verifies run/attempt-bound OCI data and never runs build/container code.
-It has **no signing secret, Environment, PAT or deployment job**. It must not
-spoof a default-main workflow identity, prematurely merge main, or re-enable the
-retired source-only notifier. PR source-head metadata and the workflow's PR
-merge snapshot are separate proof fields, not interchangeable SHAs.
+The one-time PR #5 bootstrap authorization remains historical policy; it cannot
+authorize a later PR. Preproduction/CD is retired; publishing images does not
+authorize source promotion, production deployment or database migration.
 
-After actual public image verification, a separately authorized operator wakeup
-must preserve the RN receiver's HMAC/replay/current-source/image gates and
-live acceptance before merging PR #5. The label does not deploy staging or
-production. Once PR #5 closes/merges, this entry cannot run for another PR.
-Source tests alone are not evidence that this first CI publication has succeeded;
-record the real run and all three public digests before claiming activation.
-See [staging CD](staging-cd.md) for first activation and receiver gates.
+## Development and production
 
-## Public artifacts and deployment
+`scripts/build-native-images.sh` prepares only Web/Nginx. Local compilation is
+explicitly selected for isolated acceptance; production upgrades use public images
+without host compilation. [Operator upgrades](operator-upgrade.md) keep original
+identity/configuration, verify backups and prepare behind a closed fence before
+separately opening services. [Installation](operator-manual.md) documents initial
+selection. [Staging status](staging-cd.md) records the unavailable staging gate.
 
-Development MySQL fixtures use one CPU and an explicit 768 MiB no-swap cgroup,
-a 64 MiB InnoDB buffer pool, 64 connections and disabled Performance Schema.
-This bounds test-server instrumentation without changing transactions or
-production settings. A 2026-10-09 run proved a 512 MiB fixture was OOM-killed
-during business tests; that failed run is retained, not counted as acceptance.
-Fixture failures now print scoped exit/OOM diagnostics before cleanup. Hosted
-test CI still runs no database and keeps its three-minute deadline.
-
-Business/race test containers also cap compilation explicitly: two package
-workers, `GOMAXPROCS=2`, a 512 MiB Go managed-heap target per process, `GOGC=25`
-and an aggregate 3 GiB no-swap cgroup. The heap target is not an RSS hard cap.
-A separate 2 GiB fixture OOM killed two compiler processes during HTTPAPI
-dependency compilation; those failed results are not acceptance. These limits
-retain parallel compilation without assuming that limiting CPU automatically
-limits aggregate compiler memory. They do not change production runtime limits.
-
-`scripts/test-publication-oci.sh` runs only on the development host. It exports
-a tiny real Buildx OCI format fixture through a disposable 512 MiB/one-CPU
-no-swap builder, pins the pulled official BuildKit digest for that run, validates
-the tar through the trusted publisher and removes only its own builder. It does
-not compile a second application, authenticate to GHCR, publish a package,
-load/run the output or certify the credentialed publication path. Keep its
-archive/budget/digest evidence distinct from real application-image delivery.
-
-The repository's Packages page links to:
-
-| Component | Public registry repository |
-|---|---|
-| Web (Master and storage appliance) | `ghcr.io/wongyiuming/frontiercloud-gin-web` |
-| Master updater | `ghcr.io/wongyiuming/frontiercloud-gin-updater` |
-| Master Nginx | `ghcr.io/wongyiuming/frontiercloud-gin-nginx` |
-
-Release evidence uses full 40-character commit SHA tags. The optional fresh-
-install `latest` alias advances only after verified current-main publication.
-An exact-version deployer resolves the
-manifest/index, checks its SHA-256 and unique matching platform, then pulls the
-**digest**. It verifies component, Go runtime, revision, schema generation,
-canonical repository, OS/architecture and release contract before tagging the
-local Compose/native-updater alias. A SHA tag alone is not provenance proof.
-Public images contain no production data, `.env`, keys, Python backend or tests.
-First GHCR packages are private by default: an owner must make these three
-packages public; anonymous validation deliberately fails until that is done.
-
-## Write-once publication discipline
-
-Before setting up Go/Buildx, compiling or logging in, every matrix job
-anonymously checks **all three exact-SHA components**. It verifies the index and
-selected manifest SHA-256, config descriptor size and SHA-256, a unique
-`linux/amd64` runtime, canonical source/revision/component labels, Go/schema
-generation and the Web/Updater release contract. Existing verified bytes are
-reused by digest: rerunning a SHA or promoting the identical SHA from dev to
-main skips compilation and push. A valid partial release resumes only its
-missing components; existing ones are never rebuilt.
-
-Only one canonical `404 MANIFEST_UNKNOWN` for the **SHA tag itself** authorizes
-new publication. Generic 404, private/permission failures, network/5xx errors,
-unsupported existing platform, missing child/config or wrong provenance stop
-publication rather than granting a rebuild. GHCR's config-blob redirect is
-restricted to HTTPS `pkg-containers.githubusercontent.com`; a fresh request
-does not forward registry authorization, and returned bytes are hash-checked.
-
-Trusted publication jobs share a repository + SHA + component concurrency key
-across dev/main, with `cancel-in-progress: false`. The publisher rechecks the
-tag before pushing and verifies its final digest against Buildx's generated
-metadata. A previously verified digest that drifts or disappears is an error,
-not permission to replace it. These are **workflow-level** write-once controls,
-not registry atomic compare-and-swap or intrinsically immutable SHA tags. Every
-trusted writer must use that shared lock; external package administrators can
-still modify tags. Deployment therefore remains digest-pinned and fail-closed.
-
-On 2026-10-10 the new publisher was exercised twice against the already public
-SHA `05617629dc8f1bbb6cf029d24724d6f6b142d3b0`, anonymously checking its real
-three-component manifests/configurations. Both invocations reused identical
-digests with **zero build/push calls and no registry writes** (21.11 seconds
-total). This is a real existing-SHA reuse test, not a new GitHub workflow rerun
-or proof of registry CAS. The verified `linux/amd64` runtime digests were:
-
-| Component | Runtime digest |
-|---|---|
-| Web | `sha256:34d40ba6b751cb0b94075fe0215fcfe55cc9fc61af0f0c948801486431202ab2` |
-| Updater | `sha256:6f0edad01b75449b73a387a3d9bb21ee5d042b460db91da9d5a7b08f8916f624` |
-| Nginx | `sha256:f1c76d52389fa6fd43dd4b730ded3a1ffd3d6429189292480c52eddd4d66f60c` |
-
-## Fresh-install defaults
-
-The guarded ordinary entry is the [operator bundle](operator-manual.md), extracted
-from a single public Web digest with `scripts/get-fc.sh` without running that image.
-Its `fc install` independently verifies reviewed main/source CI, manifest/config
-hashes and component provenance, then pins all application and infrastructure
-digests before initializing an empty deployment. This avoids component aliases
-crossing releases. `fc restart` validates the recorded configuration and never
-pulls a moving alias. Storage now shares this public-image path and has no build
-definition. These bundle bytes require normal reviewed main publication; this
-source change is not evidence that the new bundle has been published.
-
-The low-level Compose compatibility path still accepts the two HTTPS settings
-in README.md:
-
-```bash
-docker compose up -d --wait
-```
-
-It pulls public GHCR `latest` images, defaults to SQLite, and never builds.
-Missing/network/private image errors stop startup. No SHA or host Python is
-required. `FRONTIERCLOUD_REVISION=<published full SHA>` remains an optional pin.
-The reviewed updater and CD continue to verify exact SHA/digest provenance.
-
-The `publish-latest` job runs only for main, after all three exact publish jobs.
-It checks successful newest source CI, current main HEAD, publication attempt,
-all anonymous provenance proofs and manifest bytes before any alias write.
-One global repository lock serializes alias writers; each write rechecks current
-HEAD and exact digest. It runs trusted main code only, with a short-lived package
-write token, without candidate execution, artifacts, Docker or builds. Dev and
-the one-time bootstrap cannot advance latest. A partially failed alias update
-fails the workflow and can be retried; registry tags are not cross-package
-atomic. Retry an installation overlapping promotion once publication completes,
-or use one exact SHA for reproducible component selection. Existing running
-containers are not replaced merely because an alias changes.
-
-These aliases first become available after this implementation is reviewed and
-merged to main and its normal main publication succeeds. Local fixture aliases
-verify startup before merge; they do not claim remote latest activation.
-
-Explicit development/confirmed-missing exact-version preparation remains:
-
-```bash
-export FRONTIERCLOUD_REVISION="$(git rev-parse HEAD)"
-bash scripts/build-native-images.sh "$FRONTIERCLOUD_REVISION"
-docker compose up -d --pull never --wait
-```
-
-The helper prepares immutable public-name and historical local-name aliases.
-Storage appliance operations retain their separate role/identity prerequisites.
-`scripts/deploy-storage.sh` uses the guarded `fc` installer; it never invokes this
-developer compilation helper, even after a missing image or failed network check.
-Host-side Python is only an advanced resolver/test driver, not a default-startup
-or Web runtime dependency. Compose no longer contains local build definitions.
-
-## Fallback and recovery
-
-Only a valid `404 MANIFEST_UNKNOWN` for the exact SHA or an index confirming no
-image for this platform permits bounded local compilation from an allowlisted
-immutable Git archive. A generic 404, private/auth-denied package, HTTP 5xx,
-network error, invalid manifest/digest, failed pull or wrong labels/platform
-**stops** deployment. Never interpret these as missing images. Other supported
-architectures can use this confirmed-platform-missing fallback; initial CI
-publication covers the current amd64 fleet only.
-
-The native updater uses the same public-image preference and can reuse a
-validated project-scoped local cache for recovery. It never accepts an arbitrary
-registry or runtime credential. Cleanup removes only exact obsolete project
-aliases, retaining current/previous images and shared registry tags/digests;
-it never force-deletes images, prunes globally, changes data or updates storage.
-
-An old updater whose binary predates this feature needs a controlled bridge.
-Do not force its cold local compilation on a low-memory production host.
-A development-only real fixture has verified preserving the old business,
-identity/data and native idle journal while replacing only the control runtime
-with a verified public updater. Production use still requires explicit operator
-authorization and full acceptance of the final main release; never edit a
-journal to claim idle/success or bypass AdminGUI release policy. Subsequent
-upgrades use public images. Historical release SHAs
-without published images retain the proven-absence local-build fallback.
-`FRONTIERCLOUD_IMAGE_SOURCE=local` is reserved for isolated development fixtures
-whose private synthetic history has no public artifacts; it is not a production
-workaround for a failed registry check.
-
-Compilation or publication timeout/failure does not trigger CD. Rerun the exact
-workflow after fixing the cause; do not increase test CI's budget, switch to
-`latest`, weaken image verification or silently resume a failed deployment.
+Historical public image and deployment evidence under `docs/audits` remains
+unchanged; it does not describe the current component set.

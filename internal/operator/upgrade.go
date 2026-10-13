@@ -110,7 +110,7 @@ func (d *Deployment) targetImages(ctx context.Context, r Receipt, target, arch s
 	services := map[string]string{}
 	for name, old := range r.ServiceImages {
 		component := ""
-		for _, c := range []string{"web", "nginx", "updater"} {
+		for _, c := range []string{"web", "nginx"} {
 			repo, _ := release.ImageRepository(c)
 			if strings.HasPrefix(old, repo+"@sha256:") {
 				component = c

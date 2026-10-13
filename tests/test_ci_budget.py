@@ -73,7 +73,7 @@ class CIBudgetTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/publish-images.yml').read_text()
         self.assertEqual(inspect_workflow(workflow, 'publish-images.yml'), [])
         self.assertTrue(inspect_workflow(workflow.replace('github.workflow_sha', 'github.event.workflow_run.head_sha'), 'publish-images.yml'))
-        self.assertTrue(inspect_workflow(workflow.replace('environment: staging-cd-main', 'environment: staging'), 'publish-images.yml'))
+        self.assertTrue(inspect_workflow(workflow.replace('  publish:\n', '  publish:\n    environment: staging\n'), 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow, 'staging-cd.yml'))
 
     def test_package_writer_isolated_from_candidate_execution_and_token_requests(self):
@@ -81,14 +81,14 @@ class CIBudgetTests(unittest.TestCase):
         self.assertTrue(inspect_workflow(workflow + '\n    packages: write\n', 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow.replace('      packages: write\n', ''), 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow.replace('permissions: {}', 'permissions:\n  packages: write'), 'publish-images.yml'))
-        for job in ('plan', 'compile', 'notify-staging'):
+        for job in ('plan', 'compile'):
             unsafe = workflow.replace('  ' + job + ':\n', '  ' + job + ':\n    permissions:\n      packages: write\n')
             self.assertTrue(inspect_workflow(unsafe, 'publish-images.yml'))
         unsafe = workflow.replace('  publish:\n', '  publish:\n    run: docker load candidate.tar\n')
         self.assertTrue(inspect_workflow(unsafe, 'publish-images.yml'))
         unsafe = workflow.replace('  compile:\n', '  compile:\n    env:\n      TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}\n')
         self.assertTrue(inspect_workflow(unsafe, 'publish-images.yml'))
-        unsafe = workflow.replace('  notify-staging:\n', '  notify-staging:\n    uses: actions/download-artifact@v4\n')
+        unsafe = workflow + '\n  notify-staging:\n    timeout-minutes: 3\n'
         self.assertTrue(inspect_workflow(unsafe, 'publish-images.yml'))
 
     def test_personal_pat_is_not_a_publication_prerequisite(self):
@@ -102,7 +102,7 @@ class CIBudgetTests(unittest.TestCase):
         self.assertTrue(inspect_workflow(workflow.replace('  compile:\n', '  compile:\n    permissions: write-all\n'), 'publish-images.yml'))
 
     def test_heavywork_and_chains_cannot_hide_behind_short_timeout(self):
-        for step in ("bash scripts/test-mixed-runtime.sh", "docker build .", "nohup test &", "federation_stack.py", "bash scripts/test-go-updater.sh",
+        for step in ("bash scripts/test-mixed-runtime.sh", "docker build .", "nohup test &", "federation_stack.py",
                      "bash scripts/test-native-api.sh", "bash scripts/test-native-matrix.sh",
                      "bash scripts/test-native-release.sh", "bash scripts/test-publication-oci.sh"):
             self.assertTrue(inspect_workflow("name: test\njobs:\n  check:\n    timeout-minutes: 3\n    run: " + step, "fixture"))

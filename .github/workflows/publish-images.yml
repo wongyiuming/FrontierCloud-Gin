@@ -30,7 +30,6 @@ jobs:
       source_run_number: ${{ steps.proof.outputs.source_run_number }}
       source_run_attempt: ${{ steps.proof.outputs.source_run_attempt }}
       missing_web: ${{ steps.proof.outputs.missing_web }}
-      missing_updater: ${{ steps.proof.outputs.missing_updater }}
       missing_nginx: ${{ steps.proof.outputs.missing_nginx }}
     steps:
       - uses: actions/checkout@v4
@@ -56,19 +55,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component: [web, updater, nginx]
+        component: [web, nginx]
     steps:
       - name: Select only a proven-missing component
         id: selection
         env:
           COMPONENT: ${{ matrix.component }}
           MISSING_WEB: ${{ needs.plan.outputs.missing_web }}
-          MISSING_UPDATER: ${{ needs.plan.outputs.missing_updater }}
           MISSING_NGINX: ${{ needs.plan.outputs.missing_nginx }}
         run: |
           case "$COMPONENT" in
             web) MISSING="$MISSING_WEB";;
-            updater) MISSING="$MISSING_UPDATER";;
             nginx) MISSING="$MISSING_NGINX";;
             *) exit 1;;
           esac
@@ -103,8 +100,6 @@ jobs:
           if test "$COMPONENT" = web; then
             go build -p=4 -trimpath -ldflags='-s -w' -o .ci-out/frontiercloud ./cmd/frontiercloud
             go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/fc ./cmd/fc
-          else
-            go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/frontiercloud-updater ./cmd/frontiercloud-updater
           fi
       - name: Export OCI data without login, push or writable cache
         if: steps.selection.outputs.missing == 'true'
@@ -149,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component: [web, updater, nginx]
+        component: [web, nginx]
     concurrency:
       group: native-images-${{ github.repository }}-${{ needs.plan.outputs.revision }}-${{ matrix.component }}
       cancel-in-progress: false
@@ -189,7 +184,7 @@ jobs:
           sparse-checkout: |
             scripts/trusted_latest_publish.py
             scripts/trusted_native_publish.py
-            scripts/trusted_staging_notify.py
+            scripts/publication_proof.py
             scripts/registry_images.py
           sparse-checkout-cone-mode: false
       - name: Promote all verified main components to fresh-install aliases
@@ -197,33 +192,3 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PLAN_JSON: ${{ needs.plan.outputs.plan }}
         run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_latest_publish.py
-
-  notify-staging:
-    needs: [plan, publish]
-    # User-owned CD is opt-in. RN preproduction was decommissioned by its owner.
-    if: needs.plan.outputs.branch == 'dev' && vars.STAGING_CD_ENABLED == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    environment: staging-cd-main
-    permissions:
-      contents: read
-      actions: read
-    concurrency:
-      group: trusted-preproduction-notification
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            scripts/trusted_staging_notify.py
-            scripts/trusted_native_publish.py
-            scripts/registry_images.py
-          sparse-checkout-cone-mode: false
-      - name: Prove this publication attempt before signed staging wakeup
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          STAGING_CD_SECRET: ${{ secrets.STAGING_CD_SECRET }}
-          PLAN_JSON: ${{ needs.plan.outputs.plan }}
-        run: timeout --signal=TERM --kill-after=5s 150s python3 scripts/trusted_staging_notify.py

@@ -32,20 +32,15 @@ class PriorityContractTests(unittest.TestCase):
     def test_all_compilation_paths_and_manifest_match_current_generation(self):
         source = (ROOT / 'migrations/schema.go').read_text()
         generation = int(re.search(r'const Generation = (\d+)', source)[1])
-        for name in ('Dockerfile', 'Dockerfile.gin', 'nginx/Dockerfile', 'updater/Dockerfile', 'updater/Dockerfile.gin',
-                     'ci/Dockerfile.web', 'ci/Dockerfile.updater', 'tests/publication-oci.Dockerfile'):
+        for name in ('Dockerfile', 'Dockerfile.gin', 'nginx/Dockerfile',
+                     'ci/Dockerfile.web', 'tests/publication-oci.Dockerfile'):
             label = re.search(r'frontiercloud.schema-generation="(\d+)"', (ROOT / name).read_text())
             self.assertIsNotNone(label, name)
             self.assertEqual(int(label[1]), generation, name)
         from scripts.registry_images import SCHEMA_GENERATION
         self.assertEqual(int(SCHEMA_GENERATION), generation)
-        schema = json.loads((ROOT / 'protocol/v2/schemas/release-manifest.json').read_text())
-        self.assertEqual(schema['properties']['schema_generation']['const'], generation)
-        vector = json.loads((ROOT / f'protocol/v2/vectors/release-manifest-generation{generation}.json').read_text())
-        valid = [row for row in vector['cases'] if row['valid']]
-        self.assertTrue(valid)
-        for row in valid:
-            self.assertEqual(row['manifest']['schema_generation'], generation)
+        self.assertFalse((ROOT / 'protocol/v2/schemas/release-manifest.json').exists())
+        self.assertFalse(list((ROOT / 'protocol/v2/vectors').glob('release-manifest*.json')))
 
 
 if __name__ == '__main__':

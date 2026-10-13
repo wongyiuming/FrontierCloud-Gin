@@ -58,8 +58,7 @@ silently select an unrelated store on the next attempt.
 `scripts/test-go-deployment.sh` parses actual Docker Compose JSON and checks
 commands, permissions, source labels, optional database dependency and project
 selection and rejects updater/Docker/control mounts in normal deployment.
-Historical updater acceptance scripts remain source-only operator tooling;
-they are not the default deployment or an Admin upgrade feature. Web has no
+Historical audit evidence remains preserved; current acceptance uses independent native fleets and the host-side operator. Web has no
 Python interpreter and MySQL does not create an authoritative SQLite DB.
 
 Compose build labels by themselves do not prove that a mutable build context

@@ -13,7 +13,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
 
 const Manual = ".frontiercloud-maintenance"
@@ -23,11 +22,10 @@ const Lock = ".site-control.lock"
 var ErrState = errors.New("unsafe site maintenance state")
 
 type Service struct {
-	root  *os.Root
-	agent release.Agent
+	root *os.Root
 }
 
-func Open(directory string, agent release.Agent) (*Service, error) {
+func Open(directory string) (*Service, error) {
 	info, err := os.Lstat(directory)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil, ErrState
@@ -41,31 +39,12 @@ func Open(directory string, agent release.Agent) (*Service, error) {
 		root.Close()
 		return nil, ErrState
 	}
-	return &Service{root, agent}, nil
+	return &Service{root}, nil
 }
 func (s *Service) Close() error { return s.root.Close() }
 
-// ClearOverride is used by the isolated native updater before mutation. It
-// shares the Admin operator lease and never erases an unrecognized flag.
-func ClearOverride(ctx context.Context, root *os.Root) error {
-	done, err := Lease(ctx, root, true)
-	if err != nil {
-		return err
-	}
-	defer done()
-	s := Service{root: root}
-	exists, err := s.flag(ForceOpen, "release-failure-override\n")
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-	return s.remove(ForceOpen)
-}
-
-// Lease also coordinates native updater override clearing. Its inode is never
-// unlinked. Holding it across updater status prevents two Admin workers racing.
+// Lease serializes availability flag inspection and mutation. Its inode is
+// never unlinked, so concurrent Admin workers share the same lock.
 func Lease(ctx context.Context, root *os.Root, exclusive bool) (func(), error) {
 	info, err := root.Lstat(Lock)
 	if err == nil && (!info.Mode().IsRegular() || info.Size() != 0) {
@@ -139,7 +118,7 @@ func (s *Service) status(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	force, err := s.flag(ForceOpen, "release-failure-override\n")
+	_, err = s.flag(ForceOpen, "release-failure-override\n")
 	if err != nil {
 		return nil, err
 	}
@@ -147,41 +126,19 @@ func (s *Service) status(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// No updater is connected in the business runtime. A nil agent is an
-	// explicit absence, not an unavailable controller that gates the site.
-	// Non-nil agents remain supported by offline recovery tooling only.
-	agent := map[string]any{}
-	if s.agent != nil {
-		agent = release.AgentStatus(ctx, s.agent)
-	}
-	state, _ := agent["state"].(string)
-	phase, _ := agent["phase"].(string)
-	blocked := release.Busy(state) || state == "failed" || state == "unavailable"
 	source, detail := "open", "站点正常开放"
-	enabled := manual || blocked
+	enabled := manual
 	switch {
 	case offline:
 		enabled = true
 		source = "native-offline"
 		detail = "原生离线维护围栏已关闭，管理员开放操作不能覆盖"
-	case force && s.agent != nil:
-		enabled = false
-		source = "manual-open-override"
-		detail = "管理员已显式结束维护；发布失败遗留维护门禁被覆盖"
 	case manual:
 		source = "manual"
 		detail = "管理员手动进入维护"
-	case blocked:
-		source = "release"
-		detail = "版本发布 " + state + " / " + phase
-		if target, ok := agent["target_sha"].(string); ok && release.ValidSHA(target) {
-			detail += " · " + target[:12]
-		}
+
 	}
-	value := map[string]any{"maintenance": enabled, "source": source, "detail": detail, "manual": manual, "force_open": force && s.agent != nil}
-	if s.agent != nil {
-		value["release"] = agent
-	}
+	value := map[string]any{"maintenance": enabled, "source": source, "detail": detail, "manual": manual, "force_open": false}
 	return value, nil
 }
 func (s *Service) Set(ctx context.Context, enabled bool) (map[string]any, error) {
@@ -194,14 +151,6 @@ func (s *Service) Set(ctx context.Context, enabled bool) (map[string]any, error)
 		return nil, err
 	} else if offline {
 		return nil, errors.New("native offline maintenance cannot be reopened by Admin")
-	}
-	current := map[string]any{}
-	if s.agent != nil {
-		current = release.AgentStatus(ctx, s.agent)
-	}
-	state, _ := current["state"].(string)
-	if !enabled && (release.Busy(state) || state == "unavailable") {
-		return nil, errors.New("release execution or unknown updater state prevents reopening")
 	}
 	// Validate both existing flags before any mutation; unknown bytes/symlinks
 	// are not silently erased to make the requested state appear successful.
@@ -222,11 +171,7 @@ func (s *Service) Set(ctx context.Context, enabled bool) (map[string]any, error)
 		if err = s.remove(Manual); err != nil {
 			return nil, err
 		}
-		if state == "failed" {
-			err = s.publish(ForceOpen, "release-failure-override\n")
-		} else {
-			err = s.remove(ForceOpen)
-		}
+		err = s.remove(ForceOpen)
 		if err != nil {
 			return nil, err
 		}

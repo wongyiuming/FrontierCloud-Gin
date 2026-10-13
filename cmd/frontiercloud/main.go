@@ -133,11 +133,6 @@ func command(arguments []string) error {
 		return deleteStorageRecordingCommand(arguments[1:], os.Stdout)
 	case "delete-owned-recording":
 		return deleteOwnedRecordingCommand(arguments[1:], os.Stdout)
-	case "staging-release":
-		if len(arguments) != 1 {
-			return errors.New("staging-release accepts no arguments")
-		}
-		return stagingReleaseCommand(os.Stdout)
 	case "verify-backup":
 		return verifyBackupCommand(arguments[1:], os.Stdout)
 	case "cleanup-backup-cache":
@@ -162,11 +157,6 @@ func command(arguments []string) error {
 		return drainRenameCommand(arguments[1:], os.Stdout)
 	case "prepare-release":
 		return prepareReleaseCommand(arguments[1:])
-	case "updater-status":
-		if len(arguments) != 1 {
-			return errors.New("updater-status accepts no arguments")
-		}
-		return updaterStatusCommand(os.Stdout)
 	default:
 		return fmt.Errorf("unknown command %q", name)
 	}

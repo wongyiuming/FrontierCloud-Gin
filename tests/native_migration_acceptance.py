@@ -98,13 +98,12 @@ def run(options):
     shutil.copyfile(options.certificate_test_binary, work / 'certificate.test')
     os.chmod(work / 'certificate.test', 0o755)
     images = {name: json.loads(command(['docker', 'image', 'inspect', image]))[0]['Id']
-              for name, image in (('native', options.native_image), ('agent', options.agent_image),
-                                  ('edge', options.edge_image))}
+              for name, image in (('native', options.native_image), ('edge', options.edge_image))}
     timeout = '100m' if options.wait_cleanup else '45m'
     arguments = ['docker', 'run', '--rm', '--cpus=2', '--memory=2g', '--memory-swap=2g',
                  '--name', prefix + '-driver', '--label', 'frontiercloud.acceptance=' + prefix,
                  '-e', 'GOMAXPROCS=2', '-v', '/var/run/docker.sock:/var/run/docker.sock',
-                 '-v', str(work) + ':' + str(work), '-v', str(options.test_binary) + ':/updater.test:ro']
+                 '-v', str(work) + ':' + str(work), '-v', str(options.test_binary) + ':/fleet.test:ro']
     environment = {'FRONTIERCLOUD_TEST_DOCKER_SOCKET': '/var/run/docker.sock',
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_WORKSPACE': str(work),
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_PREFIX': prefix,
@@ -118,11 +117,10 @@ def run(options):
         'FRONTIERCLOUD_TEST_NATIVE_MIGRATION_MANY_SMALL': '1' if options.many_small_files else '',
         'FRONTIERCLOUD_TEST_MIGRATION_NO_DIRECT': '1' if options.no_direct else '',
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE': images['native'],
-        'FRONTIERCLOUD_TEST_NATIVE_MATRIX_AGENT_IMAGE': images['agent'],
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_EDGE_IMAGE': images['edge']}
     for key, value in environment.items():
         arguments += ['-e', key + '=' + value]
-    arguments += ['golang:1.26.8-bookworm', '/updater.test', '-test.timeout=' + timeout,
+    arguments += ['golang:1.26.8-bookworm', '/fleet.test', '-test.timeout=' + timeout,
                   '-test.v', '-test.run=^TestRealNativeMatrixFleetMigrations$']
     with options.test_binary.open('rb') as binary:
         binary_sha = hashlib.file_digest(binary, 'sha256').hexdigest()
@@ -202,7 +200,6 @@ if __name__ == '__main__':
     parser.add_argument('--test-binary', type=Path, required=True)
     parser.add_argument('--certificate-test-binary', type=Path, required=True)
     parser.add_argument('--native-image', required=True)
-    parser.add_argument('--agent-image', required=True)
     parser.add_argument('--edge-image', required=True)
     parser.add_argument('--browser-python', type=Path, required=True)
     parser.add_argument('--database', choices=('go-sqlite', 'go-mysql'), required=True)

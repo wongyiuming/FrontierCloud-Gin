@@ -207,9 +207,7 @@ status/history/upgrade/rollback API, polling UI or upgrade module. Default busin
 Compose launches no updater and mounts no Docker/control socket or legacy updater
 maintenance volume. Manual site maintenance works independently; its GUI cannot
 reopen the native offline migration fence. Reviewed releases are deployed by the
-operator with Compose after compatible database backup/migration checks. Historical
-updater source, image-publication contracts and user-owned external CD scripts are
-retained for recovery/tooling, not exposed through the business runtime. See
+operator with Compose after compatible database backup/migration checks. The update controller implementation, image and retired CD entry points are removed. Only explicit host-side operator commands manage upgrades. See
 [operator release procedure](docs/master-self-release.md).
 
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
@@ -235,7 +233,7 @@ registry/DNS observations do not establish public inbound reachability or write
 permission. Diagnostics use allowlisted facts, excluding arbitrary raw peer
 summaries, errors, credentials, pairing envelopes and signed URLs.
 
-Only Gin/Go may serve business APIs or run the updater. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
+Only Gin/Go may serve business APIs or provide operator CLI commands. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
 No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.
 
@@ -256,7 +254,7 @@ exceptions and manual DNS/no-mail tasks. These changes are not a penetration-tes
 certification. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
-Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Updater/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. CD notification waits for every public image. Deployers pin manifest digests and validate runtime/schema/source/platform before use; only confirmed absent versions/platforms permit bounded immutable-source compilation. Auth/network/proof failures stop, rather than fall back.
+Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. Fresh-install alias promotion waits for both public images. Deployers pin manifest digests and validate runtime/schema/source/platform before use; only confirmed absent versions/platforms permit bounded immutable-source compilation. Auth/network/proof failures stop, rather than fall back.
 
 Wiki operations guidance is maintained in the separate GitHub Wiki repository. Do not track docs/wiki in this repository.
 
@@ -287,7 +285,7 @@ Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
 The owner retired RN preproduction and its external CD on 2026-10-11.
-`STAGING_CD_ENABLED=false` suppresses notifications until a separately provisioned
+There is no staging notification or update receiver. A separately provisioned
 preproduction environment exists. No live preproduction proof can be claimed.
 Production storage retains its own state, identity, secrets and media.
 Native immutable image builds are bounded to one CPU and 1 GiB with no extra

@@ -170,7 +170,7 @@ class TrustedNativePublishTests(unittest.TestCase):
     def test_oci_wrong_labels_platform_or_revision_never_reaches_writer(self):
         for mutation in (lambda conf: conf.update(os='windows'), lambda conf: conf.update(architecture='arm64'),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.revision': 'e'*40}),
-                         lambda conf: conf['config']['Labels'].update({'frontiercloud.component': 'updater'}),
+                         lambda conf: conf['config']['Labels'].update({'frontiercloud.component': 'invalid-component'}),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.schema-generation': '2'}),
                          lambda conf: conf['config']['Labels'].update({'frontiercloud.release-manifest-version': '0'})):
             entries, _digest = oci_payload(mutate=mutation)

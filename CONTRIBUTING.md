@@ -20,11 +20,11 @@ The repository can fail an invalid PR topology, but repository-local code cannot
 3. Change the smallest coherent surface. Do not revive retired compatibility/product features to make a test pass.
 4. Add or strengthen regression coverage for every bug fix and every new invariant.
 5. Run the bounded source CI checks and native acceptance on the development host. A narrow unit test is not release evidence; heavyweight acceptance must never be added to hosted CI.
-6. Await successful dev CI, event-triggered preproduction CD completion, matching live revisions and relevant staging behavior before opening the authorized release PR. Use the fixed dev-to-main promotion pair and configured GitHub automatic review within existing quota. Merge requires owner authorization and successful exact-source validation; production upgrade is a separate maintainer action.
+6. Await successful dev CI, relevant staging behavior when a staging environment is available before opening the authorized release PR. Use the fixed dev-to-main promotion pair and configured GitHub automatic review within existing quota. Merge requires owner authorization and successful exact-source validation; production upgrade is a separate maintainer action.
 
 On 2026-10-11 the owner retired the RN preproduction deployment and its external
 CD receiver until a separate preproduction IP is available. During this explicit
-exception, `STAGING_CD_ENABLED=false` disables notification and no live staging
+exception, the CD receiver and notification are removed and no live staging
 acceptance can be claimed. Exact-source development-host acceptance and successful
 dev CI remain required; report the missing staging gate in the PR. This exception
 does not authorize merging a PR or upgrading the production Master.
@@ -72,7 +72,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 ## Validation workflow
 
-Hosted **test CI** is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial test-job chains. Do not raise this budget or use background jobs to evade it. The normal delivery exception is the separate default-main `publish-images.yml`: a completed successful exact-source CI event gates its trusted plan, parallel compilation without package-write credentials (ten minutes per component job) and isolated trusted publication (three minutes per component job), followed by a three-minute signed CD notification. Only these explicit delivery dependencies are allowed, not serial test chains. No tests/fleet/databases/browser acceptance belong in compilation workflows. Normal credential-bearing jobs never execute candidate code. See [image delivery](docs/public-image-delivery.md).
+Hosted **test CI** is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial test-job chains. Do not raise this budget or use background jobs to evade it. The normal delivery exception is the separate default-main `publish-images.yml`: a completed successful exact-source CI event gates its trusted plan, parallel compilation without package-write credentials (ten minutes per component job) and isolated trusted publication (three minutes per component job), followed by a three-minute verified main alias promotion. Only these explicit delivery dependencies are allowed, not serial test chains. No tests/fleet/databases/browser acceptance belong in compilation workflows. Normal credential-bearing jobs never execute candidate code. See [image delivery](docs/public-image-delivery.md).
 
 The owner separately authorized one first-activation exception:
 `bootstrap-images.yml` for **PR #5 only**, triggered by an owner-applied
@@ -86,20 +86,19 @@ duplicate runs and future PRs cannot use it. Staging acceptance remains a merge
 gate even though PR #5 must exist before this first label-triggered publication.
 
 Only exact publish jobs and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
-compile and notify jobs do not. Public packages must grant `FrontierCloud-Gin`
+compile jobs do not. Public packages must grant `FrontierCloud-Gin`
 Actions Write while anonymous image pulls require no credentials. Personal PATs
 and a publisher Environment are not required; old unreferenced ones may remain
 without being used or triggering deployments. Repository workflow writers are
 trusted to request package write permissions in other workflows: do not present
 this model as preventing every dev-authored workflow from replacing old tags.
-The CD signing secret remains exclusively in `staging-cd-main`, restricted to the
-exact main Branch rule, with no dev-accessible repository/organization copy.
+No publication job accesses deployment signing secrets or an external CD receiver.
 External permissions must be verified separately from source tests. Record
 actual bootstrap CI completion and public image proofs before claiming initial
 activation; do not direct-write main or merge before staging acceptance to
 sidestep that bootstrap boundary.
 
-Run native unit/race, actual SQLite/MySQL business/API, deployment and updater tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
+Run native unit/race, actual SQLite/MySQL business/API, deployment and operator upgrade tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
 
 The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers both database combinations; Master-only upgrade/rollback must leave storage versions and identities unchanged; whole-fleet release synchronization is retired. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
 

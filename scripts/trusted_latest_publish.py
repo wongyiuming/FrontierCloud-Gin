@@ -7,11 +7,11 @@ import urllib.parse
 
 if __package__:
     from . import registry_images as registry, trusted_native_publish as publication
-    from .trusted_staging_notify import publication_jobs
+    from .publication_proof import publication_jobs
 else:
     import registry_images as registry
     import trusted_native_publish as publication
-    from trusted_staging_notify import publication_jobs
+    from publication_proof import publication_jobs
 
 require = publication.require
 

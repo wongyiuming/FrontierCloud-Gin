@@ -1,4 +1,4 @@
-package updater
+package nativeacceptance
 
 import (
 	"bytes"
@@ -345,7 +345,6 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		return map[string]any{sharedName: map[string]any{"Aliases": []string{alias}}}
 	}
 	native := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE")
-	agent := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_AGENT_IMAGE")
 	edge := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_EDGE_IMAGE")
 
 	commonSecrets := filepath.Join(root, "mysql-secrets")
@@ -379,7 +378,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if err := os.Mkdir(folder, 0755); err != nil {
 			t.Fatal(err)
 		}
-		for _, child := range []string{"data", "secrets", "maintenance", "updater-control", "certificate-state", "certificate-runtime", "certificate-published", "traffic-runtime"} {
+		for _, child := range []string{"data", "secrets", "certificate-state", "certificate-runtime", "certificate-published", "traffic-runtime"} {
 			if err := os.Mkdir(filepath.Join(folder, child), 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -396,9 +395,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 
 		if i == 0 {
 			binds = append(binds, filepath.Join(folder, "traffic-runtime")+":/run/frontiercloud-traffic:ro")
-			control := filepath.Join(folder, "updater-control")
-			create(label+"-updater", agent, []string{"serve"}, []string{"UPDATER_PROJECT=" + project, "RELEASE_BRANCH=main", "UPDATER_DATA_DIRECTORY=/data"}, []string{control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
-			binds = append(binds, control+":/run/frontiercloud-updater:ro")
+
 		} else {
 			port, profile := "8443", "relay"
 			if i <= 2 {
@@ -697,8 +694,8 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	}
 	t.Log("real native matrix SQLite/MySQL revocation and re-pair passed", kind)
 	// This is business/control acceptance, not fleet release execution. Native
-	// sites use actual compiled idle agents on their private control sockets.
-	// The normal audited action must not defeat unknown agents or offline fences.
+	// sites use the normal manual availability control.
+	// Admin actions must never defeat native offline fences.
 	perform(master, "POST", "/site/maintenance", map[string]any{"enabled": false})
 	deadline = time.Now().Add(60 * time.Second)
 	for {
