@@ -1,0 +1,7 @@
+FAILED: private recovery material retained at /home/wyium/fc-operations-20261012-01a13082/pr14-1fe-native-ops/fc-ops-recovery-3b25fde766844cf1-kg3tm_62
+Traceback (most recent call last):
+  File "/home/wyium/fc-operations-20261012-01a13082/exact-source-1fe1fbe/tests/operator_recovery_acceptance.py", line 403, in <module>
+    evidence = run(options)
+  File "/home/wyium/fc-operations-20261012-01a13082/exact-source-1fe1fbe/tests/operator_recovery_acceptance.py", line 267, in run
+    raise AssertionError('native upgrade failed; private transcript retained at ' + str(transcript))
+AssertionError: native upgrade failed; private transcript retained at /home/wyium/fc-operations-20261012-01a13082/pr14-1fe-native-ops/fc-ops-recovery-3b25fde766844cf1-kg3tm_62/upgrade-test.log

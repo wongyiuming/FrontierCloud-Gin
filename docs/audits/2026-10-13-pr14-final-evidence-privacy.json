@@ -1,0 +1,8 @@
+{
+  "scope": "All remote public audit copies checked against retained fixture secret/key files and owned operator Docker volumes; private source/runtime logs are not exported",
+  "secret_files_examined": 2376,
+  "distinct_secret_byte_values": 1237,
+  "public_evidence_files_examined": 558,
+  "violation_paths": [],
+  "passed": true
+}

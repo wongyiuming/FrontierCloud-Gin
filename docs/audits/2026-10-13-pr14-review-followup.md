@@ -67,3 +67,36 @@ identity/secret/stable-table digests preserved, generation 7 reached while fence
 and original media ID/actual HTTP Range verified after opening. Its target binary
 is a private working-source override, so this is not public release proof.
 Production has only been inventoried read-only; no production upgrade is claimed.
+
+## Final native operator validation
+
+The immutable, clean `1fe1fbe7becc336e611a3833066bae0cb5bd9e6a` clone passes
+full Go race (`pr14-1fe1fbe-go-race`) and builds the runtime/operator binaries.
+`pr14-1fe1fbe-source-proof.json` records image/binary/module/input hashes.
+The first full run's missing-manual Git fixture failure is retained separately;
+the corrected fixture passes in the exact clone and selected adapter race run.
+
+Actual final native gates pass:
+
+| Evidence suffix (`2026-10-13-pr14-1fe1fbe-`) | Executed scope |
+| --- | --- |
+| `native-sqlite-second` / `native-mysql-second` | Actual 6→7 preparation, already-prepared upgrade resume, explicit opening, cold/logical backup, CLI restore, post-removal opening-journal reconciliation, original NodeID/media ID/priority and HTTP Range |
+| `native-failure` | Injected target preparation failure after real native backup; recovery retained and native gate closed, no DDL rollback |
+| `native-set` | Actual two-node coordinated cold capture/restoration, sealed relationships, original identities/vault keys, managed reads/HTTP Range, Master-last opening and another verified coordinated backup |
+| `native-install` | Actual Master SQLite and Direct local-CA installation; prepared receipt finalization preserves identity and performs no replacement pull; recreation preserves identity/key/pins |
+| `native-legacy` | Actual public generation-4 source, exact private generation-7 target binary, cold recovery, preserved stable tables/secrets/identity, original media ID and HTTP Range after opening |
+
+These remain isolated private-image/publication adapters; no public target
+release or production update is claimed. The native upgrade adapter now maps
+unchanged recorded private infrastructure IDs too, because resume verifies all
+approved pins. Its first rejection is retained in `native-sqlite.txt`; the
+corrected adapter's race tests and both second native runs pass. This adapter
+change does not broaden production registry admission.
+
+Latest review's current-generation documentation finding is corrected to 7;
+generation 6 is historical, and future generations above 7 are rejected.
+Lightweight source discovery passes 202 cases with three explicit environment
+skips. The final privacy check finds no private key/retained fixture secret bytes
+in 558 remote public evidence files. Prior migration matrix/browser/quiet-queue/
+retirement evidence retains its original source scope: these operator fixes do
+not claim that the older images contain new operator code.

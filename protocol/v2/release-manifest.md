@@ -6,12 +6,12 @@ whole-cluster release dispatch are retired. Ordinary business deployments do not
 mount manifest metadata, launch an updater or distribute release jobs to storage.
 See [operator-managed releases](../../docs/master-self-release.md).
 
-The current native schema gate is generation **6**. The unchanged
+The current native schema gate is generation **7**. The unchanged
 vectors/release-manifest.json is the generation-2 historical fixture, and
-vectors/release-manifest-generation3.json, generation4.json and generation5.json retain historical data.
+vectors/release-manifest-generation3.json, generation4.json, generation5.json and generation6.json retain historical data.
 vectors/release-manifest-generation7.json defines current acceptance, together
 with schemas/release-manifest.json. Current tooling rejects old generations
-and future generation 7. Protocol 2 is not a promise of database compatibility
+and future generations above 7. Protocol 2 is not a promise of database compatibility
 across generations, and historical digests do not authorize reverse migrations.
 
 The retained manifest has a common release_version, protocol,

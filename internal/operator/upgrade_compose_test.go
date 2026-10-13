@@ -181,6 +181,9 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 			component = "nginx"
 		}
 		if component == "" {
+			// The isolated fixture pins infrastructure by local image ID too.
+			// Resume validates/pulls every recorded pin, including unchanged ones.
+			runner.images[image] = image
 			continue
 		}
 		for _, target := range []string{strings.Repeat("a", 40), strings.Repeat("b", 40)} {
