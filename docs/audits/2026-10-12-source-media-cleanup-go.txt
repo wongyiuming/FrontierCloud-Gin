@@ -1,0 +1,67 @@
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt
+2026/10/12 19:59:54 ERROR committed media delete cleanup deferred operation=3e1178de67161181af25cc97131cd2c3 error="lost private cleanup receipt"
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending
+=== RUN   TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed
+--- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay (3.06s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/none (0.94s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/corrupt (0.29s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/replaced_inode (0.29s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/audit (0.33s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/lost_ack (0.30s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/cleanup_receipt (0.31s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_pending (0.32s)
+    --- PASS: TestMigrationSourceMediaCleanupBytesAuditRollbackAndReplay/crash_committed (0.29s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	4.093s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	4.991s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.005s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	24.367s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	18.703s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	5.219s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

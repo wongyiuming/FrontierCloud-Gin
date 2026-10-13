@@ -55,3 +55,22 @@ func TestSharedCapabilityNegotiationVectors(t *testing.T) {
 		t.Fatal("caller modified local advertisement")
 	}
 }
+
+func TestMigrationRequiresExplicitPeerAdvertisement(t *testing.T) {
+	for _, legacy := range []map[string]any{
+		{}, {"capabilities": []string{}}, {"capabilities": BaselineCapabilities()},
+	} {
+		if _, err := NegotiateCapabilities(legacy, "resource-migration-direct-v1"); err == nil {
+			t.Fatal("legacy or explicit non-migration peer was authorized")
+		}
+	}
+	current := AdvertisedCapabilities()
+	selected, err := NegotiateCapabilities(map[string]any{"capabilities": current}, "resource-migration-direct-v1")
+	if err != nil || !reflect.DeepEqual(selected, current) {
+		t.Fatal("current explicit capabilities did not negotiate", selected, err)
+	}
+	current[0] = "mutated"
+	if AdvertisedCapabilities()[0] == "mutated" {
+		t.Fatal("caller changed process capabilities")
+	}
+}

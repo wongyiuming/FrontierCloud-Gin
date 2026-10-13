@@ -44,6 +44,10 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		"protocol/contract.txt": "committed\n", "static/index.txt": "committed\n",
 		".env": "private-tracked-secret\n", "data/key": "private-tracked-key\n",
 		"app/main.py": "excluded reference runtime\n", "updater/server.py": "excluded reference updater\n",
+		"docker-compose.yaml": "services: {}\n", "docker-compose.gin-mysql.yaml": "services: {}\n",
+		"docker-compose.storage.yaml": "services: {}\n", ".env.example": "SERVER_NAME=fixture.invalid\n",
+		".env.storage.example": "SERVER_NAME=fixture.invalid\n", "docs/operator-manual.md": "Operator fixture\n",
+		"docs/operator-upgrade.md": "Approved upgrade fixture\n", "docs/operator-recovery-sets.md": "Recovery set fixture\n",
 	}
 	for name, data := range fixture {
 		write(name, data, 0600)
@@ -85,6 +89,8 @@ test "$(cat "$dest/cmd/entry.txt")" = committed
 test "$(cat "$dest/Dockerfile")" = FROM\ committed-native
 test "$(cat "$dest/Dockerfile.gin")" = FROM\ committed-native
 test "$(cat "$dest/updater/Dockerfile.gin")" = FROM\ committed-updater
+test "$(cat "$dest/docs/operator-upgrade.md")" = Approved\ upgrade\ fixture
+test "$(cat "$dest/docs/operator-recovery-sets.md")" = Recovery\ set\ fixture
 for excluded in .env data .git app updater/server.py cmd/untracked.txt; do
   test ! -e "$dest/$excluded"
 done

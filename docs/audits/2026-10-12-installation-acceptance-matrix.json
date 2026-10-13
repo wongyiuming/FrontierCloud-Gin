@@ -1,0 +1,78 @@
+{
+  "scope": "Per-case aggregation of actual compiled-fc protection and private real-Docker Install evidence; not a new execution",
+  "accepted_case_matrix_complete": true,
+  "public_release_first_installation_verified": false,
+  "publication_proof_and_private_image_resolution_injected_for_success": true,
+  "guard_cases": [
+    "dns",
+    "occupied-port",
+    "database",
+    "identity",
+    "changed-mount",
+    "project-drift",
+    "owned-volume"
+  ],
+  "private_cases": [
+    {
+      "profile": "business",
+      "database": "sqlite",
+      "case": "success",
+      "source": "2026-10-12-installation-native-fifth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-master-sqlite-2aded81bcc"
+    },
+    {
+      "profile": "business",
+      "database": "mysql",
+      "case": "success",
+      "source": "2026-10-12-installation-native-fifth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-master-mysql-7bb0fa8019"
+    },
+    {
+      "profile": "direct",
+      "database": "sqlite",
+      "case": "success",
+      "source": "2026-10-12-installation-native-fifth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-direct-09a026f4fd"
+    },
+    {
+      "profile": "relay",
+      "database": "sqlite",
+      "case": "success",
+      "source": "2026-10-12-installation-native-fifth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-relay-a84309b902"
+    },
+    {
+      "profile": "direct",
+      "database": "sqlite",
+      "case": "pull-failure",
+      "source": "2026-10-12-installation-native-fifth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-pull-failure-3f669e1b5e"
+    },
+    {
+      "profile": "relay",
+      "database": "sqlite",
+      "case": "certificate-failure",
+      "source": "2026-10-12-installation-native-sixth.json",
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-sixth/fc-ops-install-suite-ueaqsaod/fc-ops-install-certificate-failure-aac1519476"
+    }
+  ],
+  "sources": {
+    "guards": {
+      "file": "2026-10-12-installation-native-third.json",
+      "sha256": "8ee6ff286161d63e9d8b1c0d3b45f34b41f5e0633f15159094b4f9145c467d27",
+      "whole_run_passed": false
+    },
+    "profiles_and_pull": {
+      "file": "2026-10-12-installation-native-fifth.json",
+      "sha256": "54b47ed556508d8832fac454ccae97ee4090baafb58b15ee7af55584f4b312be",
+      "whole_run_passed": false
+    },
+    "certificate_rejection": {
+      "file": "2026-10-12-installation-native-sixth.json",
+      "sha256": "e01782664f3f8bafe7211aaab6bad815e2e9eaa86d7df7eb71db404082ad3ca3",
+      "whole_run_passed": true
+    }
+  },
+  "partial_run_explanation": "Third run guard cases passed before a now-corrected Storage fixture assertion; fifth run four profiles and pull failure passed before its obsolete CA-wait case was explicitly stopped. Only the sixth run certificate-rejection case is used for final rejection evidence.",
+  "cleanup": "Completed private case stopped containers and empty project networks removed only after ownership and log retention checks; named volumes, data, secrets and receipts retained."
+}

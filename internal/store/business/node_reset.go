@@ -3,6 +3,7 @@ package business
 import (
 	"context"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"time"
 )
 
 // Reset rotates only local identity. Encrypted revocation tombstones and cold
@@ -26,18 +27,32 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 			return store.ErrNodeState
 		}
 		queries := []string{
+			"SELECT COUNT(*) FROM node_relationships WHERE state='retiring'",
 			"SELECT COUNT(*) FROM global_media_objects",
 			"SELECT COUNT(*) FROM media_delete_operations WHERE state<>'rename_done'",
 			"SELECT COUNT(*) FROM cluster_upload_sessions WHERE state NOT IN ('complete','cancelled')",
 			"SELECT COUNT(*) FROM cluster_storage_members WHERE reserved_bytes<>0",
 			"SELECT COUNT(*) FROM cluster_worker_jobs WHERE state<>'complete'",
 			"SELECT COUNT(*) FROM karaoke_users WHERE status='deleting'",
+			"SELECT COUNT(*) FROM migration_tasks WHERE state NOT IN ('completed','cancelled')",
+			"SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0",
+			"SELECT COUNT(*) FROM migration_scopes",
+			"SELECT COUNT(*) FROM migration_drains",
+			"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('deleted','aborted')",
+			"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
 		}
 		if old.Role != "Standalone" {
 			queries = append(queries, "SELECT COUNT(*) FROM karaoke_recordings WHERE state<>'deleted'")
 		}
 		if old.Role == "Follower" {
 			queries = append(queries, "SELECT COUNT(*) FROM media_objects WHERE object_kind IN ('audio','video') OR (object_kind='lyric' AND media_path<>'lyrics/default.lrc')")
+		}
+		var reads int
+		if err := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_read_leases WHERE expires_at>?", time.Now().Unix()).Scan(&reads); err != nil {
+			return err
+		}
+		if reads != 0 {
+			return store.ErrMigrationState
 		}
 		for _, query := range queries {
 			var count int64

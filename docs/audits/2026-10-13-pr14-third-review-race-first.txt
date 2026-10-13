@@ -1,0 +1,17 @@
+--- FAIL: TestRecoverySetResumesPartialPublicOpening (0.25s)
+    interrupted_operations_test.go:111: member activation failed; recovery set and individual journals retained, no automatic rollback or public reopening
+2026/10/13 18:49:10 http: TLS handshake error from 127.0.0.1:33986: remote error: tls: bad certificate
+--- FAIL: TestRecoverySetActivatesAndOpensMasterLastAfterWholeSetVerification (0.25s)
+    recovery_set_activate_test.go:119: member activation failed; recovery set and individual journals retained, no automatic rollback or public reopening
+--- FAIL: TestRecoverySetMarkerCleanupResumesAfterInterrupt (0.26s)
+    recovery_set_activate_test.go:208: member activation failed; recovery set and individual journals retained, no automatic rollback or public reopening
+--- FAIL: TestRestoreActivationFailureVerifiesFenceAfterCallerCancellation (0.82s)
+    --- FAIL: TestRestoreActivationFailureVerifiesFenceAfterCallerCancellation/verified-stop (0.41s)
+        restore_failure_test.go:60: restore failed to preserve an accurate cancellation-safe fence creating_manual restore marker creation evidence changed
+    --- FAIL: TestRestoreActivationFailureVerifiesFenceAfterCallerCancellation/unverified-stop (0.41s)
+        restore_failure_test.go:60: restore failed to preserve an accurate cancellation-safe fence creating_manual restore marker creation evidence changed
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	9.313s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	1.944s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.125s
+FAIL

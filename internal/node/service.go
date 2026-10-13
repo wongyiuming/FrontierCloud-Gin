@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
@@ -37,7 +38,13 @@ type Service struct {
 	certificateDispatch sync.Mutex
 	stunPort            atomic.Int64
 	storageTransport    string
+	retirementGate      *retirementRequestGate
+	traffic             *businesstraffic.Monitor
 }
+
+// Startup-only: the HTTP process owns one monitor shared by control and data.
+func (s *Service) ConfigureBusinessTraffic(m *businesstraffic.Monitor) { s.traffic = m }
+func (s *Service) BusinessTraffic() businesstraffic.View               { return s.traffic.Snapshot() }
 
 var ErrAuthentication = errors.New("invalid relationship authentication")
 
@@ -281,7 +288,7 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 			return nil, err
 		}
 	}
-	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.BaselineCapabilities()}
+	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.AdvertisedCapabilities()}
 	summary["stun_port"] = s.stunPort.Load()
 	if s.storageTransport != "" {
 		summary["storage_transport"] = s.storageTransport
@@ -323,7 +330,7 @@ func (s *Service) SignedIdentity(ctx context.Context, challenge string) (Envelop
 	if err != nil {
 		return Envelope{}, err
 	}
-	payload := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": protocol.BaselineCapabilities()}
+	payload := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": protocol.AdvertisedCapabilities()}
 	if s.storageTransport != "" {
 		payload["storage_transport"] = s.storageTransport
 	}
@@ -516,6 +523,9 @@ func (s *Service) Call(ctx context.Context, relation store.Relationship, route s
 	return s.transport.Request(ctx, relation.Endpoint, route, method, value, relation.ID, credential)
 }
 func (s *Service) Authenticate(ctx context.Context, headers http.Header, method, path string, body []byte, pending, revoked bool) (store.Relationship, error) {
+	return s.authenticate(ctx, headers, method, path, body, pending, revoked, false)
+}
+func (s *Service) authenticate(ctx context.Context, headers http.Header, method, path string, body []byte, pending, revoked, retirement bool) (store.Relationship, error) {
 	values := map[string]string{}
 	for _, name := range []string{"X-Node-Relationship", "X-Node-Time", "X-Node-Nonce", "X-Node-Signature"} {
 		if len(headers.Values(name)) != 1 {
@@ -539,7 +549,16 @@ func (s *Service) Authenticate(ctx context.Context, headers http.Header, method,
 	if err != nil {
 		return store.Relationship{}, ErrAuthentication
 	}
-	result, err := s.repo.ReserveNodeNonce(ctx, relation.ID, nonce, relation.Credential, now, pending, revoked)
+	var result store.Relationship
+	if retirement {
+		repo, ok := s.repo.(store.RetirementFenceRepository)
+		if !ok {
+			return result, ErrAuthentication
+		}
+		result, err = repo.ReserveRetirementNonce(ctx, relation.ID, nonce, relation.Credential, now, revoked)
+	} else {
+		result, err = s.repo.ReserveNodeNonce(ctx, relation.ID, nonce, relation.Credential, now, pending, revoked)
+	}
 	if errors.Is(err, store.ErrNodeState) {
 		err = ErrAuthentication
 	}
@@ -561,10 +580,29 @@ func (s *Service) Status(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	relations, err := s.repo.Relationships(ctx, false)
+	relations, err := s.repo.Relationships(ctx, true)
 	if err != nil {
 		return nil, err
 	}
+	visible := make([]store.Relationship, 0, len(relations))
+	for _, relation := range relations {
+		if relation.State == "revoked" {
+			repository, ok := s.repo.(store.RetirementFenceRepository)
+			if !ok {
+				continue
+			}
+			member := relation.PeerID
+			if row.Role == "Follower" {
+				member = row.ID
+			}
+			receipt, e := repository.RetirementFence(ctx, relation.ID, member)
+			if e != nil || receipt.CompletedAt == 0 {
+				continue
+			}
+		}
+		visible = append(visible, relation)
+	}
+	relations = visible
 	result := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "protocol": protocol.Version, "app_version": AppVersion, "relationships": relations}
 	if s.certificateStatus != nil {
 		result["certificate"] = s.certificateStatus()

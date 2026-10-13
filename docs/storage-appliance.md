@@ -22,14 +22,19 @@ security publisher or business-backup builder.
 
 ## Fresh installation
 
-1. Build a reviewed exact `main` revision from `wongyiuming/FrontierCloud-Gin`.
-2. Copy `.env.storage.example` to `.env` and replace every placeholder.
+1. Extract the public operator bundle with `scripts/get-fc.sh`; see the
+   [operator manual](operator-manual.md). No source checkout or host compilation
+   environment is required. Explicit developer builds remain separate.
+2. Copy `.env.storage.example` to `.env` and set the domain and endpoint.
 3. Point the node domain at this host and allow public HTTP-01 on TCP 80.
    TLS_ENABLED=true automatically issues and persists its certificate; no
    certificate paths, external tools or manually prepared keys are required.
-4. Run `bash scripts/deploy-storage.sh`. This builds, waits for HTTPS readiness
-   and prints a signed one-use pairing package. Import it on the Master within
-   five minutes. Treat the package as a temporary credential, not a public log.
+4. Run `./fc --role storage doctor`, then `./fc install storage`. The source-repo
+   `scripts/deploy-storage.sh` delegates to the same client. Installation refuses
+   existing state, verifies public images and pins digests before initialization.
+   After HTTPS readiness, retrieve the one-use pairing package privately with
+   `docker compose -f docker-compose.storage.yaml -f .fc-images.json exec -T web /app/frontiercloud storage-pair`.
+   Import it on the Master within five minutes. Treat it as a temporary credential.
 5. Master Admin sets storage enablement/capacity and backup enablement.
    Direct/Relay follows the signed deployment transport profile; changing
    transport requires an explicit quiescent redeployment and endpoint handover.

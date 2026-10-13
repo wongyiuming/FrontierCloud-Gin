@@ -1,0 +1,4 @@
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+--- PASS: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.26s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.277s

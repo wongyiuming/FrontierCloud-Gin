@@ -90,13 +90,23 @@ func (s *Service) stage(ctx context.Context, reader io.Reader, maximum int64, pr
 	// Startup recovery may overlap another worker's active multipart request.
 	// Establish a process lease before making the stage visible, while holding
 	// the volume's shared lease. No volume lease is held during network reads.
-	volumeRelease, err := s.acquire(ctx, false)
+	// An owned upload must establish its durable reservation before any file
+	// becomes visible. The exclusive lease serializes that admission with the
+	// retirement barrier; a request authenticated before fencing cannot create
+	// even an empty stage after the final scan has completed.
+	volumeRelease, err := s.acquire(ctx, prepare != nil)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.ready(); err != nil {
 		volumeRelease()
 		return nil, err
+	}
+	if prepare != nil {
+		if err := prepare(stage); err != nil {
+			volumeRelease()
+			return nil, err
+		}
 	}
 	leaseFile, err := s.root.OpenFile(".upload-"+id+".lease", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
@@ -114,13 +124,6 @@ func (s *Service) stage(ctx context.Context, reader io.Reader, maximum int64, pr
 	if err != nil {
 		stage.Close()
 		return nil, err
-	}
-	if prepare != nil {
-		if err := prepare(stage); err != nil {
-			f.Close()
-			stage.Close()
-			return nil, err
-		}
 	}
 	digest := sha256.New()
 	head := &headWriter{}

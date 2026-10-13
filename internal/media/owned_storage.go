@@ -103,11 +103,7 @@ func (s *Service) ownedUpload(ctx context.Context, relationship string, object s
 	}
 	operation := ""
 	stage, err := s.stage(ctx, reader, expected, func(stage *Stage) error {
-		release, err := s.acquire(ctx, true)
-		if err != nil {
-			return err
-		}
-		defer release()
+		// stage holds the native exclusive lease and has not created files yet.
 		if err = s.ready(); err != nil {
 			return err
 		}

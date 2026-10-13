@@ -26,6 +26,13 @@ require exact-source proof. Bootstrap history alone is not release proof.
 
 ## Quick start
 
+For the guarded installation path without a source checkout, use the public
+[operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
+one published main release, configure the domain and run `./fc doctor` followed
+by `./fc install master` (or `storage`). Its receipt pins all component digests
+and rejects existing state. Bundle availability requires this change's normal
+reviewed main publication; no publication is claimed by the source checkout.
+
 For a fresh HTTPS node, point public DNS at this host and create `.env` with
 only these two values (replace the example hostname):
 
@@ -61,9 +68,7 @@ For first Admin access, read the existing key from the running deployment:
 docker compose exec -T web cat /run/frontiercloud-secrets/admin_key
 ```
 
-Use this deployment's own Compose directory and persistent secrets. RN
-preproduction and its external CD receiver were retired on 2026-10-11; no
-live preproduction deployment is currently available.
+Use this deployment's own Compose directory and persistent secrets.
 
 The two supported `.env` deployment selections are documented in
 [Native deployment](protocol/v2/native-deployment.md). Changing the runtime or
@@ -84,7 +89,8 @@ there are no upload, path, manual renewal or automatic-renewal toggle controls.
 Storage exports are encrypted to a fresh browser key before crossing the Master.
 
 Fresh storage deployments use `.env.storage.example` and
-`docker-compose.storage.yaml` alone. Run `bash scripts/deploy-storage.sh`.
+`docker-compose.storage.yaml` alone. Use `./fc install storage` from the public
+operator bundle; the repository's `scripts/deploy-storage.sh` delegates to it.
 `STORAGE_TRANSPORT=direct` uses public HTTPS 443. Relay deployments explicitly set
 `STORAGE_TRANSPORT=relay`, `STORAGE_PORT=8443` and the corresponding HTTPS endpoint;
 8443 carries authenticated Master communication without idle listeners on 80/443.
@@ -99,26 +105,6 @@ Detailed configuration, generated-secret recovery, first Admin access, role init
 Online upgrade and rollback controls have been removed from AdminGUI and the
 business API. Deploy reviewed releases through Compose after a database backup
 and compatibility check; see [operator release procedure](docs/master-self-release.md).
-
-When an operator provisions independent preproduction, its
-[bounded local CD controller](docs/staging-cd.md) receives signed wakeups only
-from a default-`main` trusted workflow after successful exact-`dev` test CI and
-all three public image proofs. Publication itself also executes immutable main
-code: candidate compilation has no package-write credentials, and the isolated
-publisher consumes verified OCI data without running candidate code. Only the
-exact publishers and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan, compilation
-and notification do not. Each public package grants `FrontierCloud-Gin` Actions
-Write access. Repository workflow writers are trusted to request package write
-permissions; this model does not isolate them from publishing package versions.
-The signing secret belongs only to the
-`staging-cd-main` Environment restricted to the `main` branch, not to repository
-secrets or dev compilation jobs. Initial activation uses an explicitly
-owner-authorized, exact-SHA label on PR #5 for image-only CI compilation and
-publication, followed by a separately verified operator staging wakeup. This
-one-time PR workflow reads no deployment secret and cannot deploy production.
-The normal workflow becomes active after promotion to default main; no polling
-timer or direct main write substitutes for `dev -> main` promotion. Production
-remains manual. See the first-activation gates in [staging CD](docs/staging-cd.md).
 
 The [public security baseline](docs/public-security-baseline.md) documents
 nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and
@@ -157,6 +143,12 @@ be same-repository, reviewed and backed by exact source CI; synchronize its
 implementation branch after merge. Database selection never changes release profile.
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before changing cross-cutting behavior.
+
+Maintainers use the separate [image delivery](docs/public-image-delivery.md)
+and [staging CD](docs/staging-cd.md) procedures for publication permissions,
+exact-source CI and signed deployment gates. RN preproduction and its external
+CD receiver were retired on 2026-10-11; no live preproduction deployment is
+currently available. Production upgrades remain separate operator actions.
 
 See [validation scopes and promotion](docs/validation-and-promotion.md) for the
 distinction between source CI, executable regression and production deployment.

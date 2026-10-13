@@ -1,0 +1,8 @@
+=== RUN   TestScannerReportsHiddenNestedSparseAndLinksWithoutWriting
+--- PASS: TestScannerReportsHiddenNestedSparseAndLinksWithoutWriting (0.04s)
+=== RUN   TestScannerRejectsChangedDirectoryAndInvalidSequences
+--- PASS: TestScannerRejectsChangedDirectoryAndInvalidSequences (0.00s)
+=== RUN   TestScannerBoundsDeepPathsAndHonorsCancellation
+--- PASS: TestScannerBoundsDeepPathsAndHonorsCancellation (0.05s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.105s

@@ -17,18 +17,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/deployment"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	storeSQLite "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
 // HTTP routing, raw body HMAC and UseNumber decoding are real. The node
 // transport socket/private CA/hostname checks have separate real TLS tests.
-type clusterHTTP struct{ routers map[string]*gin.Engine }
+type clusterHTTP struct {
+	routers      map[string]*gin.Engine
+	peerReadHook func(string, any)
+}
 
 func (t *clusterHTTP) MediaRead(ctx context.Context, origin, objectID, resourceID, owner, token string, size int64) (io.ReadCloser, error) {
 	router := t.routers[origin]
@@ -98,6 +104,9 @@ func (t *clusterHTTP) Identity(ctx context.Context, origin, id, key, role string
 	return node.Peer{ID: text("node_id"), Endpoint: origin, PublicKey: public, Role: text("role"), AppVersion: text("app_version")}, nil
 }
 func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string, value any, relationship, credential string) (map[string]any, error) {
+	if route == "/internal/v1/resource-migration/peer-read" && t.peerReadHook != nil {
+		t.peerReadHook(origin, value)
+	}
 	router := t.routers[origin]
 	if router == nil {
 		return nil, errors.New("offline")
@@ -137,7 +146,11 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 	return result, err
 }
 
-func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty bool) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
+func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty bool, withRecordings ...bool) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
+	return clusterFixtureRoots(t, origin, transport, empty, withRecordings, nil)
+}
+
+func clusterFixtureRoots(t *testing.T, origin string, transport *clusterHTTP, empty bool, withRecordings []bool, nativeDirectories map[string]string) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
 	t.Helper()
 	router, db, dir, public := publicFixture(t, false)
 	if empty {
@@ -150,25 +163,115 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	if err := os.Mkdir(filepath.Join(dir, "recordings"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	recordingRoot, err := os.OpenRoot(filepath.Join(dir, "recordings"))
+	recordingDirectory := filepath.Join(dir, "recordings")
+	if nativeDirectories["recordings"] != "" {
+		recordingDirectory = nativeDirectories["recordings"]
+	}
+	recordingRoot, err := os.OpenRoot(recordingDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { recordingRoot.Close() })
-	identity, err := node.Initialize(context.Background(), db.Nodes(), filepath.Join(dir, "secrets"))
+	public.settings.SecretsDirectory = filepath.Join(dir, "secrets")
+	identity, err := node.Initialize(context.Background(), db.Nodes(), public.settings.SecretsDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if nativeDirectories["media"] != "" {
+		mountedDirectory := nativeDirectories["media"]
+		for _, category := range []string{"music", "vido", "lyrics"} {
+			if err := os.Mkdir(filepath.Join(mountedDirectory, category), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		mounted, err := media.New(mountedDirectory, db.Media(), identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		public.media = mounted
+		t.Cleanup(func() { mounted.Close() })
+	}
 	service := node.NewService(db.Nodes(), identity, transport)
+	// Protocol/fault fixtures use a settled idle observation; load gating has
+	// separate tests with a controlled clock and actual counted HTTP bodies.
+	settled := false
+	traffic := businesstraffic.New(func() time.Time {
+		if !settled {
+			return time.Now().Add(-businesstraffic.LowInterval)
+		}
+		return time.Now()
+	})
+	settled = true
+	service.ConfigureBusinessTraffic(traffic)
+	if nativeDirectories["retirement-provenance"] == "true" {
+		public.settings.DatabaseType = config.DatabaseSQLite
+		public.settings.SQLitePath, err = db.Pool().(store.RetirementNativeRepository).RetirementDatabasePath(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = deployment.Bind(context.Background(), public.settings, func(ctx context.Context) error {
+			return service.ValidateRetainedIdentity(ctx, public.settings.SecretsDirectory)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err = identity.RecordNativeRuntime(context.Background(), dir); err != nil {
+			t.Fatal(err)
+		}
+		release, err := public.media.ControlLease(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(release)
+	}
 	service.ConfigureVolumes(db.Pool(), public.media, recordingRoot)
 	public.media.ConfigureCluster(db.Nodes(), db.Pool(), service)
 	resolver, _ := network.New(nil)
 	public.settings.TLSEnabled = true
+	closeAdmission, err := RegisterNodeRetirementBarrier(router, public.settings, service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeAdmission() })
 	RegisterNodeIdentity(router, public.settings, resolver, service)
 	RegisterNodeControl(router, public.settings, resolver, service)
 	RegisterNodeBackups(router, public.settings, resolver, service, db.Backups())
 	RegisterNodeMedia(router, public.settings, resolver, service, public.media)
 	RegisterNodeStorage(router, public.settings, resolver, service, public.media)
+	RegisterNodeMigrationControl(router, public.settings, resolver, service, public.media, db.Pool().(store.MigrationPeerRepository))
+	var privateRecordings *recording.Storage
+	if len(withRecordings) > 0 && withRecordings[0] {
+		privateRecordings, err = recording.New(recordingRoot, db.Recordings(), db.Nodes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		RegisterNodeRecordings(router, public.settings, resolver, service, privateRecordings)
+		closeRetirement, e := RegisterNodeRetirementPeer(router, public.settings, resolver, service, db.Pool(), public.media, privateRecordings)
+		if e != nil {
+			t.Fatal(e)
+		}
+		t.Cleanup(func() { closeRetirement() })
+	}
+	closeMigration := RegisterNodeMigrationData(router, public.settings, resolver, service, public.media, privateRecordings, db.Pool().(store.MigrationPeerRepository))
+	t.Cleanup(func() { closeMigration() })
+	closeInventory, err := RegisterNodePhysicalInventory(router, public.settings, resolver, service, db.Pool().(store.PhysicalInventoryRepository), public.media.InventoryRoot(), recordingRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeInventory() })
+	var recordingReader managedContentReader
+	if privateRecordings != nil {
+		recordingReader = privateRecordings
+	}
+	closeContent, err := RegisterNodeContentObservation(router, public.settings, resolver, service, db.Pool().(store.ManagedPhysicalRepository), public.media, recordingReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeContent() })
+	closeBackupObservation, err := RegisterNodeBackupObservation(router, public.settings, resolver, service, db.Backups())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeBackupObservation() })
 	transport.routers[origin] = router
 	return router, db, dir, public, service
 }

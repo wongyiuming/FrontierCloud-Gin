@@ -41,7 +41,7 @@ func deletePaths(items []store.DeleteItem) []string {
 
 func (r *Repository) PrepareDelete(ctx context.Context, operation store.DeleteOperation, audit store.AdminAudit) error {
 	for _, item := range operation.Items {
-		if item.OwnedID != "" {
+		if item.OwnedID != "" || item.MigrationTask != "" || item.MigrationLogical != "" {
 			return nodeConflict("owned deletion requires quota-aware preparation")
 		}
 	}

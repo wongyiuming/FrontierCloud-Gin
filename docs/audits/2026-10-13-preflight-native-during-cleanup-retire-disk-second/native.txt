@@ -1,0 +1,14 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-sqlite-dd
+    native_migration_real_test.go:93: pairing private follower 1 go sqlite
+    native_migration_real_test.go:93: pairing private follower 2 go sqlite
+    native_migration_real_test.go:93: pairing private follower 3 go sqlite
+    native_migration_real_test.go:93: pairing private follower 4 go sqlite
+    native_migration_real_test.go:93: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-sqlite 2 Direct / 2 Relay
+    native_migration_real_test.go:93: real native five-node certificate observation and sequential UDP STUN passed go-sqlite
+    native_migration_real_test.go:93: real native matrix SQLite/MySQL revocation and re-pair passed go-sqlite
+    native_migration_real_test.go:93: native fixture awaits isolated Chromium result during /home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-native-matrix-qij0pzyq/go-sqlite-dd/go-sqlite/browser-during-fixture.json
+    native_migration_real_test.go:93: actual Chromium migration verification failed; private result retained
+--- FAIL: TestRealNativeMatrixFleetMigrations (118.54s)
+    --- FAIL: TestRealNativeMatrixFleetMigrations/go-sqlite-dd (118.54s)
+FAIL

@@ -12,6 +12,18 @@ native="frontiercloud-native-test:$image_prefix"
 agent="frontiercloud-native-agent-test:$image_prefix"
 edge="frontiercloud-edge-test:$image_prefix"
 driver="frontiercloud-native-driver-test:$image_prefix"
+test_name=TestRealNativeMatrixFleetControl
+test_timeout=50m
+if [[ "${FRONTIERCLOUD_TEST_NATIVE_MIGRATIONS:-}" == 1 ]]; then
+  test_name=TestRealNativeMatrixFleetMigrations
+  # Native source grace is one real hour. Only an explicitly selected case may
+  # wait for that interval; hosted CI never invokes this development gate.
+  if [[ "${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_WAIT_CLEANUP:-}" == 1 ]]; then
+    test -n "${FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER:-}"
+    test -n "${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE:-}"
+    test_timeout=100m
+  fi
+fi
 # Private images are retained on failure for diagnosis; no global pruning.
 if [[ -z "${FRONTIERCLOUD_TEST_NATIVE_MATRIX_IMAGE_PREFIX:-}" ]]; then
   DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --target build -t "$driver" .
@@ -38,8 +50,10 @@ docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 -e GOFLAGS=-p=1 --name "$pr
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_WORKSPACE="$work" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_PREFIX="$prefix" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER="${FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER:-}" \
+  -e FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE="${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE:-}" \
+  -e FRONTIERCLOUD_TEST_NATIVE_MIGRATION_WAIT_CLEANUP="${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_WAIT_CLEANUP:-}" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE="$native" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_AGENT_IMAGE="$agent" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_EDGE_IMAGE="$edge" \
   "$driver" \
-  go test -timeout 50m -count=1 -v ./internal/updater -run TestRealNativeMatrixFleetControl
+  go test -timeout "$test_timeout" -count=1 -v ./internal/updater -run "^$test_name$"

@@ -1,0 +1,2 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.066s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	(cached)

@@ -28,9 +28,16 @@ func ownedDeleteItem(operation store.DeleteOperation) (store.DeleteItem, error) 
 func (r *Repository) ownedDeleteAccounting(ctx context.Context, q queryer, member string, item store.DeleteItem) error {
 	var size int64
 	err := q.QueryRowContext(ctx, "SELECT expected_bytes FROM cluster_upload_sessions WHERE media_id=? AND storage_member_id=? AND state='complete'"+r.lock(), item.OwnedID, member).Scan(&size)
-	// Legacy Follower objects need explicit offline physical adoption first.
+	// Migration publication has its own durable accounting journal rather than
+	// an ordinary upload session. It still owns the same stable physical ID.
+	if errors.Is(err, sql.ErrNoRows) && item.MigrationTask != "" && item.MigrationLogical != "" {
+		err = q.QueryRowContext(ctx, "SELECT expected_bytes FROM migration_storage_journal WHERE task_id=? AND logical_id=? AND target_id=? AND object_id=? AND resource_kind='media' AND state='deleting'"+r.lock(), item.MigrationTask, item.MigrationLogical, member, item.OwnedID).Scan(&size)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
-		return nodeConflict("owned storage needs offline ledger adoption before refund")
+		err = q.QueryRowContext(ctx, "SELECT expected_bytes FROM migration_storage_journal WHERE target_id=? AND object_id=? AND resource_kind='media' AND state='published' ORDER BY updated_at DESC,task_id DESC LIMIT 1"+r.lock(), member, item.OwnedID).Scan(&size)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nodeConflict("owned storage needs offline ledger adoption before refund")
+		}
 	}
 	if err != nil {
 		return err
@@ -48,6 +55,9 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 	if item.GlobalID != "" {
 		return nodeConflict("Master deletion is not Follower storage deletion")
 	}
+	if item.MigrationTask != "" || item.MigrationLogical != "" {
+		return store.ErrMigrationState
+	}
 	if !nodeIDPattern.MatchString(relationship) {
 		return nodeConflict("invalid owned delete relationship")
 	}
@@ -58,6 +68,9 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 	return r.write(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, relationship)
 		if err != nil {
+			return err
+		}
+		if err := r.checkMigrationScopes(ctx, q, "media", []store.DeleteItem{{Path: item.Path}}); err != nil {
 			return err
 		}
 		var path string
@@ -106,6 +119,11 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 		if operation.State == "committed" {
 			return nil
 		}
+		if item.MigrationTask != "" || item.MigrationLogical != "" {
+			if err = r.checkPeerMediaDelete(ctx, q, row.ID, item); err != nil {
+				return err
+			}
+		}
 		var path string
 		if err = q.QueryRowContext(ctx, "SELECT media_path FROM media_objects WHERE media_id=?"+r.lock(), item.OwnedID).Scan(&path); err != nil {
 			return err
@@ -129,6 +147,9 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 		if _, err = q.ExecContext(ctx, "DELETE FROM cluster_upload_sessions WHERE storage_member_id=? AND media_id=? AND state='complete'", row.ID, item.OwnedID); err != nil {
 			return err
 		}
+		if _, err = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE target_id=? AND object_id=? AND resource_kind='media' AND state='published'", time.Now().Unix(), row.ID, item.OwnedID); err != nil {
+			return err
+		}
 		now := time.Now().Unix()
 		if _, err = q.ExecContext(ctx, "UPDATE cluster_storage_members SET used_bytes=used_bytes-?,physical_free_bytes=?,updated_at=? WHERE member_id=?", item.Bytes, max(0, free), now, row.ID); err != nil {
 			return err
@@ -136,6 +157,16 @@ func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int6
 		if _, err = q.ExecContext(ctx, "UPDATE media_delete_operations SET state='committed' WHERE operation_id=?", id); err != nil {
 			return err
 		}
-		return r.nodeAudit(ctx, q, "storage-delete-committed", "", map[string]any{"operation": id, "object_id": item.OwnedID, "bytes": item.Bytes}, a)
+		if item.MigrationTask != "" {
+			if _, err = q.ExecContext(ctx, "UPDATE migration_storage_journal SET state='deleted',updated_at=? WHERE task_id=? AND logical_id=? AND state='deleting'", now, item.MigrationTask, item.MigrationLogical); err != nil {
+				return err
+			}
+		}
+		detail := map[string]any{"operation": id, "object_id": item.OwnedID, "bytes": item.Bytes}
+		if item.MigrationTask != "" {
+			detail["task_id"] = item.MigrationTask
+			detail["logical_id"] = item.MigrationLogical
+		}
+		return r.nodeAudit(ctx, q, "storage-delete-committed", "", detail, a)
 	})
 }

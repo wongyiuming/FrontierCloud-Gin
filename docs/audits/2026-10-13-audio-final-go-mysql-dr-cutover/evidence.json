@@ -1,0 +1,53 @@
+{
+  "status": "passed",
+  "database": "go-mysql",
+  "combination": "dr",
+  "workspace": "/tmp/fc-native-matrix-q3phyd7v",
+  "project": "fc-matrix-4c4fdd92-a03f-4cdc-ad2d-21f52692e6f3-dr-go-mysql",
+  "image_ids": {
+    "native": "sha256:becc53b7e256a5a16245d31123997e8cdd01be13683094f81efdf25637011a9d",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:2e15aa9b217895fb416b371449294c2a157d1f1194f2553756fd486e6b2cd3f8"
+  },
+  "test_binary_sha256": "ffabd24d659e4321820b39b1eaa3eb4eb0f988aa624d9769b851d31a95858b67",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": false,
+  "unreachable_peer_selected": false,
+  "generated_mp3_selected": true,
+  "elapsed_seconds": 198.23,
+  "actual_chromium": {
+    "passed": true,
+    "real_server": true,
+    "decrypted": true,
+    "stage": "complete",
+    "real_task_cleanup_pending": true,
+    "source_target_visible": true,
+    "source_retirement_blocked": true,
+    "plaintext_bytes": 1201257,
+    "plaintext_sha256": "3fbbee7a1cfbae8fc52925b09e5f13ced3f501dda2f2befb43794e7240f54a05",
+    "cross_chunk_range": true,
+    "range_status": 206,
+    "service_worker_controlled": true,
+    "secure_context": true,
+    "decoded_playback_verified": true,
+    "encrypted_playback_verified": true,
+    "continuous_playback_verified": true,
+    "same_media_element": true,
+    "lyric_relation_verified": true,
+    "generated_test_tones": true,
+    "network_response_counts": {
+      "crypto_session": 2,
+      "crypto_key": 2,
+      "cipher_response": 9,
+      "service_worker_response": 3
+    },
+    "native_authentication": true,
+    "shipped_browser_modules": true,
+    "no_backend_mocks": true,
+    "audible_playback_verified": false,
+    "browser_private_ca_exception": true
+  },
+  "owned_cleanup_complete": true
+}

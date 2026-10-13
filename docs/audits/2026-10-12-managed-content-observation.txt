@@ -1,0 +1,16 @@
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+    content_open_unix_test.go:53: final symlink followed
+--- FAIL: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.01s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	0.017s
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+--- PASS: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.21s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+--- PASS: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.24s)
+=== RUN   TestPeerExpectedPhysicalInventoryExactManagedLookup
+--- PASS: TestPeerExpectedPhysicalInventoryExactManagedLookup (0.16s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.635s
+FAIL

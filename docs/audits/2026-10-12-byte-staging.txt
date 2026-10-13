@@ -1,0 +1,26 @@
+Unable to find image 'debian:bookworm-slim' locally
+bookworm-slim: Pulling from library/debian
+7fd1ebe418b5: Pulling fs layer
+251000be41e0: Download complete
+7fd1ebe418b5: Download complete
+7fd1ebe418b5: Pull complete
+Digest: sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+Status: Downloaded newer image for debian:bookworm-slim
+=== RUN   TestLargeStreamUsesBoundedHeapAndActualDiskHash
+    blob_test.go:76: actual staged bytes=67108864 peak sampled additional Go heap=1153376 chunk limit=262144
+--- PASS: TestLargeStreamUsesBoundedHeapAndActualDiskHash (3.98s)
+=== RUN   TestAbortIsJournaledTaskBoundAndNeverDeletesBusinessPath
+--- PASS: TestAbortIsJournaledTaskBoundAndNeverDeletesBusinessPath (0.05s)
+=== RUN   TestActualBytesResumeDuplicateAndVerifiedDiskReader
+--- PASS: TestActualBytesResumeDuplicateAndVerifiedDiskReader (0.21s)
+=== RUN   TestCiphertextDescriptorAndFinalReadDetectDiskCorruption
+--- PASS: TestCiphertextDescriptorAndFinalReadDetectDiskCorruption (0.06s)
+=== RUN   TestCrashTailAndTemporaryJournalAreRecoveredWithoutBlindOffset
+--- PASS: TestCrashTailAndTemporaryJournalAreRecoveredWithoutBlindOffset (0.06s)
+=== RUN   TestConcurrentRequestsAndAdmissionCannotAdvanceWrongTask
+--- PASS: TestConcurrentRequestsAndAdmissionCannotAdvanceWrongTask (0.08s)
+=== RUN   TestVerificationCancellationAndCrashBeforeInitialJournal
+--- PASS: TestVerificationCancellationAndCrashBeforeInitialJournal (0.04s)
+=== RUN   TestCheckpointJSONDoesNotExposePrivateHashState
+--- PASS: TestCheckpointJSONDoesNotExposePrivateHashState (0.03s)
+PASS

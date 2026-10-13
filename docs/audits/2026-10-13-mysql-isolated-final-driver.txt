@@ -1,0 +1,1 @@
+PASS: isolated MySQL store/schema race acceptance

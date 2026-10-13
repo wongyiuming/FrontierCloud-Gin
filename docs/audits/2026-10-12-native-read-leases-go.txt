@@ -1,0 +1,140 @@
+=== RUN   TestOwnedReadRenewalFailureClosesStreamAndJoinsBeforeRelease
+--- PASS: TestOwnedReadRenewalFailureClosesStreamAndJoinsBeforeRelease (0.00s)
+=== RUN   TestOwnedReadCloseJoinsWorkerBeforeRemovingDependency
+--- PASS: TestOwnedReadCloseJoinsWorkerBeforeRemovingDependency (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	1.020s
+=== RUN   TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.145 client_ip=192.0.2.1 request_id=c1c66f6ea42843438edfa540f38e2b22 trace_id=c1c66f6ea42843438edfa540f38e2b22
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.081 client_ip=192.0.2.1 request_id=52f1e5101f554d4d8ddb9bb06577bb93 trace_id=52f1e5101f554d4d8ddb9bb06577bb93
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.151 client_ip=192.0.2.1 request_id=3c449b0820454b88b4cbfc7488f8109e trace_id=3c449b0820454b88b4cbfc7488f8109e
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.07 client_ip=192.0.2.1 request_id=1e7a434b21974571a42df62af7a0e518 trace_id=1e7a434b21974571a42df62af7a0e518
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.198 client_ip=192.0.2.1 request_id=ebafeb222fdd439c8091ab323de4cd82 trace_id=ebafeb222fdd439c8091ab323de4cd82
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.046 client_ip=192.0.2.1 request_id=97ee4dc48ea64b9aa6e99b040eb1c0bd trace_id=97ee4dc48ea64b9aa6e99b040eb1c0bd
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=5.575 client_ip=192.0.2.1 request_id=92843fa053f04a2f9f7305a033919ad8 trace_id=92843fa053f04a2f9f7305a033919ad8
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.037 client_ip=192.0.2.1 request_id=09a334163bbc46c4b03eb85d0fb95b99 trace_id=09a334163bbc46c4b03eb85d0fb95b99
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.012 client_ip=192.0.2.1 request_id=880833f025fe4d8f8c0f99dec00c8cd3 trace_id=880833f025fe4d8f8c0f99dec00c8cd3
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.703 client_ip=192.0.2.1 request_id=aec7b42368b84345998cbb45c3e51dd4 trace_id=aec7b42368b84345998cbb45c3e51dd4
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.199 client_ip=192.0.2.1 request_id=d59af92292804d57ab45dc1f010929a6 trace_id=d59af92292804d57ab45dc1f010929a6
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.045 client_ip=192.0.2.1 request_id=3b8a577eed8540618df2025568d14430 trace_id=3b8a577eed8540618df2025568d14430
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/heartbeat status=200 duration_ms=10.883 client_ip=192.0.2.1 request_id=c154befaffe94a3d9018f695955f6018 trace_id=c154befaffe94a3d9018f695955f6018
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.052 client_ip=192.0.2.1 request_id=4ff0441edc3e4535a6d38888bce73cca trace_id=4ff0441edc3e4535a6d38888bce73cca
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/heartbeat status=200 duration_ms=8.995 client_ip=192.0.2.1 request_id=f4fef9ce939849ac9f7271f9c666e6bb trace_id=f4fef9ce939849ac9f7271f9c666e6bb
+2026/10/12 19:46:16 INFO request_completed method=PUT path=/internal/v1/storage/da2fa6bea385b240132b5a43cdb8bbb4ef2daa4c69568d24807fb17fbf92729c status=200 duration_ms=29.667 client_ip=192.0.2.1 request_id=1b0e8da02ee843b9a886061bccecfc2e trace_id=1b0e8da02ee843b9a886061bccecfc2e
+2026/10/12 19:46:16 INFO request_completed method=PUT path=/internal/v1/storage/c98dde64e6b4c44db563d9a125612a9613839a8f54b52c9ed6ce3705ca15f3db status=200 duration_ms=24.071 client_ip=192.0.2.1 request_id=5114d5111a414e03a12a78365f31525a trace_id=5114d5111a414e03a12a78365f31525a
+2026/10/12 19:46:16 INFO request_completed method=GET path=/internal/v1/media/da2fa6bea385b240132b5a43cdb8bbb4ef2daa4c69568d24807fb17fbf92729c status=200 duration_ms=26.413 client_ip=192.0.2.1 request_id=ddc5ba5696c0453194b780d5c9869449 trace_id=ddc5ba5696c0453194b780d5c9869449
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=7.655 client_ip=192.0.2.1 request_id=419bb95dd36243809bb8b4aed0c68109 trace_id=419bb95dd36243809bb8b4aed0c68109
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=7.181 client_ip=192.0.2.1 request_id=692777046d644aa99bd7d45d6b245aba trace_id=692777046d644aa99bd7d45d6b245aba
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=7.722 client_ip=192.0.2.1 request_id=c534498465284c98a523dcb86ed98cda trace_id=c534498465284c98a523dcb86ed98cda
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=10.023 client_ip=192.0.2.1 request_id=4f31c2f20fc844c6bbc3ad2c706791b3 trace_id=4f31c2f20fc844c6bbc3ad2c706791b3
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=7.798 client_ip=192.0.2.1 request_id=770f05c07ada4f39ba2e22a8a4125cea trace_id=770f05c07ada4f39ba2e22a8a4125cea
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=9.43 client_ip=192.0.2.1 request_id=58741cede6024becab5248697a1350ec trace_id=58741cede6024becab5248697a1350ec
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/begin status=200 duration_ms=14.375 client_ip=192.0.2.1 request_id=9e84734c56744887a7b9ad9607f18827 trace_id=9e84734c56744887a7b9ad9607f18827
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=7.627 client_ip=192.0.2.1 request_id=c322b85034b644ac97f61df4b3ae016b trace_id=c322b85034b644ac97f61df4b3ae016b
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/read status=200 duration_ms=23.075 client_ip=192.0.2.1 request_id=09b9a7327595477292aaa65726aab17b trace_id=09b9a7327595477292aaa65726aab17b
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/append status=200 duration_ms=47.908 client_ip=192.0.2.1 request_id=78efc20edd684285946eca8735d3bc10 trace_id=78efc20edd684285946eca8735d3bc10
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/fence status=200 duration_ms=6.363 client_ip=192.0.2.1 request_id=17249c81047b4b7f9a5c2a711cc583cf trace_id=17249c81047b4b7f9a5c2a711cc583cf
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/fence status=200 duration_ms=6.054 client_ip=192.0.2.1 request_id=896e53bccc1b4dfc96cd0695dcf6472a trace_id=896e53bccc1b4dfc96cd0695dcf6472a
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.71 client_ip=192.0.2.1 request_id=b99c22fa8778401fae59b94ac9a781cc trace_id=b99c22fa8778401fae59b94ac9a781cc
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=7.557 client_ip=192.0.2.1 request_id=5fe460c8e67444b69daeef8ba84276ab trace_id=5fe460c8e67444b69daeef8ba84276ab
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=6.18 client_ip=192.0.2.1 request_id=9233b7847f7043c29ea641fcf67bd21c trace_id=9233b7847f7043c29ea641fcf67bd21c
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.378 client_ip=192.0.2.1 request_id=b92df56ea21947238982fa4172c48486 trace_id=b92df56ea21947238982fa4172c48486
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.387 client_ip=192.0.2.1 request_id=b32ea1709380402693748b051b82a098 trace_id=b32ea1709380402693748b051b82a098
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.585 client_ip=192.0.2.1 request_id=8e184bd9654941f7ac2f5610e5809078 trace_id=8e184bd9654941f7ac2f5610e5809078
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/begin status=200 duration_ms=6.562 client_ip=192.0.2.1 request_id=5499b6d9cccc4ad0a15fd4045ac1fad3 trace_id=5499b6d9cccc4ad0a15fd4045ac1fad3
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=7.143 client_ip=192.0.2.1 request_id=52c4aa775cb849cf92e0ef011423781b trace_id=52c4aa775cb849cf92e0ef011423781b
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/read status=200 duration_ms=9.718 client_ip=192.0.2.1 request_id=5ac2753ff6a44b09986e89183e087f23 trace_id=5ac2753ff6a44b09986e89183e087f23
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/append status=200 duration_ms=17.075 client_ip=192.0.2.1 request_id=79626e8c8d494f3abc1ca734d88d6b56 trace_id=79626e8c8d494f3abc1ca734d88d6b56
+2026/10/12 19:46:16 INFO request_completed method=POST path=/internal/v1/resource-migration/data/verify status=200 duration_ms=6.743 client_ip=192.0.2.1 request_id=ec508820627649bcb108264299489a14 trace_id=ec508820627649bcb108264299489a14
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.767 client_ip=192.0.2.1 request_id=f5aaecef02e648ddb87e01f0cd1e5479 trace_id=f5aaecef02e648ddb87e01f0cd1e5479
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/begin status=200 duration_ms=14.793 client_ip=192.0.2.1 request_id=a99571c2d7204d529790bd58f52480d6 trace_id=a99571c2d7204d529790bd58f52480d6
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=7.167 client_ip=192.0.2.1 request_id=0671b2f475374145a0a611033eb444fd trace_id=0671b2f475374145a0a611033eb444fd
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/read status=200 duration_ms=23.711 client_ip=192.0.2.1 request_id=30a85c46cbb9485988191adf92ad29d3 trace_id=30a85c46cbb9485988191adf92ad29d3
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/append status=200 duration_ms=43.899 client_ip=192.0.2.1 request_id=a76e0fdeedac442ba3adb5903bc87852 trace_id=a76e0fdeedac442ba3adb5903bc87852
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/read status=200 duration_ms=10.007 client_ip=192.0.2.1 request_id=d608ec4f0d6b44b09badae36a722b126 trace_id=d608ec4f0d6b44b09badae36a722b126
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/append status=200 duration_ms=17.76 client_ip=192.0.2.1 request_id=a9c44a6d83af4f3b9e0f2b6abb69ebff trace_id=a9c44a6d83af4f3b9e0f2b6abb69ebff
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/verify status=200 duration_ms=7.727 client_ip=192.0.2.1 request_id=8c2ba0febcc24e3cab06836ee86e7c16 trace_id=8c2ba0febcc24e3cab06836ee86e7c16
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.803 client_ip=192.0.2.1 request_id=10beba33bb1745eeb349acc0e73d4796 trace_id=10beba33bb1745eeb349acc0e73d4796
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.564 client_ip=192.0.2.1 request_id=f331f05dcaeb4d1c8b64a96933b3c59e trace_id=f331f05dcaeb4d1c8b64a96933b3c59e
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/publish status=200 duration_ms=6.699 client_ip=192.0.2.1 request_id=8e3eff33f2e5419d9322814d5f3260a2 trace_id=8e3eff33f2e5419d9322814d5f3260a2
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.723 client_ip=192.0.2.1 request_id=adece15c0d234ed79b071e89838a7ddf trace_id=adece15c0d234ed79b071e89838a7ddf
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.43 client_ip=192.0.2.1 request_id=0d36ea320b40417684a8ffb3564b30d8 trace_id=0d36ea320b40417684a8ffb3564b30d8
+2026/10/12 19:46:17 INFO request_completed method=POST path=/internal/v1/resource-migration/data/publish status=200 duration_ms=6.549 client_ip=192.0.2.1 request_id=7d559b478e254bc297d010f008775386 trace_id=7d559b478e254bc297d010f008775386
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.992 client_ip=192.0.2.1 request_id=83d1023478a04efab3c9f80b0dfdcc53 trace_id=83d1023478a04efab3c9f80b0dfdcc53
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/fence status=200 duration_ms=6.325 client_ip=192.0.2.1 request_id=c2c847c4e98d472988900a7679e81eab trace_id=c2c847c4e98d472988900a7679e81eab
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/fence status=200 duration_ms=6.415 client_ip=192.0.2.1 request_id=227f2b5278234e259128abf7ed4ba924 trace_id=227f2b5278234e259128abf7ed4ba924
+    migration_runner_test.go:216: second runner outcome constraint failed: cutover unavailable (1811)
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=5.963 client_ip=192.0.2.1 request_id=cfc49bc3a3bd4ae88742ecb345298e27 trace_id=cfc49bc3a3bd4ae88742ecb345298e27
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.12 client_ip=192.0.2.1 request_id=90058bac53c6430893fa78a821128996 trace_id=90058bac53c6430893fa78a821128996
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.342 client_ip=192.0.2.1 request_id=04b31116ede145bfa1780eb75ec80f08 trace_id=04b31116ede145bfa1780eb75ec80f08
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.608 client_ip=192.0.2.1 request_id=b65702c719af4aa382be0a2519831c99 trace_id=b65702c719af4aa382be0a2519831c99
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.666 client_ip=192.0.2.1 request_id=275152e0171249068e1b3164128aa7f7 trace_id=275152e0171249068e1b3164128aa7f7
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/object status=200 duration_ms=5.494 client_ip=192.0.2.1 request_id=1b816d3f439b4185932d18726a225d2f trace_id=1b816d3f439b4185932d18726a225d2f
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/begin status=200 duration_ms=6.853 client_ip=192.0.2.1 request_id=fa59459f4d7941028675019df322b87a trace_id=fa59459f4d7941028675019df322b87a
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.811 client_ip=192.0.2.1 request_id=20f1ec49d4ba4306a2a910ca7930c736 trace_id=20f1ec49d4ba4306a2a910ca7930c736
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/begin status=200 duration_ms=6.689 client_ip=192.0.2.1 request_id=6313298cd1264810b4e4f38c6505edbf trace_id=6313298cd1264810b4e4f38c6505edbf
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.619 client_ip=192.0.2.1 request_id=dd3f6e2faf9e497784f9368e8b19798f trace_id=dd3f6e2faf9e497784f9368e8b19798f
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.523 client_ip=192.0.2.1 request_id=500cec7c879f461a8e87adaf0847333e trace_id=500cec7c879f461a8e87adaf0847333e
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.638 client_ip=192.0.2.1 request_id=011a1eb7e57d497bb877b86208c47213 trace_id=011a1eb7e57d497bb877b86208c47213
+2026/10/12 19:46:18 INFO request_completed method=GET path=/internal/v1/media/da2fa6bea385b240132b5a43cdb8bbb4ef2daa4c69568d24807fb17fbf92729c status=200 duration_ms=9.269 client_ip=192.0.2.1 request_id=2327ea4376f44bb9908251d4815be56d trace_id=2327ea4376f44bb9908251d4815be56d
+2026/10/12 19:46:18 INFO request_completed method=GET path=/internal/v1/media/c98dde64e6b4c44db563d9a125612a9613839a8f54b52c9ed6ce3705ca15f3db status=200 duration_ms=9.939 client_ip=192.0.2.1 request_id=7ce05864371f4320a0685bb5ab944457 trace_id=7ce05864371f4320a0685bb5ab944457
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.225 client_ip=192.0.2.1 request_id=c048a41f2705476c8cb2228c4b57b1bf trace_id=c048a41f2705476c8cb2228c4b57b1bf
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.056 client_ip=192.0.2.1 request_id=3d1a9b4170aa4335b163378c77471bca trace_id=3d1a9b4170aa4335b163378c77471bca
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/recheck status=200 duration_ms=7.004 client_ip=192.0.2.1 request_id=e3bc2940fb844e2ab45c1dd0e0793656 trace_id=e3bc2940fb844e2ab45c1dd0e0793656
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=23.296 client_ip=192.0.2.1 request_id=c38a7d6a9f364ee6b38540cf3565daa0 trace_id=c38a7d6a9f364ee6b38540cf3565daa0
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.012 client_ip=192.0.2.1 request_id=cf375f3b5e9b42f1bdac101933e3a890 trace_id=cf375f3b5e9b42f1bdac101933e3a890
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/register status=200 duration_ms=6.073 client_ip=192.0.2.1 request_id=939a408fa0c44a5dac34c34ca6655c1d trace_id=939a408fa0c44a5dac34c34ca6655c1d
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/recheck status=200 duration_ms=6.942 client_ip=192.0.2.1 request_id=f00ae38a2b964428aa4fd9d219eba866 trace_id=f00ae38a2b964428aa4fd9d219eba866
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=7.359 client_ip=192.0.2.1 request_id=eabef7f9544f483fa4a9f9204708b647 trace_id=eabef7f9544f483fa4a9f9204708b647
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/recheck status=200 duration_ms=7.491 client_ip=192.0.2.1 request_id=a0f9f1ce664b42dd8ee582baa8b57210 trace_id=a0f9f1ce664b42dd8ee582baa8b57210
+2026/10/12 19:46:18 INFO request_completed method=POST path=/internal/v1/resource-migration/data/status status=200 duration_ms=6.603 client_ip=192.0.2.1 request_id=9f8d3bbb9f3348a0af8c2e89ee9f5704 trace_id=9f8d3bbb9f3348a0af8c2e89ee9f5704
+    migration_runner_test.go:296: Master runner moved 524351 actual bytes across one complete parent; lost acknowledgement and SQL cutover failure safely retried
+--- PASS: TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry (3.62s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	4.668s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.358s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.006s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	21.906s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	16.063s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	4.053s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.332s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	5.118s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

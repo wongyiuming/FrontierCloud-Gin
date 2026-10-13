@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
@@ -24,6 +25,8 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 	if s.Database == nil || s.Identity == nil || s.Media == nil || s.Control == nil || s.Recordings == nil || s.Resolver == nil {
 		return nil, nil, errors.New("incomplete storage HTTP services")
 	}
+	traffic := businesstraffic.New(nil)
+	s.Control.ConfigureBusinessTraffic(traffic)
 	router := httpapi.NewWithResolver(func(ctx context.Context) error {
 		if err := s.Database.Ping(ctx); err != nil {
 			return err
@@ -32,15 +35,42 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 			return err
 		}
 		return s.Recordings.Ready(ctx)
-	}, nil, s.Resolver)
+	}, nil, s.Resolver, httpapi.BusinessTrafficMiddleware(traffic))
+	closeRetirementGate, err := httpapi.RegisterNodeRetirementBarrier(router, settings, s.Control)
+	if err != nil {
+		return nil, nil, err
+	}
 	httpapi.RegisterNodeIdentity(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeControl(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeCertificate(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeMedia(router, settings, s.Resolver, s.Control, s.Media)
 	httpapi.RegisterNodeStorage(router, settings, s.Resolver, s.Control, s.Media)
+	closeMigration := func() error { return nil }
+	if peers, ok := s.Database.Pool().(store.MigrationPeerRepository); ok {
+		httpapi.RegisterNodeMigrationControl(router, settings, s.Resolver, s.Control, s.Media, peers)
+		closeMigration = httpapi.RegisterNodeMigrationData(router, settings, s.Resolver, s.Control, s.Media, s.Recordings, peers)
+	}
+	closeInventory, err := httpapi.RegisterNodePhysicalInventory(router, settings, s.Resolver, s.Control, s.Database.Pool().(store.PhysicalInventoryRepository), s.Media.InventoryRoot(), s.Recordings.InventoryRoot())
+	if err != nil {
+		return nil, nil, errors.Join(err, closeMigration(), closeRetirementGate())
+	}
+	closeContent, err := httpapi.RegisterNodeContentObservation(router, settings, s.Resolver, s.Control, s.Database.Pool().(store.ManagedPhysicalRepository), s.Media, s.Recordings)
+	if err != nil {
+		return nil, nil, errors.Join(err, closeInventory(), closeMigration(), closeRetirementGate())
+	}
+	closeBackupObservation, err := httpapi.RegisterNodeBackupObservation(router, settings, s.Resolver, s.Control, s.Database.Backups())
+	if err != nil {
+		return nil, nil, errors.Join(err, closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
+	}
+	closeRetirement, err := httpapi.RegisterNodeRetirementPeer(router, settings, s.Resolver, s.Control, s.Database.Pool(), s.Media, s.Recordings)
+	if err != nil {
+		return nil, nil, errors.Join(err, closeBackupObservation(), closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
+	}
 	httpapi.RegisterNodeRecordings(router, settings, s.Resolver, s.Control, s.Recordings)
 	httpapi.RegisterNodeBackups(router, settings, s.Resolver, s.Control, s.Database.Backups())
-	return router, func() error { return nil }, nil
+	return router, func() error {
+		return errors.Join(closeRetirement(), closeBackupObservation(), closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
+	}, nil
 }
 
 func printStoragePair(ctx context.Context, service *node.Service, repo store.NodeRepository, output io.Writer) error {

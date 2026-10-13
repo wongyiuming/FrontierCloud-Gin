@@ -1,0 +1,35 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  520.3MB
+
+Step 1/11 : FROM frontiercloud-ops-test:01a13082-web-recovery
+ ---> 2159b3607d1a
+Step 2/11 : USER root
+ ---> Using cache
+ ---> 4cdd87426dd0
+Step 3/11 : COPY .ci-out/direct-traffic/frontiercloud /app/frontiercloud
+ ---> 627b2384639b
+Step 4/11 : COPY .ci-out/direct-traffic/fc /app/operator/fc
+ ---> d045096297d9
+Step 5/11 : COPY --chown=10001:10001 static /app/static
+ ---> 00c366817f24
+Step 6/11 : COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+ ---> 419213385d3e
+Step 7/11 : COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+ ---> 5fe49911865f
+Step 8/11 : COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+ ---> 8de481437329
+Step 9/11 : COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
+ ---> f01fdda7c5ce
+Step 10/11 : LABEL frontiercloud.schema-generation="7" frontiercloud.test.run="fc-gen7-01a13082" frontiercloud.test.snapshot="working-tree"
+ ---> Running in 0dd04b7ebcee
+ ---> Removed intermediate container 0dd04b7ebcee
+ ---> 9af6aba3e9c6
+Step 11/11 : USER 10001:10001
+ ---> Running in 637933f2ec5c
+ ---> Removed intermediate container 637933f2ec5c
+ ---> becc53b7e256
+Successfully built becc53b7e256
+Successfully tagged frontiercloud-ops-test:01a13082-gen7-direct-traffic-fresh

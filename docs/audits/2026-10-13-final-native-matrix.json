@@ -1,0 +1,145 @@
+{
+  "status": "passed",
+  "cases": [
+    {
+      "database": "go-sqlite",
+      "pair": "dd",
+      "runtime_revision": "abc15db",
+      "status": "passed",
+      "elapsed_seconds": 484.875,
+      "additional_actual_small_files": 1024,
+      "chromium_phases": [
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dd/evidence.json",
+      "evidence_sha256": "cd094eb4cf845272ee4d57c501ed733ba4c38143101a6d07ffe0d39071573fbf",
+      "peak_web_memory_bytes": 297340928,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "dr",
+      "runtime_revision": "abc15db",
+      "status": "passed",
+      "elapsed_seconds": 215.081,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr/evidence.json",
+      "evidence_sha256": "0e6016ce1e6550fe0c7a65d284cbc587c96b292af33ad7278f2c73ecb773749e",
+      "peak_web_memory_bytes": 221552640,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "rd",
+      "runtime_revision": "abc15db",
+      "status": "passed",
+      "elapsed_seconds": 250.097,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd/evidence.json",
+      "evidence_sha256": "085c43cc7af4bab60cfb01d460bef38b43369b7840ebb3c14b3bd1905770ab15",
+      "peak_web_memory_bytes": 221429760,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "rr",
+      "runtime_revision": "abc15db",
+      "status": "passed",
+      "elapsed_seconds": 249.038,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr/evidence.json",
+      "evidence_sha256": "e874372897fc77d87055616f49b368ceacc2bbf75e39ed88cedeba565d7a2895",
+      "peak_web_memory_bytes": 224112640,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-mysql",
+      "pair": "dd",
+      "runtime_revision": "b2d16ed",
+      "status": "passed",
+      "elapsed_seconds": 565.741,
+      "additional_actual_small_files": 1024,
+      "chromium_phases": [
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-dd/evidence.json",
+      "evidence_sha256": "c48daa149d346dd3f27669ac77603aec9f22db75797efa96aeb77f684e6be01d",
+      "peak_web_memory_bytes": 290738176,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-mysql",
+      "pair": "dr",
+      "runtime_revision": "b2d16ed",
+      "status": "passed",
+      "elapsed_seconds": 226.131,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-dr/evidence.json",
+      "evidence_sha256": "227467daaad9201bd9f8435bb16751215b7470a3efb246715ff5458cdd6906ff",
+      "peak_web_memory_bytes": 210149376,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-mysql",
+      "pair": "rd",
+      "runtime_revision": "b2d16ed",
+      "status": "passed",
+      "elapsed_seconds": 271.249,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-rd/evidence.json",
+      "evidence_sha256": "07e32fe3a3d4d82da8da1d505a3018631259c0dd56215519c435c5f5e3a3b7fa",
+      "peak_web_memory_bytes": 219959296,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    },
+    {
+      "database": "go-mysql",
+      "pair": "rr",
+      "runtime_revision": "b2d16ed",
+      "status": "passed",
+      "elapsed_seconds": 271.196,
+      "additional_actual_small_files": 0,
+      "chromium_phases": [
+        "during",
+        "after"
+      ],
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-rr/evidence.json",
+      "evidence_sha256": "ca26b0da8341758f321a11337a142cbd37f0b51db928cf1f205335f6fe25bb6c",
+      "peak_web_memory_bytes": 212942848,
+      "five_consecutive_idle_samples": true,
+      "real_hour_cleanup_selected": false
+    }
+  ],
+  "production_input_sha256": "f32da8e53ef2e370adf04e041ef06641a08367a9b4edc61c1f963cb16395601f",
+  "production_inputs_compared": 542,
+  "runtime_source_bridge": "2026-10-13-exact-b2d16ed-provenance.json",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_hour_cleanup_separate_evidence": "2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/evidence.json"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "project": "fc-mysql-final-d1c2a357-93a2-413d-bc3e-1128363d4001",
+  "workspace": "/tmp/fc-mysql-final-ixixhi5_",
+  "large_migration_selected": true,
+  "mysql_memory_bytes": 805306368,
+  "mysql_cpus": 1,
+  "data_retained": true,
+  "exit_code": 0,
+  "mysql_oom_killed": false
+}

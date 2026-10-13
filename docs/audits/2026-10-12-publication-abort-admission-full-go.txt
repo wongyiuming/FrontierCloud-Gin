@@ -1,0 +1,66 @@
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/none
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/foreign_inode
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/corrupt
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_unlink
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_stage_unlink
+=== RUN   TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/changed_retained_stage
+--- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes (0.44s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/none (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/foreign_inode (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/corrupt (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_unlink (0.08s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/lost_stage_unlink (0.06s)
+    --- PASS: TestInterruptedPublicationCancellationPreservesForeignFilesAndResumes/changed_retained_stage (0.06s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	1.454s
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+--- PASS: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.25s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.279s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	8.773s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	43.647s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.006s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	38.722s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	14.752s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	3.175s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	2.781s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	0.060s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	3.646s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.453s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	0.103s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	6.081s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	0.227s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	0.608s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

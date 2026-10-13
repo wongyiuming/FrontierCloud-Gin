@@ -1,0 +1,24 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	5.031s
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            BuildKit is currently disabled; enable it by removing the DOCKER_BUILDKIT=0
+            environment-variable.
+
+Sending build context to Docker daemon  277.6MB
+
+Step 1/11 : FROM frontiercloud-ops-test:01a13082-web-recovery
+ ---> 2159b3607d1a
+Step 2/11 : USER root
+ ---> Using cache
+ ---> 4cdd87426dd0
+Step 3/11 : COPY .ci-out/gen7/frontiercloud /app/frontiercloud
+ ---> ac3990f45a9b
+Step 4/11 : COPY .ci-out/gen7/fc /app/operator/fc
+ ---> 705f625e53d3
+Step 5/11 : COPY --chown=10001:10001 static /app/static
+ ---> ee36ce30688f
+Step 6/11 : COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+ ---> ec966eaee3a0
+Step 7/11 : COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+ ---> b29390a90766
+Step 8/11 : COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+COPY failed: file not found in build context or excluded by .dockerignore: stat docs/operator-upgrade.md: file does not exist

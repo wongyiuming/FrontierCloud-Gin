@@ -1,0 +1,12 @@
+{
+  "scope": "compiled shipping fc early guards and private real-Docker Install protocol",
+  "public_release_first_installation_verified": false,
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/pr14-2cdd-native-ops/fc-ops-install-suite-w_g79764",
+  "successful_installation_driver_has_test_only_publication_and_local_ca": true,
+  "selected_private_cases": [
+    "master-sqlite",
+    "direct"
+  ],
+  "guards_requested": false,
+  "private_installations": []
+}

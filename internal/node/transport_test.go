@@ -172,7 +172,7 @@ func privateCA(t *testing.T, handler http.Handler) (*httptest.Server, *x509.Cert
 func testTransport(t *testing.T, server *httptest.Server, roots *x509.CertPool) *Transport {
 	t.Helper()
 	transport := transportWithRoots(roots)
-	for _, client := range []*http.Client{transport.client, transport.backup, transport.storage, transport.storageStat} {
+	for _, client := range []*http.Client{transport.client, transport.backup, transport.storage, transport.storageStat, transport.retirement} {
 		client.Transport.(*http.Transport).DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
 		}

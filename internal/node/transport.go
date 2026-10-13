@@ -134,7 +134,7 @@ func (t *Transport) MediaRead(ctx context.Context, origin, objectID, resourceID,
 	return resp.Body, nil
 }
 
-type Transport struct{ client, backup, storage, storageStat *http.Client }
+type Transport struct{ client, backup, storage, storageStat, retirement *http.Client }
 
 func NewTransport() *Transport { return transportWithRoots(nil) }
 func transportWithRoots(roots *x509.CertPool) *Transport {
@@ -147,7 +147,9 @@ func transportWithRoots(roots *x509.CertPool) *Transport {
 	storage.Timeout = 0 // Large media uses a separate pool and caller cancellation.
 	// A stat verifies the full object digest. Large objects must not inherit
 	// the ten-second heartbeat budget or monopolize heartbeat connections.
-	return &Transport{makeClient(4, 10*time.Second), makeClient(1, 60*time.Second), storage, makeClient(1, 180*time.Second)}
+	// Retirement has its own bounded connection pool and caller-owned lifetime.
+	retirement := makeClient(1, 0)
+	return &Transport{client: makeClient(4, 10*time.Second), backup: makeClient(1, 60*time.Second), storage: storage, storageStat: makeClient(1, 180*time.Second), retirement: retirement}
 }
 func safeDial(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
@@ -184,6 +186,7 @@ func (t *Transport) Close() {
 	t.backup.CloseIdleConnections()
 	t.storage.CloseIdleConnections()
 	t.storageStat.CloseIdleConnections()
+	t.retirement.CloseIdleConnections()
 }
 
 func (t *Transport) StorageUpload(ctx context.Context, origin, objectID, token string, reader io.Reader, size int64) (map[string]any, error) {
@@ -275,6 +278,9 @@ func (t *Transport) Request(ctx context.Context, origin, route, method string, v
 		}
 	}
 	client := t.client
+	if u.Path == "/internal/v1/retirement" && method == http.MethodPost {
+		client = t.retirement
+	}
 	if strings.HasPrefix(u.Path, "/internal/v1/backup/") {
 		client = t.backup
 	}

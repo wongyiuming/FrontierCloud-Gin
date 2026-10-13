@@ -39,6 +39,8 @@ type Service struct {
 	control          *node.Service
 	owned            store.OwnedStorageRepository
 	catalog          *catalogCache
+	controlLeaseMu   sync.Mutex
+	controlLeaseFile *os.File
 }
 
 type Category struct {

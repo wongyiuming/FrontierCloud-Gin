@@ -1,0 +1,16 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-sqlite-dd
+    native_migration_real_test.go:96: pairing private follower 1 go sqlite
+    native_migration_real_test.go:96: pairing private follower 2 go sqlite
+    native_migration_real_test.go:96: pairing private follower 3 go sqlite
+    native_migration_real_test.go:96: pairing private follower 4 go sqlite
+    native_migration_real_test.go:96: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-sqlite 2 Direct / 2 Relay
+    native_migration_real_test.go:96: real native five-node certificate observation and sequential UDP STUN passed go-sqlite
+    native_migration_real_test.go:96: real native matrix SQLite/MySQL revocation and re-pair passed go-sqlite
+    native_migration_real_test.go:96: uploaded 1024 additional actual small files into one native ownership unit
+    native_migration_real_test.go:96: actual HTTP peak held native checkpoint=2359296; sustained quiet auto-resumed; manual pause retained checkpoint=3932160 for 32s and explicit resume succeeded
+    native_migration_real_test.go:96: native multi-page whole ownership observations passed 45
+    native_migration_real_test.go:96: migration payload was not confined to peer data path 50815758 198027670 204754333 135709216
+--- FAIL: TestRealNativeMatrixFleetMigrations (484.04s)
+    --- FAIL: TestRealNativeMatrixFleetMigrations/go-sqlite-dd (484.04s)
+FAIL

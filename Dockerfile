@@ -1,5 +1,6 @@
 # Build a statically linked Go runtime without Python or CGO.
 FROM golang:1.26.8-bookworm AS build
+ARG REVISION
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -15,12 +16,13 @@ COPY updater/Dockerfile updater/Dockerfile.gin ./updater/
 # Bound per-build package/compiler parallelism. Several independent node agents
 # may build on one Engine; inheriting every host CPU can exhaust host memory.
 RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go test -p=1 ./... && \
-    GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath -ldflags="-s -w" -o /out/frontiercloud ./cmd/frontiercloud
+    GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath -ldflags="-s -w" -o /out/frontiercloud ./cmd/frontiercloud && \
+    GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go build -p=1 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o /out/fc ./cmd/fc
 
 FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="4" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="7" \
       frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
 
 RUN apt-get update && \
@@ -33,6 +35,11 @@ RUN apt-get update && \
 
 WORKDIR /app
 COPY --from=build /out/frontiercloud /app/frontiercloud
+COPY --from=build /out/fc /app/operator/fc
+COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
 COPY --chown=10001:10001 static /app/static
 COPY internal/search/data/LICENSE.pypinyin.txt internal/search/data/LICENSE.opencc.txt /app/licenses/
 RUN chmod -R a+rX /app/static

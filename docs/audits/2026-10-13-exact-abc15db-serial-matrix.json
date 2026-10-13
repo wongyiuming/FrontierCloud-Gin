@@ -1,0 +1,52 @@
+{
+  "source_commit": "abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133",
+  "status": "failed",
+  "cases": [
+    {
+      "database": "go-sqlite",
+      "pair": "dd",
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dd",
+      "status": "passed",
+      "many_small_files": true,
+      "during_browser": false,
+      "elapsed_seconds": 484.875
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "dr",
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 215.081
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "rd",
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 250.097
+    },
+    {
+      "database": "go-sqlite",
+      "pair": "rr",
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 249.038
+    },
+    {
+      "database": "go-mysql",
+      "pair": "dd",
+      "evidence": "docs/audits/2026-10-13-exact-abc15db-go-mysql-dd",
+      "status": "failed",
+      "many_small_files": true,
+      "during_browser": false,
+      "elapsed_seconds": null
+    }
+  ],
+  "parallel_fleets": false
+}

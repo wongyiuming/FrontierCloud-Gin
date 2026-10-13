@@ -1,0 +1,13 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	1.011s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	1.758s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	1.017s
+--- FAIL: TestMigrationDiskScanYieldsWithoutFailingVerifiedBytesOrRecheck (0.05s)
+    traffic_test.go:94: {false false 1 {dddddddddddddddddddddddddddddddd aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccc eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff media music/private/track.mp3 1111111111111111111111111111111111111111111111111111111111111111 524288 85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba <nil> <nil>} 524288 85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba [115 104 97 3 174 219 227 90 131 186 58 173 234 150 151 53 185 223 63 76 166 250 254 13 4 35 222 193 42 157 121 112 188 227 200 70 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 8 0 0] published 12345678901234567890123456789012 0 disk_verification_failed false false } <nil>
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	0.579s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.023s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	51.932s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	13.840s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	1.062s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.074s
+FAIL

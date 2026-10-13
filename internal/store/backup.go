@@ -43,6 +43,12 @@ type BackupRepository interface {
 	AbortBackups(context.Context, string, int64, NodeAudit) (BackupAbort, error)
 }
 
+// BackupObservationRepository resolves a ready manifest under the current
+// local-member/upstream relationship. It exposes no artifact payload or key.
+type BackupObservationRepository interface {
+	ReadyBackupManifest(context.Context, string, string, string, int64) (BackupManifest, error)
+}
+
 // BusinessBackupTables returns the existing v2 allowlist, never caller SQL.
 // Return a new slice so consumers cannot mutate the protocol for other callers.
 func BusinessBackupTables() []string {

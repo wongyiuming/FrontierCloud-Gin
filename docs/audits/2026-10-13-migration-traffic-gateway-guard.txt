@@ -1,0 +1,4 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	1.012s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.025s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.127s
+node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)

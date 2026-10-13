@@ -1,0 +1,20 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-mysql-dd
+    native_migration_real_test.go:93: all four Storage processes have separate native networks; migration relay is prohibited
+    native_migration_real_test.go:93: pairing private follower 1 go sqlite
+    native_migration_real_test.go:93: pairing private follower 2 go sqlite
+    native_migration_real_test.go:93: pairing private follower 3 go sqlite
+    native_migration_real_test.go:93: pairing private follower 4 go sqlite
+    native_migration_real_test.go:93: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-mysql 2 Direct / 2 Relay
+    native_migration_real_test.go:93: real native five-node certificate observation and sequential UDP STUN passed go-mysql
+    native_migration_real_test.go:93: real native matrix SQLite/MySQL revocation and re-pair passed go-mysql
+    native_migration_real_test.go:93: native peers are mutually unreachable: direct_peer_transfer failure, zero copied/committed bytes, source ownership retained, no Master relay fallback
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [2.883 4.234 4.220 4.140 4.199]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [2.776 4.198 4.125 4.007 4.177]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [3.936 5.742 5.527 5.457 5.814]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [4.042 5.613 5.664 5.832 5.571]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [3.810 5.465 5.331 5.778 5.476]
+    native_migration_real_test.go:93: five Web services passed five consecutive one-second idle CPU samples below 20 percent
+--- PASS: TestRealNativeMatrixFleetMigrations (116.52s)
+    --- PASS: TestRealNativeMatrixFleetMigrations/go-mysql-dd (116.52s)
+PASS

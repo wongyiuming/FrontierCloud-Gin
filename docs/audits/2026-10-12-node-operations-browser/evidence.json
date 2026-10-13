@@ -1,0 +1,12 @@
+{
+  "real_chromium": true,
+  "backend": "deterministic fixture",
+  "unmodified_node_module": true,
+  "plan_paging_and_typed_confirmation": true,
+  "task_controls": true,
+  "backup_blocks_retirement": true,
+  "retirement_confirmation_and_history": true,
+  "csrf_headers": true,
+  "html_injection_rejected": true,
+  "module_order_preserved": true
+}

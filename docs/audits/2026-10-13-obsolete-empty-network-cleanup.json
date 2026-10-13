@@ -1,0 +1,29 @@
+{
+  "owner": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite",
+  "containers_absent": true,
+  "driver_absent": true,
+  "minimum_age_minutes": 30,
+  "removed_empty_networks": [
+    {
+      "id": "399194ce7215",
+      "name": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite-plane"
+    },
+    {
+      "id": "a095d24ba202",
+      "name": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite-site1"
+    },
+    {
+      "id": "90829dcff074",
+      "name": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite-site2"
+    },
+    {
+      "id": "21b2d7d16f80",
+      "name": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite-site3"
+    },
+    {
+      "id": "f3ca005bec6c",
+      "name": "fc-matrix-46ab9b35-8447-4cda-b039-4b6b4ae258b7-dd-go-sqlite-site4"
+    }
+  ],
+  "data_or_volumes_removed": false
+}

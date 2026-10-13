@@ -37,8 +37,12 @@ type fleetSite struct {
 	web                             string
 }
 
-func fleetRange(t *testing.T, ctx context.Context, sites []*fleetSite, target, resource string, payload []byte) {
+func fleetRange(t *testing.T, ctx context.Context, sites []*fleetSite, target, resource string, payload []byte, objectBytes ...int64) {
 	t.Helper()
+	length := int64(len(payload))
+	if len(objectBytes) != 0 {
+		length = objectBytes[0]
+	}
 	master := sites[0]
 	if strings.HasPrefix(target, "/") {
 		target = master.origin + target
@@ -75,7 +79,7 @@ func fleetRange(t *testing.T, ctx context.Context, sites []*fleetSite, target, r
 		}
 		raw, err := io.ReadAll(io.LimitReader(response.Body, 1024))
 		response.Body.Close()
-		if err != nil || response.StatusCode != 206 || !bytes.Equal(raw, payload[3:13]) || response.Header.Get("Content-Range") != "bytes 3-12/"+big.NewInt(int64(len(payload))).String() {
+		if err != nil || response.StatusCode != 206 || !bytes.Equal(raw, payload[3:13]) || response.Header.Get("Content-Range") != "bytes 3-12/"+big.NewInt(length).String() {
 			t.Fatal("real native matrix byte-range delivery mismatch", site.runtime, site.database, response.StatusCode, "bytes", len(raw), "content-range", response.Header.Get("Content-Range"), err)
 		}
 		// Resource identity is checked in the catalog. The public edge deliberately
@@ -207,7 +211,7 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 	}
 }
 
-func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix, driver, kind string) {
+func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix, driver, kind string, migrationCase ...string) {
 	t.Helper()
 	project := prefix + "-" + kind
 	root := filepath.Join(base, kind)
@@ -224,6 +228,23 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	defer func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer stop()
+		if t.Failed() {
+			// Raw container logs stay private because they can contain instance
+			// details. The acceptance transcript contains only the failure code.
+			folder := filepath.Join(root, "private-diagnostics")
+			if os.MkdirAll(folder, 0700) == nil {
+				for _, id := range containers {
+					response, err := e.request(cleanup, "GET", "/containers/"+id+"/logs?stdout=true&stderr=true&tail=1000", nil, "")
+					if err == nil {
+						raw, readErr := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+						response.Body.Close()
+						if readErr == nil {
+							_ = os.WriteFile(filepath.Join(folder, id+".log"), raw, 0600)
+						}
+					}
+				}
+			}
+		}
 
 		for i := len(containers) - 1; i >= 0; i-- {
 			if c, err := e.Inspect(cleanup, containers[i]); err == nil && c.label("com.docker.compose.project") == project {
@@ -288,6 +309,8 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 		if strings.HasSuffix(service, "-web") {
 			host["NanoCpus"] = int64(1_000_000_000)
+			host["Memory"] = int64(512 << 20)
+			host["MemorySwap"] = int64(512 << 20)
 		}
 		if strings.HasSuffix(service, "-certificate-agent") {
 			host["NanoCpus"] = int64(50_000_000)
@@ -356,7 +379,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		if err := os.Mkdir(folder, 0755); err != nil {
 			t.Fatal(err)
 		}
-		for _, child := range []string{"data", "secrets", "maintenance", "updater-control", "certificate-state", "certificate-runtime", "certificate-published"} {
+		for _, child := range []string{"data", "secrets", "maintenance", "updater-control", "certificate-state", "certificate-runtime", "certificate-published", "traffic-runtime"} {
 			if err := os.Mkdir(filepath.Join(folder, child), 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -372,6 +395,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		binds := []string{filepath.Join(folder, "data") + ":/app/data", filepath.Join(folder, "secrets") + ":/run/frontiercloud-secrets", certs + ":/certs:ro"}
 
 		if i == 0 {
+			binds = append(binds, filepath.Join(folder, "traffic-runtime")+":/run/frontiercloud-traffic:ro")
 			control := filepath.Join(folder, "updater-control")
 			create(label+"-updater", agent, []string{"serve"}, []string{"UPDATER_PROJECT=" + project, "RELEASE_BRANCH=main", "UPDATER_DATA_DIRECTORY=/data"}, []string{control + ":/run/frontiercloud-updater", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance", filepath.Join(folder, "data") + ":/data"}, "0:0", sharedEndpoint(label+"-updater"), nil)
 			binds = append(binds, control+":/run/frontiercloud-updater:ro")
@@ -447,7 +471,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		controllerBinds := append(append([]string{}, mounts...), certs+":/certs:ro", filepath.Join(base, "certificate.test")+":/certificate.test:ro")
 		controllerEndpoints := sharedEndpoint(label + "-certificate-agent")
 		controllerEndpoints[privateName] = map[string]any{"Aliases": []string{"certificate-agent"}}
-		create(label+"-certificate-agent", native, []string{"-test.v", "-test.timeout=50m", "-test.run=^TestCertificateFleetObserver$"}, controllerEnv, controllerBinds, "0:10001", controllerEndpoints, nil)
+		create(label+"-certificate-agent", native, []string{"-test.v", "-test.timeout=100m", "-test.run=^TestCertificateFleetObserver$"}, controllerEnv, controllerBinds, "0:10001", controllerEndpoints, nil)
 		binds = append(binds, published+":/run/frontiercloud-tls:ro", runtimeDir+":/run/frontiercloud-certificate:ro")
 		image, command, health := native, []string{"serve"}, []string{"CMD", "/app/frontiercloud", "healthcheck"}
 		webAlias := label + "-web"
@@ -455,7 +479,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			webAlias = domain
 		}
 		webEndpoints := sharedEndpoint(webAlias)
-		webEndpoints[privateName] = map[string]any{"Aliases": []string{"web"}}
+		webEndpoints[privateName] = map[string]any{"Aliases": []string{"web", domain}}
 		web := create(label+"-web", image, command, env, binds, "10001:10001", webEndpoints, health)
 		if err := e.Healthy(ctx, web.ID); err != nil {
 			response, logErr := e.request(ctx, "GET", "/containers/"+web.ID+"/logs?stdout=true&stderr=true&tail=35", nil, "")
@@ -476,7 +500,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			edgeEndpoints := sharedEndpoint(domain)
 			edgeImage := edge
 			edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge", "nginx"}}
-			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", filepath.Join(folder, "certificate-published") + ":/run/frontiercloud-tls:ro", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
+			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", filepath.Join(folder, "certificate-published") + ":/run/frontiercloud-tls:ro", filepath.Join(folder, "traffic-runtime") + ":/run/frontiercloud-traffic", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
 		}
 
 		jar, _ := cookiejar.New(nil)
@@ -523,6 +547,9 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			if err != nil {
 				t.Fatal(err)
 			}
+			if err := os.Remove(filepath.Join(site.root, "data", ".private-fleet-observation.json")); err != nil {
+				t.Fatal("remove completed private observation", err)
+			}
 			var out map[string]any
 			decoder := json.NewDecoder(bytes.NewReader(data))
 			decoder.UseNumber()
@@ -543,6 +570,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		return out
 	}
 	master := sites[0]
+	if len(migrationCase) == 1 {
+		// Normal migration must use the shared peer network. The isolated
+		// unreachable-peer gate opts in before pairing so existing pools cannot
+		// disguise the topology; it must assert refusal, never a relay fallback.
+		if os.Getenv("FRONTIERCLOUD_TEST_MIGRATION_NO_DIRECT") == "1" {
+			fleetSeparateStorageNetworks(t, ctx, e, sites)
+		}
+	}
 	perform(master, "POST", "/nodes/promote", map[string]any{"role": "Master", "endpoint": master.origin, "local_capacity_gib": 1})
 	relations := make([]string, fleetNodeCount-1)
 	for i, follower := range sites[1:] {
@@ -621,7 +656,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	// rotation and durable revocation receipt before an independent new pair.
 	for _, index := range []int{1, 2} {
 		follower, old := sites[index], relations[index-1]
-		perform(master, "POST", "/nodes/"+old+"/revoke", nil)
+		member, _ := perform(follower, "GET", "/nodes", nil)["node_id"].(string)
+		code, _, err := master.request(ctx, "POST", "/api/v1/media/admin/nodes/"+old+"/revoke", nil)
+		if err != nil || code != 409 {
+			t.Fatal("active relationship bypassed independent retirement", code, err)
+		}
+		check := perform(master, "POST", "/nodes/"+old+"/retire/check", map[string]any{"member_id": member})
+		fleetRequireRetirementClear(t, check)
+		perform(master, "POST", "/nodes/"+old+"/retire/apply", map[string]any{"member_id": member, "confirm_member_id": member})
 		deadline := time.Now().Add(60 * time.Second)
 		for {
 			status := perform(follower, "GET", "/nodes", nil)
@@ -677,6 +719,11 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		time.Sleep(time.Second)
 	}
 	placements := map[string]bool{}
+	if len(migrationCase) == 1 {
+		fleetMigrationScenario(t, ctx, e, sites, relations, perform, migrationCase[0])
+		fleetIdleCPU(t, ctx, e, sites)
+		return
+	}
 	var mediaPaths []string
 	var encryptedFixtures []fleetEncryptedFixture
 	browserCrypto := newFleetBrowserCrypto(t, ctx, master)
@@ -1028,12 +1075,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	deadline = time.Now().Add(90 * time.Second)
 	for {
 		rows, _ := perform(master, "GET", "/nodes", nil)["relationships"].([]any)
-		online := len(rows) == fleetNodeCount-1
+		onlineCount := 0
 		for _, raw := range rows {
 			row := raw.(map[string]any)
-			online = online && row["state"] == "active" && row["status"] == "online"
+			if row["state"] == "active" && row["status"] == "online" {
+				onlineCount++
+			}
 		}
-		if online {
+		if onlineCount == fleetNodeCount-1 {
 			break
 		}
 		if time.Now().After(deadline) {

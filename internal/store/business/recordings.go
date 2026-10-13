@@ -119,6 +119,13 @@ func (r *Repository) ReserveRecording(ctx context.Context, v store.Recording, fr
 		candidates := []store.StorageMember{}
 		now := time.Now().Unix()
 		for _, m := range members {
+			draining, e := r.migrationDraining(ctx, q, m.ID)
+			if e != nil {
+				return e
+			}
+			if draining {
+				continue
+			}
 			if m.ID == node.ID && m.Kind == "MasterLocal" {
 				m.PhysicalFree = free
 			} else {
@@ -221,6 +228,9 @@ func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, rec
 		if v.UserID != user {
 			return store.ErrRecordingMissing
 		}
+		if e = r.checkMigrationRecording(ctx, q, v.MemberID, v.UserID); e != nil {
+			return e
+		}
 		if e = checkRecordingSnapshotEncryption(ctx, q, v, r.lock()); e != nil {
 			return e
 		}
@@ -291,6 +301,9 @@ func (r *Repository) StageRecordingDeletion(ctx context.Context, user, id string
 		}
 		if v.UserID != user {
 			return store.ErrRecordingMissing
+		}
+		if e = r.checkMigrationRecording(ctx, q, v.MemberID, v.UserID); e != nil {
+			return e
 		}
 		if pendingOnly && (v.State == "ready" || v.SHA256 != nil) {
 			return store.ErrRecordingState

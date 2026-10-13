@@ -1,0 +1,36 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	1.062s
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            BuildKit is currently disabled; enable it by removing the DOCKER_BUILDKIT=0
+            environment-variable.
+
+Sending build context to Docker daemon  322.7MB
+
+Step 1/11 : FROM frontiercloud-ops-test:01a13082-web-recovery
+ ---> 2159b3607d1a
+Step 2/11 : USER root
+ ---> Using cache
+ ---> 4cdd87426dd0
+Step 3/11 : COPY .ci-out/gen7/frontiercloud /app/frontiercloud
+ ---> 293d4d0c8119
+Step 4/11 : COPY .ci-out/gen7/fc /app/operator/fc
+ ---> 6ac90a7fd640
+Step 5/11 : COPY --chown=10001:10001 static /app/static
+ ---> ea6db12b9828
+Step 6/11 : COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+ ---> 727f27cee78a
+Step 7/11 : COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+ ---> e07015da3c55
+Step 8/11 : COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+ ---> 880771920f41
+Step 9/11 : COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
+ ---> 365a721db374
+Step 10/11 : LABEL frontiercloud.schema-generation="7" frontiercloud.test.run="fc-gen7-01a13082" frontiercloud.test.snapshot="working-tree"
+ ---> Running in ca3c8a4c1c87
+ ---> Removed intermediate container ca3c8a4c1c87
+ ---> feab0647b3b8
+Step 11/11 : USER 10001:10001
+ ---> Running in 8a73471e3363
+ ---> Removed intermediate container 8a73471e3363
+ ---> 0f88bbdd1a26
+Successfully built 0f88bbdd1a26
+Successfully tagged frontiercloud-ops-test:01a13082-gen7-native-reason

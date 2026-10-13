@@ -1,0 +1,52 @@
+{
+  "scope": "actual private-Compose deployment backup, CLI restoration and gated activation",
+  "public_installation_proof": false,
+  "synthetic_revision": "0000000000000000000000000000000000000000",
+  "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/pr14-c529-native-ops/fc-ops-recovery-4ef10397bf0d4258-5x9wsefv",
+  "database": "mysql",
+  "upgrade": {
+    "actual_compose": true,
+    "backup_sha256": "ae23d080f34bf9b826ee2b35c46922faf8ee14258e32e8720833e065793163fd",
+    "native_managed_business_reads": true,
+    "native_prepared_upgrade_resume_verified": true,
+    "phase": "opened",
+    "publication_proof_injected": true,
+    "source_schema_generation": 6,
+    "source_web_image_id": "sha256:090cf41ac0c995eebdb2d904cd9bca22e8a68230e5ba36e9bb8ae83ceca5b68e",
+    "target_schema_generation": 7,
+    "target_web_image_id": "sha256:8b36a778d5491404a9562aa3d19fb44b86e0e1b36a8dacdf66072fb56d999399",
+    "actual_image_switch": true,
+    "http_range_and_identity_preserved": true,
+    "post_business_cpu_samples": [
+      0.27,
+      0.21,
+      0.2,
+      0.26,
+      0.25
+    ]
+  },
+  "status": "passed",
+  "archive_sha256": "9b18b8231bcc2bcc7c65079b7fd65b8ec2cb324441e13d2fdb8da04e422bbd76",
+  "node_identity_preserved": true,
+  "media_id_preserved": true,
+  "priority_preserved": true,
+  "actual_http_range_verified": true,
+  "restore_check_read_only": true,
+  "offline_fence_preserved_on_apply": true,
+  "operator_activation_verified": true,
+  "interrupted_restore_open_reconciled": true,
+  "no_production_operation": true,
+  "web_cpu_limit": 1000000000,
+  "web_memory": 536870912,
+  "web_memory_swap": 536870912,
+  "post_business_cpu_samples": [
+    0.24,
+    0.29,
+    0.21,
+    0.28,
+    0.26
+  ],
+  "web_image_id": "sha256:090cf41ac0c995eebdb2d904cd9bca22e8a68230e5ba36e9bb8ae83ceca5b68e",
+  "edge_image_id": "sha256:a975254ad0f80c33c21410d0658d19bb7ebfa9102c00a572c8a9fedb80b22ea6",
+  "test_http_client_image_id": "sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72"
+}

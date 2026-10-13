@@ -319,7 +319,13 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		t.Fatal(followerView)
 	}
 	check(m.perform("POST", "/nodes/reinitialize", `{"confirmation":"wrong"}`, true, true), 409)
-	check(m.perform("POST", "/nodes/"+relation+"/revoke", "", true, true), 200)
+	check(m.perform("POST", "/nodes/"+relation+"/revoke", "", true, true), 409)
+	// The ordinary Admin shortcut is closed. This existing pairing/reset
+	// fixture explicitly exercises the legacy control tombstone underneath it;
+	// safe retirement has separate native reconciliation/credential tests.
+	if err = m.control.Revoke(ctx, relation, store.NodeAudit{Actor: "test-legacy-control"}); err != nil {
+		t.Fatal(err)
+	}
 	pack, err = f.control.CreatePair(ctx, store.NodeAudit{Actor: "local-storage-test"})
 	if err != nil {
 		t.Fatal(err)

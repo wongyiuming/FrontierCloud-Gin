@@ -1,0 +1,53 @@
+package store
+
+import "context"
+
+// Peer registrations are resource/control facts only. They never contain a
+// Master business database, private identity, relationship key or media key.
+type MigrationPeerHeader struct {
+	Format             string `json:"format"`
+	Version            int    `json:"version"`
+	TaskID             string `json:"task_id"`
+	MasterID           string `json:"master_id"`
+	SourceID           string `json:"source_id"`
+	TargetID           string `json:"target_id"`
+	SourceRelationship string `json:"source_relationship"`
+	TargetRelationship string `json:"target_relationship"`
+	PlanSHA            string `json:"plan_sha256"`
+	ObjectCount        int64  `json:"object_count"`
+	Bytes              int64  `json:"size_bytes"`
+}
+type MigrationPeerObject struct {
+	Header MigrationPeerHeader `json:"header,omitempty"`
+	State  string              `json:"peer_state,omitempty"`
+	Object MigrationObject     `json:"object"`
+	Proof  MigrationDiskProof  `json:"proof"`
+}
+type MigrationPeerRepository interface {
+	RegisterPeerMigration(context.Context, string, MigrationPeerHeader, MigrationLease, string, int64, NodeAudit) error
+	RegisterPeerMigrationObject(context.Context, string, MigrationLease, MigrationPeerObject, NodeAudit) error
+	AuthorizePeerMigration(context.Context, string, MigrationLease, string, string) (MigrationPeerObject, error)
+	FencePeerMigration(context.Context, string, string, int64, string, NodeAudit) error
+	CompletePeerMigrationAbort(context.Context, string, MigrationLease, string, NodeAudit) error
+	VerifyPeerMigrationObject(context.Context, string, MigrationLease, string, int64, string) error
+	CompletePeerMediaPublication(context.Context, string, MigrationLease, string, MediaObject, int64, string, int64, NodeAudit) error
+	CompletePeerRecordingPublication(context.Context, string, MigrationLease, string, RecordingReceipt, int64, NodeAudit) error
+	PreparePeerMigrationPublicationAbort(context.Context, string, MigrationLease, MigrationShadowGrant, NodeAudit) error
+	PreparePeerMigrationShadowDeletion(context.Context, string, MigrationLease, MigrationShadowGrant, NodeAudit) error
+	PreparePeerMigrationCleanup(context.Context, string, MigrationLease, MigrationCleanupGrant, NodeAudit) error
+	PreparePeerMediaDelete(context.Context, string, MigrationLease, DeleteOperation, NodeAudit) error
+	FailPeerMigrationShadowCleanup(context.Context, string, MigrationLease, string, NodeAudit) error
+	PeerMigrationShadowCleanupFailed(context.Context, string, MigrationLease, string) (bool, error)
+	FailPeerMigrationCleanup(context.Context, string, MigrationLease, string, NodeAudit) error
+	PeerMigrationCleanupFailed(context.Context, string, MigrationLease, string) (bool, error)
+	StagePeerRecordingDeletion(context.Context, string, MigrationLease, string) (*Recording, error)
+	CompletePeerRecordingDeletion(context.Context, string, string, string, int64, NodeAudit) error
+	ValidatePeerAnchorRetirement(context.Context, string, MigrationLease, MigrationCleanupGrant, bool) error
+	PeerMigrationUnitCancelWork(context.Context, string, MigrationLease, MigrationUnitFinishGrant) ([]MigrationPeerObject, error)
+	CompletePeerMigrationUnitCancellation(context.Context, string, MigrationLease, MigrationUnitFinishGrant, NodeAudit) (MigrationUnitFinishReceipt, error)
+	PeerMigrationUnitFinishWork(context.Context, string, MigrationLease, MigrationUnitFinishGrant) ([]MigrationPeerObject, error)
+	CompletePeerMigrationUnit(context.Context, string, MigrationLease, MigrationUnitFinishGrant, NodeAudit) (MigrationUnitFinishReceipt, error)
+	CompletePeerMigrationTaskCancellation(context.Context, string, MigrationLease, MigrationTaskFinishGrant, NodeAudit) (MigrationTaskFinishReceipt, error)
+	CompletePeerMigrationTask(context.Context, string, MigrationLease, MigrationTaskFinishGrant, NodeAudit) (MigrationTaskFinishReceipt, error)
+	ReleasePeerMigrationDrain(context.Context, string, string, string, NodeAudit) (MigrationDrainReceipt, error)
+}

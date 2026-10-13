@@ -1,0 +1,27 @@
+{
+  "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/pr14-8a866-native-ops/fc-ops-set-6a1eb1b9af44-x208bsj6",
+  "database": "sqlite",
+  "nodes": 2,
+  "public_installation_proof": false,
+  "transport_pairing_reconnect_proof": false,
+  "automatic_certificate_issuance_proof": false,
+  "status": "passed",
+  "sealed_identity_and_relationship_credentials_decrypted": true,
+  "set_sha256": "bcf42afce92cac2d01e1890bfa904882a2dacacf8764090a7c4c09c96d336074",
+  "native_store_seed": "native store APIs after actual fresh native startup; no network pairing assertion",
+  "original_identities_and_vault_keys_preserved": true,
+  "actual_http_range_and_media_id_preserved": true,
+  "missing_member_rejected_before_freeze": true,
+  "prepared_and_activated_publicly_fenced": true,
+  "all_members_opened": true,
+  "source_data_and_archives_retained": true,
+  "restored_set_rebacked_up_and_integrity_verified": true,
+  "second_set_sha256": "a3cb307a6368df0d25c6ba9b3a578be955fee09fc7e8dc3b5dc1378d86fec4c6",
+  "master_post_business_cpu_samples": [
+    2.93,
+    2.85,
+    3.7,
+    3.82,
+    0.27
+  ]
+}

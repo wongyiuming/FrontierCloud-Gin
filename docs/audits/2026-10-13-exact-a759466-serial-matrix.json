@@ -1,0 +1,16 @@
+{
+  "source_commit": "a759466c0919cfced62c99dbe24843f6792c711d",
+  "status": "failed",
+  "cases": [
+    {
+      "database": "go-sqlite",
+      "pair": "dd",
+      "evidence": "docs/audits/2026-10-13-exact-a759466-go-sqlite-dd",
+      "status": "failed",
+      "many_small_files": true,
+      "during_browser": false,
+      "elapsed_seconds": null
+    }
+  ],
+  "parallel_fleets": false
+}

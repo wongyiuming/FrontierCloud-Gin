@@ -1,0 +1,202 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            BuildKit is currently disabled; enable it by removing the DOCKER_BUILDKIT=0
+            environment-variable.
+
+Sending build context to Docker daemon  101.3MB
+
+Step 1/20 : FROM debian:13.3-slim
+ ---> 1d3c811171a0
+Step 2/20 : ARG REVISION
+ ---> Using cache
+ ---> 2dec6f339d17
+Step 3/20 : LABEL frontiercloud.revision=$REVISION frontiercloud.component="web"       frontiercloud.runtime="go" frontiercloud.schema-generation="7"       frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
+ ---> Running in 33e57ff0f84d
+ ---> Removed intermediate container 33e57ff0f84d
+ ---> ca1987d80c6d
+Step 4/20 : RUN apt-get update &&     apt-get install -y --no-install-recommends ca-certificates &&     rm -rf /var/lib/apt/lists/* &&     groupadd --system --gid 10001 appuser &&     useradd --system --uid 10001 --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser &&     mkdir -p /app/data /data &&     chown 10001:10001 /app/data /data
+ ---> Running in 2026c3c494ca
+Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [4412 B]
+Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [267 kB]
+Fetched 10.2 MB in 3s (3251 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  libssl3t64 openssl openssl-provider-legacy
+The following NEW packages will be installed:
+  ca-certificates openssl
+The following packages will be upgraded:
+  libssl3t64 openssl-provider-legacy
+2 upgraded, 2 newly installed, 0 to remove and 26 not upgraded.
+Need to get 4444 kB of archives.
+After this operation, 3006 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian-security trixie-security/main amd64 openssl-provider-legacy amd64 3.5.7-1~deb13u3 [316 kB]
+Get:2 http://deb.debian.org/debian-security trixie-security/main amd64 libssl3t64 amd64 3.5.7-1~deb13u3 [2458 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security/main amd64 openssl amd64 3.5.7-1~deb13u3 [1508 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 ca-certificates all 20250419 [162 kB]
+[91mdebconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+[0m[91mdebconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 4.)
+debconf: falling back to frontend: Teletype
+[0m[91mdebconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+[0mPreconfiguring packages ...
+Fetched 4444 kB in 2s (2653 kB/s)
+(Reading database ...
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4936 files and directories currently installed.)
+Preparing to unpack .../openssl-provider-legacy_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking openssl-provider-legacy (3.5.7-1~deb13u3) over (3.5.4-1~deb13u2) ...
+Setting up openssl-provider-legacy (3.5.7-1~deb13u3) ...
+(Reading database ...
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4936 files and directories currently installed.)
+Preparing to unpack .../libssl3t64_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking libssl3t64:amd64 (3.5.7-1~deb13u3) over (3.5.4-1~deb13u2) ...
+Setting up libssl3t64:amd64 (3.5.7-1~deb13u3) ...
+Selecting previously unselected package openssl.
+(Reading database ...
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 4936 files and directories currently installed.)
+Preparing to unpack .../openssl_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking openssl (3.5.7-1~deb13u3) ...
+Selecting previously unselected package ca-certificates.
+Preparing to unpack .../ca-certificates_20250419_all.deb ...
+Unpacking ca-certificates (20250419) ...
+Setting up openssl (3.5.7-1~deb13u3) ...
+Setting up ca-certificates (20250419) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8.)
+debconf: falling back to frontend: Teletype
+debconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+Updating certificates in /etc/ssl/certs...
+150 added, 0 removed; done.
+Processing triggers for libc-bin (2.41-12+deb13u1) ...
+Processing triggers for ca-certificates (20250419) ...
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+[91museradd warning: appuser's uid 10001 is greater than SYS_UID_MAX 999
+[0m ---> Removed intermediate container 2026c3c494ca
+ ---> 28ff4f309d93
+Step 5/20 : WORKDIR /app
+ ---> Running in 6cc5a91395cb
+ ---> Removed intermediate container 6cc5a91395cb
+ ---> 0bccc49eb9df
+Step 6/20 : COPY .ci-out/frontiercloud /app/frontiercloud
+ ---> 22461a781252
+Step 7/20 : COPY .ci-out/fc /app/operator/fc
+ ---> 13752e5ead77
+Step 8/20 : COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+ ---> fb484573690d
+Step 9/20 : COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+ ---> acb4e8b77755
+Step 10/20 : COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+ ---> 0694509f426a
+Step 11/20 : COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
+ ---> f94065276bdc
+Step 12/20 : COPY --chown=10001:10001 static /app/static
+ ---> 1bd1b02bd35f
+Step 13/20 : COPY internal/search/data/LICENSE.pypinyin.txt internal/search/data/LICENSE.opencc.txt /app/licenses/
+ ---> be33c1d14e50
+Step 14/20 : RUN chmod -R a+rX /app/static
+ ---> Running in 2e2b32d06f33
+ ---> Removed intermediate container 2e2b32d06f33
+ ---> a3399995a353
+Step 15/20 : ENV LANG=C.UTF-8
+ ---> Running in 6aa81cb94b6e
+ ---> Removed intermediate container 6aa81cb94b6e
+ ---> 7c194d1de1a2
+Step 16/20 : ENV LC_ALL=C.UTF-8
+ ---> Running in 230792f635a7
+ ---> Removed intermediate container 230792f635a7
+ ---> b75bf97c831b
+Step 17/20 : EXPOSE 8000
+ ---> Running in 17435a4c4f16
+ ---> Removed intermediate container 17435a4c4f16
+ ---> 5a8c14de3a22
+Step 18/20 : USER 10001:10001
+ ---> Running in 66368e1be5c4
+ ---> Removed intermediate container 66368e1be5c4
+ ---> 2e93046eb5df
+Step 19/20 : ENTRYPOINT ["/app/frontiercloud"]
+ ---> Running in f8686208ef8f
+ ---> Removed intermediate container f8686208ef8f
+ ---> e0e5a1f499a6
+Step 20/20 : CMD ["serve"]
+ ---> Running in fdb1c8e02375
+ ---> Removed intermediate container fdb1c8e02375
+ ---> 85d2baa834ad
+Successfully built 85d2baa834ad
+Successfully tagged frontiercloud-ops-test:01a13082-exact-817790e

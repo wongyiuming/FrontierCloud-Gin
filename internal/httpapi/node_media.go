@@ -78,6 +78,16 @@ func RegisterNodeMedia(router *gin.Engine, settings config.Config, resolver *net
 			return
 		}
 		defer stream.File.Close()
+		if !settings.NginxMedia {
+			logical, _ := payload["g"].(string)
+			readCtx, release, err := control.ProtectOwnedRead(c.Request.Context(), relation.ID, logical, stream.ObjectID, "media", func() { _ = stream.File.Close() })
+			if err != nil {
+				detail(c, 409, "Resource read is fenced by migration or node state")
+				return
+			}
+			defer release()
+			c.Request = c.Request.WithContext(readCtx)
+		}
 		// The standalone HTTPS listener is also the public edge. Browser query
 		// capabilities must not expose the metadata formerly hidden by Nginx.
 		// Header-based server downloads retain placement proof for MediaRead.

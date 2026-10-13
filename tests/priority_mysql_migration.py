@@ -43,7 +43,7 @@ for attempt in range(3):
         sql('UPDATE frontiercloud_schema SET generation=3; DELETE FROM frontiercloud_schema_migrations WHERE generation=4')
     subprocess.run([args.binary, 'migrate'], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     assert sql(facts_query) == original
-    assert sql('SELECT generation FROM frontiercloud_schema') == '4'
+    assert sql('SELECT generation FROM frontiercloud_schema') == '5'
     assert sql("SELECT data_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='media_playback_stats' AND column_name='preference'") == 'int'
     assert sql("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='media_playback_stats' AND index_name='keep_priority_index'") == '1'
 sql("UPDATE media_playback_stats SET preference=500000 WHERE media_id='media'")

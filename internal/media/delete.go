@@ -115,6 +115,11 @@ func validateOperation(operation store.DeleteOperation) error {
 		if item.Absent && (item.OwnedID == "" || item.Directory) {
 			return ErrRecovery
 		}
+		if item.MigrationTask != "" || item.MigrationLogical != "" {
+			if !operationID.MatchString(item.MigrationTask) || !ownedObjectID.MatchString(item.MigrationLogical) || item.OwnedID == "" || item.GlobalID != "" || item.Absent {
+				return ErrRecovery
+			}
+		}
 		seen[item.Slot] = true
 		names[item.Path] = true
 	}

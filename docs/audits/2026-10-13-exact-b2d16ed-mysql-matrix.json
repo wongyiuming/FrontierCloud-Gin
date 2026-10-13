@@ -1,0 +1,43 @@
+{
+  "source_commit": "b2d16edc4f9d0ab419f5324d52e3829ba90c8f18",
+  "status": "passed",
+  "cases": [
+    {
+      "database": "go-mysql",
+      "pair": "dd",
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-dd",
+      "status": "passed",
+      "many_small_files": true,
+      "during_browser": false,
+      "elapsed_seconds": 565.741
+    },
+    {
+      "database": "go-mysql",
+      "pair": "dr",
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-dr",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 226.131
+    },
+    {
+      "database": "go-mysql",
+      "pair": "rd",
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-rd",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 271.249
+    },
+    {
+      "database": "go-mysql",
+      "pair": "rr",
+      "evidence": "docs/audits/2026-10-13-exact-b2d16ed-go-mysql-rr",
+      "status": "passed",
+      "many_small_files": false,
+      "during_browser": true,
+      "elapsed_seconds": 271.196
+    }
+  ],
+  "parallel_fleets": false
+}

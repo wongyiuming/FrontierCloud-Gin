@@ -16,7 +16,7 @@ test "$(git rev-parse --verify "$revision^{commit}")" = "$revision"
 git cat-file -e "$revision:Dockerfile.gin"
 git cat-file -e "$revision:updater/Dockerfile.gin"
 # Never send .env, data, keys, untracked files, .git or mutable source changes.
-paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx updater/Dockerfile updater/Dockerfile.gin)
+paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx updater/Dockerfile updater/Dockerfile.gin docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md docs/operator-upgrade.md docs/operator-recovery-sets.md)
 components=(web updater nginx)
 if [[ "$selection" == web-only ]]; then components=(web); fi
 for component in "${components[@]}"; do

@@ -2,11 +2,7 @@
 name: ${COMPOSE_PROJECT_NAME:-frontiercloud-storage}
 
 x-storage-image: &storage-image
-  image: frontiercloud-go-web:${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}
-  build:
-    context: .
-    dockerfile: Dockerfile.gin
-    args: {REVISION: "${FRONTIERCLOUD_REVISION:?Set the exact committed source SHA}"}
+  image: ghcr.io/wongyiuming/frontiercloud-gin-web:${FRONTIERCLOUD_REVISION:-latest}
   env_file:
     - path: .env
       required: false

@@ -1,0 +1,19 @@
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+--- PASS: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (0.89s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:24: phase=seed elapsed=3.290706995s total=3.290707076s
+    migration_plan_pages_test.go:24: phase=catalog elapsed=59.192396043s total=1m2.483103119s
+    migration_plan_pages_test.go:24: phase=native-and-content-fixture-proofs elapsed=32.422055025s total=1m34.905158144s
+    migration_plan_pages_test.go:24: phase=seal elapsed=38.473696045s total=2m13.378854189s
+    migration_plan_pages_test.go:24: phase=admission-rollback elapsed=40.259252457s total=2m53.638106646s
+    migration_plan_pages_test.go:67: heartbeat exceeded recovery budget: 1m33.25056945s
+    migration_plan_pages_test.go:24: phase=admission elapsed=39.812152383s total=3m33.450259029s
+    migration_plan_pages_test.go:24: phase=commit-10005-objects elapsed=14.482593985s total=3m47.932853014s
+    migration_plan_pages_test.go:24: phase=commit-3-objects elapsed=1.129916063s total=3m49.062769077s
+    migration_plan_pages_test.go:285: both final heartbeats succeeded after all writer transactions
+    migration_plan_pages_test.go:286: paged objects=10008 immutable JSON bytes=25515005 page limit=64
+    migration_plan_pages_test.go:95: heartbeat attempts=26 recoverable_busy=13 longest_SQL_wait=5.011397136s largest_success_gap=1m33.250568067s
+--- FAIL: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (234.38s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	235.303s
+FAIL

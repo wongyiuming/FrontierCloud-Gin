@@ -1,0 +1,56 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.121s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	8.442s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	1.043s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	1.022s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	42.342s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	1.092s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	1.027s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	1.034s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	1.234s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	16.176s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	1.025s
+--- FAIL: TestBootstrapArchivesExactCommitAndRejectsMutableSelections (0.06s)
+    bootstrap_test.go:123: immutable bootstrap failed: exit status 2: fatal: pathspec 'docs/operator-upgrade.md' did not match any files
+        tar: This does not look like a tar archive
+        tar: Exiting with failure status due to previous errors
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	0.353s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	1.082s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	1.132s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	1.015s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	166.838s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	1.962s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	1.440s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	61.378s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	1.049s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	9.744s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	1.025s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	1.016s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	9.007s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	1.192s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	12.947s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	1.025s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	10.830s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	1.883s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	1.304s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.313s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.063s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	1.805s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	1.201s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	1.102s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store	1.530s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	40.273s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	2.139s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	2.840s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	1.667s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	6.856s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	1.022s
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/tests/fixtures/nginx-traffic-backend	[no test files]
+FAIL

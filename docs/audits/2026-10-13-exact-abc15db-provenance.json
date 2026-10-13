@@ -1,0 +1,34 @@
+{
+  "source_commit": "abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133",
+  "tracked_source_clean": true,
+  "images": {
+    "web": {
+      "id": "sha256:eb9a2b8e6a9827bdcd49aec5c854143bf4d13061f6eadfbd4a4867ccbeef9a6e",
+      "revision": "abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133"
+    },
+    "nginx": {
+      "id": "sha256:64f232db6aeb425d9ba3ec0abace2af9fb19a2843c8dc4b6bfd5ec51e1a09b29",
+      "revision": "abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133"
+    }
+  },
+  "binaries": {
+    "frontiercloud": {
+      "sha256": "353ca3418f6cd8f8be32ee3a63819b6cc527899f8cba92c72834bbbaa4340664",
+      "bytes": 45183138
+    },
+    "fc": {
+      "sha256": "cb498e2f6d6ed5e757fc24dfcc762898cf624ee6803c57291edf10db53f1b90f",
+      "bytes": 11727010
+    },
+    "updater.test": {
+      "sha256": "b4d25e2e17a7f82c0bc0df5577ac98eaf4cc4a93ef085c7ecd24bbffe8cbf45f",
+      "bytes": 23907080
+    }
+  },
+  "compiler_cpus": 1,
+  "compiler_memory_bytes": 1073741824,
+  "private_test_images": true,
+  "public_release_proof": false,
+  "source_ci_run_id": 38415565284,
+  "asset_ci_run_id": 38415564631
+}

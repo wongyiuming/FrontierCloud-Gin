@@ -276,6 +276,40 @@ func (r *Repository) ActivateRelationship(ctx context.Context, id string, a stor
 }
 func (r *Repository) RevokeRelationship(ctx context.Context, id string, confirmed bool, a store.NodeAudit) error {
 	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+		if v.State == "retiring" {
+			return store.ErrNodeState
+		}
+		if v.State == "revoked" && v.Summary["retirement"] != nil {
+			// Legacy notifications cannot erase a durable retirement receipt.
+			member := v.PeerID
+			if node.Role == "Follower" {
+				member = node.ID
+			}
+			_, e := retirementFenceValue(node, v, member)
+			return e
+		}
+		memberID := v.PeerID
+		if node.Role == "Follower" {
+			memberID = node.ID
+		}
+		for _, check := range []struct {
+			query string
+			args  []any
+		}{
+			{"SELECT COUNT(*) FROM migration_tasks WHERE (source_id=? OR target_id=?) AND state NOT IN ('completed','cancelled')", []any{memberID, memberID}},
+			{"SELECT COUNT(*) FROM migration_scopes WHERE member_id=?", []any{memberID}},
+			{"SELECT COUNT(*) FROM migration_capacity WHERE member_id=? AND reserved_bytes<>0", []any{memberID}},
+			{"SELECT COUNT(*) FROM migration_storage_journal WHERE (source_id=? OR target_id=?) AND state NOT IN ('deleted','aborted')", []any{memberID, memberID}},
+			{"SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND expires_at>?", []any{memberID, time.Now().Unix()}},
+		} {
+			var pending int
+			if err := q.QueryRowContext(ctx, check.query, check.args...).Scan(&pending); err != nil {
+				return err
+			}
+			if pending != 0 {
+				return store.ErrMigrationState
+			}
+		}
 		var files int
 		var query string
 		var args []any
@@ -361,7 +395,13 @@ func (r *Repository) SetRelationshipMode(ctx context.Context, id, mode string, a
 		return r.nodeAudit(ctx, q, action, id, map[string]any{"mode": mode}, a)
 	})
 }
-func (r *Repository) ReserveNodeNonce(ctx context.Context, id, nonce, expectedCredential string, now int64, pending, revoked bool) (result store.Relationship, err error) {
+func (r *Repository) ReserveNodeNonce(ctx context.Context, id, nonce, expectedCredential string, now int64, pending, revoked bool) (store.Relationship, error) {
+	return r.reserveNodeNonce(ctx, id, nonce, expectedCredential, now, pending, revoked, false)
+}
+func (r *Repository) ReserveRetirementNonce(ctx context.Context, id, nonce, expectedCredential string, now int64, revoked bool) (store.Relationship, error) {
+	return r.reserveNodeNonce(ctx, id, nonce, expectedCredential, now, false, revoked, true)
+}
+func (r *Repository) reserveNodeNonce(ctx context.Context, id, nonce, expectedCredential string, now int64, pending, revoked, retiring bool) (result store.Relationship, err error) {
 	if !nodeIDPattern.MatchString(nonce) {
 		return result, nodeConflict("invalid request nonce")
 	}
@@ -369,7 +409,7 @@ func (r *Repository) ReserveNodeNonce(ctx context.Context, id, nonce, expectedCr
 		if subtle.ConstantTimeCompare([]byte(expectedCredential), []byte(v.Credential)) != 1 {
 			return nodeConflict("relationship credentials changed")
 		}
-		if v.Protocol != 2 || (v.State != "active" && !(pending && v.State == "pending") && !(revoked && v.State == "revoked")) {
+		if v.Protocol != 2 || (v.State != "active" && !(pending && v.State == "pending") && !(revoked && v.State == "revoked") && !(retiring && v.State == "retiring")) {
 			return nodeConflict("relationship not active")
 		}
 		if _, err := q.ExecContext(ctx, "DELETE FROM node_request_nonces WHERE expires_at<=?", now); err != nil {

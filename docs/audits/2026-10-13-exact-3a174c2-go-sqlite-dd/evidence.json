@@ -1,0 +1,25 @@
+{
+  "status": "failed",
+  "database": "go-sqlite",
+  "combination": "dd",
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-native-matrix-9pcbw946",
+  "project": "fc-matrix-79d1a38a-a883-401d-8bf4-53d649f2fbdc-dd-go-sqlite",
+  "image_ids": {
+    "native": "sha256:7d3b5337223531fd5b3ef5efc101ad11a306562435bf132b010b70cddbe5d245",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:75db0f6d9071d8a60f097897e757fec0204aae743a115911f6a1f57b182fd58d"
+  },
+  "test_binary_sha256": "9d94fa9ef9194f06c5037cf24be9d42644fea271ec0df84d7b5fc700ff3ab200",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": false,
+  "unreachable_peer_selected": false,
+  "generated_mp3_selected": true,
+  "during_copy_browser_selected": false,
+  "additional_actual_small_files": 1024,
+  "error_type": "RuntimeError",
+  "actual_chromium": null,
+  "chromium_phases": {},
+  "owned_cleanup_complete": true
+}

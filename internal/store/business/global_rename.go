@@ -127,7 +127,7 @@ func (r *Repository) checkGlobalRenameScopes(ctx context.Context, q queryer, sco
 			}
 		}
 	}
-	return nil
+	return r.checkMigrationScopes(ctx, q, "media", scopes)
 }
 
 func (r *Repository) PrepareGlobalRename(ctx context.Context, old, target string, a store.AdminAudit) (op store.GlobalRenameOperation, err error) {
@@ -145,6 +145,9 @@ func (r *Repository) PrepareGlobalRename(ctx context.Context, old, target string
 		}
 		if n.Role != "Master" {
 			return store.ErrNodeState
+		}
+		if err := r.checkMigrationScopes(ctx, q, "media", []store.DeleteItem{{Path: old, Directory: true}, {Path: target, Directory: true}}); err != nil {
+			return err
 		}
 		pending, err := r.pendingGlobalRenames(ctx, q, 0, true)
 		if err != nil {

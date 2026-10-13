@@ -1,0 +1,3 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	14.458s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.135s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	1.310s

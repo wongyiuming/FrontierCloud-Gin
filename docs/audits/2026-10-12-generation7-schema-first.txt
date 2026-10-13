@@ -1,0 +1,9 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	2.157s
+=== RUN   TestRealNativeMatrixFleetControl
+    native_matrix_real_test.go:178: isolated native matrix fleet not selected
+--- SKIP: TestRealNativeMatrixFleetControl (0.00s)
+=== RUN   TestRealNativeMatrixFleetMigrations
+    native_migration_real_test.go:49: isolated native migration matrix not selected
+--- SKIP: TestRealNativeMatrixFleetMigrations (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	0.005s

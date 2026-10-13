@@ -1,0 +1,69 @@
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:29:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.122 client_ip=192.0.2.1 request_id=d99416596033439383b9100d10ce6b66 trace_id=d99416596033439383b9100d10ce6b66
+2026/10/13 01:29:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.047 client_ip=192.0.2.1 request_id=6cac6a45168a45369987d340fbe51bb2 trace_id=6cac6a45168a45369987d340fbe51bb2
+2026/10/13 01:29:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.066 client_ip=192.0.2.1 request_id=449edcf4c6944470a0698a5eb1633f68 trace_id=449edcf4c6944470a0698a5eb1633f68
+2026/10/13 01:29:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.05 client_ip=192.0.2.1 request_id=db3f122d30f64615b2269d41df25cf5a trace_id=db3f122d30f64615b2269d41df25cf5a
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.136 client_ip=192.0.2.1 request_id=4b7f6edd7e4d4c16a820afa8a5677d7a trace_id=4b7f6edd7e4d4c16a820afa8a5677d7a
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=5.283 client_ip=192.0.2.1 request_id=9d0c113e9f4c481a9fee58f3e9182a0a trace_id=9d0c113e9f4c481a9fee58f3e9182a0a
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.054 client_ip=192.0.2.1 request_id=a2cad1a28b6645d0bfe757cb5204d2de trace_id=a2cad1a28b6645d0bfe757cb5204d2de
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.902 client_ip=192.0.2.1 request_id=10993b7c9e064f6f963eb520ea7642ab trace_id=10993b7c9e064f6f963eb520ea7642ab
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.756 client_ip=192.0.2.1 request_id=c317d630997f476b87b300c69202778a trace_id=c317d630997f476b87b300c69202778a
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.949 client_ip=192.0.2.1 request_id=3f46c935a05249ffb0685bba4064f91d trace_id=3f46c935a05249ffb0685bba4064f91d
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.846 client_ip=192.0.2.1 request_id=8901034e699a4e4181ec160880c71d54 trace_id=8901034e699a4e4181ec160880c71d54
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.941 client_ip=192.0.2.1 request_id=d7e06083ca924a6e99c3b5576cc997b1 trace_id=d7e06083ca924a6e99c3b5576cc997b1
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=18.68 client_ip=192.0.2.1 request_id=080a6083f159451c873fbdb98284e94a trace_id=080a6083f159451c873fbdb98284e94a
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.854 client_ip=192.0.2.1 request_id=ba31dd5be1144eee85e258361cb3ba42 trace_id=ba31dd5be1144eee85e258361cb3ba42
+2026/10/13 01:29:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.829 client_ip=192.0.2.1 request_id=28efd278b4c64e85b7db6ab1e49cbdbb trace_id=28efd278b4c64e85b7db6ab1e49cbdbb
+    node_content_observation_test.go:116: cancel retained bytes {{11111111111111111111111111111111 {0ab26bab286ea05771567878d2cdf863 3a572336fd54732afa2e70b56153957f fb7fc0718c6b712892eec3247f1b7754 data} media b3492850e562509d7b77a3bbd2494f3ba11e34985f768ba69e6603e8d3caa96c aa435ba2e7ee28854a99316a8f2e6ca7cf6f41a8d2aece4561ae9a162a4cba8f 190000} d69bc8e6a0040be00c0ecd6c76b33ce7 cancelled 1791854969 1791855269 observation_cancelled 0xc00178fd40} <nil>
+--- FAIL: TestAuthenticatedManagedContentObservation (1.03s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:29:30 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.135 client_ip=192.0.2.1 request_id=fbc86849eb9e437a9f00eec3812df697 trace_id=fbc86849eb9e437a9f00eec3812df697
+2026/10/13 01:29:30 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.083 client_ip=192.0.2.1 request_id=0f7aa88cf1a54c7eb9132bc3d7b5ae5a trace_id=0f7aa88cf1a54c7eb9132bc3d7b5ae5a
+2026/10/13 01:29:30 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.063 client_ip=192.0.2.1 request_id=cefa7beb528b482f810014253f2f0195 trace_id=cefa7beb528b482f810014253f2f0195
+2026/10/13 01:29:30 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.1 client_ip=192.0.2.1 request_id=573acb44b8114b9794a4bdf5eddbd9b9 trace_id=573acb44b8114b9794a4bdf5eddbd9b9
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.958 client_ip=192.0.2.1 request_id=ac4736f7c8504af6abd10a5deb98b387 trace_id=ac4736f7c8504af6abd10a5deb98b387
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.156 client_ip=192.0.2.1 request_id=5baf850e0f084ec18020586873fea3d2 trace_id=5baf850e0f084ec18020586873fea3d2
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.061 client_ip=192.0.2.1 request_id=016d6ce99a2c44aeb1a95a74bfdd8f9c trace_id=016d6ce99a2c44aeb1a95a74bfdd8f9c
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.937 client_ip=192.0.2.1 request_id=d08310db0daf441fb76f4d3966fb3a06 trace_id=d08310db0daf441fb76f4d3966fb3a06
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=4.763 client_ip=192.0.2.1 request_id=6220511723f24b4db00824b90f8b1199 trace_id=6220511723f24b4db00824b90f8b1199
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.732 client_ip=192.0.2.1 request_id=9633c489999d4134a5d5f160fc290c69 trace_id=9633c489999d4134a5d5f160fc290c69
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.923 client_ip=192.0.2.1 request_id=ec1a1754ad5449a09a29b4e1630ae3fc trace_id=ec1a1754ad5449a09a29b4e1630ae3fc
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.954 client_ip=192.0.2.1 request_id=89de6d308e7343db9b613ade35f9feff trace_id=89de6d308e7343db9b613ade35f9feff
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=19.002 client_ip=192.0.2.1 request_id=5f866c9360354b7e972c7a528db49208 trace_id=5f866c9360354b7e972c7a528db49208
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.724 client_ip=192.0.2.1 request_id=def4122e52d64f13a29775deac37dcc0 trace_id=def4122e52d64f13a29775deac37dcc0
+2026/10/13 01:29:30 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.721 client_ip=192.0.2.1 request_id=d0ad49c16ea14167b873d2c608725351 trace_id=d0ad49c16ea14167b873d2c608725351
+    node_content_observation_test.go:116: cancel retained bytes {{11111111111111111111111111111111 {1d56192d2683c9d4ed0054a2218ffdb1 48f1cf672a8e697408b86d51e02dcb68 602262c69d88423b52bf1b36e17cd4b6 data} media 8a4c74a225216f9369d1d4d71f53be0b09001685b9b6cd68da9802add76ed66c a98c44e94f8168834c544a5bde13e1061ecb8c1db8d55d3060dc64ddb5af7b5e 190000} 61f143359538adf509c54a949d72d498 cancelled 1791854970 1791855270 observation_cancelled 0xc00182da70} <nil>
+--- FAIL: TestAuthenticatedManagedContentObservation (0.41s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	1.486s
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	1.035s
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	1.022s
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.00s)
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.036s
+FAIL

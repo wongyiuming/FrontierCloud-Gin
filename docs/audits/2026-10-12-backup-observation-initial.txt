@@ -1,0 +1,3 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	0.248s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	0.007s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	0.008s [no tests to run]

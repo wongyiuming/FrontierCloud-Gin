@@ -1,0 +1,7 @@
+# github.com/wongyiuming/FrontierCloud-Gin/internal/node
+internal/node/migration_direct.go:51:38: cannot use value (variable of interface type any) as map[string]any value in argument to s.identity.signed: need type assertion
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/node [build failed]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	0.003s [no tests to run]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration [build failed]
+FAIL

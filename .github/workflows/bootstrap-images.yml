@@ -113,6 +113,7 @@ jobs:
           mkdir .ci-out
           if test "$COMPONENT" = web; then
             go build -p=4 -trimpath -ldflags='-s -w' -o .ci-out/frontiercloud ./cmd/frontiercloud
+            go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/fc ./cmd/fc
           else
             go build -p=4 -trimpath -ldflags="-s -w -X main.Revision=$REVISION" -o .ci-out/frontiercloud-updater ./cmd/frontiercloud-updater
           fi

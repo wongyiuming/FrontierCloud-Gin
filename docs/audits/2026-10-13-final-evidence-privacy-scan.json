@@ -1,0 +1,9 @@
+{
+  "private_files_examined": 8254,
+  "distinct_secret_values": 989,
+  "public_evidence_files_examined": 491,
+  "violation_paths": [],
+  "passed": true,
+  "raw_private_logs_exported": false,
+  "scope": "Remote audit copies (including original terminal captures) against retained/live native fixtures and operator workspaces named by evidence: secret files, JSON secret fields, signed URL credentials and private-key PEM blocks."
+}

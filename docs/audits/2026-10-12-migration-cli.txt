@@ -1,0 +1,43 @@
+=== RUN   TestNodeCLIRejectsUnsafeAuthorityBeforeCredentialInput
+--- PASS: TestNodeCLIRejectsUnsafeAuthorityBeforeCredentialInput (0.00s)
+=== RUN   TestNodeCLIExitCodesDoNotGrantRetirement
+--- PASS: TestNodeCLIExitCodesDoNotGrantRetirement (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.015s
+=== RUN   TestMigrationClientBoundedQueriesConfirmationsAndConflict
+--- PASS: TestMigrationClientBoundedQueriesConfirmationsAndConflict (0.02s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	1.032s
+=== RUN   TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation
+2026/10/13 00:29:25 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.123 client_ip=192.0.2.1 request_id=96da31c2bd29405d8cd2d8bd288d51ed trace_id=96da31c2bd29405d8cd2d8bd288d51ed
+2026/10/13 00:29:25 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.063 client_ip=192.0.2.1 request_id=13f5a0937c6b4922b8692a28cecfa828 trace_id=13f5a0937c6b4922b8692a28cecfa828
+2026/10/13 00:29:25 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.564 client_ip=192.0.2.1 request_id=2469837784724f76a41997d09acc459c trace_id=2469837784724f76a41997d09acc459c
+2026/10/13 00:29:25 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.361 client_ip=192.0.2.1 request_id=f57729273a4f451196ee06edd9c5b389 trace_id=f57729273a4f451196ee06edd9c5b389
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.834 client_ip=192.0.2.1 request_id=04b40d1bc9da43e6b5345aa80e685007 trace_id=04b40d1bc9da43e6b5345aa80e685007
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.763 client_ip=192.0.2.1 request_id=e51e6196282e4f2686d8085435b8d334 trace_id=e51e6196282e4f2686d8085435b8d334
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/elevate status=200 duration_ms=4.477 client_ip=127.0.0.1 request_id=ea6fa672e77440b4b261135fa7a4a9c6 trace_id=ea6fa672e77440b4b261135fa7a4a9c6
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/status status=200 duration_ms=0.924 client_ip=127.0.0.1 request_id=0250abe381e5491f8d46d104764daf4a trace_id=0250abe381e5491f8d46d104764daf4a
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=200 duration_ms=6.497 client_ip=127.0.0.1 request_id=7dc76d9af6fb48668c2524481e4df52b trace_id=7dc76d9af6fb48668c2524481e4df52b
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.122 client_ip=192.0.2.1 request_id=61bf3ce478f6410b90345c6dd3de0229 trace_id=61bf3ce478f6410b90345c6dd3de0229
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.475 client_ip=192.0.2.1 request_id=064b9d1a0c2248b1b2c658cd4e3b3c89 trace_id=064b9d1a0c2248b1b2c658cd4e3b3c89
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.435 client_ip=192.0.2.1 request_id=4ed4d77bc0974dce9af497c75efb30ed trace_id=4ed4d77bc0974dce9af497c75efb30ed
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.662 client_ip=192.0.2.1 request_id=fce5daeb8a3a4e599d658955712cb5ca trace_id=fce5daeb8a3a4e599d658955712cb5ca
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.996 client_ip=192.0.2.1 request_id=9bc35f413df54475ba26e185f79451c1 trace_id=9bc35f413df54475ba26e185f79451c1
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.966 client_ip=192.0.2.1 request_id=b2885fddaa844b56b4c2ffdb7ffddc1c trace_id=b2885fddaa844b56b4c2ffdb7ffddc1c
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.305 client_ip=192.0.2.1 request_id=e8267b08e5d74fab89edb8eabb7d6171 trace_id=e8267b08e5d74fab89edb8eabb7d6171
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.642 client_ip=192.0.2.1 request_id=8a9807c6731845a9b706f1dc17eda780 trace_id=8a9807c6731845a9b706f1dc17eda780
+2026/10/13 00:29:25 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.207 client_ip=192.0.2.1 request_id=940d12bb22c5475e9f952eddcc99a9ad trace_id=940d12bb22c5475e9f952eddcc99a9ad
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/nodes/0d507724e3faa8fb81e636934b42cae6/retire/check status=200 duration_ms=62.231 client_ip=127.0.0.1 request_id=76962e23306d440d8b2128be887ae6c5 trace_id=76962e23306d440d8b2128be887ae6c5
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/logout status=200 duration_ms=1.596 client_ip=127.0.0.1 request_id=5ea3243d0d124637802c39556ccb4f43 trace_id=5ea3243d0d124637802c39556ccb4f43
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=401 duration_ms=0.052 client_ip=127.0.0.1 request_id=9faa3c45db5f4f60a8882851be32b835 trace_id=9faa3c45db5f4f60a8882851be32b835
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/elevate status=200 duration_ms=1.403 client_ip=127.0.0.1 request_id=740660ad4c984bd8ba5bf599b6143b86 trace_id=740660ad4c984bd8ba5bf599b6143b86
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/status status=200 duration_ms=0.972 client_ip=127.0.0.1 request_id=76fad8f4703c4a17a3f1b0765785233f trace_id=76fad8f4703c4a17a3f1b0765785233f
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=200 duration_ms=5.242 client_ip=127.0.0.1 request_id=1fb2b6b6335945b3a342f610bbb2955c trace_id=1fb2b6b6335945b3a342f610bbb2955c
+2026/10/13 00:29:25 INFO request_completed method=GET path=/api/v1/media/admin/nodes/migrations/ffffffffffffffffffffffffffffffff status=200 duration_ms=2.56 client_ip=127.0.0.1 request_id=5278f996a0a049ab9b5aabb2ddba9220 trace_id=5278f996a0a049ab9b5aabb2ddba9220
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/logout status=200 duration_ms=1.346 client_ip=127.0.0.1 request_id=d54d7d867faf4951a88b6e623ec16c72 trace_id=d54d7d867faf4951a88b6e623ec16c72
+    node_retirement_cli_test.go:153: migration CLI execution or credential handling pause 2
+2026/10/13 00:29:25 INFO request_completed method=POST path=/api/v1/media/admin/logout status=401 duration_ms=0.051 client_ip=127.0.0.1 request_id=4085166acd414daeb278e0fecdf694f7 trace_id=4085166acd414daeb278e0fecdf694f7
+--- FAIL: TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation (1.24s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	1.283s
+FAIL

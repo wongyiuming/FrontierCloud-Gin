@@ -1,0 +1,2 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	12.891s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	1.188s

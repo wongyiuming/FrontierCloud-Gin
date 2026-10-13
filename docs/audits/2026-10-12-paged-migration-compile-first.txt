@@ -1,0 +1,13 @@
+# github.com/wongyiuming/FrontierCloud-Gin/internal/store/business
+internal/store/business/migration_peer_finish.go:7:2: "time" imported and not used
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store	0.002s [no tests to run]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/node [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/media [build failed]
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud [build failed]
+FAIL

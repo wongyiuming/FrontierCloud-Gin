@@ -1,0 +1,20 @@
+Media crypto source/build/output hashes and CSP-compatible syntax verified
+media-crypto-build-smoke-ok (source, output and lock changes rejected without npm)
+media-crypto-smoke-ok (static/js)
+admin-ui-smoke-ok
+node-retirement-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+admin-crypto-upload-smoke-ok
+karaoke-encrypted-snapshot-smoke-ok
+catalog-startup-smoke-ok
+player-cache-smoke-ok
+audio-continuous-fetch-retry-smoke-ok
+FrontierCloud audio pipeline held { name: 'InvalidStateError', message: 'decoder state failure' }
+FrontierCloud audio pipeline held { name: 'Error', message: 'temporary authorization expired' }
+audio-continuous-stream-smoke-ok
+network-observation-smoke-ok
+FrontierCloud audio pipeline held { name: 'InvalidStateError', message: 'decoder state failure' }
+FrontierCloud audio pipeline held { name: 'Error', message: 'temporary authorization expired' }
+audio-continuous-stream-smoke-ok
+audio-continuous-fetch-retry-smoke-ok
+media-crypto-smoke-ok (static/js/compiled)

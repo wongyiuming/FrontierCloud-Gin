@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "project": "fc-nginx-traffic-fabd25b3a47b49e08f697866910d4f2e",
+  "workspace": "/tmp/fc-nginx-traffic-eko88og3",
+  "private_test_image": true,
+  "image_id": "sha256:ca0a40d0a27e313c52d44c7f9dbb7707c3d00acdfa3a28b42389d61d313d59f6",
+  "payload_sha256": "a06c26cbac8b80704f420222dae5658b88ff2da96702d12ef7a4223e9361f7c1",
+  "ongoing_sendfile_peak": 524288,
+  "partial_received_bytes": 4259840,
+  "abort_before_completion": true,
+  "in_flight_observation": true,
+  "actual_range": true,
+  "actual_http2": true,
+  "http2_in_flight_peak": 524873,
+  "tcp_counter_rejected": true,
+  "reload_epoch_retained": true,
+  "migration_observation_excluded": true,
+  "owned_container_removed": true
+}

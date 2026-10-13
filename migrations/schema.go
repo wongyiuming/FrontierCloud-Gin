@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-const Generation = 4
+const Generation = 7
 const JournalName = "create-schema-migration-journal"
 const JournalChecksum = "aee46be69d8c5b005cbee58ebfd37feb41d3431eb1fb23bb8339c9076147c03e"
 
@@ -46,3 +46,12 @@ func Statements(backend string) ([]string, error) {
 
 // SHA256 of SQLite CREATE plus the equivalent atomic MySQL ALTER.
 const PriorityChecksum = "40ed2a2da3227bc3835f9196d5bd1cc81fc547bf1ada05f410cff929715487f1"
+
+const ResourceMigrationName = "durable-storage-resource-migration"
+const ResourceMigrationChecksum = "64e2817e07fd7a65dc651297425ce9a0ca26d6a8f4e7abb21d3154a359c3ce3c"
+
+const PeerBindingsName = "immutable-peer-resource-bindings"
+const PeerBindingsChecksum = "1fda21be7bc2c0b5f1b14bfc6f74e352a1bc070688c5409ad000d47ce555aed8"
+
+const MigrationPlansName = "paged-master-migration-plans"
+const MigrationPlansChecksum = "e190dd09f369fea46adc941a3a43addbd87fd211261f5da0ea9ec384297f85cd"

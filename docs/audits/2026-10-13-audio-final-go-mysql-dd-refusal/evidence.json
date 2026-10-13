@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "database": "go-mysql",
+  "combination": "dd",
+  "workspace": "/tmp/fc-native-matrix-5uun3lza",
+  "project": "fc-matrix-56e7785f-8f9c-4082-9623-f7c5daa5e12c-dd-go-mysql",
+  "image_ids": {
+    "native": "sha256:becc53b7e256a5a16245d31123997e8cdd01be13683094f81efdf25637011a9d",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:2e15aa9b217895fb416b371449294c2a157d1f1194f2553756fd486e6b2cd3f8"
+  },
+  "test_binary_sha256": "ffabd24d659e4321820b39b1eaa3eb4eb0f988aa624d9769b851d31a95858b67",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": false,
+  "unreachable_peer_selected": true,
+  "generated_mp3_selected": false,
+  "elapsed_seconds": 117.021,
+  "actual_chromium": null,
+  "owned_cleanup_complete": true
+}

@@ -1,0 +1,1 @@
+PASS: real Chromium node operations UI; deterministic API fixture, no native-server claim

@@ -1,0 +1,88 @@
+{
+  "scope": "compiled shipping fc early guards and private real-Docker Install protocol",
+  "public_release_first_installation_verified": false,
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-sixth/fc-ops-install-suite-ueaqsaod",
+  "successful_installation_driver_has_test_only_publication_and_local_ca": true,
+  "selected_private_cases": [
+    "certificate-failure"
+  ],
+  "guards_requested": false,
+  "private_installations": [
+    {
+      "actual_ca_rejection_verified": true,
+      "actual_compose": true,
+      "case": "certificate-failure",
+      "database": "sqlite",
+      "failed_native_vault_key_preserved": true,
+      "failed_prepared_receipt_retained": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 5,
+      "install_up_calls": 1,
+      "production_publication_verified": false,
+      "profile": "relay",
+      "publication_proof_injected": true,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-sixth/fc-ops-install-suite-ueaqsaod/fc-ops-install-certificate-failure-aac1519476",
+      "retained_resources": {
+        "containers": [],
+        "volumes": [
+          "fc-ops-install-certificate-failure-aac1519476_certificate_published",
+          "fc-ops-install-certificate-failure-aac1519476_certificate_runtime",
+          "fc-ops-install-certificate-failure-aac1519476_certificate_state",
+          "fc-ops-install-certificate-failure-aac1519476_storage_secrets"
+        ]
+      },
+      "cleanup": {
+        "removed_stopped_containers": [
+          {
+            "id": "e204395a2ff12d7aceb252c9cc099dc674aecc22d59cdb4a26c0f823e4d2fddc",
+            "service": "web",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "14627b0fbb9e9ee386e1880adce367907dcc6e7e6cdade55f57ca9af849d7f58",
+            "service": "media-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "539efca4a5387007ebbbe713d734a94d00a759b23a916fa4dc1edd5be953970a",
+            "service": "secrets-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "9eea74266c75b2b0f20f9b151d0d2bc2a87f7510ff73e3b41b32aba81cfab59d",
+            "service": "certificate-agent",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 2
+          },
+          {
+            "id": "959e7a013ae3c34d047c5736ab722d8daeea76cdda70504af640e93225b714d4",
+            "service": "certificate-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          }
+        ],
+        "removed_empty_networks": [
+          "8d885d7848bf4425777dce8540c3413a888d5e96c1b00dc22b950e9ec9cfeb05"
+        ],
+        "named_volumes_retained": [
+          "fc-ops-install-certificate-failure-aac1519476_certificate_published",
+          "fc-ops-install-certificate-failure-aac1519476_certificate_runtime",
+          "fc-ops-install-certificate-failure-aac1519476_certificate_state",
+          "fc-ops-install-certificate-failure-aac1519476_storage_secrets"
+        ],
+        "receipt_sha256": "875ee5dcccfee1e4adcd6c9b04958a8bb32d73be5edcf051f71f9bda0c34a7d5",
+        "test_log_sha256": "4eb7a37adc0bc91fbcce6d135da0389644c95e35ea2f3ecc3db7cb46daefacfb"
+      }
+    }
+  ],
+  "passed": true
+}

@@ -1,0 +1,8 @@
+{
+  "private_files_examined": 770,
+  "distinct_secret_values": 463,
+  "public_evidence_files_examined": 406,
+  "violation_paths": [],
+  "passed": true,
+  "raw_private_logs_exported": false
+}

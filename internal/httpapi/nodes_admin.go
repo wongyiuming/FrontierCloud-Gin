@@ -174,7 +174,7 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	writes.POST("/:identifier/revoke", func(c *gin.Context) {
-		if err := service.Revoke(c.Request.Context(), c.Param("identifier"), audit(c)); err != nil {
+		if err := service.RevokeFromAdmin(c.Request.Context(), c.Param("identifier"), audit(c)); err != nil {
 			nodeAdminError(c, err)
 			return
 		}

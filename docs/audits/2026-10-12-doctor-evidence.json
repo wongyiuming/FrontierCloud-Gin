@@ -1,0 +1,381 @@
+{
+  "scope": "actual Compose rendering and read-only doctor; no installation/TLS acceptance",
+  "results": [
+    {
+      "role": "master",
+      "database": "sqlite",
+      "transport": "",
+      "exit_code": 2,
+      "doctor_read_only": true,
+      "compose_rendered": true,
+      "installation_executed": false,
+      "report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-doctor-v0u83sko; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "674369343488 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "pass",
+            "reason": "configured TCP/UDP ports have no observed listeners",
+            "next": "recheck immediately before starting; this does not prove inbound access"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      }
+    },
+    {
+      "role": "master",
+      "database": "mysql",
+      "transport": "",
+      "exit_code": 2,
+      "doctor_read_only": true,
+      "compose_rendered": true,
+      "installation_executed": false,
+      "report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-doctor-vqz46688; role: master; database: mysql",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "674369314816 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "pass",
+            "reason": "configured TCP/UDP ports have no observed listeners",
+            "next": "recheck immediately before starting; this does not prove inbound access"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      }
+    },
+    {
+      "role": "storage",
+      "database": "sqlite",
+      "transport": "direct",
+      "exit_code": 2,
+      "doctor_read_only": true,
+      "compose_rendered": true,
+      "installation_executed": false,
+      "report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-doctor-ip5yb28e; role: storage; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "dns",
+            "state": "blocked",
+            "reason": "hostname does not resolve from this host",
+            "next": "correct public A/AAAA records"
+          },
+          {
+            "item": "inbound_http01",
+            "state": "unverified",
+            "reason": "local DNS/outbound access does not prove public TCP 80 reaches this host",
+            "next": "verify public reachability independently before certificate issuance"
+          },
+          {
+            "item": "inbound_https",
+            "state": "unverified",
+            "reason": "public TCP reachability cannot be established locally",
+            "next": "verify 443 for Direct/Master or the configured Relay port from an external host"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "674369413120 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "pass",
+            "reason": "configured TCP/UDP ports have no observed listeners",
+            "next": "recheck immediately before starting; this does not prove inbound access"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      }
+    },
+    {
+      "role": "storage",
+      "database": "sqlite",
+      "transport": "relay",
+      "exit_code": 2,
+      "doctor_read_only": true,
+      "compose_rendered": true,
+      "installation_executed": false,
+      "report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-doctor-5_c_xbwu; role: storage; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "dns",
+            "state": "blocked",
+            "reason": "hostname does not resolve from this host",
+            "next": "correct public A/AAAA records"
+          },
+          {
+            "item": "inbound_http01",
+            "state": "unverified",
+            "reason": "local DNS/outbound access does not prove public TCP 80 reaches this host",
+            "next": "verify public reachability independently before certificate issuance"
+          },
+          {
+            "item": "inbound_https",
+            "state": "unverified",
+            "reason": "public TCP reachability cannot be established locally",
+            "next": "verify 443 for Direct/Master or the configured Relay port from an external host"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "674369318912 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "pass",
+            "reason": "configured TCP/UDP ports have no observed listeners",
+            "next": "recheck immediately before starting; this does not prove inbound access"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      }
+    }
+  ]
+}

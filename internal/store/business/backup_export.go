@@ -55,6 +55,11 @@ func (r *Repository) ExportBusinessSnapshot(ctx context.Context, emit func(strin
 		"SELECT COUNT(*) FROM karaoke_recordings WHERE state<>'ready'",
 		"SELECT COUNT(*) FROM karaoke_users WHERE status='deleting'",
 		"SELECT COUNT(*) FROM cluster_storage_members WHERE reserved_bytes<>0",
+		"SELECT COUNT(*) FROM migration_tasks WHERE state NOT IN ('completed','cancelled')",
+		"SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0",
+		"SELECT COUNT(*) FROM migration_scopes",
+		"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')",
+		"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
 	} {
 		var count int64
 		if err := tx.QueryRowContext(ctx, query).Scan(&count); err != nil {

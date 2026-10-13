@@ -2,7 +2,7 @@
 FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="4" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="7" \
       frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/* && groupadd --system --gid 10001 appuser && \
@@ -10,6 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     mkdir -p /app/data /data && chown 10001:10001 /app/data /data
 WORKDIR /app
 COPY .ci-out/frontiercloud /app/frontiercloud
+COPY .ci-out/fc /app/operator/fc
+COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
+COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
 COPY --chown=10001:10001 static /app/static
 COPY internal/search/data/LICENSE.pypinyin.txt internal/search/data/LICENSE.opencc.txt /app/licenses/
 RUN chmod -R a+rX /app/static

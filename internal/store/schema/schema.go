@@ -14,6 +14,10 @@ import (
 
 var tablePattern = regexp.MustCompile("(?i)^CREATE TABLE(?: IF NOT EXISTS)?\\s+`?(\\w+)")
 
+// Preserve existing lock names where valid. Legal longer database names need
+// a bounded hash suffix because MySQL advisory lock names allow 64 characters.
+const mysqlMigrationLockName = "CASE WHEN CHAR_LENGTH(CONCAT('frontiercloud:schema-migrations:', DATABASE()))<=64 THEN CONCAT('frontiercloud:schema-migrations:', DATABASE()) ELSE CONCAT('frontiercloud:schema-migrations:', LEFT(SHA2(DATABASE(),256),32)) END"
+
 // Initialize reserves one connection for the migration lock and its statements.
 func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 	statements, err := migrations.Statements(backend)
@@ -31,7 +35,7 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 		}
 	} else {
 		var acquired int
-		if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(CONCAT('frontiercloud:schema-migrations:', DATABASE()), 60)").Scan(&acquired); err != nil {
+		if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK("+mysqlMigrationLockName+", 60)").Scan(&acquired); err != nil {
 			return err
 		}
 		if acquired != 1 {
@@ -40,7 +44,7 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 		defer func() {
 			release, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, _ = conn.ExecContext(release, "SELECT RELEASE_LOCK(CONCAT('frontiercloud:schema-migrations:', DATABASE()))")
+			_, _ = conn.ExecContext(release, "SELECT RELEASE_LOCK("+mysqlMigrationLockName+")")
 		}()
 		if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
 			return err
@@ -151,6 +155,83 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 				return err
 			}
 			generation = 4
+		}
+		if generation == 4 {
+			// Additive DDL is replayable after a MySQL crash: CREATE IF NOT
+			// EXISTS completes before the atomic journal/generation update.
+			for _, statement := range statements {
+				match := tablePattern.FindStringSubmatch(statement)
+				if len(match) == 2 && strings.HasPrefix(match[1], "migration_") && match[1] != "migration_peer_bindings" && !strings.HasPrefix(match[1], "migration_plan_") || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_") && !strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_plan_") {
+					if _, err := conn.ExecContext(ctx, statement); err != nil {
+						return fmt.Errorf("migrate resource task journal: %w", err)
+					}
+				}
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=5"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (5,?,?,?)", migrations.ResourceMigrationName, migrations.ResourceMigrationChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=5 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 5
+		}
+		if generation == 5 {
+			for _, statement := range statements {
+				match := tablePattern.FindStringSubmatch(statement)
+				if len(match) == 2 && match[1] == "migration_peer_bindings" {
+					if _, err := conn.ExecContext(ctx, statement); err != nil {
+						return fmt.Errorf("migrate peer resource bindings: %w", err)
+					}
+				}
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=6"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (6,?,?,?)", migrations.PeerBindingsName, migrations.PeerBindingsChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=6 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 6
+		}
+		if generation == 6 {
+			for _, statement := range statements {
+				match := tablePattern.FindStringSubmatch(statement)
+				if len(match) == 2 && strings.HasPrefix(match[1], "migration_plan_") || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_plan_") {
+					if _, err := conn.ExecContext(ctx, statement); err != nil {
+						return fmt.Errorf("migrate paged resource plans: %w", err)
+					}
+				}
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=7"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (7,?,?,?)", migrations.MigrationPlansName, migrations.MigrationPlansChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=7 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 7
 		}
 		if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)

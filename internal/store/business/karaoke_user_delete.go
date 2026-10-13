@@ -28,6 +28,13 @@ func (r *Repository) StageUserDeletion(ctx context.Context, id string, a store.K
 		if v.Status == "deleting" {
 			return nil
 		}
+		var migrating int
+		if err = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_scopes WHERE resource_kind='recording' AND parent_path=?", id).Scan(&migrating); err != nil {
+			return err
+		}
+		if migrating != 0 {
+			return store.ErrMigrationState
+		}
 		now := time.Now().Unix()
 		if _, err := q.ExecContext(ctx, "UPDATE karaoke_users SET status='deleting',updated_at=? WHERE user_id=?", now, id); err != nil {
 			return err

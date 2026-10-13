@@ -13,6 +13,10 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
+// Corrupt local SQL must not allocate an unbounded manifest string before
+// the cold reader can reject it. Master identity is already an exact key.
+const backupReadColumns = "master_id,generation,SUBSTR(checksum,1,65),size_bytes,chunk_count,SUBSTR(state,1,17),created_at,updated_at"
+
 // A repeatable cold snapshot survives concurrent retention. It deliberately
 // does not require a still-active relationship: historical recovery artifacts
 // are inspected by local maintenance, never used to authorize network access.
@@ -36,7 +40,7 @@ func (r *Repository) readReadySQLBackup(ctx context.Context, master string, gene
 		return empty, err
 	}
 	defer tx.Rollback()
-	m, err := scanBackup(tx.QueryRowContext(ctx, "SELECT "+backupColumns+" FROM cluster_business_backups WHERE master_id=? AND generation=?", master, generation))
+	m, err := scanBackup(tx.QueryRowContext(ctx, "SELECT "+backupReadColumns+" FROM cluster_business_backups WHERE master_id=? AND generation=?", master, generation))
 	if errors.Is(err, sql.ErrNoRows) {
 		err = store.ErrBackupState
 	}

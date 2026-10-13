@@ -79,16 +79,23 @@ func (r *Repository) CloseFileBackups() error {
 	return nil
 }
 func (r *Repository) backupFileLease(ctx context.Context, exclusive bool) (func(), error) {
+	return r.backupFileLeaseMode(ctx, exclusive, false)
+}
+
+// A read-only inspection must not repair a missing coordination inode, even
+// when the repository also serves writable backup transfer requests.
+func (r *Repository) backupFileLeaseMode(ctx context.Context, exclusive, existingOnly bool) (func(), error) {
 	if r.backupFiles == nil {
 		return func() {}, nil
 	}
-	if info, err := r.backupFiles.Lstat(".lock"); err == nil && !info.Mode().IsRegular() {
+	info, err := r.backupFiles.Lstat(".lock")
+	if err == nil && (!info.Mode().IsRegular() || info.Size() != 0) {
 		return nil, store.ErrBackupState
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+	} else if err != nil && (existingOnly || !errors.Is(err, os.ErrNotExist)) {
 		return nil, err
 	}
 	flags := os.O_CREATE | os.O_RDWR
-	if r.backupFilesReadOnly {
+	if r.backupFilesReadOnly || existingOnly {
 		if exclusive {
 			return nil, store.ErrBackupState
 		}
@@ -98,7 +105,21 @@ func (r *Repository) backupFileLease(ctx context.Context, exclusive bool) (func(
 	if err != nil {
 		return nil, err
 	}
-	return filelease.Acquire(ctx, f, exclusive)
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || opened.Size() != 0 || (info != nil && !os.SameFile(info, opened)) {
+		f.Close()
+		return nil, store.ErrBackupState
+	}
+	release, err := filelease.Acquire(ctx, f, exclusive)
+	if err != nil {
+		return nil, err
+	}
+	current, err := r.backupFiles.Lstat(".lock")
+	if err != nil || !current.Mode().IsRegular() || current.Size() != 0 || !os.SameFile(opened, current) {
+		release()
+		return nil, store.ErrBackupState
+	}
+	return release, nil
 }
 func backupChunkName(master string, generation int64, index int, digest []byte) string {
 	return fmt.Sprintf("chunk.%s.%d.%d.%s", master, generation, index, hex.EncodeToString(digest))
