@@ -228,3 +228,17 @@ validation preserves identity, incarnation, creation and bounded idle expiry.
 CLI packages, including delayed private-CA responses/cancellation, CIDR trust
 expansion and a clock-advanced multi-page plan with renewal. Fresh exact native,
 CI and review remain pending; production has not been modified.
+
+## Eleventh review checkpoint
+
+`1bced9f` passes native SQLite/MySQL upgrade/recovery, coordinated recovery and
+full Go race with actual isolated Redis, and five-node planning/traffic/retirement/
+pairing validation. One further review finding concerns human migration output failures.
+Node CLI result writers now retain any first output/short-write error and return
+nonzero after remote work, including human migration status/control/plan and
+retirement reports. Each route keeps streaming output and its recorded remote
+state. A private-TLS CLI fixture covers all five control actions with failed first
+or second writes after authenticated mutation; short writes also fail explicitly.
+`pr14-eleventh-review-cli-race` passes those real-TLS CLI regressions and the CLI
+package. Fresh exact-source CI/review and shipping binary verification remain
+pending; production is unchanged.

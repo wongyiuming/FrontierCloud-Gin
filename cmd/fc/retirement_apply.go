@@ -17,7 +17,10 @@ func validNodeCommandID(value string) bool {
 	return e == nil && len(raw) == 16 && strings.ToLower(value) == value
 }
 
-func retirementApplyCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
+func retirementApplyCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) (exitCode int) {
+	resultOutput := &resultWriter{writer: output}
+	output = resultOutput
+	defer resultOutput.finish(&exitCode, diagnostics)
 	if len(args) < 4 {
 		return 2
 	}

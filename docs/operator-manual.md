@@ -368,6 +368,8 @@ The internal managed-content observation endpoint uses each native media or reco
 
 Host operations report a nonzero result if releasing or syncing their owned operation lock fails. Completed archive/receipt state remains available for inspection; the error does not mean that data or a completed operation was rolled back. Inspect the recorded state and retained lock before another mutation. A replacement lock is never removed by an older operation's release callback.
 
+Human and JSON node-command output failures return a nonzero result even when the remote action completed. Query the recorded task revision or retirement state before retrying; an undelivered report does not mean the action was rolled back.
+
 Migration planning renews live inventory cursors without replacing their scanner or transcript. Final peer retirement scans use a separate, one-connection transport owned by caller cancellation, while ordinary control requests retain their short timeout. Deployment receipts bind both security-exempt and trusted-proxy CIDR sets after masking, sorting and deduplication; expanding trust requires explicit deployment review.
 
 

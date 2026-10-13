@@ -12,7 +12,10 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 )
 
-func migrationPlanCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
+func migrationPlanCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) (exitCode int) {
+	resultOutput := &resultWriter{writer: output}
+	output = resultOutput
+	defer resultOutput.finish(&exitCode, diagnostics)
 	action := args[2]
 	flags := flag.NewFlagSet("fc node migrate "+action, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -61,7 +64,9 @@ func migrationPlanCommand(ctx context.Context, args []string, structured bool, i
 		}
 	} else {
 		fmt.Fprintf(output, "Plan: %s; state: %q\nSource: %s (%s)\nTarget: %s (%s)\nObjects: %d; complete parent units: %d; bytes: %d\nVerified: %d objects / %d bytes\nTarget used/reserved/free: %d / %d / %d; additional bytes: %d; physical reserve: %d\nReview SHA256: %s\nExpires: %d\n", v.ID, v.State, v.Source.ID, v.Source.Transport, v.Target.ID, v.Target.Transport, v.ObjectCount, v.UnitCount, v.Bytes, v.VerifiedObjects, v.VerifiedBytes, v.Target.Used, v.Target.Reserved, v.TargetFree, v.AdditionalBytes, v.PhysicalReserve, v.ReviewSHA, v.ExpiresAt)
-		if v.BlockerCount>0 {fmt.Fprintf(output,"Blockers: %d (up to 64 samples shown)\n",v.BlockerCount)}
+		if v.BlockerCount > 0 {
+			fmt.Fprintf(output, "Blockers: %d (up to 64 samples shown)\n", v.BlockerCount)
+		}
 		for _, b := range v.Blockers {
 			fmt.Fprintf(output, "BLOCK %q: %q\n", b.Code, b.Resource)
 		}

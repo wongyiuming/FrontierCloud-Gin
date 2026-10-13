@@ -10,10 +10,13 @@ import (
 	"strings"
 )
 
-func migrationCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
+func migrationCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) (exitCode int) {
 	if len(args) >= 3 && (args[2] == "plan" || args[2] == "plan-status" || args[2] == "start") {
 		return migrationPlanCommand(ctx, args, structured, input, output, diagnostics)
 	}
+	resultOutput := &resultWriter{writer: output}
+	output = resultOutput
+	defer resultOutput.finish(&exitCode, diagnostics)
 	if len(args) < 4 {
 		fmt.Fprintln(diagnostics, "fc node migrate status|pause|resume|cancel|retry|release-drain TASK_ID --master https://MASTER --credential-stdin")
 		return 2
@@ -49,7 +52,7 @@ func migrationCommand(ctx context.Context, args []string, structured bool, input
 	}
 	if *after != "" {
 		decoded, e := hex.DecodeString(*after)
-		if e != nil || len(decoded) != 32 && len(decoded)!=16 || *after != strings.ToLower(*after) {
+		if e != nil || len(decoded) != 32 && len(decoded) != 16 || *after != strings.ToLower(*after) {
 			return 2
 		}
 	}

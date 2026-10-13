@@ -13,13 +13,16 @@ import (
 	"strings"
 )
 
-func nodeCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
+func nodeCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) (exitCode int) {
 	if len(args) > 1 && args[1] == "migrate" {
 		return migrationCommand(ctx, args, structured, input, output, diagnostics)
 	}
 	if len(args) > 2 && args[1] == "retire" && args[2] == "apply" {
 		return retirementApplyCommand(ctx, args, structured, input, output, diagnostics)
 	}
+	resultOutput := &resultWriter{writer: output}
+	output = resultOutput
+	defer resultOutput.finish(&exitCode, diagnostics)
 	if len(args) < 4 || args[1] != "retire" || args[2] != "check" {
 		fmt.Fprintln(diagnostics, "supported: fc node retire check NODE_ID --master https://MASTER --credential-stdin")
 		return 2
