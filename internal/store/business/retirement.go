@@ -39,6 +39,8 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 	result.Role = role
 	result.CheckedAt = now
 	checks := []retirementQuery{
+		{"worker_jobs", "cluster_worker_jobs WHERE (member_id=? OR media_id IN (SELECT media_id FROM global_media_objects WHERE storage_member_id=?) OR ((member_id IS NULL OR member_id='') AND (media_id IS NULL OR media_id='' OR NOT EXISTS (SELECT 1 FROM global_media_objects g WHERE g.media_id=cluster_worker_jobs.media_id)))) AND (state<>'complete' OR lease_expires_at>?)", "job_id", "finish_or_reconcile_worker_jobs", []any{member, member, now}},
+		{"migration_binding_orphans", "migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id LEFT JOIN migration_tasks t ON t.task_id=b.task_id WHERE j.task_id IS NULL AND (t.task_id IS NULL OR t.source_id=? OR t.target_id=?)", "b.task_id", "reconcile_peer_task_and_file_receipts", []any{member, member}},
 		{"recordings", "karaoke_recordings WHERE storage_member_id=? AND state<>'deleted'", "recording_id", "migrate_or_resolve_recordings", []any{member}},
 		{"uploads", "cluster_upload_sessions WHERE storage_member_id=? AND state NOT IN ('complete','cancelled')", "upload_id", "finish_or_cancel_uploads", []any{member}},
 		{"storage_accounting", "cluster_storage_members WHERE member_id=? AND (used_bytes<>0 OR reserved_bytes<>0)", "member_id", "reconcile_used_and_reserved_bytes", []any{member}},
@@ -53,7 +55,7 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 			retirementQuery{"backup_generations", "cluster_business_backups", "CAST(generation AS CHAR)", "retain_or_replace_verified_recovery_points", nil},
 			retirementQuery{"backup_chunks", "cluster_business_backup_chunks", "CAST(generation AS CHAR)", "reconcile_receiving_or_orphan_backup_material", nil},
 			retirementQuery{"file_transactions", "media_delete_operations WHERE state<>'rename_done'", "operation_id", "finish_native_file_recovery", nil},
-			retirementQuery{"migration_journals", "migration_storage_journal j LEFT JOIN migration_tasks t ON t.task_id=j.task_id WHERE (j.source_id=? OR j.target_id=?) AND (t.task_id IS NULL OR t.state NOT IN ('completed','cancelled'))", "j.task_id", "reconcile_peer_task_and_file_receipts", []any{member, member}})
+			retirementQuery{"migration_journals", "migration_storage_journal j LEFT JOIN migration_tasks t ON t.task_id=j.task_id WHERE (j.source_id=? OR j.target_id=?) AND (t.task_id IS NULL OR t.state NOT IN ('completed','cancelled') OR j.state NOT IN ('published','deleted','aborted'))", "j.task_id", "reconcile_peer_task_and_file_receipts", []any{member, member}})
 	} else {
 		checks = append(checks,
 			retirementQuery{"managed_media", "global_media_objects WHERE storage_member_id=? AND state<>'deleted'", "media_id", "migrate_or_resolve_media", []any{member}},
@@ -91,6 +93,13 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 			return result, e
 		}
 		result.Blockers = append(result.Blockers, block)
+	}
+	if role == "Master" {
+		blockers, e := retirementMasterFileTransactions(ctx, tx, node, member)
+		if e != nil {
+			return result, e
+		}
+		result.Blockers = append(result.Blockers, blockers...)
 	}
 	result.DatabaseClear = len(result.Blockers) == 0
 	if e = tx.Commit(); e != nil {

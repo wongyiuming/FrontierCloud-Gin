@@ -318,6 +318,7 @@
                 section.append(kv([['物理条目', report.physical_entries], ['逻辑字节', dataSize(report.logical_bytes)], ['预期资源', report.expected_items]]));
                 const list = make('ul');
                 const steps = {
+                    finish_or_reconcile_worker_jobs: '完成或对账后台任务及其有效执行租约。',
                     migrate_or_resolve_media: '迁移受管理媒体，或通过业务恢复流程对账。',
                     migrate_or_resolve_recordings: '迁移录音，或处理未完成录音事务。',
                     finish_or_cancel_uploads: '等待上传安全完成，或取消未完成上传。',
