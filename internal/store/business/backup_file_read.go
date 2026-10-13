@@ -17,12 +17,12 @@ func (r *Repository) readReadyFileBackup(ctx context.Context, master string, gen
 	if !nodeIDPattern.MatchString(master) || generation <= 0 || consume == nil {
 		return empty, store.ErrBackupState
 	}
-	release, err := r.backupFileLease(ctx, false)
+	release, err := r.backupFileLeaseMode(ctx, false, true)
 	if err != nil {
 		return empty, err
 	}
 	defer release()
-	m, err := scanBackup(r.db.QueryRowContext(ctx, "SELECT "+backupColumns+" FROM cluster_business_backups WHERE master_id=? AND generation=?", master, generation))
+	m, err := scanBackup(r.db.QueryRowContext(ctx, "SELECT "+backupReadColumns+" FROM cluster_business_backups WHERE master_id=? AND generation=?", master, generation))
 	if err != nil || m.State != "ready" || !nodeHashPattern.MatchString(m.Checksum) || m.Bytes < 0 || m.Chunks < 1 || m.Chunks > store.MaxBackupChunkIndex+1 || m.Bytes > int64(m.Chunks)*store.MaxBackupChunk {
 		return empty, store.ErrBackupState
 	}

@@ -226,7 +226,7 @@ func inventoryIdentity(ctx context.Context, q queryer, relationship, member, mas
 	if e = q.QueryRowContext(ctx, "SELECT peer_id,direction,state,protocol FROM node_relationships WHERE relationship_id=?", relationship).Scan(&peer, &direction, &state, &protocol); e != nil {
 		return e
 	}
-	if nodeID != member || role != "Follower" || peer != master || state != "active" || direction != "upstream" || protocol != 2 {
+	if nodeID != member || role != "Follower" || peer != master || (state != "active" && state != "retiring") || direction != "upstream" || protocol != 2 {
 		return store.ErrNodeState
 	}
 	return nil

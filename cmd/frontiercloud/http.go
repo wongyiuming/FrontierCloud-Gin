@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
@@ -58,6 +59,11 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return result
 	}
 	ready := false
+	traffic := businesstraffic.New(nil)
+	if settings.NginxMedia {
+		closers = append(closers, traffic.WatchGateway(context.Background()))
+	}
+	controlService.ConfigureBusinessTraffic(traffic)
 	defer func() {
 		if !ready {
 			closeHTTP()
@@ -76,7 +82,12 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return securityService.Ready(ctx)
 	}, func(ctx context.Context) error {
 		return redisClient.Ping(ctx).Err()
-	}, resolver, httpapi.SecurityMiddleware(securityService, resolver))
+	}, resolver, httpapi.BusinessTrafficMiddleware(traffic), httpapi.SecurityMiddleware(securityService, resolver))
+	closeRetirementGate, err := httpapi.RegisterNodeRetirementBarrier(handler, settings, controlService)
+	if err != nil {
+		return nil, nil, err
+	}
+	closers = append(closers, closeRetirementGate)
 	public, err := httpapi.RegisterPublic(handler, settings, mediaService)
 	if err != nil {
 		return nil, nil, err
@@ -125,14 +136,30 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return nil, nil, err
 	}
 	closers = append(closers, closeContent)
+	closeBackupObservation, err := httpapi.RegisterNodeBackupObservation(handler, settings, resolver, controlService, database.Backups())
+	if err != nil {
+		return nil, nil, err
+	}
+	closers = append(closers, closeBackupObservation)
+	closeRetirement, err := httpapi.RegisterNodeRetirementPeer(handler, settings, resolver, controlService, database.Pool(), mediaService, recordingStorage)
+	if err != nil {
+		return nil, nil, err
+	}
+	closers = append(closers, closeRetirement)
 	if migrations, ok := database.Pool().(store.MigrationRepository); ok {
-		runner := &resourcemigration.Runner{Repository: migrations, Nodes: database.Nodes(), Client: controlService}
+		runner := &resourcemigration.Runner{Repository: migrations, Nodes: database.Nodes(), Client: controlService, Traffic: traffic}
 		httpapi.RegisterAdminMigrations(handler, adminHTTP, database.Pool().(store.MigrationAdminRepository), runner)
 		stop, err := runner.Start(context.Background())
 		if err != nil {
 			return nil, nil, err
 		}
 		closers = append(closers, stop)
+		planner, err := resourcemigration.NewPlanner(context.Background(), runner)
+		if err != nil {
+			return nil, nil, err
+		}
+		closers = append(closers, planner.Close)
+		httpapi.RegisterAdminMigrationPlanning(handler, adminHTTP, planner)
 	}
 	httpapi.RegisterObservations(handler, adminHTTP, observation.New(database.Observations(), redisClient, settings.WebRTCCooldown), resolver)
 

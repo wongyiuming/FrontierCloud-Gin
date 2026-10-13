@@ -85,6 +85,9 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 		return nil, empty, e
 	}
 	directory := filepath.Join(root, "deployment")
+	if _, e := os.Lstat(filepath.Join(directory, RestoreJournal)); !os.IsNotExist(e) {
+		return nil, empty, errors.New("restoration already prepared or interrupted; preserve its journal")
+	}
 	source, old, e := Open(directory)
 	if e != nil {
 		return nil, empty, e
@@ -129,10 +132,24 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 				src, _ := m["source"].(string)
 				dst, _ := m["target"].(string)
 				if kind == "bind" {
+					class := "data"
 					if dst != "/app/data" {
-						return nil, empty, errors.New("unclassified archived bind; recovery cannot relocate it silently")
+						class = recoveredMountClass(name, dst)
+						if !old.Recovered || class == "" {
+							return nil, empty, errors.New("unclassified archived bind; recovery cannot relocate it silently")
+						}
+						found := false
+						for _, recorded := range report.Manifest.Classes {
+							if recorded == class {
+								found = true
+							}
+						}
+						info, e := os.Lstat(filepath.Join(root, class))
+						if !found || e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+							return nil, empty, errors.New("required recovered bind state class is absent or unsafe")
+						}
 					}
-					m["source"] = filepath.Join(root, "data")
+					m["source"] = filepath.Join(root, class)
 					delete(m, "bind")
 				} else if kind == "volume" {
 					if class, yes := classFor[src]; yes {
@@ -142,7 +159,7 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 						m["type"] = "bind"
 						m["source"] = filepath.Join(root, class)
 						delete(m, "volume")
-					} else if src != "web_tmp" && src != "certificate_runtime" && src != "mysql_data" {
+					} else if src != "web_tmp" && src != "certificate_runtime" && src != "traffic_runtime" && src != "mysql_data" {
 						return nil, empty, errors.New("unclassified recovery volume")
 					}
 				}
@@ -167,7 +184,12 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 			n["name"] = project + "_" + name
 		}
 	}
-	if e = exclusiveJSON(filepath.Join(directory, RecoveredCompose), full); e != nil {
+	if old.Recovered {
+		e = replaceJSON(filepath.Join(directory, RecoveredCompose), full)
+	} else {
+		e = exclusiveJSON(filepath.Join(directory, RecoveredCompose), full)
+	}
+	if e != nil {
 		return nil, empty, e
 	}
 	locked := map[string]map[string]string{}
@@ -238,7 +260,14 @@ func (d *Deployment) saveRestore(s RestoreState) error {
 // ActivateRestore starts an already verified restored identity behind manual
 // maintenance. Opening public traffic is a separate explicit command.
 func (d *Deployment) ActivateRestore(ctx context.Context, r Receipt, confirmation string, sourceOffline bool) (RestoreState, error) {
+	return d.activateRestore(ctx, r, confirmation, sourceOffline, false)
+}
+
+func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmation string, sourceOffline, coordinated bool) (RestoreState, error) {
 	var state RestoreState
+	if _, e := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); !os.IsNotExist(e) && !coordinated {
+		return state, errors.New("cluster recovery member requires coordinated set activation; individual activation is refused")
+	}
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return state, e
@@ -300,11 +329,10 @@ func (d *Deployment) ActivateRestore(ctx context.Context, r Receipt, confirmatio
 	}
 	fail := func(cause error) (RestoreState, error) {
 		state.Phase = "failed_fenced"
+		if !d.fenceUpgradeFailure(ctx, cfg) {
+			state.Phase = "failed_fence_unverified"
+		}
 		_ = d.saveRestore(state)
-		_, _ = d.Compose(context.WithoutCancel(ctx), true, "stop", "web")
-		fenceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
-		defer cancel()
-		_, _ = d.Compose(fenceCtx, true, "run", "--rm", "--no-deps", "-T", "web", "maintenance", "enter")
 		return state, cause
 	}
 	// Start only restored state consumers. Fresh data/key initializers never run.
@@ -382,7 +410,14 @@ func (d *Deployment) ActivateRestore(ctx context.Context, r Receipt, confirmatio
 }
 
 func (d *Deployment) OpenRestore(ctx context.Context, r Receipt, confirmation string) (RestoreState, error) {
+	return d.openRestore(ctx, r, confirmation, false)
+}
+
+func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation string, coordinated bool) (RestoreState, error) {
 	var state RestoreState
+	if _, e := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); !os.IsNotExist(e) && !coordinated {
+		return state, errors.New("cluster recovery member requires coordinated set opening; individual opening is refused")
+	}
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return state, e
@@ -430,10 +465,15 @@ func (d *Deployment) OpenRestore(ctx context.Context, r Receipt, confirmation st
 	state.OwnManual = false
 	state.Phase = "opened"
 	e = d.saveRestore(state)
+	if e == nil {
+		r.State = "ready"
+		e = replaceJSON(filepath.Join(d.Directory, ReceiptFile), r)
+	}
 	if e != nil {
 		refence()
 		state.OwnManual = true
 		state.Phase = "verified"
+		_ = d.saveRestore(state)
 	}
 	return state, e
 }

@@ -68,6 +68,8 @@ type Manifest struct {
 	Bytes                int64       `json:"bytes"`
 	Files                []Entry     `json:"files"`
 	Directories          []Directory `json:"directories"`
+	RecoverySet          string      `json:"recovery_set,omitempty"`
+	Relations            []Relation  `json:"relations,omitempty"`
 }
 type Report struct {
 	Manifest         Manifest `json:"manifest"`
@@ -145,7 +147,9 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	m.Format = Format
 	m.Version = 1
 	m.Scope = "deployment"
-	m.SchemaGeneration = migrations.Generation
+	if m.SchemaGeneration == 0 {
+		m.SchemaGeneration = migrations.Generation
+	}
 	m.ConfigurationVersion = 1
 	m.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	m.Files = []Entry{}
@@ -294,8 +298,16 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 }
 
 func validateManifest(m Manifest) error {
-	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || m.SchemaGeneration != migrations.Generation || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
+	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
 		return ErrUnsafe
+	}
+	if m.RecoverySet != "" && !nodePattern.MatchString(m.RecoverySet) || len(m.Relations) > MaxSetMembers {
+		return ErrUnsafe
+	}
+	for _, relation := range m.Relations {
+		if !nodePattern.MatchString(relation.NodeID) || relation.NodeID == m.NodeID || relation.Protocol != 2 || relation.State != "active" || relation.Direction != "upstream" && relation.Direction != "downstream" {
+			return ErrUnsafe
+		}
 	}
 	seen := map[string]bool{}
 	var total int64
@@ -436,6 +448,12 @@ func Check(ctx context.Context, input, expected string) (Report, error) {
 // every offline flag. It never starts a service, initializes a database or
 // asserts business validation. Partial extraction remains private on failure.
 func Apply(ctx context.Context, input, target, expected, confirmation string) (Report, error) {
+	return applySetMember(ctx, input, target, expected, confirmation, "")
+}
+
+// The nonempty set permission is available only after CheckSet verified every
+// member and mutual relationship. Public single-archive Apply cannot grant it.
+func applySetMember(ctx context.Context, input, target, expected, confirmation, set string) (Report, error) {
 	var report Report
 	if !hashPattern.MatchString(expected) || !nodePattern.MatchString(confirmation) {
 		return report, ErrUnsafe
@@ -447,7 +465,7 @@ func Apply(ctx context.Context, input, target, expected, confirmation string) (R
 	if e != nil {
 		return checked, e
 	}
-	if checked.Manifest.NodeID != confirmation || len(checked.Manifest.Missing) != 0 {
+	if checked.Manifest.NodeID != confirmation || len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
 		return checked, ErrUnsafe
 	}
 	stage, e := os.MkdirTemp(filepath.Dir(target), ".fc-restore-")

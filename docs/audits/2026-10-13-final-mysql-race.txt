@@ -1,0 +1,327 @@
+=== RUN   TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows
+--- PASS: TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows (0.13s)
+=== RUN   TestPriorityPlannerExhaustionNeverPartiallyChanges
+--- PASS: TestPriorityPlannerExhaustionNeverPartiallyChanges (0.00s)
+=== RUN   TestPriorityPlannerEqualCollisionAndBoundaries
+--- PASS: TestPriorityPlannerEqualCollisionAndBoundaries (0.00s)
+=== RUN   TestPriorityPlannerRandomMovesAndLargeTies
+--- PASS: TestPriorityPlannerRandomMovesAndLargeTies (4.33s)
+=== RUN   TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay
+--- PASS: TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay (0.13s)
+=== RUN   TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials
+--- PASS: TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials (0.02s)
+=== RUN   TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory
+--- PASS: TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory (0.03s)
+=== RUN   TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones
+--- PASS: TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones (0.04s)
+=== RUN   TestAdminLocalTreeAndSearchUseNativeEncryptionBatches
+--- PASS: TestAdminLocalTreeAndSearchUseNativeEncryptionBatches (3.33s)
+=== RUN   TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion
+--- PASS: TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion (0.65s)
+=== RUN   TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive
+    backup_files_test.go:20: storage appliance is embedded SQLite only
+--- SKIP: TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive (0.02s)
+=== RUN   TestPeerBackupObservationColdReadDoesNotRepairLease
+    backup_observation_test.go:21: native storage uses embedded SQLite
+--- SKIP: TestPeerBackupObservationColdReadDoesNotRepairLease (0.01s)
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+--- PASS: TestPeerBackupObservationManifestIdentityStateAndBounds (0.03s)
+=== RUN   TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory
+--- PASS: TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory (0.12s)
+=== RUN   TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort
+--- PASS: TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort (0.10s)
+=== RUN   TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration
+--- PASS: TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration (0.03s)
+=== RUN   TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration
+--- PASS: TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration (0.01s)
+=== RUN   TestCatalogGenerationDoesNotPublishRolledBackAudit
+--- PASS: TestCatalogGenerationDoesNotPublishRolledBackAudit (0.01s)
+=== RUN   TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed
+--- PASS: TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed (0.01s)
+=== RUN   TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound
+--- PASS: TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound (0.01s)
+=== RUN   TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity
+--- PASS: TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity (0.02s)
+=== RUN   TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths
+--- PASS: TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths (0.04s)
+=== RUN   TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity
+--- PASS: TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity (0.10s)
+=== RUN   TestGlobalReservationAndFinalizationAuditFailurePreserveFunds
+    global_media_test.go:253: SQLite audit failure injection
+--- SKIP: TestGlobalReservationAndFinalizationAuditFailurePreserveFunds (0.01s)
+=== RUN   TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity
+--- PASS: TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity (0.09s)
+=== RUN   TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion
+--- PASS: TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion (0.05s)
+=== RUN   TestLyricRelationsAtomicReverseAndAutoPreservesExplicit
+--- PASS: TestLyricRelationsAtomicReverseAndAutoPreservesExplicit (0.02s)
+=== RUN   TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay
+--- PASS: TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay (0.04s)
+=== RUN   TestMediaDeleteJournalAndExactMetadataScope
+--- PASS: TestMediaDeleteJournalAndExactMetadataScope (0.02s)
+=== RUN   TestMediaAuditRetainsLargeBatchEvidence
+--- PASS: TestMediaAuditRetainsLargeBatchEvidence (0.02s)
+=== RUN   TestMediaMutationsAtomicAndCaseSensitive
+--- PASS: TestMediaMutationsAtomicAndCaseSensitive (0.01s)
+=== RUN   TestSQLiteAuditFailureRollsBackMutation
+    media_mutations_test.go:107: SQLite trigger failure injection
+--- SKIP: TestSQLiteAuditFailureRollsBackMutation (0.00s)
+=== RUN   TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories
+--- PASS: TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories (0.02s)
+=== RUN   TestUploadPublicationReplayIsAtomicAndIdempotent
+--- PASS: TestUploadPublicationReplayIsAtomicAndIdempotent (0.02s)
+=== RUN   TestResourceMigrationAdminRevisionFencesAndBoundedStatus
+--- PASS: TestResourceMigrationAdminRevisionFencesAndBoundedStatus (0.10s)
+=== RUN   TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt
+--- PASS: TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt (0.03s)
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+--- PASS: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (0.03s)
+=== RUN   TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity
+--- PASS: TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity (0.05s)
+=== RUN   TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain
+--- PASS: TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain (0.12s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+--- PASS: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (0.12s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+--- PASS: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (0.08s)
+=== RUN   TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain
+--- PASS: TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain (0.16s)
+=== RUN   TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce
+--- PASS: TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce (0.13s)
+=== RUN   TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts
+--- PASS: TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts (0.16s)
+=== RUN   TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof
+--- PASS: TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof (0.11s)
+=== RUN   TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund
+--- PASS: TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund (0.04s)
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+--- PASS: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (0.04s)
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+--- PASS: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (0.10s)
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+--- PASS: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.06s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+--- PASS: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (0.07s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+--- PASS: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (0.03s)
+=== RUN   TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations
+--- PASS: TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations (0.03s)
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source
+--- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget (0.08s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target (0.04s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source (0.04s)
+=== RUN   TestPeerMigrationEmptyCancellationReceiptReplay
+--- PASS: TestPeerMigrationEmptyCancellationReceiptReplay (0.02s)
+=== RUN   TestPeerMigrationCancellationSourceProofReadIsTaskStateBound
+--- PASS: TestPeerMigrationCancellationSourceProofReadIsTaskStateBound (0.03s)
+=== RUN   TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission
+--- PASS: TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission (0.08s)
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+--- PASS: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (0.24s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:25: phase=seed elapsed=947.217584ms total=947.217664ms
+    migration_plan_pages_test.go:25: phase=catalog elapsed=13.229354899s total=14.194282087s
+    migration_plan_pages_test.go:25: phase=native-and-content-fixture-proofs elapsed=21.41499283s total=35.625736121s
+    migration_plan_pages_test.go:25: phase=seal elapsed=9.821120462s total=45.466652491s
+    migration_plan_pages_test.go:25: phase=admission-rollback elapsed=16.134361838s total=1m1.618083187s
+    migration_plan_pages_test.go:25: phase=admission elapsed=10.656964596s total=1m12.317510727s
+    migration_plan_pages_test.go:25: phase=commit-10005-objects elapsed=3.462155046s total=1m15.79898435s
+    migration_plan_pages_test.go:25: phase=commit-3-objects elapsed=103.223149ms total=1m15.967874842s
+    migration_plan_pages_test.go:309: both final heartbeats succeeded after all writer transactions
+    migration_plan_pages_test.go:310: paged objects=10008 immutable JSON bytes=25515005 page limit=64
+    migration_plan_pages_test.go:119: heartbeat attempts=22 recoverable_busy=0 longest_SQL_wait=1.63635497s largest_success_gap=16.155070159s
+--- PASS: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (76.81s)
+=== RUN   TestPeerMigrationPublicationRollbackAndReplay
+--- PASS: TestPeerMigrationPublicationRollbackAndReplay (0.05s)
+=== RUN   TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive
+--- PASS: TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive (0.08s)
+=== RUN   TestPeerMigrationConcurrentReadAdmissionAndCleanup
+--- PASS: TestPeerMigrationConcurrentReadAdmissionAndCleanup (0.08s)
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+--- PASS: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (0.10s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+--- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (0.21s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (0.10s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (0.11s)
+=== RUN   TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary
+--- PASS: TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary (0.03s)
+=== RUN   TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor
+--- PASS: TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor (0.03s)
+=== RUN   TestResourceMigrationRunnerSchedulingFailureAndEpochFence
+--- PASS: TestResourceMigrationRunnerSchedulingFailureAndEpochFence (0.08s)
+=== RUN   TestResourceMigrationPublishedShadowGrantScaling
+    migration_shadow_scale_test.go:93: explicit SQLite bounded SQL-growth and fault-recovery regression
+--- SKIP: TestResourceMigrationPublishedShadowGrantScaling (0.00s)
+=== RUN   TestPeerMigrationPublishedShadowGrantScaling
+    migration_shadow_scale_test.go:199: explicit SQLite bounded SQL-growth and fault-recovery regression
+--- SKIP: TestPeerMigrationPublishedShadowGrantScaling (0.00s)
+=== RUN   TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority
+--- PASS: TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority (0.11s)
+=== RUN   TestResourceMigrationReadOnlyCatalogAtomicStartAndFences
+--- PASS: TestResourceMigrationReadOnlyCatalogAtomicStartAndFences (0.11s)
+=== RUN   TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof
+--- PASS: TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof (0.07s)
+=== RUN   TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata
+--- PASS: TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata (0.11s)
+=== RUN   TestResourceMigrationTargetsAndSplitOwnershipAreReported
+--- PASS: TestResourceMigrationTargetsAndSplitOwnershipAreReported (0.06s)
+=== RUN   TestResourceMigrationConcurrentPlansCannotOversellTarget
+--- PASS: TestResourceMigrationConcurrentPlansCannotOversellTarget (0.08s)
+=== RUN   TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask
+--- PASS: TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask (0.07s)
+=== RUN   TestNodePairConsumptionNonceRevocationAndHeartbeatTransactions
+--- PASS: TestNodePairConsumptionNonceRevocationAndHeartbeatTransactions (0.05s)
+=== RUN   TestNodeAuditFailureRollsBackIssuedPair
+    node_test.go:187: SQLite audit trigger injection
+--- SKIP: TestNodeAuditFailureRollsBackIssuedPair (0.01s)
+=== RUN   TestObservationConcurrentSummaryNullFailuresAndGrouping
+--- PASS: TestObservationConcurrentSummaryNullFailuresAndGrouping (0.02s)
+=== RUN   TestOwnedRecordingQuotaReplayPhysicalDeletionAndUnusedTicketTombstone
+--- PASS: TestOwnedRecordingQuotaReplayPhysicalDeletionAndUnusedTicketTombstone (0.08s)
+=== RUN   TestOwnedStorageQuotaReservationConcurrentPublicationAndCleanup
+--- PASS: TestOwnedStorageQuotaReservationConcurrentPublicationAndCleanup (0.08s)
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+--- PASS: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.04s)
+=== RUN   TestExpectedColdBackupFilesReportMissingArtifactAndChunk
+    physical_expected_backup_test.go:79: native Storage is embedded SQLite
+--- SKIP: TestExpectedColdBackupFilesReportMissingArtifactAndChunk (0.01s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+--- PASS: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.06s)
+=== RUN   TestPeerExpectedPhysicalInventoryExactManagedLookup
+--- PASS: TestPeerExpectedPhysicalInventoryExactManagedLookup (0.02s)
+=== RUN   TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone
+--- PASS: TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone (0.02s)
+=== RUN   TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority
+--- PASS: TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority (0.02s)
+=== RUN   TestMasterPromotionStableIdentityAllocationAndFollowerCapacity
+--- PASS: TestMasterPromotionStableIdentityAllocationAndFollowerCapacity (0.03s)
+=== RUN   TestFollowerConfigurationPreservesReservationsAndBackupReady
+--- PASS: TestFollowerConfigurationPreservesReservationsAndBackupReady (0.01s)
+=== RUN   TestPromotionAuditFailureRollsBackRoleCatalogAndAllocation
+    pool_test.go:244: SQLite audit fault injection
+--- SKIP: TestPromotionAuditFailureRollsBackRoleCatalogAndAllocation (0.00s)
+=== RUN   TestPriorityOrderAtomicStaleRollbackAndLegacyValues
+--- PASS: TestPriorityOrderAtomicStaleRollbackAndLegacyValues (0.03s)
+=== RUN   TestPriorityCollisionAuditKeepsCompleteLargeBatch
+--- PASS: TestPriorityCollisionAuditKeepsCompleteLargeBatch (0.85s)
+=== RUN   TestPriorityConcurrentAdminMovesHaveOneWinner
+--- PASS: TestPriorityConcurrentAdminMovesHaveOneWinner (0.01s)
+=== RUN   TestRecordingEncryptedSnapshotAtomicReceiptAndGlobalNonceTombstones
+--- PASS: TestRecordingEncryptedSnapshotAtomicReceiptAndGlobalNonceTombstones (0.03s)
+=== RUN   TestRecordingQuotaConcurrentFinalizeDeletionAndCrashStates
+--- PASS: TestRecordingQuotaConcurrentFinalizeDeletionAndCrashStates (0.06s)
+=== RUN   TestRecoverySampleUsesFileIdentitiesAndExcludesDirectorySortingRows
+--- PASS: TestRecoverySampleUsesFileIdentitiesAndExcludesDirectorySortingRows (0.01s)
+=== RUN   TestMediaRepositoryConcurrentStableIDsAndPlayback
+--- PASS: TestMediaRepositoryConcurrentStableIDsAndPlayback (0.03s)
+=== RUN   TestSQLiteLegacyIDAndAtomicRollback
+--- PASS: TestSQLiteLegacyIDAndAtomicRollback (0.17s)
+=== RUN   TestPeerRetirementMigrationRequiresBoundTerminalHistory
+--- PASS: TestPeerRetirementMigrationRequiresBoundTerminalHistory (0.04s)
+=== RUN   TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations
+    retirement_fence_test.go:27: {   0 0} node state conflict
+--- FAIL: TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations (0.02s)
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-binding
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-unit
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-state
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-count
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/task-bytes
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-role
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-master
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/active-runner
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-binding
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-unit
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-state
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-count
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/task-bytes
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-role
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-master
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/active-runner
+--- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole (0.16s)
+    --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true (0.08s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-binding (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-unit (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-state (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-count (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/task-bytes (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-role (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-master (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/active-runner (0.00s)
+    --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false (0.08s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-binding (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-unit (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-state (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-count (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/task-bytes (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-role (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-master (0.00s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/active-runner (0.00s)
+=== RUN   TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches
+--- PASS: TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches (0.20s)
+=== RUN   TestPeerRetirementFenceCannotBeErasedByIdentityReset
+    retirement_reset_test.go:16: node state conflict
+--- FAIL: TestPeerRetirementFenceCannotBeErasedByIdentityReset (0.02s)
+=== RUN   TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation
+--- PASS: TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation (0.03s)
+=== RUN   TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification
+    retirement_test.go:73: empty ledger claimed retirement permission {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ae3951f71d463ab9f5e983792af6ea32 Follower 1791891589 false true [{managed_media 16 [168916ac62dcb356ed2290f697ec5cf66b277c3a1104bd9ef6168dd95a761f8b 248f6b3afc7c4128a835088ef9a538f8d134a926c4f3f4e0cbb2fbba99e0acf9 389e773c9d2ac5c4c99dba6bfda6453521b8fe7ae8d08cf6dd67baa809d61b03 39ba958bdc2fbcdbd72c5451134cee5a9aa0c9f219b68e6d72009f2e239b10ef 4f9b2cb1de414308b60e2b7c87590a6d2f54a0c0d1740081b749d1108d6c3881 591918148e8f2198e98ac0f84994d58d9c68cd2dca8733ec9b5afcd085bf870a 64672a5d8037a495880dad404a782eacdc2aec1175b79011ae95fb478ae517b0 6877a071c031a2221a49747757ca0e304783792c2df36d816b5df7406bdd83cd] migrate_or_resolve_media}]}
+--- FAIL: TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification (0.02s)
+=== RUN   TestPeerRetirementLedgerMasterResourcesAndOfflineMember
+--- PASS: TestPeerRetirementLedgerMasterResourcesAndOfflineMember (0.06s)
+=== RUN   TestPeerRetirementLedgerWorkerAndMasterMutationReferences
+--- PASS: TestPeerRetirementLedgerWorkerAndMasterMutationReferences (0.10s)
+=== RUN   TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal
+--- PASS: TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal (0.03s)
+=== RUN   TestDurableIPSecurityConcurrentAccountingPoliciesAndSummary
+--- PASS: TestDurableIPSecurityConcurrentAccountingPoliciesAndSummary (0.05s)
+=== RUN   TestSecurityAuditFailureRollsBackPolicy
+    security_test.go:119: SQLite audit trigger failure injection
+--- SKIP: TestSecurityAuditFailureRollsBackPolicy (0.01s)
+=== RUN   TestOfflineStorageEndpointPreservesIdentityAndOwnership
+--- PASS: TestOfflineStorageEndpointPreservesIdentityAndOwnership (0.17s)
+=== RUN   TestOfflineMasterStorageRebindGuardsAndPreservesRelationship
+--- PASS: TestOfflineMasterStorageRebindGuardsAndPreservesRelationship (0.02s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	92.018s
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+    resource_migration_test.go:52: isolated schema database prefix required
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+    resource_migration_test.go:52: isolated schema database prefix required
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve
+    resource_migration_test.go:52: isolated schema database prefix required
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted
+    resource_migration_test.go:52: isolated schema database prefix required
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve
+    resource_migration_test.go:52: isolated schema database prefix required
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted
+    resource_migration_test.go:52: isolated schema database prefix required
+--- FAIL: TestResourceMigrationGenerationFourUpgrade (1.15s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.18s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.21s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (0.00s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve (0.18s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted (0.20s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted (0.00s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve (0.17s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted (0.21s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted (0.00s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	1.162s
+FAIL

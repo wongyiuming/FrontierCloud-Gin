@@ -161,7 +161,7 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 			// EXISTS completes before the atomic journal/generation update.
 			for _, statement := range statements {
 				match := tablePattern.FindStringSubmatch(statement)
-				if len(match) == 2 && strings.HasPrefix(match[1], "migration_") && match[1] != "migration_peer_bindings" || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_") {
+				if len(match) == 2 && strings.HasPrefix(match[1], "migration_") && match[1] != "migration_peer_bindings" && !strings.HasPrefix(match[1], "migration_plan_") || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_") && !strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_plan_") {
 					if _, err := conn.ExecContext(ctx, statement); err != nil {
 						return fmt.Errorf("migrate resource task journal: %w", err)
 					}
@@ -207,6 +207,31 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 				return err
 			}
 			generation = 6
+		}
+		if generation == 6 {
+			for _, statement := range statements {
+				match := tablePattern.FindStringSubmatch(statement)
+				if len(match) == 2 && strings.HasPrefix(match[1], "migration_plan_") || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_migration_plan_") {
+					if _, err := conn.ExecContext(ctx, statement); err != nil {
+						return fmt.Errorf("migrate paged resource plans: %w", err)
+					}
+				}
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM frontiercloud_schema_migrations WHERE generation=7"); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema_migrations(generation,migration_name,checksum,applied_at) VALUES (7,?,?,?)", migrations.MigrationPlansName, migrations.MigrationPlansChecksum, time.Now().Unix()); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=7 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 7
 		}
 		if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)

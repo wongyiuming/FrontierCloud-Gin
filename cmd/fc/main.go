@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ func run(args []string) int {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage | status | logs | restart | diagnose | node retire check NODE_ID | node migrate status|pause|resume|cancel|retry|release-drain TASK_ID\nRead-only: doctor/status/logs/diagnose/node retire check. Writes: install/restart and explicit migration task controls. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage | status | logs | restart | diagnose | backup create|verify|set-create|set-verify | restore check|apply|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -48,6 +49,9 @@ func run(args []string) int {
 	}
 	if args[0] == "backup" || args[0] == "restore" {
 		return recoveryCommand(ctx, *directory, args)
+	}
+	if args[0] == "upgrade" {
+		return upgradeCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}
 	emit := func(v any) {
 		if !*structured {
@@ -141,6 +145,14 @@ func run(args []string) int {
 		emit(report)
 		return 0
 	case "restart":
+		if _, markerErr := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); markerErr == nil || !os.IsNotExist(markerErr) {
+			fmt.Fprintln(os.Stderr, "deployment belongs to an incomplete coordinated recovery set; finish the set recovery before restart")
+			return 2
+		}
+		if receipt.State != "ready" {
+			fmt.Fprintln(os.Stderr, "deployment is not ready; finish its recorded recovery or upgrade before restart")
+			return 2
+		}
 		done, e := d.AcquireOperation()
 		if e != nil {
 			fmt.Fprintln(os.Stderr, e)

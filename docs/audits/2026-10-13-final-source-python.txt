@@ -1,0 +1,17 @@
+CPU did not recover below 20%: [90, 90, 90, 90, 90]
+.............................................................................s...................s...........F............................................................................................
+CPU recovered below 20% for 5 samples: [0.53, 0.24, 0.23, 27.06, 0.25, 0.25, 0.25, 0.25, 0.25]
+One-core product-runtime boundary passed
+CPU recovered below 20% for 5 samples: [95, 88, 19, 18, 17, 16, 15]
+======================================================================
+FAIL: test_all_compilation_paths_and_manifest_match_current_generation (test_priority_contract.PriorityContractTests.test_all_compilation_paths_and_manifest_match_current_generation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\wyium\FrontierCloud-Gin\tests\test_priority_contract.py", line 39, in test_all_compilation_paths_and_manifest_match_current_generation
+    self.assertEqual(int(label[1]), generation, name)
+AssertionError: 6 != 7 : ci/Dockerfile.web
+
+----------------------------------------------------------------------
+Ran 201 tests in 1.243s
+
+FAILED (failures=1, skipped=2)

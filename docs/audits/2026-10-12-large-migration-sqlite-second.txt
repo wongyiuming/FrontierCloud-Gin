@@ -1,0 +1,48 @@
+=== RUN   TestPlannerBoundsBlockerSamplesWithoutLosingAdmissionBlock
+--- PASS: TestPlannerBoundsBlockerSamplesWithoutLosingAdmissionBlock (0.00s)
+=== RUN   TestPlannerAsyncPaginationFreshProofAndIdempotentStart
+=== RUN   TestPlannerAsyncPaginationFreshProofAndIdempotentStart/unchanged
+=== RUN   TestPlannerAsyncPaginationFreshProofAndIdempotentStart/same_metadata_changed_bytes
+--- PASS: TestPlannerAsyncPaginationFreshProofAndIdempotentStart (0.01s)
+    --- PASS: TestPlannerAsyncPaginationFreshProofAndIdempotentStart/unchanged (0.00s)
+    --- PASS: TestPlannerAsyncPaginationFreshProofAndIdempotentStart/same_metadata_changed_bytes (0.00s)
+=== RUN   TestPlannerSingleWorkerCloseJoinsAndRejectsExpiredPlan
+--- PASS: TestPlannerSingleWorkerCloseJoinsAndRejectsExpiredPlan (0.00s)
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/valid
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/expiry_changed
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/observed_error
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/speculative
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/old_creation
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/wrong_path
+=== RUN   TestPlanContentRejectsReboundExpiryAndSpeculativeResult/wrong_request
+--- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult (0.01s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/valid (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/expiry_changed (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/observed_error (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/speculative (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/old_creation (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/wrong_path (0.00s)
+    --- PASS: TestPlanContentRejectsReboundExpiryAndSpeculativeResult/wrong_request (0.00s)
+=== RUN   TestPlanScopeCountsAllConflictsAndValidatesFinalPage
+=== RUN   TestPlanScopeCountsAllConflictsAndValidatesFinalPage/false
+=== RUN   TestPlanScopeCountsAllConflictsAndValidatesFinalPage/true
+--- PASS: TestPlanScopeCountsAllConflictsAndValidatesFinalPage (0.01s)
+    --- PASS: TestPlanScopeCountsAllConflictsAndValidatesFinalPage/false (0.01s)
+    --- PASS: TestPlanScopeCountsAllConflictsAndValidatesFinalPage/true (0.01s)
+=== RUN   TestPlanContentFirstStatusDoesNotWaitForTransferPollInterval
+--- PASS: TestPlanContentFirstStatusDoesNotWaitForTransferPollInterval (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	1.053s
+=== RUN   TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission
+--- PASS: TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission (0.33s)
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+    migration_plan_conflicts_test.go:53: resource migration state changed
+--- FAIL: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (0.56s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:48: database is locked (5) (SQLITE_BUSY)
+    migration_plan_pages_test.go:229: paged objects=10008 immutable JSON bytes=25515005 page limit=64
+--- FAIL: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (235.87s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	236.795s
+FAIL

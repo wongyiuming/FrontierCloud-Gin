@@ -1,0 +1,15 @@
+private workspace=/tmp/fc-native-matrix-xTzYugk1 prefix=fc-matrix-13161661-4f43-4823-9c49-4c7314c1158e
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-sqlite-dd
+    native_migration_real_test.go:91: pairing private follower 1 go sqlite
+    native_migration_real_test.go:91: pairing private follower 2 go sqlite
+    native_migration_real_test.go:91: pairing private follower 3 go sqlite
+    native_migration_real_test.go:91: pairing private follower 4 go sqlite
+    native_migration_real_test.go:91: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-sqlite 2 Direct / 2 Relay
+    native_migration_real_test.go:91: real native five-node certificate observation and sequential UDP STUN passed go-sqlite
+    native_migration_real_test.go:91: real native matrix SQLite/MySQL revocation and re-pair passed go-sqlite
+    native_migration_real_test.go:91: all four Storage processes have separate native networks; Master relays cross-node traffic
+    native_migration_real_test.go:220: native migration plan did not reach ready failed physical_observation_changed_or_unavailable source_inventory []
+--- FAIL: TestRealNativeMatrixFleetMigrations (74.23s)
+    --- FAIL: TestRealNativeMatrixFleetMigrations/go-sqlite-dd (74.23s)
+FAIL

@@ -6,7 +6,8 @@ import (
 	"errors"
 	"io"
 	"os/exec"
-	"strings"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 )
 
 type dockerRunner struct{ Directory string }
@@ -51,33 +52,7 @@ func (d dockerRunner) Run(ctx context.Context, name string, args ...string) ([]b
 	var diagnostic limitedBuffer
 	cmd.Stderr = &diagnostic
 	if err := cmd.Run(); err != nil {
-		message := strings.ToLower(diagnostic.String())
-		for _, word := range []string{"permission denied", "unauthorized", "access denied", "denied:"} {
-			if strings.Contains(message, word) {
-				return nil, errors.New("Docker access denied; check daemon permissions and public package access")
-			}
-		}
-		for _, word := range []string{"manifest unknown", "no such image"} {
-			if strings.Contains(message, word) {
-				return nil, errors.New("requested image is absent; select a complete published release")
-			}
-		}
-		for _, word := range []string{"no matching manifest", "unsupported platform"} {
-			if strings.Contains(message, word) {
-				return nil, errors.New("published image does not support this architecture")
-			}
-		}
-		for _, word := range []string{"digest", "checksum"} {
-			if strings.Contains(message, word) {
-				return nil, errors.New("image content integrity check failed; do not deploy")
-			}
-		}
-		for _, word := range []string{"timeout", "connection refused", "network", "tls handshake", "x509:", "no such host"} {
-			if strings.Contains(message, word) {
-				return nil, errors.New("Docker network or TLS connection failed; check DNS, registry and certificate trust")
-			}
-		}
-		return nil, errors.New("Docker command failed; check daemon permissions, network and selected project")
+		return nil, operator.ClassifyDockerFailure(diagnostic.String())
 	}
 	return out.Bytes(), nil
 }

@@ -17,6 +17,9 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 	if len(args) < 2 {
 		return 2
 	}
+	if args[1] == "set-create" || args[1] == "set-verify" || args[1] == "set-check" || args[1] == "set-apply" || args[1] == "set-prepare" || args[1] == "set-activate" || args[1] == "set-open" {
+		return recoverySetCommand(ctx, args)
+	}
 	action := args[0] + " " + args[1]
 	flags := flag.NewFlagSet("fc "+action, flag.ContinueOnError)
 	input := flags.String("file", "", "recovery archive")

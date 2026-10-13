@@ -1,0 +1,39 @@
+CI budget passed: test jobs <=3 minutes; isolated gated compilation <=10; no hosted acceptance
+One-core product-runtime boundary passed
+Native policy passed: reviewed provenance, three-minute test CI and separate bounded compilation
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.025s
+
+OK
+English comment check passed
+.............................................................................s...................s........................................................................................................
+----------------------------------------------------------------------
+Ran 201 tests in 1.001s
+
+OK (skipped=2)
+CPU did not recover below 20%: [90, 90, 90, 90, 90]
+CPU recovered below 20% for 5 samples: [0.53, 0.24, 0.23, 27.06, 0.25, 0.25, 0.25, 0.25, 0.25]
+One-core product-runtime boundary passed
+CPU recovered below 20% for 5 samples: [95, 88, 19, 18, 17, 16, 15]
+Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external
+Media crypto source/build/output hashes and CSP-compatible syntax verified
+media-crypto-build-smoke-ok (source, output and lock changes rejected without npm)
+media-crypto-smoke-ok (static/js)
+media-crypto-smoke-ok (static/js/compiled)
+admin-ui-smoke-ok
+node-retirement-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+admin-crypto-upload-smoke-ok
+karaoke-encrypted-snapshot-smoke-ok
+catalog-startup-smoke-ok
+player-cache-smoke-ok
+audio-continuous-fetch-retry-smoke-ok
+FrontierCloud audio pipeline held { name: 'InvalidStateError', message: 'decoder state failure' }
+FrontierCloud audio pipeline held { name: 'Error', message: 'temporary authorization expired' }
+audio-continuous-stream-smoke-ok
+network-observation-smoke-ok
+FrontierCloud audio pipeline held { name: 'InvalidStateError', message: 'decoder state failure' }
+FrontierCloud audio pipeline held { name: 'Error', message: 'temporary authorization expired' }
+audio-continuous-stream-smoke-ok
+audio-continuous-fetch-retry-smoke-ok

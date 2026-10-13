@@ -27,6 +27,7 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 			return store.ErrNodeState
 		}
 		queries := []string{
+			"SELECT COUNT(*) FROM node_relationships WHERE state='retiring'",
 			"SELECT COUNT(*) FROM global_media_objects",
 			"SELECT COUNT(*) FROM media_delete_operations WHERE state<>'rename_done'",
 			"SELECT COUNT(*) FROM cluster_upload_sessions WHERE state NOT IN ('complete','cancelled')",

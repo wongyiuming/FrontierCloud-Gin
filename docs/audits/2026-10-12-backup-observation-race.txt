@@ -1,0 +1,118 @@
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes/sql
+2026/10/13 02:38:26 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.165 client_ip=192.0.2.1 request_id=af9cae1fd36440e99ea298b443cbddeb trace_id=af9cae1fd36440e99ea298b443cbddeb
+2026/10/13 02:38:26 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.091 client_ip=192.0.2.1 request_id=7aed15ff3d4f40b9a9ac9f4d307447c4 trace_id=7aed15ff3d4f40b9a9ac9f4d307447c4
+2026/10/13 02:38:26 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.107 client_ip=192.0.2.1 request_id=afa1dc248bac4480ad9c2807467c7e11 trace_id=afa1dc248bac4480ad9c2807467c7e11
+2026/10/13 02:38:26 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.259 client_ip=192.0.2.1 request_id=23003b5b79734fe8aa27400a89e28e04 trace_id=23003b5b79734fe8aa27400a89e28e04
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.376 client_ip=192.0.2.1 request_id=2a2b5cbe4cd24148b6cde3ae2d743116 trace_id=2a2b5cbe4cd24148b6cde3ae2d743116
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.684 client_ip=192.0.2.1 request_id=0e22352d15da451da4bd18c4d1e8eda5 trace_id=0e22352d15da451da4bd18c4d1e8eda5
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=401 duration_ms=0.051 client_ip=192.0.2.1 request_id=632a835cd2874b4186687b437f4e2e36 trace_id=632a835cd2874b4186687b437f4e2e36
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=400 duration_ms=3.67 client_ip=192.0.2.1 request_id=9300f5abb9504ac690df214422ab5e5c trace_id=9300f5abb9504ac690df214422ab5e5c
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=409 duration_ms=2.898 client_ip=192.0.2.1 request_id=144b63aa597f4dc3a4da08d78e9769c3 trace_id=144b63aa597f4dc3a4da08d78e9769c3
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=3.906 client_ip=192.0.2.1 request_id=c0685b76563842b6a6e84eb10050f0f3 trace_id=c0685b76563842b6a6e84eb10050f0f3
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=19.482 client_ip=192.0.2.1 request_id=5e40545df7bd48eaa31e6fc6463f4dd8 trace_id=5e40545df7bd48eaa31e6fc6463f4dd8
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=3.83 client_ip=192.0.2.1 request_id=22adf524ce4540c693880ca9fe3090e5 trace_id=22adf524ce4540c693880ca9fe3090e5
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=3.952 client_ip=192.0.2.1 request_id=fc87a4d04eb44fe79bbe6b16a0de4f63 trace_id=fc87a4d04eb44fe79bbe6b16a0de4f63
+2026/10/13 02:38:26 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.711 client_ip=192.0.2.1 request_id=5ded5317e30c484aa914494fb2e16dcc trace_id=5ded5317e30c484aa914494fb2e16dcc
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes/cold
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.18 client_ip=192.0.2.1 request_id=d33eadf389f142cd95285b9645c0046e trace_id=d33eadf389f142cd95285b9645c0046e
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=2.337 client_ip=192.0.2.1 request_id=7ee4c1b0e77144eb9c20612b7d4c4ffe trace_id=7ee4c1b0e77144eb9c20612b7d4c4ffe
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.108 client_ip=192.0.2.1 request_id=65838e0027bc435392ec67d0b6e48dae trace_id=65838e0027bc435392ec67d0b6e48dae
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.128 client_ip=192.0.2.1 request_id=3b596e56b97640e19bd34d31d67e07c0 trace_id=3b596e56b97640e19bd34d31d67e07c0
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=31.505 client_ip=192.0.2.1 request_id=2f222759a7ae46ee9c315231169cdb44 trace_id=2f222759a7ae46ee9c315231169cdb44
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.479 client_ip=192.0.2.1 request_id=a72415329eb6462e8311587347e89d94 trace_id=a72415329eb6462e8311587347e89d94
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=401 duration_ms=0.082 client_ip=192.0.2.1 request_id=71f053e366fa4920822d6886479781a6 trace_id=71f053e366fa4920822d6886479781a6
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=400 duration_ms=2.879 client_ip=192.0.2.1 request_id=e1f2fec55a7a4212923675ec79415583 trace_id=e1f2fec55a7a4212923675ec79415583
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=409 duration_ms=2.797 client_ip=192.0.2.1 request_id=d0508b76fe4b4baebdd4126b3b4d9fd3 trace_id=d0508b76fe4b4baebdd4126b3b4d9fd3
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.004 client_ip=192.0.2.1 request_id=c79a44802c1e450db803137ac850d3bf trace_id=c79a44802c1e450db803137ac850d3bf
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=26.149 client_ip=192.0.2.1 request_id=786a23478c9e4575ae907ecd01636006 trace_id=786a23478c9e4575ae907ecd01636006
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.429 client_ip=192.0.2.1 request_id=75bd3973dc59410aa75d9c1158d9627e trace_id=75bd3973dc59410aa75d9c1158d9627e
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=5.134 client_ip=192.0.2.1 request_id=44efd943b7984419919923639f7280c4 trace_id=44efd943b7984419919923639f7280c4
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.508 client_ip=192.0.2.1 request_id=ebd80980ebbc4c2e8bbabc75ec4ee206 trace_id=ebd80980ebbc4c2e8bbabc75ec4ee206
+--- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes (1.64s)
+    --- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes/sql (1.10s)
+    --- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes/cold (0.54s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.916 client_ip=192.0.2.1 request_id=eeb3c8d0bdb94e85920cb6586fea0b90 trace_id=eeb3c8d0bdb94e85920cb6586fea0b90
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.144 client_ip=192.0.2.1 request_id=4a64f67727d1411abc1d2a809ab262b5 trace_id=4a64f67727d1411abc1d2a809ab262b5
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.092 client_ip=192.0.2.1 request_id=9f06a9c014814cd7b78869b26057cf8c trace_id=9f06a9c014814cd7b78869b26057cf8c
+2026/10/13 02:38:27 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.866 client_ip=192.0.2.1 request_id=ae09b2a644144d23afd2fd8bed40390d trace_id=ae09b2a644144d23afd2fd8bed40390d
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=7.867 client_ip=192.0.2.1 request_id=73eb0b43c4864e88be1abf67c363a473 trace_id=73eb0b43c4864e88be1abf67c363a473
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.358 client_ip=192.0.2.1 request_id=dfde796062174978b2fb9f63316fc6db trace_id=dfde796062174978b2fb9f63316fc6db
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.066 client_ip=192.0.2.1 request_id=ada94107a9e8456492bab5bdd256d7fb trace_id=ada94107a9e8456492bab5bdd256d7fb
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=4.505 client_ip=192.0.2.1 request_id=bc39dc7d7c2349dba245408891acaa15 trace_id=bc39dc7d7c2349dba245408891acaa15
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.415 client_ip=192.0.2.1 request_id=792c7820f9be4f50b80f333ec89f50ce trace_id=792c7820f9be4f50b80f333ec89f50ce
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.511 client_ip=192.0.2.1 request_id=e16a120f625248f2abad77113b3cfeaf trace_id=e16a120f625248f2abad77113b3cfeaf
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.078 client_ip=192.0.2.1 request_id=9474d6ea49b84fbf845c05d896ac90fe trace_id=9474d6ea49b84fbf845c05d896ac90fe
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=8.749 client_ip=192.0.2.1 request_id=0dcdc1b43c4d4341bbc783de773ce1c5 trace_id=0dcdc1b43c4d4341bbc783de773ce1c5
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=22.61 client_ip=192.0.2.1 request_id=671fd0310be647e3b920c3eab51298d9 trace_id=671fd0310be647e3b920c3eab51298d9
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.029 client_ip=192.0.2.1 request_id=805e7a8047d34201bd222cd3c178fedf trace_id=805e7a8047d34201bd222cd3c178fedf
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.371 client_ip=192.0.2.1 request_id=581dc383767a438c9aa12d30c215c899 trace_id=581dc383767a438c9aa12d30c215c899
+2026/10/13 02:38:27 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.793 client_ip=192.0.2.1 request_id=68948ee7494447d98579958fc94da676 trace_id=68948ee7494447d98579958fc94da676
+--- PASS: TestAuthenticatedManagedContentObservation (0.51s)
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes/sql
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.12 client_ip=192.0.2.1 request_id=7a36fb61de2243f3ae422a720d2e938b trace_id=7a36fb61de2243f3ae422a720d2e938b
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.076 client_ip=192.0.2.1 request_id=751f48a5c99f4094a86850e209693312 trace_id=751f48a5c99f4094a86850e209693312
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.14 client_ip=192.0.2.1 request_id=0bd4ee48cc9248768c6fb74f31f3dc4f trace_id=0bd4ee48cc9248768c6fb74f31f3dc4f
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.119 client_ip=192.0.2.1 request_id=8a5e8dcccdf54b70a786d1fc14ca3ec2 trace_id=8a5e8dcccdf54b70a786d1fc14ca3ec2
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.777 client_ip=192.0.2.1 request_id=37cafec9ae214abd86e23ff6848d59e5 trace_id=37cafec9ae214abd86e23ff6848d59e5
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.345 client_ip=192.0.2.1 request_id=5d8ca58bf1af472ca2f766587d86f299 trace_id=5d8ca58bf1af472ca2f766587d86f299
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=401 duration_ms=0.054 client_ip=192.0.2.1 request_id=37ef86d68897448896b28052faf18e51 trace_id=37ef86d68897448896b28052faf18e51
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=400 duration_ms=2.949 client_ip=192.0.2.1 request_id=afc02fcd287c43cea313ba9294932927 trace_id=afc02fcd287c43cea313ba9294932927
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=409 duration_ms=3.043 client_ip=192.0.2.1 request_id=bf63c6503481400198722d4e243b3b56 trace_id=bf63c6503481400198722d4e243b3b56
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.094 client_ip=192.0.2.1 request_id=9e01f245521c4886975f1ecacf816c69 trace_id=9e01f245521c4886975f1ecacf816c69
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.438 client_ip=192.0.2.1 request_id=badfb39fd3f14469a8d9beb769d494e5 trace_id=badfb39fd3f14469a8d9beb769d494e5
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=3.848 client_ip=192.0.2.1 request_id=52898d9137de41deaa8750a5ded02efc trace_id=52898d9137de41deaa8750a5ded02efc
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.225 client_ip=192.0.2.1 request_id=741c6199f66447aea6f10a6f3a96377c trace_id=741c6199f66447aea6f10a6f3a96377c
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=3.883 client_ip=192.0.2.1 request_id=b1194711535f446e8da4568f9fb81a37 trace_id=b1194711535f446e8da4568f9fb81a37
+=== RUN   TestAuthenticatedBackupObservationActualSQLAndColdBytes/cold
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.201 client_ip=192.0.2.1 request_id=9ad1d3bc13274b08a48350d8f0df5734 trace_id=9ad1d3bc13274b08a48350d8f0df5734
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.132 client_ip=192.0.2.1 request_id=3cb74393917b4f168fe570e530997a03 trace_id=3cb74393917b4f168fe570e530997a03
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.212 client_ip=192.0.2.1 request_id=8049fcf947ae4ad4b3e679a62ae58fdf trace_id=8049fcf947ae4ad4b3e679a62ae58fdf
+2026/10/13 02:38:28 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.336 client_ip=192.0.2.1 request_id=e89e500b2df8452b998f159cba494d43 trace_id=e89e500b2df8452b998f159cba494d43
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=9.209 client_ip=192.0.2.1 request_id=4bba0412fa5c4d618c167ff1cef68208 trace_id=4bba0412fa5c4d618c167ff1cef68208
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=7.967 client_ip=192.0.2.1 request_id=0c9fa1a7e30a4705a97ae44dfc2a83a9 trace_id=0c9fa1a7e30a4705a97ae44dfc2a83a9
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=401 duration_ms=0.066 client_ip=192.0.2.1 request_id=3d7295960bbb4157964f8f87b3920d7f trace_id=3d7295960bbb4157964f8f87b3920d7f
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=400 duration_ms=3.833 client_ip=192.0.2.1 request_id=d85cbc61f9434e15be0a590942eb5309 trace_id=d85cbc61f9434e15be0a590942eb5309
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=409 duration_ms=3.25 client_ip=192.0.2.1 request_id=ab0006212c4f4ba5ac605134ce9826eb trace_id=ab0006212c4f4ba5ac605134ce9826eb
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=5.248 client_ip=192.0.2.1 request_id=711c56f3f95a4f6da3ebb5342cc534c8 trace_id=711c56f3f95a4f6da3ebb5342cc534c8
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.663 client_ip=192.0.2.1 request_id=22755138d8c9415f966e8d7b88bdfb61 trace_id=22755138d8c9415f966e8d7b88bdfb61
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.533 client_ip=192.0.2.1 request_id=589c403bfe9e4b71ab34e90041bc6c80 trace_id=589c403bfe9e4b71ab34e90041bc6c80
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=4.731 client_ip=192.0.2.1 request_id=1cbbabffbbaf423eb9d9988cdf0074ef trace_id=1cbbabffbbaf423eb9d9988cdf0074ef
+2026/10/13 02:38:28 INFO request_completed method=POST path=/internal/v1/backup-observation status=200 duration_ms=7.584 client_ip=192.0.2.1 request_id=69db2c9bfac14a66b03157b8187dd864 trace_id=69db2c9bfac14a66b03157b8187dd864
+--- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes (0.94s)
+    --- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes/sql (0.44s)
+    --- PASS: TestAuthenticatedBackupObservationActualSQLAndColdBytes/cold (0.50s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 02:38:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.159 client_ip=192.0.2.1 request_id=5f1975290c8e4bc5acc8ce5decd9b089 trace_id=5f1975290c8e4bc5acc8ce5decd9b089
+2026/10/13 02:38:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.168 client_ip=192.0.2.1 request_id=91bbe91b74874f2095ed649be3631d40 trace_id=91bbe91b74874f2095ed649be3631d40
+2026/10/13 02:38:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.246 client_ip=192.0.2.1 request_id=e901019dc6084994af6cddfda8cf2bea trace_id=e901019dc6084994af6cddfda8cf2bea
+2026/10/13 02:38:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.141 client_ip=192.0.2.1 request_id=db3d1e8153934b9db0f1b736f4d1b9ca trace_id=db3d1e8153934b9db0f1b736f4d1b9ca
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.287 client_ip=192.0.2.1 request_id=d7d72602f9a341bb8c254cd54226c56c trace_id=d7d72602f9a341bb8c254cd54226c56c
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.303 client_ip=192.0.2.1 request_id=19817922686d40428557e46c29e75633 trace_id=19817922686d40428557e46c29e75633
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.081 client_ip=192.0.2.1 request_id=61df0957bd4a4451a56c8365db4711c1 trace_id=61df0957bd4a4451a56c8365db4711c1
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.312 client_ip=192.0.2.1 request_id=ca5fd7f081914357987ae77e53c2cec5 trace_id=ca5fd7f081914357987ae77e53c2cec5
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.442 client_ip=192.0.2.1 request_id=65f605ede87f47918e2b041bf77baaaa trace_id=65f605ede87f47918e2b041bf77baaaa
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.408 client_ip=192.0.2.1 request_id=378507f1759343e5a72edc98a275358f trace_id=378507f1759343e5a72edc98a275358f
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.121 client_ip=192.0.2.1 request_id=23e7a54e36f546b68e41ecf496c7ec5f trace_id=23e7a54e36f546b68e41ecf496c7ec5f
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.188 client_ip=192.0.2.1 request_id=842064f1c0f945a899629053e58731a9 trace_id=842064f1c0f945a899629053e58731a9
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=19.45 client_ip=192.0.2.1 request_id=4fc896564dcb4dafa77634fdae8190c0 trace_id=4fc896564dcb4dafa77634fdae8190c0
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.584 client_ip=192.0.2.1 request_id=ea85c31c6f9349ea8b048050e515d115 trace_id=ea85c31c6f9349ea8b048050e515d115
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.125 client_ip=192.0.2.1 request_id=c4ff79d9d6014f8db3a3b5272c42351f trace_id=c4ff79d9d6014f8db3a3b5272c42351f
+2026/10/13 02:38:29 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.707 client_ip=192.0.2.1 request_id=3ae882a8cb7940609d0b6dd3c960c6c2 trace_id=3ae882a8cb7940609d0b6dd3c960c6c2
+--- PASS: TestAuthenticatedManagedContentObservation (0.43s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	4.587s
+=== RUN   TestBackupJobsGenerationAndResourceIsolation
+--- PASS: TestBackupJobsGenerationAndResourceIsolation (0.00s)
+=== RUN   TestBackupJobsGenerationAndResourceIsolation
+--- PASS: TestBackupJobsGenerationAndResourceIsolation (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.020s
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+--- PASS: TestPeerBackupObservationManifestIdentityStateAndBounds (0.23s)
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+--- PASS: TestPeerBackupObservationManifestIdentityStateAndBounds (0.19s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.460s

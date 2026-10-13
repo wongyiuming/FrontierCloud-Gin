@@ -61,7 +61,7 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 	if strings.HasSuffix(path, "/begin") && c.blockBegin != nil && c.blockBegin() {
 		return nil, errors.New("injected stop after committed unit")
 	}
-	if strings.HasSuffix(path, "/read") {
+	if strings.HasSuffix(path, "/pull") {
 		raw, _ := json.Marshal(value)
 		var request migrationdata.Request
 		if json.Unmarshal(raw, &request) == nil {
@@ -85,7 +85,7 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		c.lostUnpublish = false
 		return nil, errors.New("injected lost publication abort receipt")
 	}
-	if e == nil && c.lost && strings.HasSuffix(path, "/append") {
+	if e == nil && c.lost && strings.HasSuffix(path, "/pull") {
 		c.lost = false
 		return nil, errors.New("injected lost append acknowledgement")
 	}
@@ -122,6 +122,32 @@ func TestMasterMigrationRunnerRealBytesRestartAndAtomicUnitRetry(t *testing.T) {
 }
 func TestMasterMigrationCancellationRealPrefixAndLostFinalReceipts(t *testing.T) {
 	masterMigrationRunnerFixture(t, true)
+}
+
+func TestMasterMigrationPagedRecoveryAcceptance(t *testing.T) {
+	if os.Getenv("FRONTIERCLOUD_TEST_PAGED_RECOVERY") != "1" {
+		t.Skip("isolated native paged recovery acceptance")
+	}
+	t.Setenv("FRONTIERCLOUD_TEST_PAGED_RUNNER", "1")
+	for _, mode := range []string{"cancel", "mixed", "checkpoint", "reverse", "target-full", "unpublish"} {
+		t.Run(mode, func(t *testing.T) {
+			masterMigrationRunnerFixture(t, mode == "cancel" || mode == "target-full", mode)
+		})
+	}
+}
+func TestMasterMigrationCancellationBeforeTargetAdmission(t *testing.T) {
+	for _, failure := range []string{"target-full", "target-unwritable"} {
+		t.Run(failure, func(t *testing.T) { masterMigrationRunnerFixture(t, true, failure) })
+	}
+}
+func TestMasterMigrationPlanAuthenticatedNativeBytesAndPhysicalConflict(t *testing.T) {
+	masterMigrationRunnerFixture(t, false, "plan-observation")
+}
+func TestMasterMigrationPlanAdminCLIRealTLSRedisAndFreshStart(t *testing.T) {
+	if os.Getenv("FRONTIERCLOUD_TEST_REDIS_URL") == "" {
+		t.Skip("requires isolated Redis")
+	}
+	masterMigrationRunnerFixture(t, false, "plan-service")
 }
 func TestMasterMigrationPartialCommitCancellationPreservesBothOwners(t *testing.T) {
 	masterMigrationRunnerFixture(t, false, "mixed")
@@ -242,6 +268,7 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	mixed := len(modes) > 0 && modes[0] == "mixed"
 	unpublish := len(modes) > 0 && modes[0] == "unpublish"
 	checkpoint := len(modes) > 0 && modes[0] == "checkpoint"
+	unadmitted := len(modes) > 0 && (modes[0] == "target-full" || modes[0] == "target-unwritable")
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	masterRouter, db, masterDir, masterPublic, master := clusterFixture(t, "https://master.test", transport, true)
@@ -376,11 +403,100 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		sum := sha256.Sum256(payloads[o.Path])
 		plan.Proofs = append(plan.Proofs, store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: hex.EncodeToString(sum[:])})
 	}
+	if len(modes) > 0 && modes[0] == "plan-service" {
+		testAdminMigrationPlanning(t, masterRouter, db, masterDir, masterPublic, master, sourceDir, catalog, payloads)
+		return
+	}
+	if len(modes) > 0 && modes[0] == "plan-observation" {
+		observer := &resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: master}
+		observed, e := observer.ObservePlan(ctx, plan.ID, sr.PeerID, tr.PeerID, nil)
+		if e != nil || len(observed.Plan.Catalog.Blockers) != 0 {
+			t.Fatal("authenticated plan", observed.Plan.Catalog.Blockers, e)
+		}
+		if len(observed.SourceVolumes) != 3 || len(observed.TargetVolumes) != 3 || !observed.Plan.TargetAbsent {
+			t.Fatal("missing actual mounts", observed)
+		}
+
+		if observed.Plan.Format != "frontiercloud-paged-migration-v1" || observed.Plan.ObjectCount != int64(len(plan.Proofs)) || len(observed.Plan.Proofs) != 0 {
+			t.Fatal("unbounded or missing proofs", observed.Plan.ObjectCount)
+		}
+		var proofSequence store.MigrationSequence
+		for _, expected := range plan.Proofs {
+			var proof store.MigrationDiskProof
+			proof.ID = expected.ID
+			// The preview has no migration_objects row. Decode immutable metadata and
+			// compare the server-observed SHA with the actual upload payload.
+			var raw []byte
+			if e = db.Database().QueryRow("SELECT object_json,expected_bytes,source_sha256 FROM migration_plan_bindings WHERE plan_id=? AND logical_id=?", observed.Plan.ID, expected.ID).Scan(&raw, &proof.Bytes, &proof.SHA256); e != nil {
+				t.Fatal(e)
+			}
+			var object store.MigrationObject
+			if e = json.Unmarshal(raw, &object); e != nil {
+				t.Fatal(e)
+			}
+			proof.Version = object.Version
+			if proof != expected {
+				t.Fatal("native bytes did not match actual upload", proof, expected)
+			}
+			if e = proofSequence.Add(proof.ID, proof); e != nil {
+				t.Fatal(e)
+			}
+		}
+		if observed.Plan.ProofsSHA != proofSequence.Sum() {
+			t.Fatal("paged proof transcript differs")
+		}
+
+		for _, database := range []*sql.DB{db.Database(), sourceDB.Database(), targetDB.Database()} {
+			for _, table := range []string{"migration_tasks", "migration_drains", "migration_capacity", "migration_scopes"} {
+				var count int
+				if e = database.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); e != nil || count != 0 {
+					t.Fatal("plan wrote business state", table, count, e)
+				}
+			}
+		}
+		collision := filepath.Join(targetDir, "media", filepath.FromSlash(catalog.Objects[0].TargetPath))
+		if e = os.MkdirAll(filepath.Dir(collision), 0700); e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(collision, []byte("existing unmanaged target bytes"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		blocked, e := observer.ObservePlan(ctx, plan.ID, sr.PeerID, tr.PeerID, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		found := false
+		for _, b := range blocked.Plan.Catalog.Blockers {
+			if b.Code == "target_physical_path_conflict" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("unmanaged target collision omitted", blocked.Plan.Catalog.Blockers)
+		}
+		return
+	}
+	if os.Getenv("FRONTIERCLOUD_TEST_PAGED_RUNNER") == "1" {
+		observation, err := (&resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: master}).ObservePlan(ctx, plan.ID, sr.PeerID, tr.PeerID, nil)
+		if err != nil || len(observation.Plan.Catalog.Blockers) != 0 {
+			t.Fatal("native paged recovery observation", observation.Plan.Catalog.Blockers, err)
+		}
+		plan = observation.Plan
+	}
 	if _, e = repo.StartMigration(ctx, plan, store.NodeAudit{}); e != nil {
 		t.Fatal(e)
 	}
 	fault := &runnerFaultCaller{client: master, lost: true, reads: map[int64]int{}}
 	engine := &resourcemigration.Runner{Repository: repo, Nodes: db.Nodes(), Client: fault}
+	if unadmitted {
+		statement := "UPDATE cluster_storage_members SET allocated_bytes=0 WHERE member_id=?"
+		if modes[0] == "target-unwritable" {
+			statement = "UPDATE cluster_storage_members SET writable=0 WHERE member_id=?"
+		}
+		if _, e = targetDB.Database().Exec(statement, tr.PeerID); e != nil {
+			t.Fatal(e)
+		}
+	}
 	if mixed {
 		fault.lost = false
 		fault.blockBegin = func() bool { task, e := repo.MigrationTask(ctx, plan.ID); return e == nil && task.CommittedBytes > 0 }
@@ -477,10 +593,14 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		t.Fatal("lost acknowledgement ignored")
 	}
 	task, e := repo.MigrationTask(ctx, plan.ID)
-	if e != nil || task.State != "failed" || task.ErrorCode != "peer_transport" {
+	if e != nil || task.State != "failed" || task.ErrorCode != "peer_transport" && task.ErrorCode != "direct_peer_transfer" {
 		t.Fatal(task, e)
 	}
-	if fault.reads[0] != 1 {
+	expectedReads := 1
+	if unadmitted {
+		expectedReads = 0
+	}
+	if fault.reads[0] != expectedReads {
 		t.Fatal("unexpected initial copies", fault.reads)
 	}
 	if cancelTask {
@@ -546,8 +666,14 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 				t.Fatal("source business bytes after cancel", e)
 			}
 		}
-		if fault.reads[0] != 1 {
+		if fault.reads[0] != expectedReads {
 			t.Fatal("cancellation recopied prefix", fault.reads)
+		}
+		if unadmitted {
+			var persisted string
+			if e = targetDB.Database().QueryRow("SELECT plan FROM migration_tasks WHERE task_id=?", plan.ID).Scan(&persisted); e != nil || !strings.Contains(persisted, `"cancellation_only":true`) {
+				t.Fatal("missing durable non-admission fact", e)
+			}
 		}
 		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
 			t.Fatal("explicit cancel drain release", e)

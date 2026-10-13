@@ -23,7 +23,7 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 	if os.Getenv("FRONTIERCLOUD_SCHEMA_TEST_MYSQL_HOST") != "" {
 		backends = append(backends, "mysql")
 	}
-	for _, startGeneration := range []int{4, 5} {
+	for _, startGeneration := range []int{4, 5, 6} {
 		for _, backend := range backends {
 			for _, interrupted := range []bool{false, true} {
 				name := "preserve"
@@ -32,6 +32,9 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 				}
 				if startGeneration == 5 {
 					name = "bindings" + name
+				}
+				if startGeneration == 6 {
+					name = "plans" + name
 				}
 				t.Run(backend+"/"+name, func(t *testing.T) {
 					ctx := context.Background()
@@ -84,8 +87,13 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 							t.Fatal(e)
 						}
 					}
-					if startGeneration == 5 {
+					if startGeneration >= 5 {
 						if _, e = db.Exec("INSERT INTO frontiercloud_schema_migrations VALUES (5,?,?,123)", migrations.ResourceMigrationName, migrations.ResourceMigrationChecksum); e != nil {
+							t.Fatal(e)
+						}
+					}
+					if startGeneration >= 6 {
+						if _, e = db.Exec("INSERT INTO frontiercloud_schema_migrations VALUES (6,?,?,123)", migrations.PeerBindingsName, migrations.PeerBindingsChecksum); e != nil {
 							t.Fatal(e)
 						}
 					}
@@ -107,6 +115,9 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 						table := "migration_tasks"
 						if startGeneration == 5 {
 							table = "migration_peer_bindings"
+						}
+						if startGeneration == 6 {
+							table = "migration_plan_headers"
 						}
 						if backend == "sqlite" {
 							var count int
@@ -141,6 +152,9 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 					if e = db.QueryRow("SELECT migration_name,checksum FROM frontiercloud_schema_migrations WHERE generation=6").Scan(&migrationName, &checksum); e != nil || migrationName != migrations.PeerBindingsName || checksum != migrations.PeerBindingsChecksum {
 						t.Fatal("generation-6 journal identity", migrationName, checksum, e)
 					}
+					if e = db.QueryRow("SELECT migration_name,checksum FROM frontiercloud_schema_migrations WHERE generation=7").Scan(&migrationName, &checksum); e != nil || migrationName != migrations.MigrationPlansName || checksum != migrations.MigrationPlansChecksum {
+						t.Fatal("generation-7 journal identity", migrationName, checksum, e)
+					}
 					var id, path string
 					var score, preference int
 					if e = db.QueryRow("SELECT m.media_id,m.media_path,s.play_score,s.preference FROM media_objects m JOIN media_playback_stats s ON s.media_id=m.media_id WHERE m.path_locator='historical-locator'").Scan(&id, &path, &score, &preference); e != nil || id != "historical-id" || path != "music/old/a.mp3" || score != 7 || preference != 500000 {
@@ -155,7 +169,7 @@ func TestResourceMigrationGenerationFourUpgrade(t *testing.T) {
 					if _, e = db.Exec("INSERT INTO migration_capacity(task_id,member_id,reserved_bytes,updated_at) VALUES ('task','target',-1,1)"); e == nil {
 						t.Fatal("negative reservation admitted")
 					}
-					if _, e = db.Exec("UPDATE frontiercloud_schema SET generation=7"); e != nil {
+					if _, e = db.Exec("UPDATE frontiercloud_schema SET generation=?", migrations.Generation+1); e != nil {
 						t.Fatal(e)
 					}
 					if e = schema.Initialize(ctx, db, backend); e == nil {

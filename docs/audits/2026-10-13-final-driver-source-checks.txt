@@ -1,0 +1,26 @@
+COMMAND: python scripts/check_ci_budget.py
+CI budget passed: test jobs <=3 minutes; isolated gated compilation <=10; no hosted acceptance
+COMMAND: python scripts/check_cpu_boundary.py
+One-core product-runtime boundary passed
+COMMAND: python scripts/check_release_policy.py
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.034s
+
+OK
+Native policy passed: reviewed provenance, three-minute test CI and separate bounded compilation
+COMMAND: python scripts/check_english_comments.py
+English comment check passed
+COMMAND: python -m unittest discover -s tests -p test_*.py
+.............................................................................s...................s........................................................................................................
+----------------------------------------------------------------------
+Ran 201 tests in 0.805s
+
+OK (skipped=2)
+CPU did not recover below 20%: [90, 90, 90, 90, 90]
+CPU recovered below 20% for 5 samples: [0.53, 0.24, 0.23, 27.06, 0.25, 0.25, 0.25, 0.25, 0.25]
+One-core product-runtime boundary passed
+CPU recovered below 20% for 5 samples: [95, 88, 19, 18, 17, 16, 15]
+COMMAND: python scripts/check_ci_assets.py
+Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external
+COMMAND: git -c core.safecrlf=false diff --check

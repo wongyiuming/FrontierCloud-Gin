@@ -1,0 +1,330 @@
+=== RUN   TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows
+--- PASS: TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows (0.19s)
+=== RUN   TestPriorityPlannerExhaustionNeverPartiallyChanges
+--- PASS: TestPriorityPlannerExhaustionNeverPartiallyChanges (0.00s)
+=== RUN   TestPriorityPlannerEqualCollisionAndBoundaries
+--- PASS: TestPriorityPlannerEqualCollisionAndBoundaries (0.00s)
+=== RUN   TestPriorityPlannerRandomMovesAndLargeTies
+--- PASS: TestPriorityPlannerRandomMovesAndLargeTies (4.32s)
+=== RUN   TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay
+--- PASS: TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay (0.16s)
+=== RUN   TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials
+--- PASS: TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials (0.10s)
+=== RUN   TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory
+--- PASS: TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory (0.13s)
+=== RUN   TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones
+--- PASS: TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones (0.16s)
+=== RUN   TestAdminLocalTreeAndSearchUseNativeEncryptionBatches
+--- PASS: TestAdminLocalTreeAndSearchUseNativeEncryptionBatches (3.50s)
+=== RUN   TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion
+--- PASS: TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion (1.45s)
+=== RUN   TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive
+    backup_files_test.go:20: storage appliance is embedded SQLite only
+--- SKIP: TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive (0.18s)
+=== RUN   TestPeerBackupObservationColdReadDoesNotRepairLease
+    backup_observation_test.go:21: native storage uses embedded SQLite
+--- SKIP: TestPeerBackupObservationColdReadDoesNotRepairLease (0.12s)
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+--- PASS: TestPeerBackupObservationManifestIdentityStateAndBounds (0.14s)
+=== RUN   TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory
+--- PASS: TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory (0.23s)
+=== RUN   TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort
+--- PASS: TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort (0.29s)
+=== RUN   TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration
+--- PASS: TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration (0.22s)
+=== RUN   TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration
+--- PASS: TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration (0.31s)
+=== RUN   TestCatalogGenerationDoesNotPublishRolledBackAudit
+--- PASS: TestCatalogGenerationDoesNotPublishRolledBackAudit (0.70s)
+=== RUN   TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed
+[mysql] 2026/10/13 12:04:30 packets.go:58 read tcp 192.168.160.3:54488->192.168.160.2:3306: i/o timeout
+    encryption_batch_test.go:16: initialize schema: invalid connection
+--- FAIL: TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed (29.87s)
+=== RUN   TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound
+--- PASS: TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound (40.32s)
+=== RUN   TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity
+--- PASS: TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity (16.66s)
+=== RUN   TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths
+[mysql] 2026/10/13 12:06:08 packets.go:58 read tcp 192.168.160.3:50514->192.168.160.2:3306: i/o timeout
+    global_delete_test.go:15: invalid connection
+--- FAIL: TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths (37.04s)
+=== RUN   TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity
+[mysql] 2026/10/13 12:06:23 packets.go:58 read tcp 192.168.160.3:33354->192.168.160.2:3306: i/o timeout
+    global_media_test.go:18: initialize schema: invalid connection
+--- FAIL: TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity (18.76s)
+=== RUN   TestGlobalReservationAndFinalizationAuditFailurePreserveFunds
+    global_media_test.go:253: SQLite audit failure injection
+--- SKIP: TestGlobalReservationAndFinalizationAuditFailurePreserveFunds (5.06s)
+=== RUN   TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity
+--- PASS: TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity (0.44s)
+=== RUN   TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion
+--- PASS: TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion (0.32s)
+=== RUN   TestLyricRelationsAtomicReverseAndAutoPreservesExplicit
+--- PASS: TestLyricRelationsAtomicReverseAndAutoPreservesExplicit (0.27s)
+=== RUN   TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay
+--- PASS: TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay (0.38s)
+=== RUN   TestMediaDeleteJournalAndExactMetadataScope
+--- PASS: TestMediaDeleteJournalAndExactMetadataScope (0.26s)
+=== RUN   TestMediaAuditRetainsLargeBatchEvidence
+--- PASS: TestMediaAuditRetainsLargeBatchEvidence (0.41s)
+=== RUN   TestMediaMutationsAtomicAndCaseSensitive
+--- PASS: TestMediaMutationsAtomicAndCaseSensitive (0.22s)
+=== RUN   TestSQLiteAuditFailureRollsBackMutation
+    media_mutations_test.go:107: SQLite trigger failure injection
+--- SKIP: TestSQLiteAuditFailureRollsBackMutation (0.32s)
+=== RUN   TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories
+--- PASS: TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories (0.64s)
+=== RUN   TestUploadPublicationReplayIsAtomicAndIdempotent
+[mysql] 2026/10/13 12:06:45 packets.go:58 read tcp 192.168.160.3:36842->192.168.160.2:3306: i/o timeout
+[mysql] 2026/10/13 12:06:45 packets.go:58 read tcp 192.168.160.3:36738->192.168.160.2:3306: i/o timeout
+[mysql] 2026/10/13 12:06:45 packets.go:58 read tcp 192.168.160.3:36800->192.168.160.2:3306: i/o timeout
+    media_upload_test.go:30: invalid connection
+--- FAIL: TestUploadPublicationReplayIsAtomicAndIdempotent (9.09s)
+=== RUN   TestResourceMigrationAdminRevisionFencesAndBoundedStatus
+[mysql] 2026/10/13 12:07:09 packets.go:58 read tcp 192.168.160.3:49748->192.168.160.2:3306: i/o timeout
+    migration_admin_test.go:14: initialize schema: invalid connection
+--- FAIL: TestResourceMigrationAdminRevisionFencesAndBoundedStatus (25.14s)
+=== RUN   TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt
+    migration_anchor_test.go:13: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt (7.35s)
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+[mysql] 2026/10/13 12:07:35 packets.go:58 read tcp 192.168.160.3:50836->192.168.160.2:3306: i/o timeout
+    migration_backup_test.go:14: initialize schema: invalid connection
+--- FAIL: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (15.99s)
+=== RUN   TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity
+[mysql] 2026/10/13 12:07:52 packets.go:58 read tcp 192.168.160.3:39708->192.168.160.2:3306: i/o timeout
+    migration_cancel_admission_test.go:13: invalid connection
+--- FAIL: TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity (17.65s)
+=== RUN   TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain
+[mysql] 2026/10/13 12:08:05 packets.go:58 read tcp 192.168.160.3:48286->192.168.160.2:3306: i/o timeout
+    migration_cleanup_test.go:13: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain (11.58s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+[mysql] 2026/10/13 12:08:19 packets.go:58 read tcp 192.168.160.3:53772->192.168.160.2:3306: i/o timeout
+    migration_commit_test.go:14: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (15.16s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+[mysql] 2026/10/13 12:08:40 packets.go:58 read tcp 192.168.160.3:36694->192.168.160.2:3306: i/o timeout
+    migration_commit_test.go:132: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (23.86s)
+=== RUN   TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain
+    migration_finish_test.go:14: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain (22.70s)
+=== RUN   TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce
+    migration_finish_test.go:133: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce (19.98s)
+=== RUN   TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts
+    migration_finish_test.go:264: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts (22.37s)
+=== RUN   TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof
+    migration_finish_test.go:357: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof (9.61s)
+=== RUN   TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund
+[mysql] 2026/10/13 12:10:42 packets.go:58 read tcp 192.168.160.3:39550->192.168.160.2:3306: i/o timeout
+    migration_peer_cleanup_test.go:12: invalid connection
+--- FAIL: TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund (17.42s)
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+[mysql] 2026/10/13 12:10:53 packets.go:58 read tcp 192.168.160.3:47270->192.168.160.2:3306: i/o timeout
+    migration_peer_delete_test.go:15: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (11.38s)
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+[mysql] 2026/10/13 12:11:09 packets.go:58 read tcp 192.168.160.3:42944->192.168.160.2:3306: i/o timeout
+    migration_peer_delete_test.go:68: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (16.14s)
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+[mysql] 2026/10/13 12:11:26 packets.go:58 read tcp 192.168.160.3:46704->192.168.160.2:3306: i/o timeout
+    migration_peer_delete_test.go:221: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (19.71s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+    migration_peer_test.go:87: ping MySQL: dial tcp 192.168.160.2:3306: i/o timeout
+--- FAIL: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (9.49s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+    migration_peer_test.go:198: ping MySQL: dial tcp: lookup mysql: i/o timeout
+--- FAIL: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (10.88s)
+=== RUN   TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations
+[mysql] 2026/10/13 12:12:13 packets.go:58 read tcp 192.168.160.3:52874->192.168.160.2:3306: i/o timeout
+    migration_peer_test.go:235: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations (20.08s)
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target
+[mysql] 2026/10/13 12:12:33 packets.go:58 read tcp 192.168.160.3:50252->192.168.160.2:3306: i/o timeout
+    migration_peer_test.go:289: fresh isolated MySQL database allocation failed invalid connection <nil>
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source
+[mysql] 2026/10/13 12:12:43 packets.go:58 read tcp 192.168.160.3:56768->192.168.160.2:3306: i/o timeout
+    migration_peer_test.go:289: invalid connection
+--- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget (27.17s)
+    --- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target (18.91s)
+    --- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source (7.53s)
+=== RUN   TestPeerMigrationEmptyCancellationReceiptReplay
+[mysql] 2026/10/13 12:12:51 packets.go:58 read tcp 192.168.160.3:56770->192.168.160.2:3306: i/o timeout
+    migration_peer_test.go:373: fresh isolated MySQL database allocation failed invalid connection <nil>
+--- FAIL: TestPeerMigrationEmptyCancellationReceiptReplay (7.67s)
+=== RUN   TestPeerMigrationCancellationSourceProofReadIsTaskStateBound
+[mysql] 2026/10/13 12:12:56 packets.go:58 read tcp 192.168.160.3:48132->192.168.160.2:3306: i/o timeout
+    migration_peer_test.go:401: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationCancellationSourceProofReadIsTaskStateBound (5.03s)
+=== RUN   TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission
+[mysql] 2026/10/13 12:13:01 packets.go:58 read tcp 192.168.160.3:38808->192.168.160.2:3306: i/o timeout
+    migration_plan_changed_test.go:12: ping MySQL: invalid connection
+--- FAIL: TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission (5.08s)
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+[mysql] 2026/10/13 12:13:06 packets.go:58 read tcp 192.168.160.3:38818->192.168.160.2:3306: i/o timeout
+    migration_plan_conflicts_test.go:13: ping MySQL: invalid connection
+--- FAIL: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (5.04s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+[mysql] 2026/10/13 12:13:11 packets.go:58 read tcp 192.168.160.3:49940->192.168.160.2:3306: i/o timeout
+    migration_plan_pages_test.go:19: ping MySQL: invalid connection
+--- FAIL: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (5.05s)
+=== RUN   TestPeerMigrationPublicationRollbackAndReplay
+[mysql] 2026/10/13 12:13:16 packets.go:58 read tcp 192.168.160.3:49944->192.168.160.2:3306: i/o timeout
+    migration_publish_test.go:11: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationPublicationRollbackAndReplay (5.05s)
+=== RUN   TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive
+[mysql] 2026/10/13 12:13:21 packets.go:58 read tcp 192.168.160.3:37224->192.168.160.2:3306: i/o timeout
+    migration_read_test.go:14: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive (5.05s)
+=== RUN   TestPeerMigrationConcurrentReadAdmissionAndCleanup
+[mysql] 2026/10/13 12:13:26 packets.go:58 read tcp 192.168.160.3:37234->192.168.160.2:3306: i/o timeout
+    migration_read_test.go:58: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationConcurrentReadAdmissionAndCleanup (5.06s)
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+[mysql] 2026/10/13 12:13:31 packets.go:58 read tcp 192.168.160.3:36176->192.168.160.2:3306: i/o timeout
+    migration_recording_delete_test.go:17: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (5.03s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+[mysql] 2026/10/13 12:13:36 packets.go:58 read tcp 192.168.160.3:36178->192.168.160.2:3306: i/o timeout
+    migration_recording_delete_test.go:74: ping MySQL: invalid connection
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+[mysql] 2026/10/13 12:13:41 packets.go:58 read tcp 192.168.160.3:48082->192.168.160.2:3306: i/o timeout
+    migration_recording_delete_test.go:74: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (10.13s)
+    --- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (5.05s)
+    --- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (5.07s)
+=== RUN   TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary
+[mysql] 2026/10/13 12:13:46 packets.go:58 read tcp 192.168.160.3:48096->192.168.160.2:3306: i/o timeout
+    migration_recording_publish_test.go:17: ping MySQL: invalid connection
+--- FAIL: TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary (5.03s)
+=== RUN   TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor
+panic: test timed out after 10m0s
+	running tests:
+		TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor (5s)
+
+goroutine 14581 [running]:
+testing.(*M).startAlarm.func1()
+	/usr/local/go/src/testing/testing.go:2802 +0x605
+created by time.goFunc
+	/usr/local/go/src/time/sleep.go:215 +0x45
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0xc000142b48, {0x154385c, 0x41}, 0x16c5570)
+	/usr/local/go/src/testing/testing.go:2109 +0xb3e
+testing.runTests.func1(0xc000142b48)
+	/usr/local/go/src/testing/testing.go:2585 +0x85
+testing.tRunner(0xc000142b48, 0xc00023fad0)
+	/usr/local/go/src/testing/testing.go:2036 +0x21d
+testing.runTests({0x1536a0f, 0x28}, {0x1542f18, 0x40}, 0xc000016210, {0x1e1db20, 0x6f, 0x6f}, {0xc2aba5ffdc405cb5, 0x8bb332dc62, ...})
+	/usr/local/go/src/testing/testing.go:2583 +0x9ea
+testing.(*M).Run(0xc000138f00)
+	/usr/local/go/src/testing/testing.go:2443 +0xf4c
+main.main()
+	_testmain.go:268 +0x165
+
+goroutine 14573 [select]:
+github.com/go-sql-driver/mysql.(*mysqlConn).startWatcher.func1()
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/connection.go:755 +0x105
+created by github.com/go-sql-driver/mysql.(*mysqlConn).startWatcher in goroutine 14570
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/connection.go:752 +0x1c5
+
+goroutine 14571 [select]:
+database/sql.(*DB).connectionOpener(0xc000b42750, {0x16d4b98, 0xc001a79090})
+	/usr/local/go/src/database/sql/sql.go:1261 +0xed
+created by database/sql.OpenDB in goroutine 14570
+	/usr/local/go/src/database/sql/sql.go:841 +0x287
+
+goroutine 14570 [IO wait]:
+internal/poll.runtime_pollWait(0x7a413c361400, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85
+internal/poll.(*pollDesc).wait(0xc001a68ba0, 0x72, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc001a68b80, {0xc000b51000, 0x1000, 0x1000})
+	/usr/local/go/src/internal/poll/fd_unix.go:165 +0x499
+net.(*netFD).Read(0xc001a68b80, {0xc000b51000, 0x1000, 0x1000})
+	/usr/local/go/src/net/fd_posix.go:68 +0x4b
+net.(*conn).Read(0xc0001a8a68, {0xc000b51000, 0x1000, 0x1000})
+	/usr/local/go/src/net/net.go:196 +0xad
+github.com/go-sql-driver/mysql.(*mysqlConn).readWithTimeout(0xc000bf11d0, {0xc000b51000, 0x1000, 0x1000})
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/connection.go:75 +0x129
+github.com/go-sql-driver/mysql.(*buffer).fill(0xc000bf11d0, 0x4, 0xc00002db30)
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/buffer.go:72 +0x1c5
+github.com/go-sql-driver/mysql.(*mysqlConn).readNext(0xc000bf11d0, 0x4)
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/packets.go:32 +0x85
+github.com/go-sql-driver/mysql.(*mysqlConn).readPacket(0xc000bf11d0)
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/packets.go:52 +0x1ba
+github.com/go-sql-driver/mysql.(*mysqlConn).readHandshakePacket(0xc000bf11d0)
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/packets.go:185 +0x3f
+github.com/go-sql-driver/mysql.(*connector).Connect(0xc001a58960, {0x16d4a40, 0x1e45080})
+	/go/pkg/mod/github.com/go-sql-driver/mysql@v1.10.1/connector.go:134 +0xccf
+database/sql.(*DB).conn(0xc000b42750, {0x16d4a40, 0x1e45080}, 0x1)
+	/usr/local/go/src/database/sql/sql.go:1431 +0xed1
+database/sql.(*DB).PingContext.func1(0x1)
+	/usr/local/go/src/database/sql/sql.go:900 +0x66
+database/sql.(*DB).retry(0xc00002e4e0?, 0xc00002e520)
+	/usr/local/go/src/database/sql/sql.go:1576 +0x4b
+database/sql.(*DB).PingContext(0xc000b42750, {0x16d4a40, 0x1e45080})
+	/usr/local/go/src/database/sql/sql.go:899 +0xf4
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql.(*Store).Ping(0xc0017e0a80, {0x16d4a40, 0x1e45080})
+	/workspace/internal/store/mysql/mysql.go:85 +0x5a
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql.OpenContext({0x16d4a40, 0x1e45080}, {{0xc00002001e, 0x5}, 0xcea, {0xc0000200e2, 0xb}, {0xc00002004e, 0x4}, {0xc000024077, ...}})
+	/workspace/internal/store/mysql/mysql.go:69 +0x8cc
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql.Open(...)
+	/workspace/internal/store/mysql/mysql.go:37
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.database(0xc0010a2488)
+	/workspace/internal/store/business/repository_test.go:47 +0x9e9
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.peerMigrationFixture(_, _)
+	/workspace/internal/store/business/migration_peer_test.go:17 +0xd7
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor(0xc0010a2488)
+	/workspace/internal/store/business/migration_recording_publish_test.go:93 +0xc5
+testing.tRunner(0xc0010a2488, 0x16c5570)
+	/usr/local/go/src/testing/testing.go:2036 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2101 +0xb13
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	600.058s
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+[mysql] 2026/10/13 12:13:54 packets.go:58 unexpected EOF
+    resource_migration_test.go:56: ping MySQL: invalid connection
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+    resource_migration_test.go:56: ping MySQL: dial tcp 192.168.160.2:3306: connect: connection refused
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve
+    resource_migration_test.go:56: ping MySQL: dial tcp: lookup mysql on 127.0.0.11:53: server misbehaving
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted
+    resource_migration_test.go:56: ping MySQL: dial tcp: lookup mysql on 127.0.0.11:53: server misbehaving
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve
+    resource_migration_test.go:56: ping MySQL: dial tcp: lookup mysql on 127.0.0.11:53: server misbehaving
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted
+    resource_migration_test.go:56: ping MySQL: dial tcp: lookup mysql on 127.0.0.11:53: server misbehaving
+--- FAIL: TestResourceMigrationGenerationFourUpgrade (2.62s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.22s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.26s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (1.13s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (0.01s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve (0.24s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted (0.25s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve (0.01s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted (0.00s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve (0.23s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted (0.25s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted (0.00s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	2.645s
+FAIL

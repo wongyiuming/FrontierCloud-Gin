@@ -55,6 +55,10 @@ schema labels are checked before initialization. Infrastructure images are
 also resolved to digests. `.fc-images.json` and `.fc-deployment.json` preserve
 the images, reviewed source, role, project, mount/database binding and config
 version. Keep both with the deployment. Failed pulls never trigger compilation.
+For HTTPS installation, `fc` independently verifies the native controller's
+configured hostname, serving certificate fingerprint and HTTPS readiness before
+recording `ready`. Certificate rejection retains the `prepared` receipt and
+initialized identity; resolve the certificate failure without reinitialization.
 
 ## Daily checks
 
@@ -155,18 +159,33 @@ report business verification. `restore open` is separate, repeats verification,
 and removes only maintenance owned by this recovery. Preexisting administrator
 maintenance is retained. A failed activation stops Web, keeps public maintenance
 closed and attempts to restore the native fence; recovery material is retained.
-Coordinated multi-node recovery sets remain in progress. Never regenerate identity
-as a recovery substitute. Actual isolated SQLite/MySQL HTTP Range/identity/priority
+For a complete cluster on one local Engine, use the explicit
+[coordinated recovery-set workflow](operator-recovery-sets.md). It freezes every
+listed member together and requires the complete reciprocal cluster roster.
+An extracted set cannot be activated or opened through a single-member command.
+Cross-host coordination is outside that local entry point; independently captured
+archives must not be described as one consistent cluster recovery point.
+Never regenerate identity as a recovery substitute. Actual isolated SQLite/MySQL HTTP Range/identity/priority
 verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 
-This development runtime uses database generation 5. Its additive migration
-preserves existing business data and records durable resource migration facts;
-execution integration is still in progress. Generation-4 binaries reject a
-generation-5 database. Restore archives require their matching runtime generation;
-an old archive must first use its matching operator bundle. See the
+This development runtime uses database generation 7. Its additive migrations
+preserve existing business data and record durable resource migration facts and
+peer object bindings, plus bounded paged plan records. Older binaries reject newer
+database generations. Recovery archives preserve their source generation;
+restoration uses the matching source images. The operator supports the explicitly
+implemented 6-to-7 upgrade in addition to same-generation upgrades. See the
 [schema contract](../migrations/README.md) before selecting target images.
+
+The development `fc upgrade plan`, `apply` and `open` commands now provide an
+explicit target/review/NodeID workflow. `apply` preserves a verified consistent
+recovery archive and prepares the target under the native maintenance fence;
+`open` separately verifies the running target before allowing traffic. Follow
+the [approved upgrade procedure](operator-upgrade.md) for exact commands and
+generation compatibility limits. Normal `restart` refuses unfinished upgrade or
+recovery receipts and coordinated-set markers. Private Compose acceptance is documented separately from
+public release evidence.
 
 Keep the current receipt/digests and an independently verified consistent
 recovery point. Explicitly select the reviewed published target main SHA and
@@ -180,16 +199,14 @@ reopen traffic. See [operator releases](https://github.com/wongyiuming/FrontierC
 
 Resource migration and relation revocation are distinct business operations.
 Neither authorizes stopping hosts, deleting volumes or erasing disks. The
-persistent resource migration/retirement implementation and acceptance are
-ongoing; this manual does not claim that a released node can yet be safely
-migrated through `fc`. The current dev repository has durable tasks, reservations,
-source drains and runner fences, with transactional whole-parent ownership
-cutover. The isolated authenticated router tests cover bounded byte copying, media and
-recording publication, source cleanup, private anchor retirement, final task
-receipts and explicit owned-drain release. Authenticated physical inventory,
-whole-task cancellation, independent retirement, GUI/CLI and actual fleet/browser
-acceptance remain incomplete; production migration capability is not advertised.
-Planning never reserves capacity. Cancelling a task retains capacity until safe
+persistent implementation now includes [plan/start](resource-migration-planning.md),
+durable tasks, reservations, source drains and runner fences, transactional
+whole-parent ownership cutover, source cleanup and
+[independent safe retirement](node-safe-retirement.md). Both GUI and CLI call the
+same authenticated Master services. This is development code; publication and
+native fleet/browser acceptance remain separate gates recorded in the audit.
+Master Local is rejected as a migration endpoint. Planning never reserves capacity.
+Cancelling a task retains capacity until safe
 staging cleanup, and does not move committed data back or release another drain.
 No host/container/volume deletion is part of this business operation.
 Existing owned storage must follow the separate
@@ -219,11 +236,13 @@ blocker samples, missing expected files, retained backups and suggested repairs.
 Historical results retain their timestamp through page refresh and must be rerun.
 An incomplete/offline observation never becomes a successful check.
 
-This is a preflight report, not final retirement approval. It does not revoke the
-relationship, remove files or stop containers. Final fenced admission, verified
-backup replacement/retention and full transaction/reference reconciliation are
-still under implementation; the development UI must not be used as evidence that
-a disk can be erased. Native browser/fleet acceptance is still outstanding.
+This is a preflight report. Final apply requires typed source NodeID confirmation,
+establishes a durable relationship write fence, joins in-flight native requests,
+rechecks both SQL ledgers and the actual filesystem, and records durable
+revocation receipts. Retained backups and unknown residual files block retirement;
+this release provides no backup-purge or force-retire shortcut. A successful
+business retirement never authorizes disk erasure. Native browser/fleet acceptance
+is recorded separately from package tests.
 
 
 ### CLI retirement preflight
@@ -249,18 +268,27 @@ it completed with blockers; exit 2 means invalid input, transport/authentication
 failure or incomplete observation. Every report remains `preflight_only`: exit 0
 never grants permission to revoke a node or erase its disk. Human output quotes
 sample paths to avoid terminal control sequences; `--json` emits the bounded typed
-report, including available partial observations on failure. `retire apply` is
-not yet implemented.
+report, including available partial observations on failure. Final apply uses
+`fc node retire apply NODE_ID --confirm-node-id NODE_ID` with the same Master,
+TLS and stdin credential options. An uncertain reply can be retried with the same
+NodeID; a retained retirement fence must be resolved through that workflow.
+See [safe retirement](node-safe-retirement.md) for the complete retry contract.
 
 
 ### Existing migration task controls
 
-The dev Master Nodes module lists persisted migration tasks in pages of 16,
-including failures and historical terminal tasks. Checkpoint details separately
+The dev Master Nodes module lists queue/attention items oldest first in pages
+of 16; a separate history view includes terminal tasks. Checkpoint details separately
 page through up to 16 objects (48 KiB encoded object-data budget), with aggregate
 object/unit states, verified bytes and authoritative committed bytes. Target
 publication is not counted as authoritative ownership commit. Historical
-checkpoint views show their observation time and require explicit refresh.
+checkpoint views show their observation time. Up to four visible active tasks
+refresh automatically, and explicit refresh remains available. The task view
+shows queue position, waiting node, measured business rates, current object/byte
+offset and copy speed. Automatic traffic waiting preserves its checkpoint and
+reservation; manual pause is never automatically resumed. See
+[migration scheduling](resource-migration-planning.md#heavy-task-scheduling-and-progress)
+for the default thresholds and gateway observation behavior.
 
 Task controls call the same authenticated Admin service: pause, resume, retry
 and cancel. Each mutation confirms source/target NodeIDs and the displayed task
@@ -274,8 +302,9 @@ The API is under `/api/v1/media/admin/nodes/migrations`: collection GET uses
 `after_time`/`after_id`, task GET uses an object `after` cursor, and task
 `/control` POST requires `action`, `revision`, `confirm_source_id` and
 `confirm_target_id`, with the existing session/CSRF and HTTPS boundaries.
-New task planning/start and the matching migration CLI are still under
-implementation; callers cannot submit fabricated disk proofs through this API.
+New task planning/start uses the separate
+[migration-plans service](resource-migration-planning.md); callers cannot submit
+fabricated disk proofs through either API.
 
 
 ### CLI migration task queries and controls
@@ -301,8 +330,9 @@ Committed units keep target ownership; reservations remain until managed cleanup
 and draining remains until a separate explicit release. Human output quotes
 paths/error codes; JSON output contains only typed bounded task/status fields.
 Credential stdin, normal TLS verification, optional public CA trust, ephemeral
-cookies and bounded logout follow the retirement client contract. Plan/start
-and final retirement apply remain under implementation.
+cookies and bounded logout follow the retirement client contract. The plan/start
+workflow returns prompt asynchronous observations, then persists a task only
+after the exact source/target and reviewed plan have been confirmed.
 
 
 ### Explicit task-owned drain release
@@ -321,7 +351,8 @@ Administrator maintenance and other owners' restrictions remain. Repeated
 requests reconcile the same facts and do not repeat audit mutations. A lost
 reply requires status/reconciliation before an explicit retry. Releasing a drain
 neither moves committed resources back nor revokes the node, stops containers
-or permits volume cleanup. Final retirement remains a separate unfinished flow.
+or permits volume cleanup. Final retirement remains a separate, explicitly
+confirmed operation with a fresh fenced check; see [safe retirement](node-safe-retirement.md).
 
 
 The internal managed-content observation endpoint uses each native media or recording mount, authenticates the current upstream Master and hashes exact managed bytes in one bounded worker. It reports an ephemeral observation with a five-minute expiry and process incarnation. It does not freeze content, generate a migration plan, reserve space or authorize deletion/retirement. Operators should continue using the exposed node task/retire-check commands; there is no supported direct content-observation operator command.

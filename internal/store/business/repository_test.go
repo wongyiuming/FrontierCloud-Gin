@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -15,10 +16,14 @@ import (
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
+var mysqlFixtureSequence atomic.Uint64
+
 func database(t *testing.T) store.Store {
 	t.Helper()
 	var db store.Store
 	var err error
+	isolatedDatabase := ""
+	var isolatedConfig mysqlstore.Config
 	if host := os.Getenv("FRONTIERCLOUD_TEST_MYSQL_HOST"); host != "" {
 		port := 3306
 		if text := os.Getenv("FRONTIERCLOUD_TEST_MYSQL_PORT"); text != "" {
@@ -27,14 +32,55 @@ func database(t *testing.T) store.Store {
 				t.Fatal(err)
 			}
 		}
-		db, err = mysqlstore.Open(mysqlstore.Config{Host: host, Port: port, Database: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_DATABASE"), User: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_USER"), PasswordFile: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE")})
+		name := os.Getenv("FRONTIERCLOUD_TEST_MYSQL_DATABASE")
+		if prefix := os.Getenv("FRONTIERCLOUD_TEST_MYSQL_DATABASE_PREFIX"); prefix != "" {
+			if len(prefix) > 32 || len(prefix) < 8 || prefix[:8] != "fc_test_" {
+				t.Fatal("explicit isolated MySQL fixture prefix required")
+			}
+			for _, character := range prefix {
+				if character != '_' && (character < 'a' || character > 'z') && (character < '0' || character > '9') {
+					t.Fatal("unsafe MySQL fixture prefix")
+				}
+			}
+			// Match SQLite's new database per fixture, including repeated calls
+			// within one test. No prior test's media/identity can certify emptiness.
+			sum := sha256.Sum256([]byte(t.Name()))
+			name = prefix + hex.EncodeToString(sum[:8]) + "_" + strconv.FormatUint(mysqlFixtureSequence.Add(1), 10)
+			isolatedDatabase = name
+			isolatedConfig = mysqlstore.Config{Host: host, Port: port, Database: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_DATABASE"), User: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_USER"), PasswordFile: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE")}
+			bootstrap, e := mysqlstore.Open(isolatedConfig)
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, e = bootstrap.Database().Exec("CREATE DATABASE `" + name + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+			closeErr := bootstrap.Close()
+			if e != nil || closeErr != nil {
+				t.Fatal("fresh isolated MySQL database allocation failed", e, closeErr)
+			}
+		}
+		db, err = mysqlstore.Open(mysqlstore.Config{Host: host, Port: port, Database: name, User: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_USER"), PasswordFile: os.Getenv("FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE")})
 	} else {
 		db, err = sqlitestore.Open(filepath.Join(t.TempDir(), "database.db"))
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		db.Close()
+		if isolatedDatabase != "" && !t.Failed() {
+			// Successful temporary databases are reclaimed only after caller
+			// cleanup and all assertions. Failed fixtures retain their evidence.
+			bootstrap, e := mysqlstore.Open(isolatedConfig)
+			if e != nil {
+				t.Error("isolated MySQL fixture cleanup connection failed", e)
+				return
+			}
+			if _, e = bootstrap.Database().Exec("DROP DATABASE `" + isolatedDatabase + "`"); e != nil {
+				t.Error("isolated MySQL fixture cleanup failed", e)
+			}
+			bootstrap.Close()
+		}
+	})
 	if err := db.Initialize(context.Background()); err != nil {
 		t.Fatal(err)
 	}

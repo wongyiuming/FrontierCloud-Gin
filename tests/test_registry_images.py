@@ -22,7 +22,7 @@ def response(value, digest=None):
 def publication_fixture(component='web', configuration=None):
     config = configuration or {'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': {
         'frontiercloud.revision': SHA, 'frontiercloud.component': component,
-        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '6',
+        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '7',
         'frontiercloud.release-manifest-version': '1', 'org.opencontainers.image.source': SOURCE,
         'org.opencontainers.image.revision': SHA}}}
     raw = json.dumps(config).encode()

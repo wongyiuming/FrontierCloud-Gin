@@ -32,6 +32,11 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 	if e != nil {
 		return nil, e
 	}
+	nativeState, e := newRetirementNativeInventory(context.Background(), root, settings, repository, control)
+	if e != nil {
+		root.Close()
+		return nil, e
+	}
 	expectedRepository, ok := repository.(store.ExpectedPhysicalRepository)
 	if !ok {
 		root.Close()
@@ -102,12 +107,12 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		if c.Request.URL.RawQuery != "" {
 			uri += "?" + c.Request.URL.RawQuery
 		}
-		rel, e := control.Authenticate(c.Request.Context(), c.Request.Header, c.Request.Method, uri, body, false, false)
+		rel, e := control.AuthenticateRetirement(c.Request.Context(), c.Request.Header, c.Request.Method, uri, body)
 		if e != nil {
 			detail(c, 401, "Invalid inventory relationship authentication")
 			return
 		}
-		if e = control.RequireFollower(c.Request.Context(), rel); e != nil {
+		if e = control.RequireInventoryFollower(c.Request.Context(), rel); e != nil {
 			detail(c, 403, "Inventory requires the active upstream Master")
 			return
 		}
@@ -152,6 +157,10 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		defer cancel()
 		unhook := context.AfterFunc(shutdown, cancel)
 		defer unhook()
+		if len(nativeRoots) == 2 && nativeState.validate(ctx) != nil {
+			detail(c, 409, "Retained native state changed; reconcile the selected runtime files")
+			return
+		}
 		binding := resourceinventory.Binding{MemberID: identity.ID, MasterID: rel.PeerID, RelationshipID: rel.ID, Scope: request.Scope}
 		var result any
 		switch request.Action {
@@ -183,6 +192,7 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			facts, e = repository.ClassifyPhysicalInventory(ctx, rel.ID, identity.ID, rel.PeerID, entries)
 			if e == nil && len(facts) == len(entries) && request.Scope == "data" && len(nativeRoots) == 2 {
 				for i, entry := range observed.Page.Entries {
+					facts[i] = nativeState.classify(ctx, entry, facts[i])
 					for _, scope := range []string{"media", "recordings"} {
 						if excluded[scope] == nil && (entry.Path == scope || strings.HasPrefix(entry.Path, scope+"/")) && entry.Kind == "regular" {
 							facts[i] = store.PhysicalInventoryFact{Category: "unmanaged_file", Blocking: true, Reason: "outside_native_mount"}
@@ -195,11 +205,21 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 				indices := []int{}
 				for i, entry := range observed.Page.Entries {
 					handled := false
+					if facts[i].Category == "migration_material" {
+						facts[i], handled = retirementCheckpointInventory(ctx, roots[request.Scope], repository, rel.ID, identity.ID, rel.PeerID, request.Scope, entry, facts[i])
+					}
 					if request.Scope == "media" {
-						facts[i], handled = media.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+						var native bool
+						facts[i], native = nativeState.controlLease(roots[request.Scope], entry, facts[i])
+						if !native {
+							facts[i], native = media.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+						}
+						handled = handled || native
 					}
 					if request.Scope == "recordings" {
-						facts[i], handled = recording.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+						var native bool
+						facts[i], native = recording.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+						handled = handled || native
 					}
 					if handled {
 						indices = append(indices, i)

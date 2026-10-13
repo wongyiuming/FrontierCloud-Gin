@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
@@ -158,15 +159,44 @@ func bindingEqual(a, b Spec) bool {
 }
 func (r *Receiver) load(s Spec) (Checkpoint, error) {
 	_, name, _ := names(s)
-	f, e := r.private(name, os.O_RDONLY)
-	if e != nil {
-		return Checkpoint{}, e
+	// save replaces a complete, fsynced journal atomically. A read-only status
+	// may retain that complete previous inode after replacement; requiring its
+	// pathname to still name it would reject a legitimate concurrent save.
+	// Pin the regular inode before opening, never follow/adopt a changed inode,
+	// and validate the complete binding/hash state as before. Mutation files
+	// still use private's strict post-open pathname check.
+	for attempt := 0; attempt < 4; attempt++ {
+		pinned, e := r.root.Lstat(name)
+		if e != nil {
+			return Checkpoint{}, e
+		}
+		if !pinned.Mode().IsRegular() || pinned.Mode()&os.ModeSymlink != 0 {
+			return Checkpoint{}, ErrState
+		}
+		f, e := r.root.Open(name)
+		if e != nil {
+			return Checkpoint{}, e
+		}
+		actual, e := f.Stat()
+		if e != nil || !actual.Mode().IsRegular() {
+			f.Close()
+			return Checkpoint{}, ErrState
+		}
+		if !os.SameFile(pinned, actual) {
+			f.Close()
+			continue
+		}
+		raw, e := io.ReadAll(io.LimitReader(f, journalLimit+1))
+		f.Close()
+		if e != nil || len(raw) > journalLimit {
+			return Checkpoint{}, ErrState
+		}
+		return decodeCheckpoint(s, raw)
 	}
-	defer f.Close()
-	raw, e := io.ReadAll(io.LimitReader(f, journalLimit+1))
-	if e != nil || len(raw) > journalLimit {
-		return Checkpoint{}, ErrState
-	}
+	return Checkpoint{}, ErrState
+}
+
+func decodeCheckpoint(s Spec, raw []byte) (Checkpoint, error) {
 	var saved journalRecord
 	d := json.NewDecoder(strings.NewReader(string(raw)))
 	d.DisallowUnknownFields()
@@ -294,8 +324,23 @@ type contextReader struct {
 	r   io.Reader
 }
 
+type scanAdmissionKey struct{}
+
+func WithScanAdmission(ctx context.Context, gate func() error) context.Context {
+	return context.WithValue(ctx, scanAdmissionKey{}, gate)
+}
+func ScanAdmission(ctx context.Context) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	if gate, ok := ctx.Value(scanAdmissionKey{}).(func() error); ok {
+		return gate()
+	}
+	return nil
+}
+
 func (r contextReader) Read(p []byte) (int, error) {
-	if e := r.ctx.Err(); e != nil {
+	if e := ScanAdmission(r.ctx); e != nil {
 		return 0, e
 	}
 	return r.r.Read(p)
@@ -354,6 +399,9 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 	}
 	name, _, _ := names(s)
 	failed := func(cause error) (Checkpoint, error) {
+		if errors.Is(cause, businesstraffic.ErrWait) {
+			return c, cause
+		}
 		c.AnchorError = "anchor_retirement_failed"
 		return c, errors.Join(cause, r.save(c))
 	}
@@ -733,6 +781,9 @@ func (r *Receiver) Recheck(ctx context.Context, s Spec, id string, admission fun
 		return c, e
 	}
 	failed := func(cause error) (Checkpoint, error) {
+		if errors.Is(cause, businesstraffic.ErrWait) {
+			return c, cause
+		}
 		c.RecheckID = id
 		c.RecheckedAt = 0
 		c.RecheckError = "disk_verification_failed"

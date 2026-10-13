@@ -1,0 +1,15 @@
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+--- PASS: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (0.09s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:24: phase=seed elapsed=281.79379ms total=281.79383ms
+    migration_plan_pages_test.go:24: phase=catalog elapsed=3.278170978s total=3.559964808s
+    migration_plan_pages_test.go:24: phase=native-and-content-fixture-proofs elapsed=2.740070548s total=6.300035356s
+    migration_plan_pages_test.go:24: phase=seal elapsed=2.121677724s total=8.42171308s
+    migration_plan_pages_test.go:24: phase=admission-rollback elapsed=2.33837379s total=10.76008687s
+    migration_plan_pages_test.go:24: phase=admission elapsed=2.322660424s total=13.082747294s
+    migration_plan_pages_test.go:24: phase=commit-10005-objects elapsed=924.075006ms total=14.0068223s
+    migration_plan_pages_test.go:24: phase=commit-3-objects elapsed=55.056303ms total=14.061878603s
+    migration_plan_pages_test.go:242: paged objects=10008 immutable JSON bytes=25515005 page limit=64
+--- PASS: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (14.44s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	14.532s

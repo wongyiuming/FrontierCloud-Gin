@@ -1,0 +1,4 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	1.024s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.284s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.069s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	2.575s

@@ -24,15 +24,28 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 		return result, e
 	}
 	defer tx.Rollback()
+	result, e = r.retirementLedger(ctx, tx, relationship, member)
+	if e != nil {
+		return result, e
+	}
+	if e = tx.Commit(); e != nil {
+		return result, e
+	}
+	return result, nil
+}
+
+func (r *Repository) retirementLedger(ctx context.Context, q queryer, relationship, member string) (store.RetirementLedger, error) {
+	result := store.RetirementLedger{MemberID: member, RelationshipID: relationship, RequiresPhysicalVerification: true, Blockers: []store.RetirementBlocker{}}
+	var e error
 	var node, role, peer, direction, state string
 	var protocol int
-	if e = tx.QueryRowContext(ctx, "SELECT node_id,role FROM node_identity WHERE singleton=1").Scan(&node, &role); e != nil {
+	if e = q.QueryRowContext(ctx, "SELECT node_id,role FROM node_identity WHERE singleton=1").Scan(&node, &role); e != nil {
 		return result, e
 	}
-	if e = tx.QueryRowContext(ctx, "SELECT peer_id,direction,state,protocol FROM node_relationships WHERE relationship_id=?", relationship).Scan(&peer, &direction, &state, &protocol); e != nil {
+	if e = q.QueryRowContext(ctx, "SELECT peer_id,direction,state,protocol FROM node_relationships WHERE relationship_id=?", relationship).Scan(&peer, &direction, &state, &protocol); e != nil {
 		return result, e
 	}
-	if state != "active" || protocol != 2 || role == "Master" && (member == node || member != peer || direction != "downstream") || role == "Follower" && (member != node || direction != "upstream") || role != "Master" && role != "Follower" {
+	if (state != "active" && state != "retiring") || protocol != 2 || role == "Master" && (member == node || member != peer || direction != "downstream") || role == "Follower" && (member != node || direction != "upstream") || role != "Master" && role != "Follower" {
 		return result, store.ErrNodeState
 	}
 	now := time.Now().Unix()
@@ -62,17 +75,18 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 			retirementQuery{"managed_media", "global_media_objects WHERE storage_member_id=? AND state<>'deleted'", "media_id", "migrate_or_resolve_media", []any{member}},
 			retirementQuery{"backup_placement", "cluster_backup_members WHERE member_id=? AND (generation>0 OR state NOT IN ('ready','disabled','failed'))", "member_id", "verify_replacement_backup_and_stop_delivery", []any{member}},
 			retirementQuery{"node_offline", "cluster_storage_members WHERE member_id=? AND health<>'online'", "member_id", "restore_connectivity_for_final_reconciliation", []any{member}})
+		checks = append(checks, retirementPlanQueries(member)...)
 	}
 	for _, check := range checks {
 		var count int64
-		if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+check.from, check.args...).Scan(&count); e != nil {
+		if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+check.from, check.args...).Scan(&count); e != nil {
 			return result, e
 		}
 		if count == 0 {
 			continue
 		}
 		block := store.RetirementBlocker{Code: check.code, Count: count, SampleIDs: []string{}, NextStep: check.next}
-		rows, e := tx.QueryContext(ctx, "SELECT "+check.id+" FROM "+check.from+" ORDER BY "+check.id+" LIMIT 8", check.args...)
+		rows, e := q.QueryContext(ctx, "SELECT "+check.id+" FROM "+check.from+" ORDER BY "+check.id+" LIMIT 8", check.args...)
 		if e != nil {
 			return result, e
 		}
@@ -96,15 +110,17 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 		result.Blockers = append(result.Blockers, block)
 	}
 	if role == "Master" {
-		blockers, e := retirementMasterFileTransactions(ctx, tx, node, member)
+		blockers, e := retirementMasterFileTransactions(ctx, q, node, member)
 		if e != nil {
 			return result, e
 		}
 		result.Blockers = append(result.Blockers, blockers...)
+		plans, e := r.retirementPlanHistory(ctx, q, node, member)
+		if e != nil {
+			return result, e
+		}
+		result.Blockers = append(result.Blockers, plans...)
 	}
 	result.DatabaseClear = len(result.Blockers) == 0
-	if e = tx.Commit(); e != nil {
-		return result, e
-	}
 	return result, nil
 }

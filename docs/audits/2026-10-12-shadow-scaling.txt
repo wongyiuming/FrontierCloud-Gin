@@ -1,0 +1,18 @@
+=== RUN   TestResourceMigrationPublishedShadowGrantScaling
+=== RUN   TestResourceMigrationPublishedShadowGrantScaling/128
+    migration_shadow_scale_test.go:179: master unit_objects=128 grants=8 SQL_statements=1296 immutable_binding_rows=1032 elapsed=584.471966ms
+=== RUN   TestResourceMigrationPublishedShadowGrantScaling/1024
+    migration_shadow_scale_test.go:179: master unit_objects=1024 grants=8 SQL_statements=8912 immutable_binding_rows=8200 elapsed=3.865352852s
+--- PASS: TestResourceMigrationPublishedShadowGrantScaling (14.62s)
+    --- PASS: TestResourceMigrationPublishedShadowGrantScaling/128 (1.89s)
+    --- PASS: TestResourceMigrationPublishedShadowGrantScaling/1024 (12.73s)
+=== RUN   TestPeerMigrationPublishedShadowGrantScaling
+=== RUN   TestPeerMigrationPublishedShadowGrantScaling/128
+    migration_shadow_scale_test.go:244: target unit_objects=128 grants=8 SQL_statements=1177 immutable_binding_rows=1032 elapsed=489.862013ms
+=== RUN   TestPeerMigrationPublishedShadowGrantScaling/1024
+    migration_shadow_scale_test.go:244: target unit_objects=1024 grants=8 SQL_statements=8457 immutable_binding_rows=8200 elapsed=3.406254255s
+--- PASS: TestPeerMigrationPublishedShadowGrantScaling (18.65s)
+    --- PASS: TestPeerMigrationPublishedShadowGrantScaling/128 (1.78s)
+    --- PASS: TestPeerMigrationPublishedShadowGrantScaling/1024 (16.87s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	34.300s

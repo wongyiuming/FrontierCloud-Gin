@@ -31,7 +31,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		}
 		_ = r.Repository.ReleaseMigration(finish, l)
 	}()
-	w, e := r.Repository.MigrationWork(ctx, id)
+	w, e := r.header(ctx, id)
 	if e != nil {
 		return e
 	}
@@ -76,7 +76,37 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		}
 		return ctx.Err()
 	}
-	for _, cp := range w.Objects {
+	scheduler := trafficSchedule{runner: r, source: source, target: target, task: id, master: w.Task.MasterID}
+	ensureLease := ensure
+	ensure = func() error { return scheduler.wait(ctx, &l, phase, object, ensureLease) }
+	refreshGrant := func(req *migrationdata.Request, anchor bool) error {
+		proof, e := r.FreshTargetProof(ctx, l, req.Spec.LogicalID)
+		if e != nil {
+			return e
+		}
+		var grant store.MigrationCleanupGrant
+		if anchor {
+			grant, e = r.Repository.AuthorizeMigrationAnchorRetirement(ctx, l, req.Spec.LogicalID, proof)
+		} else {
+			grant, e = r.Repository.AuthorizeMigrationCleanup(ctx, l, req.Spec.LogicalID, proof)
+		}
+		if e != nil {
+			return e
+		}
+		l, e = r.Repository.RenewMigration(ctx, l, time.Minute)
+		if e != nil {
+			return e
+		}
+		if e = refresh(); e != nil {
+			return e
+		}
+		req.Lease, req.CleanupGrant = l, &grant
+		return nil
+	}
+	for cp, pageErr := range r.objects(ctx, id, "") {
+		if pageErr != nil {
+			return pageErr
+		}
 		if cp.State == "cleaned" {
 			continue
 		}
@@ -86,16 +116,18 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			}
 			return store.ErrMigrationState
 		}
-		eligible := false
-		for _, u := range w.Units {
-			if u.ID == cp.UnitID {
-				eligible = u.CommittedAt > 0 && u.CleanupAfter >= u.CommittedAt+3600 && u.CleanupAfter <= time.Now().Unix()
-			}
+		u, e := r.unit(ctx, id, cp.UnitID)
+		if e != nil {
+			return e
 		}
+		eligible := u.CommittedAt > 0 && u.CleanupAfter >= u.CommittedAt+3600 && u.CleanupAfter <= time.Now().Unix()
 		if !eligible {
 			continue
 		}
 		object = cp.Object.ID
+		if e = ensure(); e != nil {
+			return e
+		}
 		if cp.Object.Resource != "media" && (cp.Object.Resource != "recording" || cp.Object.Recording == nil) {
 			return store.ErrMigrationState
 		}
@@ -118,14 +150,34 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		o := cp.Object
 		req := migrationdata.Request{Lease: l, CleanupGrant: &grant, Spec: migrationdata.Spec{TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
 		deadline := time.Now().Add(30 * time.Minute)
+		waitingAtStart := scheduler.waited
 		for {
+			waitBefore := scheduler.waited
 			if e = ensure(); e != nil {
 				return e
+			}
+			if scheduler.waited > waitBefore {
+				if e = refreshGrant(&req, false); e != nil {
+					return e
+				}
 			}
 			req.Lease = l
 			value, e := r.request(ctx, source, prefix+"data/cleanup", req)
 			if e != nil {
 				return e
+			}
+			if value["waiting_traffic"] == true {
+				if e = scheduler.markWait(ctx, l, phase, object, source.PeerID); e != nil {
+					return e
+				}
+				scheduler.expires = time.Time{}
+				if e = ensure(); e != nil {
+					return e
+				}
+				if e = refreshGrant(&req, false); e != nil {
+					return e
+				}
+				continue
 			}
 			req.CleanupGrant = nil
 			if value["state"] == "cleanup_failed" {
@@ -141,7 +193,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 				}
 				break
 			}
-			if time.Now().After(deadline) {
+			if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {
 				return context.DeadlineExceeded
 			}
 			if e = delay(ctx); e != nil {
@@ -151,17 +203,19 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 	}
 	// The source checkpoint is durable; private target-anchor retirement can
 	// resume independently after a lost reply or a Master restart.
-	w, e = r.Repository.MigrationWork(ctx, id)
+	w, e = r.header(ctx, id)
 	if e != nil {
 		return e
 	}
-	for _, cp := range w.Objects {
-		finished := false
-		for _, unit := range w.Units {
-			if unit.ID == cp.UnitID && unit.State == "cleaned" {
-				finished = true
-			}
+	for cp, pageErr := range r.objects(ctx, id, "") {
+		if pageErr != nil {
+			return pageErr
 		}
+		u, e := r.unit(ctx, id, cp.UnitID)
+		if e != nil {
+			return e
+		}
+		finished := u.State == "cleaned"
 		if finished {
 			continue
 		}
@@ -187,16 +241,37 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		object = o.ID
 		req := migrationdata.Request{Lease: l, CleanupGrant: &grant, Spec: migrationdata.Spec{TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
 		deadline := time.Now().Add(30 * time.Minute)
+		waitingAtStart := scheduler.waited
 		submitted := false
 		for {
+			waitBefore := scheduler.waited
 			if e = ensure(); e != nil {
 				return e
+			}
+			if scheduler.waited > waitBefore {
+				if e = refreshGrant(&req, true); e != nil {
+					return e
+				}
+				submitted = false
 			}
 			req.Lease = l
 			if !submitted {
 				result, err := r.request(ctx, target, prefix+"data/retire", req)
 				if err != nil {
 					return err
+				}
+				if result["waiting_traffic"] == true {
+					if e = scheduler.markWait(ctx, l, phase, object, target.PeerID); e != nil {
+						return e
+					}
+					scheduler.expires = time.Time{}
+					if e = ensure(); e != nil {
+						return e
+					}
+					if e = refreshGrant(&req, true); e != nil {
+						return e
+					}
+					continue
 				}
 				submitted = result["state"] != "waiting"
 			}
@@ -225,7 +300,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 				return store.ErrMigrationState
 			}
 
-			if time.Now().After(deadline) {
+			if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {
 				return context.DeadlineExceeded
 			}
 			if e = delay(ctx); e != nil {
@@ -233,16 +308,22 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			}
 		}
 	}
-	w, e = r.Repository.MigrationWork(ctx, id)
+	w, e = r.header(ctx, id)
 	if e != nil {
 		return e
 	}
-	for _, unit := range w.Units {
+	for unit, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if unit.State == "cleaned" || phase == "cancelling" && unit.CommittedAt == 0 {
 			continue
 		}
 		ready := true
-		for _, cp := range w.Objects {
+		for cp, pageErr := range r.objects(ctx, id, unit.ID) {
+			if pageErr != nil {
+				return pageErr
+			}
 			if cp.UnitID == unit.ID && cp.State != "cleaned" {
 				ready = false
 			}
@@ -274,12 +355,15 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			return e
 		}
 	}
-	w, e = r.Repository.MigrationWork(ctx, id)
+	w, e = r.header(ctx, id)
 	if e != nil {
 		return e
 	}
 	allClean := true
-	for _, unit := range w.Units {
+	for unit, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if unit.State != "cleaned" && !(phase == "cancelling" && unit.State == "cancelled") {
 			allClean = false
 		}

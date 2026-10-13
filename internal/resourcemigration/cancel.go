@@ -11,11 +11,11 @@ import (
 
 // Cancellation reconciles persisted units; it never reverses business owners.
 func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) {
-	initial, e := r.Repository.MigrationWork(ctx, id)
-	if e != nil {
-		return e
-	}
-	for _, unit := range initial.Units {
+	var e error
+	for unit, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if unit.CommittedAt > 0 && unit.State != "cleaned" && unit.CleanupAfter <= time.Now().Unix() {
 			if e = r.cleanup(ctx, id, runner); e != nil {
 				return e
@@ -43,7 +43,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 		}
 		_ = r.Repository.ReleaseMigration(finish, l)
 	}()
-	w, e := r.Repository.MigrationWork(ctx, id)
+	w, e := r.header(ctx, id)
 	if e != nil {
 		return e
 	}
@@ -63,7 +63,10 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 	}
 	h := store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, SourceRelationship: source.ID, TargetRelationship: target.ID, PlanSHA: w.Task.PlanSHA, ObjectCount: w.Task.ObjectCount, Bytes: w.Task.TotalBytes}
 	allTerminal := true
-	for _, u := range w.Units {
+	for u, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if u.State != "cleaned" && u.State != "cancelled" {
 			allTerminal = false
 		}
@@ -92,11 +95,44 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 		}
 		return ctx.Err()
 	}
-	if !allTerminal || len(w.Units) == 0 {
+	scheduler := trafficSchedule{runner: r, source: source, target: target, task: id, master: w.Task.MasterID}
+	ensureLease := ensure
+	ensure = func() error {
+		if allTerminal {
+			return ensureLease()
+		}
+		return scheduler.wait(ctx, &l, "cancelling", object, ensureLease)
+	}
+	requestData := func(rel store.Relationship, route string, req migrationdata.Request) (map[string]any, error) {
+		for {
+			if err := ensure(); err != nil {
+				return nil, err
+			}
+			req.Lease = l
+			value, err := r.request(ctx, rel, route, req)
+			if err != nil || value["waiting_traffic"] != true {
+				return value, err
+			}
+			if err = scheduler.markWait(ctx, l, "cancelling", object, rel.PeerID); err != nil {
+				return nil, err
+			}
+			scheduler.expires = time.Time{}
+			if err = ensure(); err != nil {
+				return nil, err
+			}
+			if req.ShadowGrant != nil {
+				return map[string]any{"state": "grant_required"}, nil
+			}
+		}
+	}
+	if !allTerminal || w.Task.ObjectCount == 0 {
 		if e = refresh(); e != nil {
 			return e
 		}
-		for _, cp := range w.Objects {
+		for cp, pageErr := range r.objects(ctx, id, "") {
+			if pageErr != nil {
+				return pageErr
+			}
 			if e = ensure(); e != nil {
 				return e
 			}
@@ -108,7 +144,10 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 			}
 		}
 	}
-	for _, u := range w.Units {
+	for u, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if u.State == "cleaned" || u.State == "cancelled" {
 			continue
 		}
@@ -121,7 +160,10 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 		if e != nil {
 			return e
 		}
-		for _, cp := range w.Objects {
+		for cp, pageErr := range r.objects(ctx, id, u.ID) {
+			if pageErr != nil {
+				return pageErr
+			}
 			if cp.UnitID != u.ID {
 				continue
 			}
@@ -131,7 +173,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 			}
 			o := cp.Object
 			spec := migrationdata.Spec{TaskID: id, MasterID: h.MasterID, SourceID: h.SourceID, TargetID: h.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}
-			response, e := r.request(ctx, target, prefix+"data/abort", migrationdata.Request{Lease: l, Spec: spec})
+			response, e := requestData(target, prefix+"data/abort", migrationdata.Request{Lease: l, Spec: spec})
 			if errors.Is(e, node.ErrRemoteConflict) && (o.Resource == "media" || o.Resource == "recording" && o.Recording != nil) {
 				proof, err := r.FreshCancellationSourceProof(ctx, l, o.ID)
 				if err != nil {
@@ -151,12 +193,13 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 				req := migrationdata.Request{Lease: l, Spec: spec, ShadowGrant: &grant}
 				operation := "unpublish"
 				deadline := time.Now().Add(30 * time.Minute)
+				waitingAtStart := scheduler.waited
 				for {
 					if err = ensure(); err != nil {
 						return err
 					}
 					req.Lease = l
-					value, err := r.request(ctx, target, prefix+"data/"+operation, req)
+					value, err := requestData(target, prefix+"data/"+operation, req)
 					// A SQL-accounted publication requires managed deletion and a used
 					// refund. It must never be treated as an unaccounted hard link.
 					if operation == "unpublish" && errors.Is(err, node.ErrRemoteConflict) {
@@ -195,7 +238,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 						}
 						break
 					}
-					if time.Now().After(deadline) {
+					if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {
 						return context.DeadlineExceeded
 					}
 					if err = delay(ctx); err != nil {
@@ -236,11 +279,10 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 			return e
 		}
 	}
-	current, e := r.Repository.MigrationWork(ctx, id)
-	if e != nil {
-		return e
-	}
-	for _, unit := range current.Units {
+	for unit, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if unit.State != "cleaned" && unit.State != "cancelled" {
 			return nil
 		}

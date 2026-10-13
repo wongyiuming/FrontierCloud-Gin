@@ -1,0 +1,1 @@
+PASS: native serial migration case go-sqlite/dd

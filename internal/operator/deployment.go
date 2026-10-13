@@ -413,7 +413,7 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	for _, name := range names {
 		image := r.ServiceImages[name]
 		if _, err = d.Runner.Run(ctx, "docker", "pull", image); err != nil {
-			return r, errors.New("image pull failed after verification; fix network/permissions; local build is never automatic")
+			return r, fmt.Errorf("image pull failed after verification; local build is never automatic: %w", safeDockerFailure(err))
 		}
 		if !strings.Contains(image, "@sha256:") {
 			raw, e := d.Runner.Run(ctx, "docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image)
@@ -451,9 +451,17 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	if _, err = d.ValidateReceipt(ctx, r); err != nil {
 		return r, err
 	}
-	_, err = d.Compose(ctx, true, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "600")
+	// Compose health proves that the controller runs; it does not prove that
+	// automatic TLS issued a certificate or that the endpoint serves those bytes.
+	// Both checks share the existing bounded startup window.
+	readyCtx, cancelReady := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancelReady()
+	_, err = d.Compose(readyCtx, true, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "600")
 	if err != nil {
 		return r, errors.New("installation has not passed readiness; preserve its receipt and volumes; inspect status and automatic TLS")
+	}
+	if err = d.installCertificateReady(readyCtx, cfg); err != nil {
+		return r, err
 	}
 	r.State = "ready"
 	if err = replaceJSON(filepath.Join(d.Directory, ReceiptFile), r); err != nil {

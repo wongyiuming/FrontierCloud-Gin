@@ -1,0 +1,227 @@
+{
+  "calls": [
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migration-plans",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"request_id\":\"55c765cbf8949aacfab68abbb7ba2480\",\"source_id\":\"22222222222222222222222222222222\",\"target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migration-plans/55555555555555555555555555555555?after=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migration-plans/55555555555555555555555555555555/start",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"review_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"confirm_source_id\":\"22222222222222222222222222222222\",\"confirm_target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111/control",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"action\":\"retry\",\"revision\":3,\"confirm_source_id\":\"22222222222222222222222222222222\",\"confirm_target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111/control",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"action\":\"pause\",\"revision\":4,\"confirm_source_id\":\"22222222222222222222222222222222\",\"confirm_target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111/control",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"action\":\"resume\",\"revision\":5,\"confirm_source_id\":\"22222222222222222222222222222222\",\"confirm_target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111/control",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"action\":\"cancel\",\"revision\":6,\"confirm_source_id\":\"22222222222222222222222222222222\",\"confirm_target_id\":\"33333333333333333333333333333333\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations/11111111111111111111111111111111",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/observability",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/migrations",
+      "options": {}
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/66666666666666666666666666666666/retire/check",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"member_id\":\"22222222222222222222222222222222\"}"
+      }
+    },
+    {
+      "path": "/api/v1/media/admin/nodes/66666666666666666666666666666666/retire/check",
+      "options": {
+        "method": "POST",
+        "headers": {
+          "X-CSRF-Token": "browser-fixture"
+        },
+        "body": "{\"member_id\":\"22222222222222222222222222222222\"}"
+      }
+    }
+  ],
+  "clearRetirement": true,
+  "text": "22222222222222222222222222222222本机资源ONLINEDirect连接状态Online0 ms最近心跳从未最近时间从未1h 平均0 ms1h 最低 / 最高0 / 0 msRTT 样本0 次连续失败0历史恢复0RTT 是 Master 到该节点 HTTPS 控制面的往返时间。StorageEnabled0.00 GiB / 0.00 GiB物理 used / all0.00 GiB / 0.00 GiB已使用 / 已分配0.00 GiB / 0.00 GiB等待确认物理表示该媒体文件系统已用 / 总容量；已使用 / 已分配表示 FrontierCloud 项目占用 / 分配配额。BackupDisabled未启用最近成功从未距今-最近大小-恢复点0 个最近尝试-下次计划-最近校验-等待确认Master 每 24 小时向启用 Backup 的存储节点 写入业务恢复点；失败约 5 分钟后重试。存储节点证书TLS待查询管理方式待查询状态待查询域名待查询SAN待查询签发机构待查询生效时间从未有效期至从未剩余有效期待查询最近续期尚无续期记录下次计划续期待签发或等待 CA 计划最近错误无HTTPS 服务尚未验证可用线上证书一致尚未验证一致控制器尚未确认验证入口待查询查询证书下载证书及私钥退役检查盘点资源、事务与备份。检查完成后仍需最终复核；不会撤销节点或删除磁盘。盘点已完成 · 10/13/2026, 4:11:16 AM · 历史观察，需重新检查物理条目undefined逻辑字节0 B预期资源0执行只读退役检查 Storage 承载业务数据关闭后停止新写入；已有数据不会自动迁走。GiB 配额 Backup 恢复点Master 每 24h 发送业务恢复包；失败后约 5 分钟重试。RelayDirect应用资源配置撤销关系33333333333333333333333333333333本机资源ONLINERelay连接状态Online0 ms最近心跳从未最近时间从未1h 平均0 ms1h 最低 / 最高0 / 0 msRTT 样本0 次连续失败0历史恢复0RTT 是 Master 到该节点 HTTPS 控制面的往返时间。StorageEnabled0.00 GiB / 0.00 GiB物理 used / all0.00 GiB / 0.00 GiB已使用 / 已分配0.00 GiB / 0.00 GiB等待确认物理表示该媒体文件系统已用 / 总容量；已使用 / 已分配表示 FrontierCloud 项目占用 / 分配配额。BackupDisabled未启用最近成功从未距今-最近大小-恢复点0 个最近尝试-下次计划-最近校验-等待确认Master 每 24 小时向启用 Backup 的存储节点 写入业务恢复点；失败约 5 分钟后重试。存储节点证书TLS待查询管理方式待查询状态待查询域名待查询SAN待查询签发机构待查询生效时间从未有效期至从未剩余有效期待查询最近续期尚无续期记录下次计划续期待签发或等待 CA 计划最近错误无HTTPS 服务尚未验证可用线上证书一致尚未验证一致控制器尚未确认验证入口待查询查询证书下载证书及私钥退役检查盘点资源、事务与备份。检查完成后仍需最终复核；不会撤销节点或删除磁盘。执行只读退役检查 Storage 承载业务数据关闭后停止新写入；已有数据不会自动迁走。GiB 配额 Backup 恢复点Master 每 24h 发送业务恢复包；失败后约 5 分钟重试。RelayDirect应用资源配置撤销关系Master Local本机资源LOCALLocal连接状态localLocalMaster Local 是本机资源。StorageDisabled0.00 GiB / 0.00 GiB物理 used / all0.00 GiB / 0.00 GiB已使用 / 已分配0.00 GiB / 0.00 GiB已生效物理表示该媒体文件系统已用 / 总容量；已使用 / 已分配表示 FrontierCloud 项目占用 / 分配配额。BackupDisabled未启用最近成功从未距今-最近大小-恢复点0 个最近尝试-下次计划-最近校验-已生效Master 每 24 小时向启用 Backup 的存储节点 写入业务恢复点；失败约 5 分钟后重试。Master Local 是本机固定资源，仅允许调整 Storage 配额。更新本机配额整节点资源迁出选择源与目标后生成只读计划。计划包含隐藏、加密及子目录对象；Master Local 暂不支持迁入或迁出。源节点请选择节点22222222222222222222222222222222 · Direct33333333333333333333333333333333 · Relay88888888888888888888888888888888 · Local · Master Local 不支持目标节点请选择节点22222222222222222222222222222222 · Direct33333333333333333333333333333333 · Relay88888888888888888888888888888888 · Local · Master Local 不支持、不可写或排空中生成只读迁移计划刷新计划下一页计划对象计划55555555555555555555555555555555状态started源 → 目标类型Direct → Relay归属单元 / 对象2 / 20实际字节200 B已校验20 个 / 200 B目标已用 / 预留0 B / 0 B目标最小可用 / 额外需求0 B / 0 B计划到期从未Direct/Relay 可以跨类型迁移，源与目标均须连接同一 Master；数据经 Master 有界中继。只读盘点不执行写入探测，目标发布仍须通过本机事务。备份和源端残留需单独处理，迁移不会自动退役节点。media · <img src=x onerror=alert(1)> · 10 B · 归属单元 music/unit资源迁移任务任务保存在 Master。目标暂存或发布不代表归属已提交；取消保留已提交资源，排空状态需另行明确解除。迁移完成后仍需独立退役检查。11111111111111111111111111111111 · 已取消源节点22222222222222222222222222222222目标节点33333333333333333333333333333333对象数20已提交 / 全部100 B / 200 B更新检查点明确解除本任务排空检查点观察：10/13/2026, 4:11:16 AM，点击更新获取当前事实。",
+  "status": "盘点完成；结果不代表最终撤销已获准"
+}

@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 	"io"
 	"io/fs"
 	"os"
@@ -24,7 +25,7 @@ type jointSourceFixture struct {
 	current           *release.Manifest
 }
 
-var jointSourcePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin", "docker-compose.yaml", "docker-compose.gin-mysql.yaml", "docker-compose.storage.yaml", ".env.example", ".env.storage.example", "docs/operator-manual.md"}
+var jointSourcePaths = []string{"Dockerfile", "Dockerfile.gin", "go.mod", "go.sum", "cmd", "internal", "migrations", "protocol", "static", "nginx", "updater/Dockerfile", "updater/Dockerfile.gin", "docker-compose.yaml", "docker-compose.gin-mysql.yaml", "docker-compose.storage.yaml", ".env.example", ".env.storage.example", "docs/operator-manual.md", "docs/operator-upgrade.md", "docs/operator-recovery-sets.md"}
 
 func newJointSourceFixture(t *testing.T, ctx context.Context, source, root string, publication *nativePublicationFixture) *jointSourceFixture {
 	t.Helper()
@@ -112,7 +113,7 @@ func (f *jointSourceFixture) publish(t *testing.T, version string) *release.Mani
 		args = append(args, "-p", f.current.Artifacts["main"].CommitSHA)
 	}
 	reference := f.git(t, args...)
-	m := &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: 6, Artifacts: map[string]release.Artifact{}}
+	m := &release.Manifest{Format: "frontiercloud-release-manifest", Version: 1, ReleaseVersion: version, Protocol: 2, SchemaGeneration: migrations.Generation, Artifacts: map[string]release.Artifact{}}
 	for branch, commit := range map[string]string{"main": reference, "gin_main": target} {
 		policy, _ := release.PolicyForBranch(branch)
 		sourceArgs := []string{"commit-tree", tree, "-m", "private reviewed " + policy.Source + " " + version}

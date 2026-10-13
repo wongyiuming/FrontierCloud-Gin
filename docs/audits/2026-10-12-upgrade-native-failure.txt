@@ -1,0 +1,12 @@
+FAILED: private recovery material retained at /home/wyium/fc-operations-20261012-01a13082/upgrade-acceptance/fc-ops-recovery-ed8742bc79c74530-m1t8y_cq
+Traceback (most recent call last):
+  File "/home/wyium/fc-operations-20261012-01a13082/src/tests/operator_recovery_acceptance.py", line 356, in <module>
+    evidence = run(options)
+  File "/home/wyium/fc-operations-20261012-01a13082/src/tests/operator_recovery_acceptance.py", line 258, in run
+    states = json.loads(compose(directory, 'ps', '--all', '--format', 'json'))
+  File "/usr/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 348, in decode
+    raise JSONDecodeError("Extra data", s, end)
+json.decoder.JSONDecodeError: Extra data: line 2 column 1 (char 2046)

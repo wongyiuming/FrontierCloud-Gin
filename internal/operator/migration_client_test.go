@@ -43,6 +43,10 @@ func TestMigrationClientBoundedQueriesConfirmationsAndConflict(t *testing.T) {
 		after := r.URL.Query().Get("after")
 		report := store.MigrationStatus{Task: task, After: after, Next: strings.Repeat("1", 64), Complete: true, Objects: []store.MigrationObjectStatus{{ID: strings.Repeat("1", 64), UnitID: strings.Repeat("4", 64), Path: "music/hidden/fixture.mp3", State: "pending", Bytes: 10}}, ObjectStages: []store.MigrationStage{{State: "pending", Count: 1, Bytes: 10}}}
 		switch mode {
+		case "recording":
+			report.Objects[0].ID=strings.Repeat("1",32)
+			report.Objects[0].Resource="recording"
+			report.Next=report.Objects[0].ID
 		case "foreign":
 			report.Task.MasterID = target
 		case "cursor":
@@ -81,6 +85,8 @@ func TestMigrationClientBoundedQueriesConfirmationsAndConflict(t *testing.T) {
 	if _, e = client.ControlMigration(context.Background(), id, "pause", 7, source, target); e == nil {
 		t.Fatal("foreign control acknowledgment")
 	}
+	mode="recording"
+	if report,e=client.MigrationStatus(context.Background(),id,strings.Repeat("0",32));e!=nil || len(report.Objects)!=1 || len(report.Next)!=32 {t.Fatal("recording cursor rejected",report,e)}
 	mode = "conflict"
 	if _, e = client.ControlMigration(context.Background(), id, "pause", 7, source, target); e != ErrMigrationClientConflict {
 		t.Fatal("conflict lost", e)

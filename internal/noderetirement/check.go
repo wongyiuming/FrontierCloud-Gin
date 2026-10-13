@@ -108,7 +108,7 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 	if e != nil {
 		return report, e
 	}
-	if identity.Role != "Master" || identity.ID == member || rel.PeerID != member || rel.Direction != "downstream" || rel.State != "active" {
+	if identity.Role != "Master" || identity.ID == member || rel.PeerID != member || rel.Direction != "downstream" || rel.State != "active" && rel.State != "retiring" {
 		return report, ErrObservation
 	}
 	report.Master, e = s.Repository.RetirementLedger(ctx, relationship, member)

@@ -1,0 +1,20 @@
+{
+  "status": "failed",
+  "database": "go-sqlite",
+  "combination": "dd",
+  "workspace": "/tmp/fc-native-matrix-2ongto1v",
+  "project": "fc-matrix-844fd7a0-2cbe-4460-855e-e8215cbf3ada-dd-go-sqlite",
+  "image_ids": {
+    "native": "sha256:3e1b2765a07dfc3361ea0bd96914dd5e56ff9d90d4ad2009e5f6fc7f9b762f71",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:2e15aa9b217895fb416b371449294c2a157d1f1194f2553756fd486e6b2cd3f8"
+  },
+  "test_binary_sha256": "948cd00589cf1bf4f41c3f992d80f9f204a79a8c3d42f8865662748fe131cb21",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": true,
+  "error_type": "RuntimeError",
+  "actual_chromium": null,
+  "owned_cleanup_complete": true
+}

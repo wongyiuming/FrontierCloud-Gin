@@ -1,0 +1,48 @@
+{
+  "scope": "actual private-Compose deployment backup, CLI restoration and gated activation",
+  "public_installation_proof": false,
+  "synthetic_revision": "0000000000000000000000000000000000000000",
+  "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/upgrade-acceptance/fc-ops-recovery-8808aa19a9464343-i3a22bj5",
+  "database": "sqlite",
+  "upgrade": {
+    "actual_compose": true,
+    "backup_sha256": "c34cf2b1d4e3e82997a270fc155b6b2c8ef7eaed911e2082e5043c53dcd83882",
+    "native_managed_business_reads": true,
+    "phase": "opened",
+    "publication_proof_injected": true,
+    "source_web_image_id": "sha256:090cf41ac0c995eebdb2d904cd9bca22e8a68230e5ba36e9bb8ae83ceca5b68e",
+    "target_web_image_id": "sha256:aa260778705e6351b38e5b2256635251fd7c87f301d63def6aeb852e3c8a4d74",
+    "actual_image_switch": true,
+    "http_range_and_identity_preserved": true,
+    "post_business_cpu_samples": [
+      0.29,
+      0.26,
+      0.27,
+      0.19,
+      0.32
+    ]
+  },
+  "status": "passed",
+  "archive_sha256": "9b294fcdd088d2a8e8a60ef1933dd85b8047f31bb2100d127bca1408e71094dc",
+  "node_identity_preserved": true,
+  "media_id_preserved": true,
+  "priority_preserved": true,
+  "actual_http_range_verified": true,
+  "restore_check_read_only": true,
+  "offline_fence_preserved_on_apply": true,
+  "operator_activation_verified": true,
+  "no_production_operation": true,
+  "web_cpu_limit": 1000000000,
+  "web_memory": 536870912,
+  "web_memory_swap": 536870912,
+  "post_business_cpu_samples": [
+    0.17,
+    0.27,
+    0.16,
+    0.17,
+    0.29
+  ],
+  "web_image_id": "sha256:090cf41ac0c995eebdb2d904cd9bca22e8a68230e5ba36e9bb8ae83ceca5b68e",
+  "edge_image_id": "sha256:8109ee6e2692a29d6050df7f2d542fc1f760c8f75ae06f0632c7787a71b3d30e",
+  "test_http_client_image_id": "sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72"
+}

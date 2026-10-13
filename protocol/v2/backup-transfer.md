@@ -62,3 +62,34 @@ Invalid messages/checksums/sequences return 400; invalid authentication returns
 401; an authenticated request in the wrong role/direction returns 403. A role
 or relationship change discovered at the write boundary returns 409. No such
 failure is reported as a successful ready generation.
+
+## Native ready-byte observation
+
+`POST /internal/v1/backup-observation` independently re-reads a known ready
+generation through one bounded asynchronous worker. The request binds an
+observation ID, member/Master/relationship IDs, `scope=data`,
+`resource_kind=backup`, a canonical positive decimal generation string in
+`object_id`, the ready manifest's metadata digest, and its exact expected byte
+count. No filesystem path, fetch URL or decryption key is accepted. The normal
+HTTPS, exact-body HMAC, nonce and current Follower/upstream checks apply to
+`start`, `status` and `cancel`; status/cancel also require the returned process
+incarnation and the identical request. Unknown fields are rejected.
+
+The worker uses the existing cold reader and a 64 KiB hash buffer, requires
+full EOF and checks actual length/SHA-256. It repeats the live identity-bound
+manifest lookup after reading; a historical read snapshot that survived
+retention does not prove that the generation is still retained. The worker
+expires after five minutes, cancels on shutdown, and is joined before its
+borrowed roots close. Inspection opens the existing coordination lock and
+never recreates a missing one. A busy worker rejects additional observations.
+
+The Master `ObserveBackup` client pins the current relationship, exact request,
+incarnation and fixed expiry, checks the resulting generation/length/hash,
+and requests bounded cancellation on exit. The virtual observation path is
+`backup/GENERATION`; it is not a caller-controlled filesystem locator.
+
+This is an integrity observation only. It neither validates the package's
+business restore semantics nor pins a generation against future retention.
+Backup replacement, durable retention holds and authorized source purge remain
+separate work; a successful observation alone cannot authorize retirement or
+delete the sole recovery point. Ordinary v2 delivery compatibility is unchanged.

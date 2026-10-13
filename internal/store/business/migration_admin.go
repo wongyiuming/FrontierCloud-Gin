@@ -5,10 +5,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"time"
 )
 
 func (r *Repository) MigrationTasksPage(ctx context.Context, afterTime int64, afterID string) (page store.MigrationTaskPage, e error) {
-	page = store.MigrationTaskPage{Tasks: []store.MigrationTask{}, AfterTime: afterTime, AfterID: afterID, NextTime: afterTime, NextID: afterID}
+	return r.migrationTasksPage(ctx, afterTime, afterID, false)
+}
+func (r *Repository) MigrationQueuePage(ctx context.Context, afterTime int64, afterID string) (store.MigrationTaskPage, error) {
+	return r.migrationTasksPage(ctx, afterTime, afterID, true)
+}
+func (r *Repository) migrationTasksPage(ctx context.Context, afterTime int64, afterID string, queue bool) (page store.MigrationTaskPage, e error) {
+	page = store.MigrationTaskPage{Tasks: []store.MigrationTask{}, AfterTime: afterTime, AfterID: afterID, NextTime: afterTime, NextID: afterID, Queue: queue}
 	if afterTime < 0 || (afterID == "" && afterTime != 0) || (afterID != "" && !nodeIDPattern.MatchString(afterID)) {
 		return page, store.ErrMigrationState
 	}
@@ -18,11 +25,16 @@ func (r *Repository) MigrationTasksPage(ctx context.Context, afterTime int64, af
 	}
 	query := "SELECT " + migrationTaskColumns + " FROM migration_tasks WHERE master_id=?"
 	args := []any{n.ID}
+	comparison, direction := "<", "DESC"
+	if queue {
+		query += " AND state NOT IN ('completed','cancelled')"
+		comparison, direction = ">", "ASC"
+	}
 	if afterID != "" {
-		query += " AND (created_at<? OR (created_at=? AND task_id<?))"
+		query += " AND (created_at" + comparison + "? OR (created_at=? AND task_id" + comparison + "?))"
 		args = append(args, afterTime, afterTime, afterID)
 	}
-	query += " ORDER BY created_at DESC,task_id DESC LIMIT 17"
+	query += " ORDER BY created_at " + direction + ",task_id " + direction + " LIMIT 17"
 	rows, e := r.db.QueryContext(ctx, query, args...)
 	if e != nil {
 		return page, e
@@ -46,7 +58,7 @@ func (r *Repository) MigrationTasksPage(ctx context.Context, afterTime int64, af
 }
 func (r *Repository) MigrationStatus(ctx context.Context, id, after string) (result store.MigrationStatus, e error) {
 	result = store.MigrationStatus{After: after, Next: after, Objects: []store.MigrationObjectStatus{}, ObjectStages: []store.MigrationStage{}, UnitStages: []store.MigrationStage{}}
-	if !nodeIDPattern.MatchString(id) || after != "" && !nodeHashPattern.MatchString(after) {
+	if !nodeIDPattern.MatchString(id) || after != "" && !nodeHashPattern.MatchString(after) && !nodeIDPattern.MatchString(after) {
 		return result, store.ErrMigrationState
 	}
 	tx, e := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -64,6 +76,11 @@ func (r *Repository) MigrationStatus(ctx context.Context, id, after string) (res
 	}
 	if result.Task.MasterID != n.ID {
 		return result, store.ErrMigrationState
+	}
+	if migrationRunnable(result.Task.State) || result.Task.State == "cancelling" {
+		if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_tasks t WHERE t.master_id=? AND "+migrationReadyTasks+" AND (t.created_at<? OR (t.created_at=? AND t.task_id<=?))", n.ID, time.Now().Unix(), time.Now().Unix(), result.Task.CreatedAt, result.Task.CreatedAt, id).Scan(&result.QueuePosition); e != nil {
+			return result, e
+		}
 	}
 	stages := func(query string) ([]store.MigrationStage, error) {
 		rows, e := tx.QueryContext(ctx, query, id)

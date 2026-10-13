@@ -22,10 +22,24 @@ import (
 )
 
 type retirementAdminFixture struct {
-	calls   atomic.Int32
-	entered chan struct{}
-	release chan struct{}
-	failure bool
+	calls      atomic.Int32
+	applyCalls atomic.Int32
+	entered    chan struct{}
+	release    chan struct{}
+	failure    bool
+}
+
+func (f *retirementAdminFixture) Apply(ctx context.Context, member, relationship string, audit store.NodeAudit) (store.RetirementFence, error) {
+	f.applyCalls.Add(1)
+	if audit.Actor == "" {
+		return store.RetirementFence{}, errors.New("missing actor")
+	}
+	result := store.RetirementFence{MemberID: member, RelationshipID: relationship, FencedAt: 1, CompletedAt: 1}
+	if f.failure {
+		result.CompletedAt = 0
+		return result, errors.New("private internal credential must never reach HTTP response")
+	}
+	return result, nil
 }
 
 func (f *retirementAdminFixture) Check(ctx context.Context, member, relationship string) (noderetirement.Report, error) {
@@ -99,6 +113,11 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	}
 	path := "/nodes/" + strings.Repeat("1", 32) + "/retire/check"
 	body := `{"member_id":"` + strings.Repeat("2", 32) + `"}`
+	applyPath := strings.TrimSuffix(path, "check") + "apply"
+	applyBody := strings.TrimSuffix(body, "}") + `,"confirm_member_id":"` + strings.Repeat("2", 32) + `"}`
+	if w := perform("POST", applyPath, applyBody, false); w.Code != 401 {
+		t.Fatal("anonymous apply", w.Code)
+	}
 	if w := perform("GET", "/nodes/migrations", "", false); w.Code != 401 {
 		t.Fatal("anonymous migration listing", w.Code)
 	}
@@ -114,6 +133,17 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	}
 	if w := perform("POST", path, body, false); w.Code != 403 {
 		t.Fatal("missing CSRF", w.Code)
+	}
+	if w := perform("POST", applyPath, applyBody, false); w.Code != 403 {
+		t.Fatal("apply missing CSRF", w.Code)
+	}
+	for _, bad := range []string{body, applyBody + ` {}`, strings.TrimSuffix(applyBody, "}") + `,"force":true}`, strings.Replace(applyBody, `"confirm_member_id":"2`, `"confirm_member_id":"3`, 1)} {
+		if w := perform("POST", applyPath, bad, true); w.Code != 422 {
+			t.Fatal("invalid apply confirmation", w.Code, w.Body.String())
+		}
+	}
+	if checker.applyCalls.Load() != 0 {
+		t.Fatal("invalid request invoked apply")
 	}
 	for _, bad := range []string{`{"member_id":"../../secrets"}`, body + ` {}`, strings.TrimSuffix(body, "}") + `,"force":true}`} {
 		if w := perform("POST", path, bad, true); w.Code != 422 {
@@ -161,6 +191,9 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 		t.Fatal("unknown migration field", w.Code)
 	}
 	checker.failure = true
+	if w := perform("POST", applyPath, applyBody, true); w.Code != 409 || strings.Contains(w.Body.String(), "credential") || !strings.Contains(w.Body.String(), `"retirement_incomplete"`) {
+		t.Fatal("unsafe incomplete apply", w.Code, w.Body.String())
+	}
 	if w := perform("POST", path, body, true); w.Code != 409 || strings.Contains(w.Body.String(), "credential") || !strings.Contains(w.Body.String(), `"observation_complete":false`) {
 		t.Fatal("unsafe incomplete error", w.Code, w.Body.String())
 	}
@@ -170,6 +203,9 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	finished := make(chan *httptest.ResponseRecorder, 1)
 	go func() { finished <- perform("POST", path, body, true) }()
 	<-checker.entered
+	if w := perform("POST", applyPath, applyBody, true); w.Code != 429 {
+		t.Fatal("apply overlapped independent scan", w.Code)
+	}
 	if w := perform("POST", path, body, true); w.Code != 429 {
 		t.Fatal("parallel unbounded scan", w.Code, w.Body.String())
 	}
@@ -182,7 +218,7 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	if w := perform("POST", path, body, true); w.Code != 200 {
 		t.Fatal("slot leaked", w.Code)
 	}
-	if w := perform("POST", strings.TrimSuffix(path, "check")+"apply", body, true); w.Code != 404 {
-		t.Fatal("unexpected retire apply", w.Code)
+	if w := perform("POST", applyPath, applyBody, true); w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("confirmed apply failed", w.Code, w.Body.String())
 	}
 }

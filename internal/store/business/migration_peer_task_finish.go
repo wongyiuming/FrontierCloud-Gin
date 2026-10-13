@@ -67,97 +67,56 @@ func (r *Repository) completePeerMigrationTask(ctx context.Context, relationship
 		if count != h.ObjectCount || total != h.Bytes {
 			return store.ErrMigrationState
 		}
-		rows, e := q.QueryContext(ctx, "SELECT unit_id,resource_kind,parent_path,source_version,state,object_count,total_bytes,committed_at,cleanup_after FROM migration_units WHERE task_id=? ORDER BY unit_id", l.TaskID)
-		if e != nil {
-			return e
-		}
-		units := []store.MigrationUnitFinishGrant{}
-		for rows.Next() {
-			unit := store.MigrationUnitFinishGrant{Header: h}
-			var phase string
-			if e = rows.Scan(&unit.Unit.ID, &unit.Unit.Resource, &unit.Unit.Parent, &unit.UnitVersion, &phase, &unit.Unit.ObjectCount, &unit.Unit.Bytes, &unit.Unit.CommittedAt, &unit.Unit.CleanupAfter); e != nil {
-				rows.Close()
-				return e
+
+		var units store.MigrationSequence
+		var objects, bytes int64
+		for u, err := range r.migrationUnits(ctx, q, l.TaskID) {
+			if err != nil {
+				return err
 			}
-			if phase != "cleaned" && !(cancelling && phase == "cancelled") {
-				rows.Close()
+			unit := store.MigrationUnitFinishGrant{Header: h, Unit: u}
+			if u.State != "cleaned" && !(cancelling && u.State == "cancelled") {
 				return store.ErrMigrationState
 			}
-			if phase == "cleaned" {
-				if unit.Unit.CommittedAt <= 0 || unit.Unit.CleanupAfter < unit.Unit.CommittedAt+3600 {
-					rows.Close()
+			if u.State == "cleaned" {
+				if u.CommittedAt <= 0 || u.CleanupAfter < u.CommittedAt+3600 {
 					return store.ErrMigrationState
 				}
 				unit.Unit.State = "cleanup_pending"
-			} else {
-				if unit.Unit.CommittedAt != 0 || unit.Unit.CleanupAfter != 0 {
-					rows.Close()
-					return store.ErrMigrationState
-				}
-				unit.Unit.State = "cancelled"
-			}
-			units = append(units, unit)
-		}
-		e = rows.Err()
-		rows.Close()
-		if e != nil {
-			return e
-		}
-		var objects int64
-		var bytes int64
-		for i := range units {
-			unit := &units[i]
-			entries, e := q.QueryContext(ctx, "SELECT logical_id,sha256 FROM migration_storage_journal WHERE task_id=? AND unit_id=? ORDER BY logical_id", l.TaskID, unit.Unit.ID)
-			if e != nil {
-				return e
-			}
-			type item struct{ id, sha string }
-			items := []item{}
-			for entries.Next() {
-				var value item
-				if e = entries.Scan(&value.id, &value.sha); e != nil {
-					entries.Close()
-					return e
-				}
-				items = append(items, value)
-			}
-			e = entries.Err()
-			entries.Close()
-			if e != nil {
-				return e
-			}
-			bindings := []store.MigrationPeerObject{}
-			for _, entry := range items {
-				o, e := r.peerObjectBinding(ctx, q, l.TaskID, entry.id)
-				if e != nil {
-					return e
-				}
-				bindings = append(bindings, store.MigrationPeerObject{Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
-			}
-			var actualBytes int64
-			for _, binding := range bindings {
-				actualBytes += binding.Object.Bytes
-				if migrationUnit(binding.Object) != unit.Unit.ID {
-					return store.ErrMigrationState
-				}
-			}
-			if int64(len(bindings)) != unit.Unit.ObjectCount || actualBytes != unit.Unit.Bytes {
+			} else if u.CommittedAt != 0 || u.CleanupAfter != 0 {
 				return store.ErrMigrationState
 			}
-			unit.ObjectsSHA, e = store.MigrationUnitObjectsSHA(bindings)
-			if e != nil {
+			if e = q.QueryRowContext(ctx, "SELECT source_version FROM migration_units WHERE task_id=? AND unit_id=?", l.TaskID, u.ID).Scan(&unit.UnitVersion); e != nil {
 				return e
 			}
-			objects += unit.Unit.ObjectCount
-			bytes += unit.Unit.Bytes
+			var bindings store.MigrationSequence
+			var actualBytes int64
+			for binding, err := range r.peerObjects(ctx, q, l.TaskID, u.ID) {
+				if err != nil {
+					return err
+				}
+				actualBytes += binding.Object.Bytes
+				binding.State = ""
+				binding.Header = store.MigrationPeerHeader{}
+				if e = bindings.Add(binding.Object.ID, binding); e != nil {
+					return e
+				}
+			}
+			if bindings.Count() != u.ObjectCount || actualBytes != u.Bytes {
+				return store.ErrMigrationState
+			}
+			unit.ObjectsSHA = bindings.Sum()
+			if e = units.Add(u.ID, unit); e != nil {
+				return e
+			}
+			objects += u.ObjectCount
+			bytes += u.Bytes
 		}
-		sha, e := store.MigrationTaskUnitsSHA(units)
-		if e != nil {
-			return e
-		}
-		if g.UnitCount != int64(len(units)) || objects != h.ObjectCount || bytes != h.Bytes || sha != g.UnitsSHA {
+		sha := units.Sum()
+		if g.UnitCount != units.Count() || objects != h.ObjectCount || bytes != h.Bytes || sha != g.UnitsSHA {
 			return store.ErrMigrationState
 		}
+
 		var scopes int
 		if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_scopes WHERE task_id=?", l.TaskID).Scan(&scopes); e != nil {
 			return e

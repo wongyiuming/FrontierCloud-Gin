@@ -45,6 +45,9 @@ func (r *Repository) MigrationTasks(ctx context.Context, limit int) ([]store.Mig
 	return tasks, rows.Err()
 }
 func (r *Repository) StartMigration(ctx context.Context, p store.MigrationPlan, a store.NodeAudit) (task store.MigrationTask, e error) {
+	if p.Format != "" {
+		return r.startPagedMigration(ctx, p, a)
+	}
 	now := time.Now().Unix()
 	if !nodeIDPattern.MatchString(p.ID) || !nodeIDPattern.MatchString(p.Catalog.Source.ID) || !nodeIDPattern.MatchString(p.Catalog.Target.ID) || p.Catalog.Source.ID == p.Catalog.Target.ID || !nodeHashPattern.MatchString(p.Catalog.Version) || !p.TargetAbsent || p.TargetFree < store.PhysicalReserve || len(p.Catalog.Blockers) != 0 || len(p.Proofs) != len(p.Catalog.Objects) || len(p.Proofs) > store.MaxMigrationObjects {
 		return task, store.ErrMigrationState

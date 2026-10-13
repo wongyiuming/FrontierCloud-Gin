@@ -1,0 +1,2 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic	1.015s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.072s

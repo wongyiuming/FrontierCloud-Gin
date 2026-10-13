@@ -1,0 +1,84 @@
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+panic: test timed out after 10m0s
+	running tests:
+		TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (10m0s)
+
+goroutine 21267 [running]:
+testing.(*M).startAlarm.func1()
+	/usr/local/go/src/testing/testing.go:2802 +0x605
+created by time.goFunc
+	/usr/local/go/src/time/sleep.go:215 +0x45
+
+goroutine 1 [chan receive, 10 minutes]:
+testing.(*T).Run(0xc0000e8908, {0x1515a9f, 0x41}, 0x1696f88)
+	/usr/local/go/src/testing/testing.go:2109 +0xb3e
+testing.runTests.func1(0xc0000e8908)
+	/usr/local/go/src/testing/testing.go:2585 +0x85
+testing.tRunner(0xc0000e8908, 0xc0002bfad0)
+	/usr/local/go/src/testing/testing.go:2036 +0x21d
+testing.runTests({0x15090e2, 0x28}, {0x15151dc, 0x40}, 0xc0000a41f8, {0x1dd9a60, 0x6b, 0x6b}, {0xc2ab889496ac6ff4, 0x8bb3479f4d, ...})
+	/usr/local/go/src/testing/testing.go:2583 +0x9ea
+testing.(*M).Run(0xc0000feb40)
+	/usr/local/go/src/testing/testing.go:2443 +0xf4c
+main.main()
+	_testmain.go:260 +0x165
+
+goroutine 22 [runnable]:
+modernc.org/sqlite/lib._lengthFunc(0xc0000a0370, 0x77ac951fad48, 0x0?, 0x77ac951fad78)
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/lib/sqlite_g_000000000001feab.go:9918 +0x2c5
+modernc.org/sqlite/lib._sqlite3VdbeExec(0xc0000a0370, 0x77ac951f0e38)
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/lib/sqlite_g_0000000000000480.go:25640 +0x39fa3
+modernc.org/sqlite/lib._sqlite3Step(0xc0000a0370, 0x77ac951f0e38)
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/lib/sqlite_g_000000000001deab.go:3968 +0x1ef
+modernc.org/sqlite/lib.Xsqlite3_step(0xc0000a0370, 0x77ac951f0e38)
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/lib/sqlite.go:12110 +0x1cb
+modernc.org/sqlite.(*conn).step(0xc0000a6240, 0x77ac951f0e38)
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/conn.go:435 +0x5e
+modernc.org/sqlite.(*stmt).query(0xc000016660, {0x16a5f40, 0x1e00f80}, {0xc000310000, 0x6, 0x6})
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/stmt.go:337 +0x405
+modernc.org/sqlite.(*conn).query(0xc0000a6240, {0x16a5f40, 0x1e00f80}, {0xc0002fe000, 0x10e}, {0xc000310000, 0x6, 0x6})
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/conn.go:1210 +0xa8
+modernc.org/sqlite.(*conn).QueryContext(0xc0000a6240, {0x16a5f40, 0x1e00f80}, {0xc0002fe000, 0x10e}, {0xc000310000, 0x6, 0x6})
+	/go/pkg/mod/modernc.org/sqlite@v1.60.1/conn.go:1436 +0x95
+database/sql.ctxDriverQuery({0x16a5f40, 0x1e00f80}, {0x77acde59c4c0, 0xc0000a6240}, {0x0, 0x0}, {0xc0002fe000, 0x10e}, {0xc000310000, 0x6, ...})
+	/usr/local/go/src/database/sql/ctxutil.go:48 +0xeb
+database/sql.(*DB).queryDC.func1()
+	/usr/local/go/src/database/sql/sql.go:1786 +0x266
+database/sql.withLock({0x16a4418, 0xc0000f6000}, 0xc0003053e0)
+	/usr/local/go/src/database/sql/sql.go:3572 +0xa3
+database/sql.(*DB).queryDC(0xc000305401?, {0x16a5f40, 0x1e00f80}, {0x0, 0x0}, 0xc0000f6000, 0xc000243d40, {0xc0002fe000, 0x10e}, {0xc0000f6280, ...})
+	/usr/local/go/src/database/sql/sql.go:1781 +0x325
+database/sql.(*DB).query(0xc0000a3380, {0x16a5f40, 0x1e00f80}, {0xc0002fe000, 0x10e}, {0xc0000f6280, 0x6, 0x8}, 0x1)
+	/usr/local/go/src/database/sql/sql.go:1764 +0x166
+database/sql.(*DB).QueryContext.func1(0x1)
+	/usr/local/go/src/database/sql/sql.go:1742 +0xd0
+database/sql.(*DB).retry(0x10e?, 0xc000305660)
+	/usr/local/go/src/database/sql/sql.go:1576 +0x4b
+database/sql.(*DB).QueryContext(0xc0000a3380, {0x16a5f40, 0x1e00f80}, {0xc0002fe000, 0x10e}, {0xc0000f6280, 0x6, 0x8})
+	/usr/local/go/src/database/sql/sql.go:1741 +0x185
+database/sql.(*DB).QueryRowContext(0xc0000a3380, {0x16a5f40, 0x1e00f80}, {0xc0002fe000, 0x10e}, {0xc0000f6280, 0x6, 0x8})
+	/usr/local/go/src/database/sql/sql.go:1842 +0x95
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business.(*Repository).scanMigrationCatalog(_, {_, _}, {_, _}, {_, _}, {_, _}, 0x0)
+	/workspace/internal/store/business/migration_plan_catalog.go:164 +0x93e
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business.(*Repository).SealMigrationPlan(_, {_, _}, {{0x15022c8, 0x20}, 0x2718, 0x2, {0xc000236b00, 0x40}, {0x0, ...}, ...})
+	/workspace/internal/store/business/migration_plan_pages.go:243 +0x106
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity(0xc0000e86c8)
+	/workspace/internal/store/business/migration_plan_pages_test.go:143 +0x271d
+testing.tRunner(0xc0000e86c8, 0x1696f88)
+	/usr/local/go/src/testing/testing.go:2036 +0x21d
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2101 +0xb13
+
+goroutine 23 [select, 10 minutes]:
+database/sql.(*DB).connectionOpener(0xc0000a3380, {0x16a6098, 0xc0000e2320})
+	/usr/local/go/src/database/sql/sql.go:1261 +0xed
+created by database/sql.OpenDB in goroutine 22
+	/usr/local/go/src/database/sql/sql.go:841 +0x287
+
+goroutine 9 [select]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity.func2()
+	/workspace/internal/store/business/migration_plan_pages_test.go:42 +0x205
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/store/business_test.TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity in goroutine 22
+	/workspace/internal/store/business/migration_plan_pages_test.go:37 +0x433
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	600.034s
+FAIL

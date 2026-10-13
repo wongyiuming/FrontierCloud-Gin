@@ -9,7 +9,7 @@ See [operator-managed releases](../../docs/master-self-release.md).
 The current native schema gate is generation **6**. The unchanged
 vectors/release-manifest.json is the generation-2 historical fixture, and
 vectors/release-manifest-generation3.json, generation4.json and generation5.json retain historical data.
-vectors/release-manifest-generation6.json defines current acceptance, together
+vectors/release-manifest-generation7.json defines current acceptance, together
 with schemas/release-manifest.json. Current tooling rejects old generations
 and future generation 7. Protocol 2 is not a promise of database compatibility
 across generations, and historical digests do not authorize reverse migrations.

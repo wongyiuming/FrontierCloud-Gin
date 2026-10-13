@@ -1,0 +1,57 @@
+{
+  "aborted": {
+    "reason": "known old readiness implementation waits on PENDING with permanent CA rejection; rerun only this case after correction",
+    "case": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-certificate-failure-0c7fad725f",
+    "terminated_owned_driver_pid": 3433640
+  },
+  "cleanup": {
+    "removed_stopped_containers": [
+      {
+        "id": "1863bfa0f32091f2b2e9e9282857da8d3d5d6b5c5d2591ef38d86a47ef240340",
+        "service": "web",
+        "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+        "status": "exited",
+        "exit_code": 0
+      },
+      {
+        "id": "4e577987f0d3a4d51d6f3b1a87c57545e01a43215b965f7360a531801fd8bcc0",
+        "service": "secrets-init",
+        "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+        "status": "exited",
+        "exit_code": 0
+      },
+      {
+        "id": "6c8aa86b71b90ba3071012b51987e9b75afae9ec61ac7fe6bf42500eb27cee84",
+        "service": "media-init",
+        "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+        "status": "exited",
+        "exit_code": 0
+      },
+      {
+        "id": "3b2a02ec946e369e1e6e1b13523dff210c330d63c7159ab9946ba8abd19324a2",
+        "service": "certificate-agent",
+        "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+        "status": "exited",
+        "exit_code": 2
+      },
+      {
+        "id": "472e6ae61328bf845f163478280b861ed599d6974a4c317bee608c049f20925f",
+        "service": "certificate-init",
+        "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+        "status": "exited",
+        "exit_code": 0
+      }
+    ],
+    "removed_empty_networks": [
+      "47f8e9e925ea3f1028184d2f30373c25ada7c1f1003f3dfb7314c989eeb71dc2"
+    ],
+    "named_volumes_retained": [
+      "fc-ops-install-certificate-failure-0c7fad725f_certificate_published",
+      "fc-ops-install-certificate-failure-0c7fad725f_certificate_runtime",
+      "fc-ops-install-certificate-failure-0c7fad725f_certificate_state",
+      "fc-ops-install-certificate-failure-0c7fad725f_storage_secrets"
+    ],
+    "receipt_sha256": "335e2590ecedaa9cdf5a18eeae0b97757a548b89c8320b7f0c897f71b5706742",
+    "test_log_sha256": "d173878ab81a8892c944ab9b62a335bb0ab54ab9a645aba60db8ed42b4557dff"
+  }
+}

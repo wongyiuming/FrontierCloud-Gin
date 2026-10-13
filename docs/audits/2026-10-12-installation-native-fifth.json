@@ -1,0 +1,530 @@
+{
+  "scope": "compiled shipping fc early guards and private real-Docker Install protocol",
+  "public_release_first_installation_verified": false,
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm",
+  "successful_installation_driver_has_test_only_publication_and_local_ca": true,
+  "selected_private_cases": null,
+  "guards_requested": false,
+  "private_installations": [
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "11e66092f9f9bbb56a8ce8e6cefe92c8c777327e84ff41e792096e1dec53cfdb",
+        "hostname": "business.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791869621,
+          "port80_active": true,
+          "started_at": 1791869621,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797053601,
+        "not_after": 1799645621,
+        "not_before": 1791869561,
+        "remaining_seconds": 7775991,
+        "san": [
+          "business.fixture.test"
+        ],
+        "serving_fingerprint": "11e66092f9f9bbb56a8ce8e6cefe92c8c777327e84ff41e792096e1dec53cfdb",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "http01"
+      },
+      "database": "sqlite",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 8,
+      "install_up_calls": 2,
+      "media_premaster_present": true,
+      "native_node_id": "202e7edd76677910e7298349db396f63",
+      "native_role": "Standalone",
+      "native_vault_key_preserved": true,
+      "production_publication_verified": false,
+      "profile": "business",
+      "publication_proof_injected": true,
+      "receipt_sha256": "06e1a65dd5a8e14f01c8e7b804b015f5fa237b35b1dacc4b56e7d2d7e18dfe1f",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-master-sqlite-2aded81bcc",
+      "retained_resources": {
+        "containers": [],
+        "volumes": [
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_published",
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_runtime",
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_state",
+          "fc-ops-install-master-sqlite-2aded81bcc_redis_data",
+          "fc-ops-install-master-sqlite-2aded81bcc_runtime_secrets",
+          "fc-ops-install-master-sqlite-2aded81bcc_web_tmp"
+        ]
+      },
+      "cleanup": {
+        "removed_stopped_containers": [
+          {
+            "id": "a858840373f0084b49a1b236b0e6c8168f7da739e41901f892ec6357e86c5b51",
+            "service": "nginx",
+            "image": "sha256:8109ee6e2692a29d6050df7f2d542fc1f760c8f75ae06f0632c7787a71b3d30e",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "4ca706063849ab2d1614b22d0f893c9fa0871af6cac9b41aca81ff6b61b8d29e",
+            "service": "web",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "644a8942befe33bb232030264a2f191824858c5cf2036fc95c76ba778838be6d",
+            "service": "redis",
+            "image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "54f34780fbad580f5576cc1dddf639e56338afb329a13da13728a5be6e675de6",
+            "service": "stun",
+            "image": "sha256:771a95d04cb97bbc5bfc672e5fdf455591c7d2b2a15f02bb9ceda3e27561695f",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "8d3ad4f284f9d29a0957c455f1100f6e175163a6714c254115f0849f6d1e44a9",
+            "service": "media-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "bf6d69aeaab053cf9eb9d3a39b1c6d4900accb8066399cc82fd03737e5d0bc92",
+            "service": "secrets-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "01886abd3213926d5493939cdb1df2c53e4678acc3c6c70fcfa7dc7e65ea02ae",
+            "service": "certificate-agent",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 2
+          },
+          {
+            "id": "e0114d568b376e09738c6504f064620e784de0c3442a09dd400f13e9cde493a7",
+            "service": "certificate-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          }
+        ],
+        "removed_empty_networks": [
+          "1e10d4f5db3a42f4532344e558c99863e02d2b3254dfd87fc37d439c56b737e2"
+        ],
+        "named_volumes_retained": [
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_published",
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_runtime",
+          "fc-ops-install-master-sqlite-2aded81bcc_certificate_state",
+          "fc-ops-install-master-sqlite-2aded81bcc_redis_data",
+          "fc-ops-install-master-sqlite-2aded81bcc_runtime_secrets",
+          "fc-ops-install-master-sqlite-2aded81bcc_web_tmp"
+        ],
+        "receipt_sha256": "06e1a65dd5a8e14f01c8e7b804b015f5fa237b35b1dacc4b56e7d2d7e18dfe1f",
+        "test_log_sha256": "a5de62e254b99ba6dd522f2e55a146fe53768ebc17cc53eb93f56be33d32cd2d"
+      }
+    },
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "58d31846689da213b0114dece29475d4ddcfeffd0f1be2fd1b9d15e39e0416fe",
+        "hostname": "business.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791869657,
+          "port80_active": true,
+          "started_at": 1791869657,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797053637,
+        "not_after": 1799645657,
+        "not_before": 1791869597,
+        "remaining_seconds": 7775991,
+        "san": [
+          "business.fixture.test"
+        ],
+        "serving_fingerprint": "58d31846689da213b0114dece29475d4ddcfeffd0f1be2fd1b9d15e39e0416fe",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "http01"
+      },
+      "database": "mysql",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 9,
+      "install_up_calls": 2,
+      "media_premaster_present": true,
+      "native_node_id": "b1a751a75956ba907b5d721bed12d140",
+      "native_role": "Standalone",
+      "native_vault_key_preserved": true,
+      "production_publication_verified": false,
+      "profile": "business",
+      "publication_proof_injected": true,
+      "receipt_sha256": "2a059b742f5dfcf19e6bb1f40f056789eb89a3298d97829e4d903fccc7fc9980",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-master-mysql-7bb0fa8019",
+      "retained_resources": {
+        "containers": [],
+        "volumes": [
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_published",
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_runtime",
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_state",
+          "fc-ops-install-master-mysql-7bb0fa8019_mysql_data",
+          "fc-ops-install-master-mysql-7bb0fa8019_redis_data",
+          "fc-ops-install-master-mysql-7bb0fa8019_runtime_secrets",
+          "fc-ops-install-master-mysql-7bb0fa8019_web_tmp"
+        ]
+      },
+      "cleanup": {
+        "removed_stopped_containers": [
+          {
+            "id": "55963caafbe995230411007653084f431358ad14cf4e760a2481d94696017271",
+            "service": "nginx",
+            "image": "sha256:8109ee6e2692a29d6050df7f2d542fc1f760c8f75ae06f0632c7787a71b3d30e",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "3508dd0b483a8736893c138d550963646ba7f06020fd796728cbd4fbbef82c39",
+            "service": "web",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "24f69797f2f218eac60a834d14a505fb06c82065efb62ec8102e100d9ea3c4e5",
+            "service": "mysql",
+            "image": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "d1519e18874605a5f1ea5c2bed7664926302ca277f05c0fda68863c5e30e679a",
+            "service": "redis",
+            "image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "e59d058ae3a6589262c7ef1aec9c620ae1ccc3ebe0244b9359f44667e1f7294e",
+            "service": "stun",
+            "image": "sha256:771a95d04cb97bbc5bfc672e5fdf455591c7d2b2a15f02bb9ceda3e27561695f",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "12ed6b0bb15eb8cb905059297d822717dd7e1a4a93e54e30856889eea55b7470",
+            "service": "secrets-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "26a85c2be7b9ce63f570b711ba37920ca898d1f0ff9672281c77f316cd1fa9d0",
+            "service": "media-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "1e5d36763ccf10e3dbf4b2f20fa887159736b9a2dc1ed658ba42e0d261c07306",
+            "service": "certificate-agent",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 2
+          },
+          {
+            "id": "d3ccebbf9533ce417a04064e856d2ca46794b4936bf10a61436a30f7bb220eba",
+            "service": "certificate-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          }
+        ],
+        "removed_empty_networks": [
+          "034cb37b353b26ce8cb3177b82a117ce644cc7fd2c087f186a968295b25d7104"
+        ],
+        "named_volumes_retained": [
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_published",
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_runtime",
+          "fc-ops-install-master-mysql-7bb0fa8019_certificate_state",
+          "fc-ops-install-master-mysql-7bb0fa8019_mysql_data",
+          "fc-ops-install-master-mysql-7bb0fa8019_redis_data",
+          "fc-ops-install-master-mysql-7bb0fa8019_runtime_secrets",
+          "fc-ops-install-master-mysql-7bb0fa8019_web_tmp"
+        ],
+        "receipt_sha256": "2a059b742f5dfcf19e6bb1f40f056789eb89a3298d97829e4d903fccc7fc9980",
+        "test_log_sha256": "e173d3746b080733e956bc951b60d2c3a0cd1473ef3b99928c25803d80ea0fc8"
+      }
+    },
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "1496b4691567ceea1d45b6593cd642d3081ab5817f84743c7ced3b43da2fb10e",
+        "hostname": "storage.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791869682,
+          "port80_active": false,
+          "started_at": 1791869682,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797053662,
+        "not_after": 1799645682,
+        "not_before": 1791869622,
+        "remaining_seconds": 7775993,
+        "san": [
+          "storage.fixture.test"
+        ],
+        "serving_fingerprint": "1496b4691567ceea1d45b6593cd642d3081ab5817f84743c7ced3b43da2fb10e",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "temporary_port80"
+      },
+      "database": "sqlite",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 5,
+      "install_up_calls": 2,
+      "media_premaster_present": false,
+      "native_node_id": "1b5b9424ad9aa2563c999a6bfe8d968d",
+      "native_role": "Follower",
+      "native_vault_key_preserved": true,
+      "production_publication_verified": false,
+      "profile": "direct",
+      "publication_proof_injected": true,
+      "receipt_sha256": "ae0f86d9836c1fc274c27a6ab4ee35e087cf980c51d8e94c4b55608f9099a562",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-direct-09a026f4fd",
+      "retained_resources": {
+        "containers": [],
+        "volumes": [
+          "fc-ops-install-direct-09a026f4fd_certificate_published",
+          "fc-ops-install-direct-09a026f4fd_certificate_runtime",
+          "fc-ops-install-direct-09a026f4fd_certificate_state",
+          "fc-ops-install-direct-09a026f4fd_storage_secrets"
+        ]
+      },
+      "cleanup": {
+        "removed_stopped_containers": [
+          {
+            "id": "86328de8f731484981a506d06178ebd965c057fd404b9668707e73948ab517f6",
+            "service": "web",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "081574219d4a5798fe48f6f75fcfa7cd045a61102fb28135d2469cb062ed9066",
+            "service": "media-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "9bd4a19fe10d2fa0c05150b059ddc9f82ae396b09d0b324ffb1578cb29ef3d3d",
+            "service": "secrets-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "c63970caefe7e986351e1fda01d9800cc8936a46324deace7caac3d9df455816",
+            "service": "certificate-agent",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 2
+          },
+          {
+            "id": "ec590722561dceb22ff48c37e91757df2f2c4b126a925cbf437306a98a34fa75",
+            "service": "certificate-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          }
+        ],
+        "removed_empty_networks": [
+          "57d8cd26cf61b665e37d5bb6ec5911ca9be5c2e3ce37656e5989c7183a6c5efe"
+        ],
+        "named_volumes_retained": [
+          "fc-ops-install-direct-09a026f4fd_certificate_published",
+          "fc-ops-install-direct-09a026f4fd_certificate_runtime",
+          "fc-ops-install-direct-09a026f4fd_certificate_state",
+          "fc-ops-install-direct-09a026f4fd_storage_secrets"
+        ],
+        "receipt_sha256": "ae0f86d9836c1fc274c27a6ab4ee35e087cf980c51d8e94c4b55608f9099a562",
+        "test_log_sha256": "1276aaa92d402568c44ae94e98f7eb2ba735378d0329427d45e89e0e042b459f"
+      }
+    },
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "8c8815fb09c8bd5276425aed28e4866155595f22686aaa7d86e2aa1bb910bc17",
+        "hostname": "storage.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791869696,
+          "port80_active": false,
+          "started_at": 1791869695,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797053676,
+        "not_after": 1799645696,
+        "not_before": 1791869636,
+        "remaining_seconds": 7775994,
+        "san": [
+          "storage.fixture.test"
+        ],
+        "serving_fingerprint": "8c8815fb09c8bd5276425aed28e4866155595f22686aaa7d86e2aa1bb910bc17",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "temporary_port80"
+      },
+      "database": "sqlite",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 5,
+      "install_up_calls": 2,
+      "media_premaster_present": false,
+      "native_node_id": "5c0b37853a70ec804841b75895673ac2",
+      "native_role": "Follower",
+      "native_vault_key_preserved": true,
+      "production_publication_verified": false,
+      "profile": "relay",
+      "publication_proof_injected": true,
+      "receipt_sha256": "427fc5f46a5669e7dec112213583b86e22eb44f199e8313231ffe2b85c4f0e35",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-relay-a84309b902",
+      "retained_resources": {
+        "containers": [],
+        "volumes": [
+          "fc-ops-install-relay-a84309b902_certificate_published",
+          "fc-ops-install-relay-a84309b902_certificate_runtime",
+          "fc-ops-install-relay-a84309b902_certificate_state",
+          "fc-ops-install-relay-a84309b902_storage_secrets"
+        ]
+      },
+      "cleanup": {
+        "removed_stopped_containers": [
+          {
+            "id": "51e67147428aea494e6f3ea2d171302083e52a4e77fd4cd331e76187821697e8",
+            "service": "web",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "1b1722a961e88d6d925917ee9dca065aa99e2ef7b320734b359acbe30df902dd",
+            "service": "secrets-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "e1f444de7aa8db01614682a464421c71248c7df671b8ce67232b417b2ea225a4",
+            "service": "media-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          },
+          {
+            "id": "69355e7047c08b97462b628f461a88fc40faf5c1e8bc6ba1c540a843a755f4ed",
+            "service": "certificate-agent",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 2
+          },
+          {
+            "id": "0fa9fac81402fe5509852bc5cb38b2030d39da86665a307baa8e6aa2b9bd6bc8",
+            "service": "certificate-init",
+            "image": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+            "status": "exited",
+            "exit_code": 0
+          }
+        ],
+        "removed_empty_networks": [
+          "024885e344eceedbcdfdd269b5473653b8ad506d85e7639db7b43aab8d75c679"
+        ],
+        "named_volumes_retained": [
+          "fc-ops-install-relay-a84309b902_certificate_published",
+          "fc-ops-install-relay-a84309b902_certificate_runtime",
+          "fc-ops-install-relay-a84309b902_certificate_state",
+          "fc-ops-install-relay-a84309b902_storage_secrets"
+        ],
+        "receipt_sha256": "427fc5f46a5669e7dec112213583b86e22eb44f199e8313231ffe2b85c4f0e35",
+        "test_log_sha256": "1133780bc6effbe214218217de8954bcd994b21b7720d1651d61516a8c58f982"
+      }
+    },
+    {
+      "actual_compose": true,
+      "actual_docker_pull_failed_before_initialization": true,
+      "case": "pull-failure",
+      "database": "sqlite",
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 1,
+      "install_up_calls": 0,
+      "production_publication_verified": false,
+      "profile": "direct",
+      "publication_proof_injected": true,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-fifth/fc-ops-install-suite-7v7re5wm/fc-ops-install-pull-failure-3f669e1b5e",
+      "retained_resources": {
+        "containers": [],
+        "volumes": []
+      },
+      "cleanup": {
+        "removed_stopped_containers": [],
+        "removed_empty_networks": [],
+        "named_volumes_retained": [],
+        "receipt_sha256": null,
+        "test_log_sha256": "a25f8650e120d5c7e250eab64b9485dd8da6eb3f89a4df8a0ed105a3986ee3be"
+      }
+    }
+  ]
+}

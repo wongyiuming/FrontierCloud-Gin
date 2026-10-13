@@ -1,0 +1,187 @@
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted
+--- PASS: TestResourceMigrationGenerationFourUpgrade (11.51s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.20s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.23s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (1.69s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (1.65s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve (0.18s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted (0.23s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve (1.68s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted (1.73s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve (0.19s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted (0.22s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve (1.74s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted (1.76s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	12.530s
+=== RUN   TestPeerBackupObservationColdReadDoesNotRepairLease
+    backup_observation_test.go:21: native storage uses embedded SQLite
+--- SKIP: TestPeerBackupObservationColdReadDoesNotRepairLease (1.77s)
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+--- PASS: TestPeerBackupObservationManifestIdentityStateAndBounds (0.08s)
+=== RUN   TestResourceMigrationAdminRevisionFencesAndBoundedStatus
+--- PASS: TestResourceMigrationAdminRevisionFencesAndBoundedStatus (0.48s)
+=== RUN   TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt
+--- PASS: TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt (0.08s)
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+--- PASS: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (0.04s)
+=== RUN   TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity
+--- PASS: TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity (0.09s)
+=== RUN   TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain
+--- PASS: TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain (0.28s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+--- PASS: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (0.31s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+--- PASS: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (0.25s)
+=== RUN   TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain
+--- PASS: TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain (0.33s)
+=== RUN   TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce
+--- PASS: TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce (0.28s)
+=== RUN   TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts
+--- PASS: TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts (0.34s)
+=== RUN   TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof
+--- PASS: TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof (0.23s)
+=== RUN   TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund
+--- PASS: TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund (0.10s)
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+--- PASS: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (0.09s)
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+--- PASS: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (0.17s)
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+--- PASS: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.12s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+--- PASS: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (0.13s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+--- PASS: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (0.08s)
+=== RUN   TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations
+--- PASS: TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations (0.07s)
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source
+--- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget (0.19s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target (0.09s)
+    --- PASS: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source (0.10s)
+=== RUN   TestPeerMigrationEmptyCancellationReceiptReplay
+--- PASS: TestPeerMigrationEmptyCancellationReceiptReplay (0.05s)
+=== RUN   TestPeerMigrationCancellationSourceProofReadIsTaskStateBound
+--- PASS: TestPeerMigrationCancellationSourceProofReadIsTaskStateBound (0.08s)
+=== RUN   TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission
+--- PASS: TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission (0.22s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:229: paged objects=10008 immutable JSON bytes=25515005 page limit=64
+--- PASS: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (114.34s)
+=== RUN   TestPeerMigrationPublicationRollbackAndReplay
+--- PASS: TestPeerMigrationPublicationRollbackAndReplay (0.14s)
+=== RUN   TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive
+--- PASS: TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive (0.13s)
+=== RUN   TestPeerMigrationConcurrentReadAdmissionAndCleanup
+--- PASS: TestPeerMigrationConcurrentReadAdmissionAndCleanup (0.10s)
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+--- PASS: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (0.15s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+--- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (0.31s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (0.15s)
+    --- PASS: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (0.16s)
+=== RUN   TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary
+--- PASS: TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary (0.09s)
+=== RUN   TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor
+--- PASS: TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor (0.13s)
+=== RUN   TestResourceMigrationRunnerSchedulingFailureAndEpochFence
+--- PASS: TestResourceMigrationRunnerSchedulingFailureAndEpochFence (0.20s)
+=== RUN   TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority
+--- PASS: TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority (0.20s)
+=== RUN   TestResourceMigrationReadOnlyCatalogAtomicStartAndFences
+--- PASS: TestResourceMigrationReadOnlyCatalogAtomicStartAndFences (0.21s)
+=== RUN   TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof
+--- PASS: TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof (0.14s)
+=== RUN   TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata
+--- PASS: TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata (0.22s)
+=== RUN   TestResourceMigrationTargetsAndSplitOwnershipAreReported
+--- PASS: TestResourceMigrationTargetsAndSplitOwnershipAreReported (0.13s)
+=== RUN   TestResourceMigrationConcurrentPlansCannotOversellTarget
+--- PASS: TestResourceMigrationConcurrentPlansCannotOversellTarget (0.16s)
+=== RUN   TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask
+--- PASS: TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask (0.15s)
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+--- PASS: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.20s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+--- PASS: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.13s)
+=== RUN   TestPeerExpectedPhysicalInventoryExactManagedLookup
+--- PASS: TestPeerExpectedPhysicalInventoryExactManagedLookup (0.04s)
+=== RUN   TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone
+--- PASS: TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone (0.05s)
+=== RUN   TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority
+--- PASS: TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority (0.05s)
+=== RUN   TestPeerRetirementMigrationRequiresBoundTerminalHistory
+--- PASS: TestPeerRetirementMigrationRequiresBoundTerminalHistory (0.09s)
+=== RUN   TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations
+--- PASS: TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations (0.05s)
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-binding
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-unit
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-state
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-count
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/task-bytes
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-role
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-master
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/active-runner
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-binding
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-unit
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-state
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-count
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/task-bytes
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-role
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-master
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/active-runner
+--- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole (0.26s)
+    --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true (0.13s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-binding (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/missing-unit (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-state (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/unit-count (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/task-bytes (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-role (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/wrong-master (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true/active-runner (0.01s)
+    --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false (0.13s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-binding (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/missing-unit (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-state (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/unit-count (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/task-bytes (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-role (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/wrong-master (0.01s)
+        --- PASS: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false/active-runner (0.01s)
+=== RUN   TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches
+--- PASS: TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches (0.30s)
+=== RUN   TestPeerRetirementFenceCannotBeErasedByIdentityReset
+--- PASS: TestPeerRetirementFenceCannotBeErasedByIdentityReset (0.03s)
+=== RUN   TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation
+--- PASS: TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation (0.06s)
+=== RUN   TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification
+--- PASS: TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification (0.03s)
+=== RUN   TestPeerRetirementLedgerMasterResourcesAndOfflineMember
+--- PASS: TestPeerRetirementLedgerMasterResourcesAndOfflineMember (0.11s)
+=== RUN   TestPeerRetirementLedgerWorkerAndMasterMutationReferences
+--- PASS: TestPeerRetirementLedgerWorkerAndMasterMutationReferences (0.23s)
+=== RUN   TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal
+--- PASS: TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal (0.06s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	125.388s
+PASS: SQLite/MySQL schema recovery, MySQL task/reservation/lease transactions and migration backup guards; byte transport remains separate acceptance

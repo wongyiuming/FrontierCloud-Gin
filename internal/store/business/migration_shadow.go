@@ -18,7 +18,7 @@ func (r *Repository) AuthorizeMigrationShadowDeletion(ctx context.Context, l sto
 		if t.State != "cancelling" || proof.ID != id || proof.VerifiedAt < now-30 || proof.VerifiedAt > now+30 {
 			return store.ErrMigrationState
 		}
-		w, e := r.migrationWork(ctx, q, l.TaskID)
+		w, e := r.migrationObjectWork(ctx, q, l.TaskID, id)
 		if e != nil {
 			return e
 		}
@@ -30,7 +30,7 @@ func (r *Repository) AuthorizeMigrationShadowDeletion(ctx context.Context, l sto
 			if cp.State == "cancelled" || cp.State == "cleanup_pending" || cp.State == "cleaned" || cp.SourceSHA != proof.SHA256 || cp.Object.Version != proof.Version || cp.Object.Bytes != proof.Bytes {
 				return store.ErrMigrationState
 			}
-			unit, e := r.migrationUnitCancelGrant(ctx, q, l, cp.UnitID)
+			unit, e := r.migrationCancellationObjectGrant(ctx, q, l, id)
 			if e != nil {
 				return e
 			}

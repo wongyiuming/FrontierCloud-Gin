@@ -17,28 +17,28 @@ func (r *Repository) migrationUnitCancelGrant(ctx context.Context, q queryer, l 
 	if t.State != "cancelling" {
 		return g, store.ErrMigrationState
 	}
-	w, e := r.migrationWork(ctx, q, l.TaskID)
+	w, e := r.migrationHeader(ctx, q, l.TaskID)
 	if e != nil {
 		return g, e
 	}
 	if w.Plan.Catalog.Source.RelationshipID == nil || w.Plan.Catalog.Target.RelationshipID == nil {
 		return g, store.ErrMigrationState
 	}
-	found := false
-	for _, u := range w.Units {
-		if u.ID == id {
-			g.Unit = u
-			found = true
-		}
+	g.Unit, e = scanMigrationUnit(q.QueryRowContext(ctx, "SELECT "+migrationUnitColumns+" FROM migration_units WHERE task_id=? AND unit_id=?", l.TaskID, id))
+	if e != nil {
+		return g, e
 	}
-	if !found || g.Unit.CommittedAt != 0 || g.Unit.CleanupAfter != 0 || g.Unit.State == "committed" || g.Unit.State == "cleanup_pending" || g.Unit.State == "cleaned" {
+	if g.Unit.CommittedAt != 0 || g.Unit.CleanupAfter != 0 || g.Unit.State == "committed" || g.Unit.State == "cleanup_pending" || g.Unit.State == "cleaned" {
 		return g, store.ErrMigrationState
 	}
 	replay := g.Unit.State == "cancelled"
 	g.Unit.State = "cancelled"
-	objects := []store.MigrationPeerObject{}
+	var objects store.MigrationSequence
 	var total int64
-	for _, cp := range w.Objects {
+	for cp, err := range r.migrationObjects(ctx, q, l.TaskID, id) {
+		if err != nil {
+			return g, err
+		}
 		if cp.UnitID != id {
 			continue
 		}
@@ -59,17 +59,22 @@ func (r *Repository) migrationUnitCancelGrant(ctx context.Context, q queryer, l 
 			}
 		}
 		total += cp.Object.Bytes
-		objects = append(objects, store.MigrationPeerObject{Object: cp.Object, Proof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}})
+		if e = objects.Add(cp.Object.ID, store.MigrationPeerObject{Object: cp.Object, Proof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}}); e != nil {
+			return g, e
+		}
 	}
-	if int64(len(objects)) != g.Unit.ObjectCount || total != g.Unit.Bytes || len(objects) == 0 {
+	if objects.Count() != g.Unit.ObjectCount || total != g.Unit.Bytes || objects.Count() == 0 {
 		return g, store.ErrMigrationState
 	}
-	g.ObjectsSHA, e = store.MigrationUnitObjectsSHA(objects)
+	g.ObjectsSHA = objects.Sum()
 	if e != nil {
 		return g, e
 	}
 	if e = q.QueryRowContext(ctx, "SELECT source_version FROM migration_units WHERE task_id=? AND unit_id=?", l.TaskID, id).Scan(&g.UnitVersion); e != nil {
 		return g, e
+	}
+	if w.Plan.Format == pagedMigrationFormat && g.UnitVersion != g.ObjectsSHA {
+		return g, store.ErrMigrationState
 	}
 	g.Header = store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: l.TaskID, MasterID: t.MasterID, SourceID: t.SourceID, TargetID: t.TargetID, SourceRelationship: *w.Plan.Catalog.Source.RelationshipID, TargetRelationship: *w.Plan.Catalog.Target.RelationshipID, PlanSHA: t.PlanSHA, ObjectCount: t.ObjectCount, Bytes: t.TotalBytes}
 	return g, nil

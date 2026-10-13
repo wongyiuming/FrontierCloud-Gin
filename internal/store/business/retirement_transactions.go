@@ -2,13 +2,12 @@ package business
 
 import (
 	"context"
-	"database/sql"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // Large, malformed and unexamined mutation manifests remain explicit blockers.
 // The diagnostic budget never converts an incomplete projection into clearance.
-func retirementMasterFileTransactions(ctx context.Context, tx *sql.Tx, master, member string) ([]store.RetirementBlocker, error) {
+func retirementMasterFileTransactions(ctx context.Context, tx queryer, master, member string) ([]store.RetirementBlocker, error) {
 	const limit = 8
 	const manifestBytes = 64 << 10
 	var total int64

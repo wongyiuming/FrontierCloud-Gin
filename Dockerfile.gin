@@ -22,7 +22,7 @@ RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go te
 FROM debian:13.3-slim
 ARG REVISION
 LABEL frontiercloud.revision=$REVISION frontiercloud.component="web" \
-      frontiercloud.runtime="go" frontiercloud.schema-generation="6" \
+      frontiercloud.runtime="go" frontiercloud.schema-generation="7" \
       frontiercloud.release-manifest-version="1" frontiercloud.automatic-tls="1"
 
 RUN apt-get update && \
@@ -38,6 +38,8 @@ COPY --from=build /out/frontiercloud /app/frontiercloud
 COPY --from=build /out/fc /app/operator/fc
 COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
 COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
+COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md
+COPY docs/operator-recovery-sets.md /app/operator/RECOVERY-SETS.md
 COPY --chown=10001:10001 static /app/static
 COPY internal/search/data/LICENSE.pypinyin.txt internal/search/data/LICENSE.opencc.txt /app/licenses/
 RUN chmod -R a+rX /app/static

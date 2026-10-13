@@ -18,12 +18,33 @@ type ContentObservation struct {
 	SHA256     string `json:"sha256"`
 }
 
+type contentReadAdmissionKey struct{}
+
+// WithContentReadAdmission lets an authenticated observation yield between
+// bounded reads while preserving its pinned file and incremental hash state.
+func WithContentReadAdmission(ctx context.Context, admit func() error) context.Context {
+	return context.WithValue(ctx, contentReadAdmissionKey{}, admit)
+}
+
+func admitContentRead(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if admit, ok := ctx.Value(contentReadAdmissionKey{}).(func() error); ok && admit != nil {
+		return admit()
+	}
+	return nil
+}
+
 // ContentAt observes a caller-authorized managed path with one fixed buffer.
 // It is not a frozen version, writer fence, migration or deletion authorization.
 func ContentAt(ctx context.Context, root *os.Root, name string, expected int64) (ContentObservation, error) {
 	var result ContentObservation
 	if root == nil || expected < 0 || name == "." || name == ".." || !utf8.ValidString(name) || len(name) > MaxPathBytes || path.Clean(name) != name || strings.HasPrefix(name, "/") || strings.HasPrefix(name, "../") || strings.ContainsAny(name, "\\\x00:") {
 		return result, os.ErrInvalid
+	}
+	if err := admitContentRead(ctx); err != nil {
+		return result, err
 	}
 	parts := strings.Split(name, "/")
 	if len(parts) > MaxDepth {
@@ -59,7 +80,7 @@ func ContentAt(ctx context.Context, root *os.Root, name string, expected int64) 
 	buffer := make([]byte, 64<<10)
 	remaining := expected
 	for remaining > 0 {
-		if e = ctx.Err(); e != nil {
+		if e = admitContentRead(ctx); e != nil {
 			return result, e
 		}
 		length := int64(len(buffer))

@@ -37,7 +37,7 @@ for _ in $(seq 1 90); do
     sleep 1
 done
 [ "$ready" = true ] || { printf 'Isolated MySQL did not become ready\n' >&2; exit 1; }
-printf 'CREATE DATABASE `%spreserve`; CREATE DATABASE `%sinterrupted`; CREATE DATABASE `%sbusiness`; CREATE DATABASE `%sbindingspreserve`; CREATE DATABASE `%sbindingsinterrupted`;\n' "$prefix" "$prefix" "$prefix" "$prefix" "$prefix" | \
+printf 'CREATE DATABASE `%spreserve`; CREATE DATABASE `%sinterrupted`; CREATE DATABASE `%sbusiness`; CREATE DATABASE `%sbindingspreserve`; CREATE DATABASE `%sbindingsinterrupted`; CREATE DATABASE `%splanspreserve`; CREATE DATABASE `%splansinterrupted`;\n' "$prefix" "$prefix" "$prefix" "$prefix" "$prefix" "$prefix" "$prefix" | \
     docker exec -i "$mysql" sh -c 'MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root'
 # Optional reusable caches affect compiler speed only, never database facts.
 cache=()
@@ -52,7 +52,8 @@ docker run --rm --name "$run-go" --network "$network" --label "frontiercloud.tes
     -e FRONTIERCLOUD_TEST_MYSQL_HOST=mysql -e "FRONTIERCLOUD_TEST_MYSQL_DATABASE=${prefix}business" \
     -e FRONTIERCLOUD_TEST_MYSQL_USER=root \
     -e FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
+    -e FRONTIERCLOUD_TEST_LARGE_MIGRATION="${FRONTIERCLOUD_TEST_LARGE_MIGRATION:-}" \
     -v "$secret_dir:/run/frontiercloud-secrets:ro" -v "$source_root:/src:ro" \
     "${cache[@]}" -w /src golang:1.26.8-bookworm \
-    sh -c 'go test -p=2 -count=1 -race -v ./internal/store/schema && go test -p=2 -count=1 -race -v ./internal/store/business -run "TestMigrationFacts|TestResourceMigration|TestPeerMigration|TestPeerPhysicalInventory|TestPeerExpectedPhysicalInventory|TestPeerRetirementLedger"'
+    sh -c 'go test -p=2 -count=1 -race -v ./internal/store/schema && go test -p=2 -count=1 -race -v ./internal/store/business -run "TestMigrationFacts|TestResourceMigration|TestPeerMigration|TestPeerPhysicalInventory|TestPeerExpectedPhysicalInventory|TestPeerRetirement|TestPeerBackupObservation"'
 printf 'PASS: SQLite/MySQL schema recovery, MySQL task/reservation/lease transactions and migration backup guards; byte transport remains separate acceptance\n'

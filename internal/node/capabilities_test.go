@@ -42,7 +42,7 @@ func TestCapabilitiesLegacyHeartbeatAndInvalidFactsDoNotGrantReadiness(t *testin
 		t.Fatal(err)
 	}
 	features, err := protocol.ReadCapabilities(envelope.Payload)
-	if err != nil || !reflect.DeepEqual(features, protocol.BaselineCapabilities()) {
+	if err != nil || !reflect.DeepEqual(features, protocol.AdvertisedCapabilities()) {
 		t.Fatal(features, err)
 	}
 	pack, err := f.CreatePair(ctx, store.NodeAudit{})
@@ -70,6 +70,9 @@ func TestCapabilitiesLegacyHeartbeatAndInvalidFactsDoNotGrantReadiness(t *testin
 	}
 	if _, err = protocol.NegotiateCapabilities(mr.Summary, "release-manifest-v1"); err == nil {
 		t.Fatal("new release feature inferred for legacy peer")
+	}
+	if _, err = protocol.NegotiateCapabilities(mr.Summary, store.MigrationCapability); err == nil {
+		t.Fatal("migration feature inferred for legacy peer")
 	}
 	fr, err := fd.Nodes().Relationship(ctx, id)
 	if err != nil {

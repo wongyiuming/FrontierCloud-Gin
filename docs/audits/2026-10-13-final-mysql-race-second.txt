@@ -1,0 +1,379 @@
+=== RUN   TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows
+--- PASS: TestEncryptionBatchQueriesAreBoundedAndValidateRealSQLRows (0.17s)
+=== RUN   TestPriorityPlannerExhaustionNeverPartiallyChanges
+--- PASS: TestPriorityPlannerExhaustionNeverPartiallyChanges (0.00s)
+=== RUN   TestPriorityPlannerEqualCollisionAndBoundaries
+--- PASS: TestPriorityPlannerEqualCollisionAndBoundaries (0.00s)
+=== RUN   TestPriorityPlannerRandomMovesAndLargeTies
+--- PASS: TestPriorityPlannerRandomMovesAndLargeTies (4.53s)
+=== RUN   TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay
+    aa_adoption_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_359dc30729b47e7a_1'
+--- FAIL: TestOwnedAdoptionAtomicCurrentRelationshipCompleteSetAndReplay (0.04s)
+=== RUN   TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials
+    aa_maintenance_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_35f66927cdebf4b4_2'
+--- FAIL: TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials (0.00s)
+=== RUN   TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory
+    aa_node_reset_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c2283b5fdb4f4f52_3'
+--- FAIL: TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory (0.00s)
+=== RUN   TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones
+    aa_recording_adoption_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_08ac760f85b78e2e_4'
+--- FAIL: TestRecordingInventoryPinnedAuthorityAtomicAdoptionQuotaAndTombstones (0.00s)
+=== RUN   TestAdminLocalTreeAndSearchUseNativeEncryptionBatches
+    admin_encryption_batch_test.go:61: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_232ad8b28a63a632_5'
+--- FAIL: TestAdminLocalTreeAndSearchUseNativeEncryptionBatches (0.00s)
+=== RUN   TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion
+    backup_export_test.go:19: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_d6d787a8a2ab1fdb_6'
+--- FAIL: TestBusinessBackupExportRepeatableSnapshotDatesAndPrivateTableExclusion (0.00s)
+=== RUN   TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive
+    backup_files_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_2584024dfc8d351a_7'
+--- FAIL: TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive (0.00s)
+=== RUN   TestPeerBackupObservationColdReadDoesNotRepairLease
+    backup_observation_test.go:18: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c617c5b45a97699c_8'
+--- FAIL: TestPeerBackupObservationColdReadDoesNotRepairLease (0.00s)
+=== RUN   TestPeerBackupObservationManifestIdentityStateAndBounds
+    backup_observation_test.go:91: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6a9a37e944b3ec05_9'
+--- FAIL: TestPeerBackupObservationManifestIdentityStateAndBounds (0.00s)
+=== RUN   TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory
+    backup_read_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_5f9897c51f952e8f_10'
+--- FAIL: TestBusinessBackupColdReadSnapshotRetentionCorruptionAndLocalHistory (0.00s)
+=== RUN   TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort
+    backup_test.go:73: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_1b69e791e0d930cd_11'
+--- FAIL: TestBusinessBackupBoundedChunksChecksumReplayRetentionAndAbort (0.00s)
+=== RUN   TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration
+    backup_test.go:196: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_be05872ec918fa6d_12'
+--- FAIL: TestBusinessBackupReadyAuditFailureRollsBackVerifiedGeneration (0.00s)
+=== RUN   TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration
+    catalog_generation_test.go:12: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_8703c3cebd1ca08f_13'
+--- FAIL: TestCatalogGenerationSharedHandlesCommitAndReadOnlyRegistration (0.00s)
+=== RUN   TestCatalogGenerationDoesNotPublishRolledBackAudit
+    catalog_generation_test.go:41: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_08d28d7b6bb6aaa1_14'
+--- FAIL: TestCatalogGenerationDoesNotPublishRolledBackAudit (0.00s)
+=== RUN   TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed
+    encryption_batch_test.go:16: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_61deced8e382fa74_15'
+--- FAIL: TestEncryptionBatchNativeRepositoryPreservesPlainAndFailsClosed (0.00s)
+=== RUN   TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound
+    encryption_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e957e38ad64f2b94_16'
+--- FAIL: TestEncryptedPremasterIdentityIsDurableAndCannotBeRebound (0.00s)
+=== RUN   TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity
+    encryption_test.go:65: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c461de5225db92ff_17'
+--- FAIL: TestEncryptedMetadataAtomicImmutableAndFollowsStableIdentity (0.00s)
+=== RUN   TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths
+    global_delete_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_49e8ed5e17089a9b_18'
+--- FAIL: TestGlobalDeleteDurablePendingConcurrentRefundAndExactPaths (0.00s)
+=== RUN   TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity
+    global_media_test.go:18: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_97feff0997738ed5_19'
+--- FAIL: TestGlobalReservationsFolderAffinityIdempotentFinalizeAndCapacity (0.00s)
+=== RUN   TestGlobalReservationAndFinalizationAuditFailurePreserveFunds
+    global_media_test.go:251: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_7b4b2ce05abf438f_20'
+--- FAIL: TestGlobalReservationAndFinalizationAuditFailurePreserveFunds (0.00s)
+=== RUN   TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity
+    global_rename_test.go:16: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_9d4cff319a9e274f_21'
+--- FAIL: TestGlobalRenameDurableScopeFencesConcurrentCommitAndMetadataIdentity (0.00s)
+=== RUN   TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion
+    karaoke_accounts_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_da771e045c03930f_22'
+--- FAIL: TestKaraokeRegistrationQuotaConcurrencyPasswordAndDurableDeletion (0.00s)
+=== RUN   TestLyricRelationsAtomicReverseAndAutoPreservesExplicit
+    lyrics_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_62ea3ba0ed9bd26f_23'
+--- FAIL: TestLyricRelationsAtomicReverseAndAutoPreservesExplicit (0.00s)
+=== RUN   TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay
+    master_upload_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6f2875a8e8e59ba5_24'
+--- FAIL: TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay (0.00s)
+=== RUN   TestMediaDeleteJournalAndExactMetadataScope
+    media_delete_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_f4d5f72a635380dd_25'
+--- FAIL: TestMediaDeleteJournalAndExactMetadataScope (0.00s)
+=== RUN   TestMediaAuditRetainsLargeBatchEvidence
+    media_mutations_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_82a4954afcad7620_26'
+--- FAIL: TestMediaAuditRetainsLargeBatchEvidence (0.00s)
+=== RUN   TestMediaMutationsAtomicAndCaseSensitive
+    media_mutations_test.go:59: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_2a6b321a4be240ca_27'
+--- FAIL: TestMediaMutationsAtomicAndCaseSensitive (0.00s)
+=== RUN   TestSQLiteAuditFailureRollsBackMutation
+    media_mutations_test.go:105: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_5e85e0ce856bf087_28'
+--- FAIL: TestSQLiteAuditFailureRollsBackMutation (0.00s)
+=== RUN   TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories
+    media_rename_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_fd69e7bec88296b4_29'
+--- FAIL: TestRenameMetadataPreservesIdentityAndReusesOnlyStaleDirectories (0.00s)
+=== RUN   TestUploadPublicationReplayIsAtomicAndIdempotent
+    media_upload_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_8a223f669f3bd5ed_30'
+--- FAIL: TestUploadPublicationReplayIsAtomicAndIdempotent (0.00s)
+=== RUN   TestResourceMigrationAdminRevisionFencesAndBoundedStatus
+    migration_admin_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_33680ce5b4fe9056_31'
+--- FAIL: TestResourceMigrationAdminRevisionFencesAndBoundedStatus (0.00s)
+=== RUN   TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt
+    migration_anchor_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c0b4f295b5616b67_32'
+--- FAIL: TestPeerMigrationAnchorGrantRequiresPublishedTargetAndSourceReceipt (0.00s)
+=== RUN   TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals
+    migration_backup_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_f1d5f576b9419712_33'
+--- FAIL: TestMigrationFactsBlockSnapshotsWithoutDiscardingJournals (0.00s)
+=== RUN   TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity
+    migration_cancel_admission_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_2ff3354d6f8a2a29_34'
+--- FAIL: TestPeerMigrationCancellationDoesNotRequireOrRefundUnadmittedCapacity (0.00s)
+=== RUN   TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain
+    migration_cleanup_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_8b30551b142cc936_35'
+--- FAIL: TestResourceMigrationCleanupRequiresFreshTargetOwnerGraceAndReadDrain (0.00s)
+=== RUN   TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent
+    migration_commit_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_7f438657b7712ab0_36'
+--- FAIL: TestResourceMigrationUnitCommitIsAtomicVerifiedAndIdempotent (0.00s)
+=== RUN   TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit
+    migration_commit_test.go:132: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_9c7623acc5524f6a_37'
+--- FAIL: TestResourceMigrationChangedSourceOrPausedRunnerCannotCommit (0.00s)
+=== RUN   TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain
+    migration_finish_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_0d7ef5b5306a1e0a_38'
+--- FAIL: TestResourceMigrationUnitCleanupRequiresBothBoundReceiptsAndRetainsDrain (0.00s)
+=== RUN   TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce
+    migration_finish_test.go:133: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_24679c29d86dc035_39'
+--- FAIL: TestResourceMigrationUnitCancellationKeepsSourceAndRefundsOnce (0.00s)
+=== RUN   TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts
+    migration_finish_test.go:264: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_1d499a839fe26175_40'
+--- FAIL: TestResourceMigrationCommittedCancellationStillRequiresCleanupReceipts (0.00s)
+=== RUN   TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof
+    migration_finish_test.go:357: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_062a5266f1816258_41'
+--- FAIL: TestResourceMigrationShadowGrantRejectsStaleWrongAndCommittedSourceProof (0.00s)
+=== RUN   TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund
+    migration_peer_cleanup_test.go:12: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_cd8623c8d6721508_42'
+--- FAIL: TestPeerMigrationCleanupGrantIsSourceOnlyBoundAndDoesNotRefund (0.00s)
+=== RUN   TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether
+    migration_peer_delete_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_a869899abb3e92a7_43'
+--- FAIL: TestPeerMigrationMediaDeleteJournalAndQuotaCommitTogether (0.00s)
+=== RUN   TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery
+    migration_peer_delete_test.go:68: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_b19b2e0a29f860ab_44'
+--- FAIL: TestPeerMigrationPublishedShadowDeletionAdmissionCommitAndRecovery (0.00s)
+=== RUN   TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished
+    migration_peer_delete_test.go:221: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_932359f6fc303fb6_45'
+--- FAIL: TestPeerMigrationInterruptedPublicationAbortKeepsReservationAndRejectsPublished (0.00s)
+=== RUN   TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences
+    migration_peer_test.go:87: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_add9755f7a2b28ce_46'
+--- FAIL: TestPeerMigrationTargetIdentityRosterQuotaAndEpochFences (0.00s)
+=== RUN   TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead
+    migration_peer_test.go:198: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_b83d6db0c843cce6_47'
+--- FAIL: TestPeerMigrationSourceDrainBlocksLegacyWritesButPreservesRead (0.00s)
+=== RUN   TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations
+    migration_peer_test.go:235: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_765b20fcad667d06_48'
+--- FAIL: TestPeerMigrationAbortReceiptIsFencedIdempotentAndKeepsReservations (0.00s)
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target
+    migration_peer_test.go:289: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c85d917c113073e8_49'
+=== RUN   TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source
+    migration_peer_test.go:289: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_222a73e665ad79dd_50'
+--- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget (0.00s)
+    --- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/target (0.00s)
+    --- FAIL: TestPeerMigrationUnitCancellationRefundsOnlyUnpublishedTarget/source (0.00s)
+=== RUN   TestPeerMigrationEmptyCancellationReceiptReplay
+    migration_peer_test.go:373: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_1f0a5ab920e48855_51'
+--- FAIL: TestPeerMigrationEmptyCancellationReceiptReplay (0.00s)
+=== RUN   TestPeerMigrationCancellationSourceProofReadIsTaskStateBound
+    migration_peer_test.go:401: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c38ec2c544ea376a_52'
+--- FAIL: TestPeerMigrationCancellationSourceProofReadIsTaskStateBound (0.00s)
+=== RUN   TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission
+    migration_plan_changed_test.go:12: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_b6bdae9c244a54af_53'
+--- FAIL: TestResourceMigrationPagedPlanRechecksMetadataBeforeAdmission (0.00s)
+=== RUN   TestResourceMigrationPagedConflictsCountDistinctImmediateParents
+    migration_plan_conflicts_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_cb5c8c3958804201_54'
+--- FAIL: TestResourceMigrationPagedConflictsCountDistinctImmediateParents (0.00s)
+=== RUN   TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity
+    migration_plan_pages_test.go:19: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_978c1e57f755fe32_55'
+--- FAIL: TestResourceMigrationPagedPlanAdmissionCommitAndManifestIntegrity (0.00s)
+=== RUN   TestPeerMigrationPublicationRollbackAndReplay
+    migration_publish_test.go:11: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_80824a9f9b22d878_56'
+--- FAIL: TestPeerMigrationPublicationRollbackAndReplay (0.00s)
+=== RUN   TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive
+    migration_read_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_30757bbbe6bba818_57'
+--- FAIL: TestPeerMigrationActualReadLeaseBlocksCleanupAndCannotRevive (0.00s)
+=== RUN   TestPeerMigrationConcurrentReadAdmissionAndCleanup
+    migration_read_test.go:58: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_9cb06e8d3c03a564_58'
+--- FAIL: TestPeerMigrationConcurrentReadAdmissionAndCleanup (0.00s)
+=== RUN   TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone
+    migration_recording_delete_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_498bf3264fde4117_59'
+--- FAIL: TestPeerMigrationRecordingCleanupGrantQuotaAndTombstone (0.00s)
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain
+    migration_recording_delete_test.go:74: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_c34ed0991181488a_60'
+=== RUN   TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted
+    migration_recording_delete_test.go:74: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_888916f6822ae581_61'
+--- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota (0.00s)
+    --- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/plain (0.00s)
+    --- FAIL: TestPeerMigrationRecordingShadowCancellationTombstoneAndQuota/encrypted (0.00s)
+=== RUN   TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary
+    migration_recording_publish_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_ba73d2cc22c7f1ab_62'
+--- FAIL: TestPeerMigrationRecordingPublicationRollbackReplayAndAccountBoundary (0.00s)
+=== RUN   TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor
+    migration_recording_publish_test.go:93: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_b6a2defd3894682d_63'
+--- FAIL: TestPeerMigrationRecordingEncryptedReverseKeepsOriginalDescriptor (0.00s)
+=== RUN   TestResourceMigrationRunnerSchedulingFailureAndEpochFence
+    migration_run_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_94df7dfba69386e0_64'
+--- FAIL: TestResourceMigrationRunnerSchedulingFailureAndEpochFence (0.00s)
+=== RUN   TestResourceMigrationPublishedShadowGrantScaling
+    migration_shadow_scale_test.go:93: explicit SQLite bounded SQL-growth and fault-recovery regression
+--- SKIP: TestResourceMigrationPublishedShadowGrantScaling (0.00s)
+=== RUN   TestPeerMigrationPublishedShadowGrantScaling
+    migration_shadow_scale_test.go:199: explicit SQLite bounded SQL-growth and fault-recovery regression
+--- SKIP: TestPeerMigrationPublishedShadowGrantScaling (0.00s)
+=== RUN   TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority
+    migration_source_receipt_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_184a8d4e85cd0dd2_65'
+--- FAIL: TestResourceMigrationSourceReceiptKeepsCleanupScopesAndTargetAuthority (0.00s)
+=== RUN   TestResourceMigrationReadOnlyCatalogAtomicStartAndFences
+    migration_tasks_test.go:142: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6df54e01c6cd5d53_66'
+--- FAIL: TestResourceMigrationReadOnlyCatalogAtomicStartAndFences (0.00s)
+=== RUN   TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof
+    migration_tasks_test.go:258: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_aba72fa0007ed3f5_67'
+--- FAIL: TestResourceMigrationRejectsStalePlansAndMissingPhysicalProof (0.00s)
+=== RUN   TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata
+    migration_tasks_test.go:296: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_eca716acbc561b2e_68'
+--- FAIL: TestResourceMigrationRecordingAndNestedUnitsRetainBusinessMetadata (0.00s)
+=== RUN   TestResourceMigrationTargetsAndSplitOwnershipAreReported
+    migration_tasks_test.go:406: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_cdece26f75b613d5_69'
+--- FAIL: TestResourceMigrationTargetsAndSplitOwnershipAreReported (0.00s)
+=== RUN   TestResourceMigrationConcurrentPlansCannotOversellTarget
+    migration_tasks_test.go:446: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6d640478eeef6d4e_70'
+--- FAIL: TestResourceMigrationConcurrentPlansCannotOversellTarget (0.00s)
+=== RUN   TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask
+    migration_tasks_test.go:501: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6cfa0229edcb7bda_71'
+--- FAIL: TestResourceMigrationUnrelatedLocalMutationDoesNotBlockTask (0.00s)
+=== RUN   TestNodePairConsumptionNonceRevocationAndHeartbeatTransactions
+    node_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_d1d78615e83691d5_72'
+--- FAIL: TestNodePairConsumptionNonceRevocationAndHeartbeatTransactions (0.00s)
+=== RUN   TestNodeAuditFailureRollsBackIssuedPair
+    node_test.go:185: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_43a1535bceff78b2_73'
+--- FAIL: TestNodeAuditFailureRollsBackIssuedPair (0.00s)
+=== RUN   TestObservationConcurrentSummaryNullFailuresAndGrouping
+    observation_test.go:12: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_7a0ab76434ec0af8_74'
+--- FAIL: TestObservationConcurrentSummaryNullFailuresAndGrouping (0.00s)
+=== RUN   TestOwnedRecordingQuotaReplayPhysicalDeletionAndUnusedTicketTombstone
+    owned_recordings_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_bd21f584279aaff6_75'
+--- FAIL: TestOwnedRecordingQuotaReplayPhysicalDeletionAndUnusedTicketTombstone (0.00s)
+=== RUN   TestOwnedStorageQuotaReservationConcurrentPublicationAndCleanup
+    owned_storage_test.go:18: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6ffd794cb3f7f716_76'
+--- FAIL: TestOwnedStorageQuotaReservationConcurrentPublicationAndCleanup (0.00s)
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+    physical_expected_backup_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_0a3f82d72c0d3189_77'
+--- FAIL: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.00s)
+=== RUN   TestExpectedColdBackupFilesReportMissingArtifactAndChunk
+    physical_expected_backup_test.go:76: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_47973792270917af_78'
+--- FAIL: TestExpectedColdBackupFilesReportMissingArtifactAndChunk (0.00s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+    physical_expected_test.go:11: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_f78c88407e35a9c6_79'
+--- FAIL: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.00s)
+=== RUN   TestPeerExpectedPhysicalInventoryExactManagedLookup
+    physical_expected_test.go:73: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e1e1a9d447e40035_80'
+--- FAIL: TestPeerExpectedPhysicalInventoryExactManagedLookup (0.00s)
+=== RUN   TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone
+    physical_inventory_lease_test.go:11: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_7ff2e1f6638ea455_81'
+--- FAIL: TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone (0.00s)
+=== RUN   TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority
+    physical_inventory_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_7b5ac8b51adf5fd1_82'
+--- FAIL: TestPeerPhysicalInventoryClassifiesMetadataWithoutMutatingAuthority (0.00s)
+=== RUN   TestMasterPromotionStableIdentityAllocationAndFollowerCapacity
+    pool_test.go:22: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_dc85e6121abf528a_83'
+--- FAIL: TestMasterPromotionStableIdentityAllocationAndFollowerCapacity (0.00s)
+=== RUN   TestFollowerConfigurationPreservesReservationsAndBackupReady
+    pool_test.go:171: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_42697249bf794bc3_84'
+--- FAIL: TestFollowerConfigurationPreservesReservationsAndBackupReady (0.00s)
+=== RUN   TestPromotionAuditFailureRollsBackRoleCatalogAndAllocation
+    pool_test.go:242: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_88dd9d7e33282e81_85'
+--- FAIL: TestPromotionAuditFailureRollsBackRoleCatalogAndAllocation (0.00s)
+=== RUN   TestPriorityOrderAtomicStaleRollbackAndLegacyValues
+    priority_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_ce568cce25757618_86'
+--- FAIL: TestPriorityOrderAtomicStaleRollbackAndLegacyValues (0.00s)
+=== RUN   TestPriorityCollisionAuditKeepsCompleteLargeBatch
+    priority_test.go:86: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_3f0e9aaef0b6d671_87'
+--- FAIL: TestPriorityCollisionAuditKeepsCompleteLargeBatch (0.00s)
+=== RUN   TestPriorityConcurrentAdminMovesHaveOneWinner
+    priority_test.go:145: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_4ddc15e6feeba8e7_88'
+--- FAIL: TestPriorityConcurrentAdminMovesHaveOneWinner (0.00s)
+=== RUN   TestRecordingEncryptedSnapshotAtomicReceiptAndGlobalNonceTombstones
+    recording_encrypted_test.go:19: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e8a26a7ea136a840_89'
+--- FAIL: TestRecordingEncryptedSnapshotAtomicReceiptAndGlobalNonceTombstones (0.00s)
+=== RUN   TestRecordingQuotaConcurrentFinalizeDeletionAndCrashStates
+    recordings_test.go:17: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_6c94aba641e1816f_90'
+--- FAIL: TestRecordingQuotaConcurrentFinalizeDeletionAndCrashStates (0.00s)
+=== RUN   TestRecoverySampleUsesFileIdentitiesAndExcludesDirectorySortingRows
+    recovery_test.go:10: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e08480af5a10831a_91'
+--- FAIL: TestRecoverySampleUsesFileIdentitiesAndExcludesDirectorySortingRows (0.00s)
+=== RUN   TestMediaRepositoryConcurrentStableIDsAndPlayback
+    repository_test.go:63: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_0aca6838c0147134_92'
+--- FAIL: TestMediaRepositoryConcurrentStableIDsAndPlayback (0.00s)
+=== RUN   TestSQLiteLegacyIDAndAtomicRollback
+--- PASS: TestSQLiteLegacyIDAndAtomicRollback (0.22s)
+=== RUN   TestPeerRetirementMigrationRequiresBoundTerminalHistory
+    retirement_checkpoint_test.go:12: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_3b208cdfefd82966_93'
+--- FAIL: TestPeerRetirementMigrationRequiresBoundTerminalHistory (0.00s)
+=== RUN   TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations
+    retirement_fence_test.go:13: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_61fcb17226bf78d2_94'
+--- FAIL: TestPeerRetirementFencePersistsAndRejectsPreviouslyAdmittedMutations (0.00s)
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true
+    retirement_migrations_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e28eba690c4d1942_95'
+=== RUN   TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false
+    retirement_migrations_test.go:15: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_ddb59d2390180edd_96'
+--- FAIL: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole (0.00s)
+    --- FAIL: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/true (0.00s)
+    --- FAIL: TestPeerRetirementLedgerTerminalCancellationRequiresCompleteRosterAndRole/false (0.00s)
+=== RUN   TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches
+    retirement_plans_test.go:11: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_ad7222d832813122_97'
+--- FAIL: TestPeerRetirementReconcilesPagedPlanHistoryWithoutBlockingPreviewCaches (0.00s)
+=== RUN   TestPeerRetirementFenceCannotBeErasedByIdentityReset
+    retirement_reset_test.go:11: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_a064211a21f4aa82_98'
+--- FAIL: TestPeerRetirementFenceCannotBeErasedByIdentityReset (0.00s)
+=== RUN   TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation
+    retirement_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_cb748226c62d9be9_99'
+--- FAIL: TestPeerRetirementLedgerReportsIndependentBlockersWithoutMutation (0.00s)
+=== RUN   TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification
+    retirement_test.go:67: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_df9cd9c2908f2bc1_100'
+--- FAIL: TestPeerRetirementLedgerEmptySQLStillRequiresPhysicalVerification (0.00s)
+=== RUN   TestPeerRetirementLedgerMasterResourcesAndOfflineMember
+    retirement_test.go:98: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_df8cbfbee73ae0d0_101'
+--- FAIL: TestPeerRetirementLedgerMasterResourcesAndOfflineMember (0.00s)
+=== RUN   TestPeerRetirementLedgerWorkerAndMasterMutationReferences
+    retirement_test.go:146: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_e5f68384fc6f9ab9_102'
+--- FAIL: TestPeerRetirementLedgerWorkerAndMasterMutationReferences (0.00s)
+=== RUN   TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal
+    retirement_test.go:229: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_15232475975384f5_103'
+--- FAIL: TestPeerRetirementLedgerOrphanBindingsAndTerminalTaskIncompleteJournal (0.00s)
+=== RUN   TestDurableIPSecurityConcurrentAccountingPoliciesAndSummary
+    security_test.go:14: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_d3c4af130f0be394_104'
+--- FAIL: TestDurableIPSecurityConcurrentAccountingPoliciesAndSummary (0.00s)
+=== RUN   TestSecurityAuditFailureRollsBackPolicy
+    security_test.go:117: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_50e138fb95f8fd0a_105'
+--- FAIL: TestSecurityAuditFailureRollsBackPolicy (0.00s)
+=== RUN   TestOfflineStorageEndpointPreservesIdentityAndOwnership
+--- PASS: TestOfflineStorageEndpointPreservesIdentityAndOwnership (0.19s)
+=== RUN   TestOfflineMasterStorageRebindGuardsAndPreservesRelationship
+    storage_endpoint_test.go:93: ping MySQL: Error 1049 (42000): Unknown database 'fc_test_54da68998154_9092870cf3b4f265_106'
+--- FAIL: TestOfflineMasterStorageRebindGuardsAndPreservesRelationship (0.00s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	5.339s
+=== RUN   TestResourceMigrationGenerationFourUpgrade
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/preserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/preserve
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_preserve'
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/interrupted
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_interrupted'
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_bindingspreserve'
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_bindingsinterrupted'
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve
+=== RUN   TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_planspreserve'
+=== RUN   TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted
+    resource_migration_test.go:56: ping MySQL: Error 1049 (42000): Unknown database 'fc_schema_54da68998154_plansinterrupted'
+--- FAIL: TestResourceMigrationGenerationFourUpgrade (1.39s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/preserve (0.21s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/interrupted (0.24s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/preserve (0.02s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/interrupted (0.00s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingspreserve (0.20s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/bindingsinterrupted (0.23s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingspreserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/bindingsinterrupted (0.00s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/planspreserve (0.20s)
+    --- PASS: TestResourceMigrationGenerationFourUpgrade/sqlite/plansinterrupted (0.29s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/planspreserve (0.00s)
+    --- FAIL: TestResourceMigrationGenerationFourUpgrade/mysql/plansinterrupted (0.00s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	1.403s
+FAIL

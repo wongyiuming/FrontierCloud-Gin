@@ -22,7 +22,7 @@ func (r *Repository) migrationTaskFinishGrant(ctx context.Context, q queryer, l 
 	} else if t.State != "cleanup_pending" || t.CommittedBytes != t.TotalBytes {
 		return g, store.ErrMigrationState
 	}
-	w, e := r.migrationWork(ctx, q, l.TaskID)
+	w, e := r.migrationHeader(ctx, q, l.TaskID)
 	if e != nil {
 		return g, e
 	}
@@ -30,9 +30,12 @@ func (r *Repository) migrationTaskFinishGrant(ctx context.Context, q queryer, l 
 		return g, store.ErrMigrationState
 	}
 	g.Header = store.MigrationPeerHeader{Format: "frontiercloud-peer-migration", Version: 1, TaskID: l.TaskID, MasterID: t.MasterID, SourceID: t.SourceID, TargetID: t.TargetID, SourceRelationship: *w.Plan.Catalog.Source.RelationshipID, TargetRelationship: *w.Plan.Catalog.Target.RelationshipID, PlanSHA: t.PlanSHA, ObjectCount: t.ObjectCount, Bytes: t.TotalBytes}
-	units := []store.MigrationUnitFinishGrant{}
+	var units store.MigrationSequence
 	var committedBytes, objectCount, totalBytes int64
-	for _, u := range w.Units {
+	for u, err := range r.migrationUnits(ctx, q, l.TaskID) {
+		if err != nil {
+			return g, err
+		}
 		if u.State != "cleaned" && !(cancelling && u.State == "cancelled") {
 			return g, store.ErrMigrationState
 		}
@@ -52,27 +55,32 @@ func (r *Repository) migrationTaskFinishGrant(ctx context.Context, q queryer, l 
 		if e = q.QueryRowContext(ctx, "SELECT source_version FROM migration_units WHERE task_id=? AND unit_id=?", l.TaskID, u.ID).Scan(&unit.UnitVersion); e != nil {
 			return g, e
 		}
-		objects := []store.MigrationPeerObject{}
-		for _, cp := range w.Objects {
+		var objects store.MigrationSequence
+		var unitBytes int64
+		for cp, err := range r.migrationObjects(ctx, q, l.TaskID, u.ID) {
+			if err != nil {
+				return g, err
+			}
 			if cp.UnitID == u.ID {
 				if cp.State != objectState {
 					return g, store.ErrMigrationState
 				}
-				objects = append(objects, store.MigrationPeerObject{Object: cp.Object, Proof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}})
+				if e = objects.Add(cp.Object.ID, store.MigrationPeerObject{Object: cp.Object, Proof: store.MigrationDiskProof{ID: cp.Object.ID, Version: cp.Object.Version, Bytes: cp.Object.Bytes, SHA256: cp.SourceSHA}}); e != nil {
+					return g, e
+				}
+				unitBytes += cp.Object.Bytes
 			}
 		}
-		var unitBytes int64
-		for _, object := range objects {
-			unitBytes += object.Object.Bytes
-		}
-		if int64(len(objects)) != u.ObjectCount || unitBytes != u.Bytes {
+		if objects.Count() != u.ObjectCount || unitBytes != u.Bytes {
 			return g, store.ErrMigrationState
 		}
-		unit.ObjectsSHA, e = store.MigrationUnitObjectsSHA(objects)
+		unit.ObjectsSHA = objects.Sum()
 		if e != nil {
 			return g, e
 		}
-		units = append(units, unit)
+		if e = units.Add(unit.Unit.ID, unit); e != nil {
+			return g, e
+		}
 	}
 	if committedBytes != t.CommittedBytes || objectCount != t.ObjectCount || totalBytes != t.TotalBytes {
 		return g, store.ErrMigrationState
@@ -91,8 +99,8 @@ func (r *Repository) migrationTaskFinishGrant(ctx context.Context, q queryer, l 
 	if reserved != 0 {
 		return g, store.ErrMigrationState
 	}
-	g.UnitCount = int64(len(units))
-	g.UnitsSHA, e = store.MigrationTaskUnitsSHA(units)
+	g.UnitCount = units.Count()
+	g.UnitsSHA = units.Sum()
 	return
 }
 func (r *Repository) MigrationTaskFinishGrant(ctx context.Context, l store.MigrationLease) (g store.MigrationTaskFinishGrant, e error) {

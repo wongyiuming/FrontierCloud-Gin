@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 prefix="fc-go-business-$(date +%s)-$$"
+mysql_fixture_prefix="fc_test_$(date +%s)_$$_"
 network="$prefix-network"
 secrets="$prefix-secrets"
 mysql="$prefix-mysql"
@@ -41,8 +42,10 @@ docker run -d --memory=768m --memory-swap=768m --cpus=1 --name "$mysql" --networ
     -e MYSQL_DATABASE=fc_business -e MYSQL_USER=media_admin \
     -e MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
     -e MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
+    -e MYSQL_ROOT_HOST=% \
     -v "$secrets:/run/frontiercloud-secrets:ro" mysql:8.4.11 --skip-log-bin \
-    --innodb-buffer-pool-size=64M --performance-schema=OFF --max-connections=64 >/dev/null
+    --innodb-buffer-pool-size=64M --performance-schema=OFF --max-connections=64 \
+    --table-open-cache=128 --table-open-cache-instances=1 --table-definition-cache=400 >/dev/null
 docker run -d --memory=128m --cpus=1 --name "$redis" --network "$network" --network-alias redis redis:7.4.11-alpine >/dev/null
 ready=false
 for _ in $(seq 1 90); do
@@ -55,8 +58,9 @@ done
 if [ "$ready" != true ]; then docker logs --tail 40 "$mysql"; exit 1; fi
 docker run --rm "${go_test_budget[@]}" --network "$network" -v "$secrets:/run/frontiercloud-secrets:ro" \
     -e FRONTIERCLOUD_TEST_MYSQL_HOST=mysql -e FRONTIERCLOUD_TEST_MYSQL_DATABASE=fc_business \
-    -e FRONTIERCLOUD_TEST_MYSQL_USER=media_admin \
-    -e FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password \
+    -e FRONTIERCLOUD_TEST_MYSQL_DATABASE_PREFIX="$mysql_fixture_prefix" \
+    -e FRONTIERCLOUD_TEST_MYSQL_USER=root \
+    -e FRONTIERCLOUD_TEST_MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password \
     "$build_image" go test -p=2 -count=1 -v ./internal/store/business
 docker run --rm "${go_test_budget[@]}" --network "$network" -e FRONTIERCLOUD_TEST_REDIS_URL=redis://redis:6379/1 \
     "$build_image" go test -p=2 -count=1 -v ./internal/admin

@@ -4,98 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 func (r *Repository) peerUnitFinishWork(ctx context.Context, q queryer, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant, cancelling bool) (objects []store.MigrationPeerObject, e error) {
-	h, n, state, e := r.checkPeerLease(ctx, q, rel, l)
-	if e != nil {
-		return nil, e
-	}
-	expected, _ := store.MigrationDigest(h)
-	actual, _ := store.MigrationDigest(g.Header)
-	if expected != actual || !nodeHashPattern.MatchString(g.UnitVersion) {
-		return nil, store.ErrMigrationState
-	}
-	if cancelling {
-		if state != "cancelling" || g.Unit.State != "cancelled" || g.Unit.CommittedAt != 0 || g.Unit.CleanupAfter != 0 {
-			return nil, store.ErrMigrationState
+	e = r.validatePeerUnit(ctx, q, rel, l, g, cancelling, func(o store.MigrationPeerObject) error {
+		if len(objects) >= store.MaxMigrationObjects {
+			return store.ErrMigrationInventoryLimit
 		}
-	} else if g.Unit.State != "cleanup_pending" || g.Unit.CommittedAt <= 0 || g.Unit.CleanupAfter < g.Unit.CommittedAt+3600 || g.Unit.CleanupAfter > time.Now().Unix() {
-		return nil, store.ErrMigrationState
-	}
-	var count, total int64
-	if e = q.QueryRowContext(ctx, "SELECT COUNT(*),COALESCE(SUM(expected_bytes),0) FROM migration_storage_journal WHERE task_id=?", l.TaskID).Scan(&count, &total); e != nil {
-		return nil, e
-	}
-	if count != h.ObjectCount || total != h.Bytes {
-		return nil, store.ErrMigrationState
-	}
-	rows, e := q.QueryContext(ctx, "SELECT logical_id,state,sha256 FROM migration_storage_journal WHERE task_id=? AND unit_id=? ORDER BY logical_id", l.TaskID, g.Unit.ID)
-	if e != nil {
-		return nil, e
-	}
-	type row struct{ id, state, sha string }
-	entries := []row{}
-	for rows.Next() {
-		var entry row
-		if e = rows.Scan(&entry.id, &entry.state, &entry.sha); e != nil {
-			rows.Close()
-			return nil, e
-		}
-		entries = append(entries, entry)
-	}
-	e = rows.Err()
-	rows.Close()
-	if e != nil {
-		return nil, e
-	}
-	objects = []store.MigrationPeerObject{}
-	var bytes int64
-	for _, entry := range entries {
-		phase := "published"
-		if n.ID == h.SourceID {
-			phase = "deleted"
-		}
-		if cancelling {
-			phase = "aborted"
-			if n.ID == h.SourceID {
-				phase = "receiving"
-			}
-		}
-		if entry.state != phase && !(cancelling && n.ID == h.TargetID && entry.state == "deleted") {
-			return nil, store.ErrMigrationState
-		}
-		o, e := r.peerObjectBinding(ctx, q, l.TaskID, entry.id)
-		if e != nil {
-			return nil, e
-		}
-		if migrationUnit(o) != g.Unit.ID || o.Parent != g.Unit.Parent || o.Resource != g.Unit.Resource {
-			return nil, store.ErrMigrationState
-		}
-		bytes += o.Bytes
-		objects = append(objects, store.MigrationPeerObject{State: entry.state, Object: o, Proof: store.MigrationDiskProof{ID: o.ID, Version: o.Version, Bytes: o.Bytes, SHA256: entry.sha}})
-		if !cancelling && n.ID == h.SourceID {
-			var reads int
-			if e = q.QueryRowContext(ctx, "SELECT COUNT(*) FROM migration_read_leases WHERE member_id=? AND (logical_id=? OR object_id=?) AND expires_at>?", n.ID, o.ID, o.ObjectID, time.Now().Unix()).Scan(&reads); e != nil {
-				return nil, e
-			}
-			if reads != 0 {
-				return nil, store.ErrMigrationState
-			}
-		}
-	}
-	sha, e := store.MigrationUnitObjectsSHA(objects)
-	if e != nil {
-		return nil, e
-	}
-	if int64(len(objects)) != g.Unit.ObjectCount || bytes != g.Unit.Bytes || sha != g.ObjectsSHA {
-		return nil, store.ErrMigrationState
-	}
-	return objects, nil
+		objects = append(objects, o)
+		return nil
+	})
+	return
 }
+
 func (r *Repository) PeerMigrationUnitFinishWork(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant) (objects []store.MigrationPeerObject, e error) {
 	e = r.write(ctx, func(q queryer) error {
 		var err error
@@ -106,7 +29,7 @@ func (r *Repository) PeerMigrationUnitFinishWork(ctx context.Context, rel string
 }
 func (r *Repository) CompletePeerMigrationUnit(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant, a store.NodeAudit) (receipt store.MigrationUnitFinishReceipt, e error) {
 	e = r.write(ctx, func(q queryer) error {
-		if _, e := r.peerUnitFinishWork(ctx, q, rel, l, g, false); e != nil {
+		if e := r.validatePeerUnit(ctx, q, rel, l, g, false, nil); e != nil {
 			return e
 		}
 		n, e := r.ownedStorageNode(ctx, q, rel)

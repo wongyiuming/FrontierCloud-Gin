@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 type fakeRunner struct {
@@ -68,6 +69,9 @@ func (r *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 	if strings.Contains(call, " compose version ") {
 		return []byte("2.40.3"), nil
 	}
+	if strings.HasSuffix(call, " certificate-status") {
+		return []byte(`{"enabled":false,"controller_running":true,"state":"DISABLED"}`), nil
+	}
 	return nil, nil
 }
 
@@ -84,7 +88,7 @@ func (i *fakeImages) Prove(_ context.Context, target, component, arch string) (r
 	if target == "latest" {
 		target = strings.Repeat("a", 40)
 	}
-	return release.ImageProof{Image: "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64), Revision: target, Platform: "linux/" + arch, Generation: 6}, nil
+	return release.ImageProof{Image: "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64), Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, nil
 }
 
 type fakeEvidence struct{ valid bool }
@@ -122,7 +126,7 @@ func TestInstallPinsOneRevisionAndInfrastructureBeforeStarting(t *testing.T) {
 	if receipt.Revision != strings.Repeat("a", 40) || receipt.ServiceImages["redis"] != "redis@sha256:"+strings.Repeat("b", 64) {
 		t.Fatal(receipt)
 	}
-	if !strings.Contains(r.calls[len(r.calls)-1], "--no-build --pull never --wait") {
+	if !strings.Contains(r.calls[len(r.calls)-3], "--no-build --pull never --wait") || !strings.HasSuffix(r.calls[len(r.calls)-1], " certificate-ready") {
 		t.Fatal(r.calls)
 	}
 	opened, got, e := Open(d.Directory)

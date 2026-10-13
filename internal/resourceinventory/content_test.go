@@ -112,3 +112,70 @@ func TestContentObservationActualBytesPathsAndMutation(t *testing.T) {
 		t.Fatal("empty observation", empty, e)
 	}
 }
+
+func TestContentReadAdmissionPreservesHashAndCancelsWhileWaiting(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "resume-pinned-hash", true: "cancel-wait"}[cancelled], func(t *testing.T) {
+			dir := t.TempDir()
+			payload := bytes.Repeat([]byte("bounded native observation"), 12000)
+			if err := os.WriteFile(filepath.Join(dir, "fixture.bin"), payload, 0600); err != nil {
+				t.Fatal(err)
+			}
+			root, err := os.OpenRoot(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			reached, resume := make(chan struct{}), make(chan struct{})
+			calls := 0
+			ctx = WithContentReadAdmission(ctx, func() error {
+				calls++
+				if calls == 3 {
+					close(reached)
+					select {
+					case <-resume:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+				return nil
+			})
+			done := make(chan error, 1)
+			go func() {
+				observed, err := ContentAt(ctx, root, "fixture.bin", int64(len(payload)))
+				if err == nil {
+					sha := sha256.Sum256(payload)
+					if observed.Bytes != int64(len(payload)) || observed.SHA256 != hex.EncodeToString(sha[:]) {
+						err = errors.New("resumed observation lost the original hash prefix")
+					}
+				}
+				done <- err
+			}()
+			select {
+			case <-reached:
+			case <-time.After(time.Second):
+				t.Fatal("read admission did not stop between chunks")
+			}
+			select {
+			case <-done:
+				t.Fatal("observation completed while admission was blocked")
+			default:
+			}
+			if cancelled {
+				cancel()
+			} else {
+				close(resume)
+			}
+			select {
+			case err := <-done:
+				if cancelled && !errors.Is(err, context.Canceled) || !cancelled && err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("blocked read did not resume/cancel promptly")
+			}
+		})
+	}
+}

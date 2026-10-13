@@ -14,7 +14,7 @@ import (
 )
 
 func validPeerHeader(h store.MigrationPeerHeader) bool {
-	return h.Format == "frontiercloud-peer-migration" && h.Version == 1 && nodeIDPattern.MatchString(h.TaskID) && nodeIDPattern.MatchString(h.MasterID) && nodeIDPattern.MatchString(h.SourceID) && nodeIDPattern.MatchString(h.TargetID) && h.SourceID != h.TargetID && h.SourceID != h.MasterID && h.TargetID != h.MasterID && nodeIDPattern.MatchString(h.SourceRelationship) && nodeIDPattern.MatchString(h.TargetRelationship) && h.SourceRelationship != h.TargetRelationship && nodeHashPattern.MatchString(h.PlanSHA) && h.ObjectCount >= 0 && h.ObjectCount <= store.MaxMigrationObjects && h.Bytes >= 0 && h.Bytes <= store.MaxStorageAllocation && ((h.ObjectCount == 0) == (h.Bytes == 0))
+	return h.Format == "frontiercloud-peer-migration" && h.Version == 1 && nodeIDPattern.MatchString(h.TaskID) && nodeIDPattern.MatchString(h.MasterID) && nodeIDPattern.MatchString(h.SourceID) && nodeIDPattern.MatchString(h.TargetID) && h.SourceID != h.TargetID && h.SourceID != h.MasterID && h.TargetID != h.MasterID && nodeIDPattern.MatchString(h.SourceRelationship) && nodeIDPattern.MatchString(h.TargetRelationship) && h.SourceRelationship != h.TargetRelationship && nodeHashPattern.MatchString(h.PlanSHA) && h.ObjectCount >= 0 && h.ObjectCount <= h.Bytes && h.Bytes >= 0 && h.Bytes <= store.MaxStorageAllocation && ((h.ObjectCount == 0) == (h.Bytes == 0))
 }
 func (r *Repository) peerIdentity(ctx context.Context, q queryer, relationship string, h store.MigrationPeerHeader) (store.NodeIdentity, error) {
 	n, e := r.ownedStorageNode(ctx, q, relationship)
@@ -34,20 +34,28 @@ func peerLeaseValid(l store.MigrationLease, id string) bool {
 	now := time.Now().Unix()
 	return l.TaskID == id && nodeIDPattern.MatchString(l.RunnerID) && l.Epoch > 0 && l.ExpiresAt > now && l.ExpiresAt <= now+90
 }
-func (r *Repository) peerHeader(ctx context.Context, q queryer, id string) (store.MigrationPeerHeader, string, error) {
+
+// CancellationOnly is immutable local admission history, distinct from mutable
+// diagnostic error_code. It is never part of the Master's shared header digest.
+type peerMigrationRecord struct {
+	store.MigrationPeerHeader
+	CancellationOnly bool `json:"cancellation_only,omitempty"`
+}
+
+func (r *Repository) peerRecord(ctx context.Context, q queryer, id string) (peerMigrationRecord, string, error) {
 	var raw []byte
 	var state string
-	e := q.QueryRowContext(ctx, "SELECT plan,state FROM migration_tasks WHERE task_id=?"+r.lock(), id).Scan(&raw, &state)
+	e := q.QueryRowContext(ctx, "SELECT SUBSTR(plan,1,8193),state FROM migration_tasks WHERE task_id=?"+r.lock(), id).Scan(&raw, &state)
 	if e != nil {
-		return store.MigrationPeerHeader{}, state, e
+		return peerMigrationRecord{}, state, e
 	}
 	if len(raw) > 8192 {
-		return store.MigrationPeerHeader{}, state, store.ErrMigrationState
+		return peerMigrationRecord{}, state, store.ErrMigrationState
 	}
-	var h store.MigrationPeerHeader
+	var h peerMigrationRecord
 	d := json.NewDecoder(strings.NewReader(string(raw)))
 	d.DisallowUnknownFields()
-	if d.Decode(&h) != nil || !validPeerHeader(h) || h.TaskID != id {
+	if d.Decode(&h) != nil || !validPeerHeader(h.MigrationPeerHeader) || h.TaskID != id {
 		return h, state, store.ErrMigrationState
 	}
 	var extra any
@@ -55,6 +63,10 @@ func (r *Repository) peerHeader(ctx context.Context, q queryer, id string) (stor
 		return h, state, store.ErrMigrationState
 	}
 	return h, state, nil
+}
+func (r *Repository) peerHeader(ctx context.Context, q queryer, id string) (store.MigrationPeerHeader, string, error) {
+	h, state, e := r.peerRecord(ctx, q, id)
+	return h.MigrationPeerHeader, state, e
 }
 func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship string, h store.MigrationPeerHeader, l store.MigrationLease, state string, free int64, a store.NodeAudit) error {
 	if !nodeIDPattern.MatchString(relationship) || !validPeerHeader(h) || !peerLeaseValid(l, h.TaskID) || (state != "queued" && state != "cancelling") || free < 0 {
@@ -72,10 +84,10 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 		if e != nil {
 			return e
 		}
-		old, phase, e := r.peerHeader(ctx, q, h.TaskID)
+		old, phase, e := r.peerRecord(ctx, q, h.TaskID)
 		if e == nil {
-			previous, _ := json.Marshal(old)
-			if string(previous) != string(raw) || phase == "completed" || phase == "cancelled" && state != "cancelling" {
+			previous, _ := json.Marshal(old.MigrationPeerHeader)
+			if string(previous) != string(raw) || phase == "completed" || (phase == "cancelled" || phase == "cancelling" || old.CancellationOnly) && state != "cancelling" {
 				return store.ErrMigrationState
 			}
 			var runner string
@@ -117,7 +129,7 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 			if member.Reserved != 0 {
 				return store.ErrMigrationState
 			}
-		} else {
+		} else if state != "cancelling" {
 			draining, e := r.migrationDraining(ctx, q, n.ID)
 			if e != nil {
 				return e
@@ -126,8 +138,16 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 				return store.ErrStorageCapacity
 			}
 		}
+		cancelOnly := n.ID == h.TargetID && state == "cancelling"
+		recordRaw := raw
+		if cancelOnly {
+			recordRaw, e = json.Marshal(peerMigrationRecord{MigrationPeerHeader: h, CancellationOnly: true})
+			if e != nil {
+				return e
+			}
+		}
 		now := time.Now().Unix()
-		if _, e = q.ExecContext(ctx, "INSERT INTO migration_tasks(task_id,master_id,source_id,target_id,source_relationship,target_relationship,plan_sha256,plan,state,object_count,total_bytes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", h.TaskID, h.MasterID, h.SourceID, h.TargetID, h.SourceRelationship, h.TargetRelationship, h.PlanSHA, string(raw), state, h.ObjectCount, h.Bytes, now, now); e != nil {
+		if _, e = q.ExecContext(ctx, "INSERT INTO migration_tasks(task_id,master_id,source_id,target_id,source_relationship,target_relationship,plan_sha256,plan,state,object_count,total_bytes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", h.TaskID, h.MasterID, h.SourceID, h.TargetID, h.SourceRelationship, h.TargetRelationship, h.PlanSHA, string(recordRaw), state, h.ObjectCount, h.Bytes, now, now); e != nil {
 			return e
 		}
 		if _, e = q.ExecContext(ctx, "INSERT INTO migration_runners(task_id,runner_id,epoch,expires_at) VALUES (?,?,?,?)", h.TaskID, l.RunnerID, l.Epoch, l.ExpiresAt); e != nil {
@@ -138,10 +158,14 @@ func (r *Repository) RegisterPeerMigration(ctx context.Context, relationship str
 				return e
 			}
 		} else {
-			if _, e = q.ExecContext(ctx, "INSERT INTO migration_capacity(task_id,member_id,reserved_bytes,updated_at) VALUES (?,?,?,?)", h.TaskID, n.ID, h.Bytes, now); e != nil {
+			reserved := h.Bytes
+			if cancelOnly {
+				reserved = 0
+			}
+			if _, e = q.ExecContext(ctx, "INSERT INTO migration_capacity(task_id,member_id,reserved_bytes,updated_at) VALUES (?,?,?,?)", h.TaskID, n.ID, reserved, now); e != nil {
 				return e
 			}
-			if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", h.Bytes, free, now, n.ID); e != nil {
+			if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", reserved, free, now, n.ID); e != nil {
 				return e
 			}
 		}
@@ -413,7 +437,7 @@ func (r *Repository) FencePeerMigration(ctx context.Context, relationship, task 
 		if e != nil {
 			return e
 		}
-		if phase == "completed" || phase == "cancelled" {
+		if phase == "completed" || phase == "cancelled" || phase == "cancelling" && state != "cancelling" {
 			return store.ErrMigrationState
 		}
 		if _, e = r.peerIdentity(ctx, q, relationship, h); e != nil {

@@ -1,0 +1,4 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	1.663s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.024s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	8.664s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.455s

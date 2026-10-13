@@ -123,7 +123,10 @@ func command(arguments []string) error {
 		}
 		return operatorStatusCommand(os.Stdout)
 	case "recovery-verify":
-		if len(arguments)!=1{return errors.New("recovery-verify accepts no arguments")};return recoveryVerifyCommand(os.Stdout)
+		if len(arguments) != 1 {
+			return errors.New("recovery-verify accepts no arguments")
+		}
+		return recoveryVerifyCommand(os.Stdout)
 	case "storage-endpoint", "storage-rebind":
 		return storageEndpointCommand(name, arguments[1:], os.Stdout)
 	case "delete-storage-recording":
@@ -323,11 +326,6 @@ func serve() error {
 			defer func() { stop(); conn.Close(); <-stunDone }()
 		}
 	}
-	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
-	if err != nil {
-		return err
-	}
-	defer closeHTTP()
 	admission, cancelAdmission := context.WithTimeout(shutdown, 15*time.Second)
 	err = identity.RecordNativeRuntime(admission, settings.DataRoot)
 	if err == nil && settings.DeploymentMode == config.DeploymentStorage {
@@ -337,6 +335,13 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	// Native inventory pins the completed admission records before serving any
+	// HTTP requests, including retirement observations.
+	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
+	if err != nil {
+		return err
+	}
+	defer closeHTTP()
 	server := &http.Server{
 		Addr:              settings.HTTPAddress,
 		Handler:           runtime.Handler(handler),

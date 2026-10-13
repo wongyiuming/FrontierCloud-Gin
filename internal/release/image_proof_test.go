@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -13,7 +15,7 @@ func imageProofFixture(t *testing.T, mutate func(map[string]any)) (*RegistryClie
 	t.Helper()
 	revision := strings.Repeat("a", 40)
 	configuration := map[string]any{"os": "linux", "architecture": "amd64", "config": map[string]any{"Labels": map[string]string{
-		"frontiercloud.revision": revision, "frontiercloud.runtime": "go", "frontiercloud.component": "web", "frontiercloud.schema-generation": "6", "frontiercloud.release-manifest-version": "1", "frontiercloud.automatic-tls": "1", "org.opencontainers.image.source": ImageSource, "org.opencontainers.image.revision": revision,
+		"frontiercloud.revision": revision, "frontiercloud.runtime": "go", "frontiercloud.component": "web", "frontiercloud.schema-generation": strconv.Itoa(migrations.Generation), "frontiercloud.release-manifest-version": "1", "frontiercloud.automatic-tls": "1", "org.opencontainers.image.source": ImageSource, "org.opencontainers.image.revision": revision,
 	}}}
 	if mutate != nil {
 		mutate(configuration)
@@ -38,7 +40,7 @@ func TestImageProofBindsConfigProvenanceAndImmutableRuntime(t *testing.T) {
 	r, revision, digest := imageProofFixture(t, nil)
 	for _, target := range []string{"latest", revision} {
 		p, e := r.Prove(context.Background(), target, "web", "amd64")
-		if e != nil || p.Revision != revision || p.Image != "ghcr.io/wongyiuming/frontiercloud-gin-web@"+digest || p.Generation != 6 {
+		if e != nil || p.Revision != revision || p.Image != "ghcr.io/wongyiuming/frontiercloud-gin-web@"+digest || p.Generation != migrations.Generation {
 			t.Fatal(p, e)
 		}
 	}

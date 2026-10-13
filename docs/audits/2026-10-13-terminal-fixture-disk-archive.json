@@ -1,0 +1,196 @@
+{
+  "terminal_fixture_archives": [
+    {
+      "source": "/tmp/fc-native-matrix-m5609xnd",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-m5609xnd",
+      "project": "fc-matrix-e30b9faa-77d7-4ce0-b16b-34cd7022d337-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-12-native-sqlite-dd-second/evidence.json",
+      "files": 463,
+      "bytes": 439967937,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-5uun3lza",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-5uun3lza",
+      "project": "fc-matrix-56e7785f-8f9c-4082-9623-f7c5daa5e12c-dd-go-mysql",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-mysql-dd-refusal/evidence.json",
+      "files": 263,
+      "bytes": 167493500,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-q3phyd7v",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-q3phyd7v",
+      "project": "fc-matrix-4c4fdd92-a03f-4cdc-ad2d-21f52692e6f3-dr-go-mysql",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-mysql-dr-cutover/evidence.json",
+      "files": 465,
+      "bytes": 446750667,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-u0_vmat9",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-u0_vmat9",
+      "project": "fc-matrix-23582355-c87d-4e56-a596-061723bc29b0-rd-go-mysql",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-mysql-rd-cutover/evidence.json",
+      "files": 465,
+      "bytes": 446742434,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-qhwnnd3_",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-qhwnnd3_",
+      "project": "fc-matrix-bd4929f0-4341-4887-8760-d0dadfa5959b-rr-go-mysql",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-mysql-rr-cutover/evidence.json",
+      "files": 465,
+      "bytes": 446758732,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-sljp0ood",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-sljp0ood",
+      "project": "fc-matrix-4b9a83d2-af05-48cb-920b-8204b1c06549-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-sqlite-dd-cleanup-retire/evidence.json",
+      "files": 495,
+      "bytes": 449064841,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-xpkhmvcz",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-xpkhmvcz",
+      "project": "fc-matrix-57f9c124-7d51-4559-bcc5-1a0f74f7c9b9-rr-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-audio-final-go-sqlite-rr-cutover/evidence.json",
+      "files": 466,
+      "bytes": 447721466,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-bgq4if7o",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-bgq4if7o",
+      "project": "fc-matrix-04096846-de33-40df-aa29-3d4ddff56c2e-dd-go-mysql",
+      "evidence": "docs/audits/2026-10-13-final-native-go-mysql-dd-traffic/evidence.json",
+      "files": 462,
+      "bytes": 439097095,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-smexwhgg",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-smexwhgg",
+      "project": "fc-matrix-5985aac8-1f65-480d-a1c5-42ffd9ff44ed-dr-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-final-native-go-sqlite-dr-cutover/evidence.json",
+      "files": 463,
+      "bytes": 440141536,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-4h0jfvzq",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-4h0jfvzq",
+      "project": "fc-matrix-ef7760a6-2fe1-47f7-91a5-f23d66eee201-rd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-final-native-go-sqlite-rd-cutover/evidence.json",
+      "files": 190,
+      "bytes": 32256518,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-n2cu8wzz",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-n2cu8wzz",
+      "project": "fc-matrix-853f9a22-8a5a-42f7-a69c-5f2902c9f4fd-rd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-audio-sqlite-rd/evidence.json",
+      "files": 293,
+      "bytes": 171574586,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-_3_0xeen",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-_3_0xeen",
+      "project": "fc-matrix-bc9bd9e9-e03b-4a28-82e0-95c17528317a-rd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-audio-sqlite-rd-second/evidence.json",
+      "files": 466,
+      "bytes": 447713188,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-orn3pqjz",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-orn3pqjz",
+      "project": "fc-matrix-eea11967-12ae-4311-9276-4b9ba3b9b089-dr-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-direct-proof-sqlite-dr/evidence.json",
+      "files": 463,
+      "bytes": 440137399,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-g6vzdgqw",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-g6vzdgqw",
+      "project": "fc-matrix-e42f2633-1161-4f2f-a0e5-a5624de3c050-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-direct-refusal-sqlite-dd/evidence.json",
+      "files": 264,
+      "bytes": 168410959,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-jetb62bt",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-jetb62bt",
+      "project": "fc-matrix-2293aad0-73fe-415e-bc82-f6f2d4718934-dd-go-mysql",
+      "evidence": "docs/audits/2026-10-13-native-direct-traffic-mysql-dd/evidence.json",
+      "files": 462,
+      "bytes": 439187125,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-cq4ss0ex",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-cq4ss0ex",
+      "project": "fc-matrix-db8c22f7-1fdd-4414-aa96-e2e82a631c04-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-direct-traffic-sqlite-dd/evidence.json",
+      "files": 463,
+      "bytes": 440145591,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-2ongto1v",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-2ongto1v",
+      "project": "fc-matrix-844fd7a0-2cbe-4460-855e-e8215cbf3ada-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd/evidence.json",
+      "files": 421,
+      "bytes": 172040160,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-629kfnpr",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-629kfnpr",
+      "project": "fc-matrix-841bff78-0376-4ebb-b1bb-3a2013eb3146-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-second/evidence.json",
+      "files": 463,
+      "bytes": 440059497,
+      "sha256_verified": true,
+      "original_path_retained": true
+    },
+    {
+      "source": "/tmp/fc-native-matrix-piuyvz7_",
+      "archive": "/home/wyium/fc-operations-20261012-01a13082/retained-acceptance/fc-native-matrix-piuyvz7_",
+      "project": "fc-matrix-020e7004-5f4e-4d9d-b09e-bba2af0ebe91-dd-go-sqlite",
+      "evidence": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire/evidence.json",
+      "files": 202,
+      "bytes": 33666376,
+      "sha256_verified": true,
+      "original_path_retained": true
+    }
+  ],
+  "data_preserved": true,
+  "unrelated_containers_modified": false
+}

@@ -31,7 +31,7 @@ func (r *Repository) preparePeerMigrationCancellation(ctx context.Context, rel s
 		u := g.Unit.Unit
 		o := g.Object
 		proof := g.SourceProof
-		if state != "cancelling" || n.ID != h.TargetID || expected != actual || u.State != "cancelled" || u.CommittedAt != 0 || u.CleanupAfter != 0 || !nodeHashPattern.MatchString(g.Unit.UnitVersion) || o.Resource != "media" && (o.Resource != "recording" || o.Recording == nil) || u.ID != migrationUnit(o) || u.Resource != o.Resource || u.Parent != o.Parent || !validPeerObject(h, store.MigrationPeerObject{Object: o, Proof: proof.MigrationDiskProof}) {
+		if state != "cancelling" || n.ID != h.TargetID || expected != actual || u.State != "cancelled" || u.CommittedAt != 0 || u.CleanupAfter != 0 || !nodeHashPattern.MatchString(g.Unit.UnitVersion) || !nodeHashPattern.MatchString(g.Unit.ObjectsSHA) || u.ObjectCount <= 0 || u.Bytes <= 0 || o.Resource != "media" && (o.Resource != "recording" || o.Recording == nil) || u.ID != migrationUnit(o) || u.Resource != o.Resource || u.Parent != o.Parent || !validPeerObject(h, store.MigrationPeerObject{Object: o, Proof: proof.MigrationDiskProof}) {
 			return store.ErrMigrationState
 		}
 		bound, e := r.peerObjectBinding(ctx, q, l.TaskID, o.ID)
@@ -46,52 +46,53 @@ func (r *Repository) preparePeerMigrationCancellation(ctx context.Context, rel s
 		if e != nil || expected != actual {
 			return store.ErrMigrationState
 		}
-		var rosterCount, rosterBytes int64
-		if e = q.QueryRowContext(ctx, "SELECT COUNT(*),COALESCE(SUM(expected_bytes),0) FROM migration_storage_journal WHERE task_id=?", l.TaskID).Scan(&rosterCount, &rosterBytes); e != nil {
-			return e
-		}
-		if rosterCount != h.ObjectCount || rosterBytes != h.Bytes {
-			return store.ErrMigrationState
-		}
-		rows, e := q.QueryContext(ctx, "SELECT logical_id,sha256 FROM migration_storage_journal WHERE task_id=? AND unit_id=? ORDER BY logical_id", l.TaskID, u.ID)
-		if e != nil {
-			return e
-		}
-		type entry struct{ id, sha string }
-		entries := []entry{}
-		for rows.Next() {
-			var row entry
-			if e = rows.Scan(&row.id, &row.sha); e != nil {
-				rows.Close()
-				return e
-			}
-			entries = append(entries, row)
-		}
-		e = rows.Err()
-		rows.Close()
-		if e != nil {
-			return e
-		}
-		objects := []store.MigrationPeerObject{}
-		var total int64
-		for _, entry := range entries {
-			object, e := r.peerObjectBinding(ctx, q, l.TaskID, entry.id)
-			if e != nil {
-				return e
-			}
-			if migrationUnit(object) != u.ID || object.Parent != u.Parent || object.Resource != u.Resource {
+		// A complete sorted roster is verified once before persisting its root.
+		// Replays on a fresh process use only this durable fact plus the exact
+		// object binding/current phase/proof below. Legacy unit versions keep
+		// the full validation path. Final unit cancellation always scans all.
+		var unitState, unitVersion, unitResource, unitParent string
+		var count, bytes, committed, after int64
+		e = q.QueryRowContext(ctx, "SELECT state,source_version,object_count,total_bytes,committed_at,cleanup_after,resource_kind,parent_path FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), l.TaskID, u.ID).Scan(&unitState, &unitVersion, &count, &bytes, &committed, &after, &unitResource, &unitParent)
+		unitExists := e == nil
+		if unitExists {
+			if unitState != "pending" || unitVersion != g.Unit.UnitVersion || count != u.ObjectCount || bytes != u.Bytes || committed != 0 || after != 0 || unitResource != u.Resource || unitParent != u.Parent {
 				return store.ErrMigrationState
 			}
-			total += object.Bytes
-			objects = append(objects, store.MigrationPeerObject{Object: object, Proof: store.MigrationDiskProof{ID: object.ID, Version: object.Version, Bytes: object.Bytes, SHA256: entry.sha}})
-		}
-		sha, e := store.MigrationUnitObjectsSHA(objects)
-		if e != nil {
+		} else if !errors.Is(e, sql.ErrNoRows) {
 			return e
 		}
-		if int64(len(objects)) != u.ObjectCount || total != u.Bytes || sha != g.Unit.ObjectsSHA {
-			return store.ErrMigrationState
+		sealedRoster := unitExists && unitVersion == g.Unit.ObjectsSHA
+		if !sealedRoster {
+			var rosterCount, rosterBytes int64
+			if e = q.QueryRowContext(ctx, "SELECT COUNT(*),COALESCE(SUM(expected_bytes),0) FROM migration_storage_journal WHERE task_id=?", l.TaskID).Scan(&rosterCount, &rosterBytes); e != nil {
+				return e
+			}
+			if rosterCount != h.ObjectCount || rosterBytes != h.Bytes {
+				return store.ErrMigrationState
+			}
+
+			var objects store.MigrationSequence
+			var total int64
+			for object, err := range r.peerObjects(ctx, q, l.TaskID, u.ID) {
+				if err != nil {
+					return err
+				}
+				if object.Object.Parent != u.Parent || object.Object.Resource != u.Resource {
+					return store.ErrMigrationState
+				}
+				total += object.Object.Bytes
+				object.State = ""
+				object.Header = store.MigrationPeerHeader{}
+				if e = objects.Add(object.Object.ID, object); e != nil {
+					return e
+				}
+			}
+			if objects.Count() != u.ObjectCount || total != u.Bytes || objects.Sum() != g.Unit.ObjectsSHA {
+				return store.ErrMigrationState
+			}
+
 		}
+
 		var phase, hash, version string
 		var size int64
 		if e = q.QueryRowContext(ctx, "SELECT state,sha256,source_version,expected_bytes FROM migration_storage_journal WHERE task_id=? AND logical_id=?"+r.lock(), l.TaskID, o.ID).Scan(&phase, &hash, &version, &size); e != nil {
@@ -104,16 +105,7 @@ func (r *Repository) preparePeerMigrationCancellation(ctx context.Context, rel s
 		if phase == initial && (proof.VerifiedAt < now-30 || proof.VerifiedAt > now+30) {
 			return store.ErrMigrationState
 		}
-		var unitState, unitVersion string
-		var count, bytes, committed, after int64
-		e = q.QueryRowContext(ctx, "SELECT state,source_version,object_count,total_bytes,committed_at,cleanup_after FROM migration_units WHERE task_id=? AND unit_id=?"+r.lock(), l.TaskID, u.ID).Scan(&unitState, &unitVersion, &count, &bytes, &committed, &after)
-		if e == nil {
-			if unitState != "pending" || unitVersion != g.Unit.UnitVersion || count != u.ObjectCount || bytes != u.Bytes || committed != 0 || after != 0 {
-				return store.ErrMigrationState
-			}
-		} else if !errors.Is(e, sql.ErrNoRows) {
-			return e
-		} else {
+		if !unitExists {
 			if phase != initial {
 				return store.ErrMigrationState
 			}

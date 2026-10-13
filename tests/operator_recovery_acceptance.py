@@ -227,6 +227,63 @@ def run(args):
         media_id = probe(request, payload)
         assert admin_probe(directory, 'set')['priority'] == 77
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
+        if args.upgrade_test_binary:
+            # This adapter exercises actual native processes, Compose, archives
+            # and writes. Only public-release proof is mapped to private image
+            # IDs by the opt-in Go test; no production command has that bypass.
+            target_image = json.loads(command(['docker', 'image', 'inspect', args.upgrade_image]))[0]['Id']
+            assert target_image != web_image, 'upgrade acceptance requires a distinct target image'
+            spec = directory / 'upgrade-fixture.json'
+            spec.write_text(json.dumps({'directory': str(directory), 'web_image_id': web_image,
+                                        'target_web_image_id': target_image, 'edge_image_id': edge_image,
+                                        'fail_prepare': args.upgrade_failure,
+                                        'expected_source_generation': args.expected_source_generation}))
+            completed = subprocess.run([str(args.upgrade_test_binary), '-test.run',
+                                        '^TestOperatorUpgradeComposeAcceptance$', '-test.v'],
+                                       env={**os.environ, 'FRONTIERCLOUD_TEST_OPERATOR_UPGRADE': str(spec)},
+                                       capture_output=True, timeout=800)
+            transcript = directory / 'upgrade-test.log'
+            transcript.write_bytes(completed.stdout + completed.stderr)
+            os.chmod(transcript, 0o600)
+            if completed.returncode:
+                raise AssertionError('native upgrade failed; private transcript retained at ' + str(transcript))
+            upgrade = json.loads((directory / 'upgrade-evidence.json').read_text())
+            result['upgrade'] = upgrade
+            if args.upgrade_failure:
+                assert upgrade['phase'] == 'failed_fenced'
+                assert (data / '.frontiercloud-native-maintenance').exists()
+                checked = json.loads(command([str(args.binary), 'backup', 'verify', '--file',
+                                              str(directory / 'pre-upgrade-recovery.tar'),
+                                              '--sha256', upgrade['backup_sha256']], timeout=700))
+                assert checked['integrity_verified']
+                state_output = compose(directory, 'ps', '--all', '--format', 'json').decode()
+                try:
+                    states = json.loads(state_output)
+                except json.JSONDecodeError:
+                    states = [json.loads(line) for line in state_output.splitlines() if line.strip()]
+                if isinstance(states, dict):
+                    states = [states]
+                assert all(item['State'] in ('exited', 'created', 'dead')
+                           for item in states if item['Service'] != 'mysql')
+                result.update(status='passed', scope='actual native upgrade preparation failure and retained recovery point',
+                              no_production_operation=True, database=args.database)
+                success = True
+                return result
+            assert upgrade['phase'] == 'opened' and upgrade['native_managed_business_reads']
+            wait_ready(base)
+            upgraded_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
+            assert upgraded_fact['node_id'] == before_fact['node_id']
+            assert probe(request, payload) == media_id
+            assert admin_probe(directory, 'verify')['priority'] == 77
+            upgraded_web = compose(directory, 'ps', '--quiet', 'web').decode().strip()
+            actual = json.loads(command(['docker', 'inspect', upgraded_web]))[0]
+            assert actual['Image'] == target_image
+            assert actual['HostConfig']['NanoCpus'] == 1000000000
+            assert actual['HostConfig']['Memory'] == 512 * 1024 * 1024
+            assert actual['HostConfig']['MemorySwap'] == 512 * 1024 * 1024
+            upgrade['actual_image_switch'] = True
+            upgrade['http_range_and_identity_preserved'] = True
+            upgrade['post_business_cpu_samples'] = idle_cpu(upgraded_web)
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
                                      '--freeze', '--output', str(archive),
@@ -280,6 +337,21 @@ def run(args):
                     compose(location, 'rm', '-f')
                 except RuntimeError:
                     pass
+        # Only detach empty networks bearing the exact born-project label.
+        # Keep every volume, archive, and bind directory on either outcome.
+        for born_project in (project, restored_project):
+            if not born_project.startswith('fc-ops-recovery-'):
+                continue
+            try:
+                networks = command(['docker', 'network', 'ls', '--quiet', '--filter',
+                                    'label=com.docker.compose.project=' + born_project]).decode().split()
+                for network in networks:
+                    detail = json.loads(command(['docker', 'network', 'inspect', network]))[0]
+                    if (detail.get('Labels', {}).get('com.docker.compose.project') == born_project
+                            and not detail.get('Containers')):
+                        command(['docker', 'network', 'rm', network])
+            except RuntimeError:
+                pass
         if not success:
             print('FAILED: private recovery material retained at ' + str(directory))
 
@@ -290,9 +362,17 @@ if __name__ == '__main__':
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--image', required=True)
     parser.add_argument('--edge-image', required=True)
+    parser.add_argument('--upgrade-test-binary', type=Path)
+    parser.add_argument('--upgrade-image', help='distinct private target image for optional native upgrade acceptance')
+    parser.add_argument('--expected-source-generation', type=int, default=0, help='require this actual source runtime schema for explicit cross-generation acceptance')
+    parser.add_argument('--upgrade-failure', action='store_true', help='inject failure at target preparation after real native backup')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     options = parser.parse_args()
+    if (options.upgrade_test_binary is None) != (options.upgrade_image is None):
+        parser.error('--upgrade-test-binary and --upgrade-image must be supplied together')
+    if options.upgrade_failure and options.upgrade_test_binary is None:
+        parser.error('--upgrade-failure requires the native upgrade adapter')
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')

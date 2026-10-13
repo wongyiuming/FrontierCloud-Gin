@@ -20,3 +20,24 @@ type RetirementLedger struct {
 type RetirementRepository interface {
 	RetirementLedger(context.Context, string, string) (RetirementLedger, error)
 }
+
+// RetirementMigrationRepository resolves retained byte checkpoints against
+// bounded, authenticated terminal history. It never grants deletion or revoke.
+type RetirementMigrationRepository interface {
+	RetirementMigration(context.Context, string, string, string, string, string) (MigrationPeerObject, error)
+}
+
+type RetirementFence struct {
+	MemberID       string `json:"member_id"`
+	RelationshipID string `json:"relationship_id"`
+	MasterID       string `json:"master_id"`
+	FencedAt       int64  `json:"fenced_at"`
+	CompletedAt    int64  `json:"completed_at"`
+}
+
+type RetirementFenceRepository interface {
+	BeginRetirement(context.Context, string, string, NodeAudit) (RetirementFence, error)
+	CompleteRetirement(context.Context, string, string, NodeAudit) (RetirementFence, error)
+	RetirementFence(context.Context, string, string) (RetirementFence, error)
+	ReserveRetirementNonce(context.Context, string, string, string, int64, bool) (Relationship, error)
+}

@@ -103,7 +103,7 @@ func (s *Storage) migrationDeleteAuthorized(ctx context.Context, relationship st
 	buffer := make([]byte, 64<<10)
 	var size int64
 	for {
-		if e = ctx.Err(); e != nil {
+		if e = migrationdata.ScanAdmission(ctx); e != nil {
 			return e
 		}
 		n, err := f.Read(buffer)

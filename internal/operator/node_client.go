@@ -141,7 +141,7 @@ func (c *NodeClient) RetirementCheck(ctx context.Context, member string) (nodere
 	}
 	relationship := ""
 	for _, rel := range nodes.Relationships {
-		if rel.Peer == member && rel.Direction == "downstream" && rel.State == "active" {
+		if rel.Peer == member && rel.Direction == "downstream" && (rel.State == "active" || rel.State == "retiring") {
 			if relationship != "" || !nodeClientID(rel.ID) {
 				return report, ErrNodeAuthority
 			}

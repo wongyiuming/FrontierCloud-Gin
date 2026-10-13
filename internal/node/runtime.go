@@ -108,7 +108,7 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 				return nil, err
 			}
 		}
-		value := map[string]any{"capabilities": protocol.BaselineCapabilities()}
+		value := map[string]any{"capabilities": protocol.AdvertisedCapabilities()}
 		if relation.Direction == "downstream" {
 			if s.pool == nil {
 				return nil, errors.New("resource pool is not configured")
@@ -117,7 +117,7 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 			if err != nil {
 				return nil, err
 			}
-			value = map[string]any{"mode": relation.Mode, "resources": resourceWire(config), "capabilities": protocol.BaselineCapabilities()}
+			value = map[string]any{"mode": relation.Mode, "resources": resourceWire(config), "capabilities": protocol.AdvertisedCapabilities()}
 		}
 		summary, err := s.Call(ctx, relation, "/internal/v1/heartbeat", value)
 		if err != nil {

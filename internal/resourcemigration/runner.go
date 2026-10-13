@@ -4,13 +4,13 @@ package resourcemigration
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"sync"
 	"time"
 )
 
@@ -18,9 +18,12 @@ type Caller interface {
 	Call(context.Context, store.Relationship, string, any) (map[string]any, error)
 }
 type Runner struct {
-	Repository store.MigrationRepository
-	Nodes      store.NodeRepository
-	Client     Caller
+	Repository     store.MigrationRepository
+	Nodes          store.NodeRepository
+	Client         Caller
+	Traffic        *businesstraffic.Monitor
+	executionMutex sync.RWMutex
+	execution      *store.MigrationExecution
 }
 
 const prefix = "/internal/v1/resource-migration/"
@@ -85,7 +88,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			}
 		}
 	}()
-	w, e := r.Repository.MigrationWork(ctx, id)
+	w, e := r.header(ctx, id)
 	if e != nil {
 		return e
 	}
@@ -133,8 +136,19 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 	if e = register(); e != nil {
 		return e
 	}
-	for _, c := range w.Objects {
+	scheduler := trafficSchedule{runner: r, source: source, target: target, task: id, master: w.Task.MasterID}
+	waitTraffic := func(phase, object string) error { return scheduler.wait(ctx, &lease, phase, object, ensure) }
+	if e = waitTraffic(w.Task.State, ""); e != nil {
+		return e
+	}
+	for c, pageErr := range r.objects(ctx, id, "") {
+		if pageErr != nil {
+			return pageErr
+		}
 		object = c.Object.ID
+		if e = waitTraffic(w.Task.State, object); e != nil {
+			return e
+		}
 		if e = ensure(); e != nil {
 			return e
 		}
@@ -146,11 +160,30 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 		}
 	}
 	call := func(rel store.Relationship, op string, req *migrationdata.Request) (map[string]any, error) {
-		if e := ensure(); e != nil {
-			return nil, e
+		for {
+			if e := ensure(); e != nil {
+				return nil, e
+			}
+			req.Lease = lease
+			value, err := r.request(ctx, rel, prefix+"data/"+op, *req)
+			if err != nil || value["waiting_traffic"] != true {
+				return value, err
+			}
+			phase := "copying"
+			if op == "verify" {
+				phase = "verifying"
+			}
+			if op == "publish" {
+				phase = "committing"
+			}
+			if err = scheduler.markWait(ctx, lease, phase, req.Spec.LogicalID, rel.PeerID); err != nil {
+				return nil, err
+			}
+			scheduler.expires = time.Time{}
+			if err = waitTraffic(phase, req.Spec.LogicalID); err != nil {
+				return nil, err
+			}
 		}
-		req.Lease = lease
-		return r.request(ctx, rel, prefix+"data/"+op, *req)
 	}
 	status := func(req *migrationdata.Request) (migrationdata.Checkpoint, string, error) {
 		v, e := call(target, "status", req)
@@ -169,11 +202,17 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 		}
 		return cp, phase, nil
 	}
-	for _, unit := range w.Units {
+	for unit, pageErr := range r.units(ctx, id) {
+		if pageErr != nil {
+			return pageErr
+		}
 		if unit.State == "cleanup_pending" || unit.State == "cleaned" || unit.State == "committed" {
 			continue
 		}
-		for _, c := range w.Objects {
+		for c, pageErr := range r.objects(ctx, id, unit.ID) {
+			if pageErr != nil {
+				return pageErr
+			}
 			if c.UnitID != unit.ID {
 				continue
 			}
@@ -191,51 +230,83 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			if e != nil {
 				return e
 			}
+			var grantLease store.MigrationLease
+			r.progress(id, "copying", object, cp.Offset, o.Bytes)
 			for cp.Offset < o.Bytes {
 				if cp.State != "receiving" || cp.Offset%migrationdata.ChunkBytes != 0 {
 					return store.ErrMigrationState
 				}
+				if e = waitTraffic("copying", object); e != nil {
+					return e
+				}
 				req.Offset = cp.Offset
 				req.Length = int(min(int64(migrationdata.ChunkBytes), o.Bytes-cp.Offset))
-				value, e := call(source, "read", &req)
+				req.Lease = lease
+				if req.TransferGrant == nil || grantLease != lease {
+					grantRequest := req
+					grantRequest.TransferGrant = nil
+					grantRequest.SourcePublicKey = ""
+					grantRequest.SourceEndpoint = ""
+					grantRequest.TargetPublicKey = target.PublicKey
+					value, err := r.request(ctx, source, prefix+"data/delegate", grantRequest)
+					if err != nil {
+						return err
+					}
+					var grant migrationdata.Signed
+					if e = decode(value, &grant); e != nil {
+						return e
+					}
+					req.TransferGrant = &grant
+					grantLease = lease
+				}
+				req.SourcePublicKey = source.PublicKey
+				req.SourceEndpoint = source.Endpoint
+				code = "direct_peer_transfer"
+				value, e := r.request(ctx, target, prefix+"data/pull", req)
 				if e != nil {
 					return e
 				}
-				var chunk struct {
-					Data    []byte `json:"data"`
-					Offset  int64  `json:"offset"`
-					Size    int    `json:"size_bytes"`
-					SHA     string `json:"chunk_sha256"`
-					Version string `json:"source_version"`
-				}
-				if e = decode(value, &chunk); e != nil {
-					return e
-				}
-				sum := sha256.Sum256(chunk.Data)
-				if len(chunk.Data) != req.Length || chunk.Size != req.Length || chunk.Offset != req.Offset || chunk.Version != o.Version || hex.EncodeToString(sum[:]) != chunk.SHA {
-					return store.ErrMigrationState
-				}
-				req.Data = chunk.Data
-				req.SHA = chunk.SHA
-				value, e = call(target, "append", &req)
-				req.Data = nil
-				req.SHA = ""
-				if e != nil {
-					return e
+				if value["waiting_traffic"] == true {
+					var waiting struct {
+						Checkpoint migrationdata.Checkpoint `json:"checkpoint"`
+						NodeID     string                   `json:"waiting_node_id"`
+						Traffic    businesstraffic.View     `json:"traffic"`
+					}
+					if e = decode(value, &waiting); e != nil || waiting.Checkpoint.Offset != req.Offset || waiting.NodeID != h.SourceID && waiting.NodeID != h.TargetID {
+						return store.ErrMigrationState
+					}
+					if e = scheduler.observePeerWait(waiting.NodeID, waiting.Traffic); e != nil {
+						return e
+					}
+					if e = scheduler.markWait(ctx, lease, "copying", object, waiting.NodeID); e != nil {
+						return e
+					}
+					scheduler.expires = time.Time{}
+					if e = trafficDelay(ctx); e != nil {
+						return e
+					}
+					continue
 				}
 				if e = decode(value, &cp); e != nil {
 					return e
 				}
-				if cp.Offset != req.Offset+int64(req.Length) {
+				expected, _ := store.MigrationDigest(req.Spec)
+				actual, _ := store.MigrationDigest(cp.Spec)
+				if expected != actual || cp.Offset != req.Offset+int64(req.Length) {
 					return store.ErrMigrationState
 				}
+				r.progress(id, "copying", object, cp.Offset, o.Bytes)
 			}
 			code = "target_verification"
 			if e = r.Repository.MigrationRunState(ctx, lease, "verifying", object, "", store.NodeAudit{}); e != nil {
 				return e
 			}
 			deadline := time.Now().Add(30 * time.Minute)
+			waitingAtStart := scheduler.waited
 			for phase != "verified" && phase != "published" {
+				if e = waitTraffic("verifying", object); e != nil {
+					return e
+				}
 				if cp.State != "received" && cp.State != "verified" {
 					return store.ErrMigrationState
 				}
@@ -249,7 +320,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 				if e != nil {
 					return e
 				}
-				if time.Now().After(deadline) {
+				if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {
 					return context.DeadlineExceeded
 				}
 			}
@@ -261,13 +332,19 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			}
 		}
 		code = "unit_commit"
+		if e = waitTraffic("verifying", ""); e != nil {
+			return e
+		}
 		if e = r.Repository.PrepareMigrationPublication(ctx, lease, unit.ID); e != nil {
 			return e
 		}
 		if e = r.Repository.MigrationRunState(ctx, lease, "committing", "", "", store.NodeAudit{}); e != nil {
 			return e
 		}
-		for _, c := range w.Objects {
+		for c, pageErr := range r.objects(ctx, id, unit.ID) {
+			if pageErr != nil {
+				return pageErr
+			}
 			if c.UnitID != unit.ID {
 				continue
 			}
@@ -276,7 +353,11 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			o := c.Object
 			req := migrationdata.Request{Spec: migrationdata.Spec{TaskID: id, MasterID: h.MasterID, SourceID: h.SourceID, TargetID: h.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: c.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
 			deadline := time.Now().Add(30 * time.Minute)
+			waitingAtStart := scheduler.waited
 			for {
+				if e = waitTraffic("committing", object); e != nil {
+					return e
+				}
 				cp, phase, e := status(&req)
 				if e != nil {
 					return e
@@ -290,7 +371,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 				if e = delay(ctx); e != nil {
 					return e
 				}
-				if time.Now().After(deadline) {
+				if time.Now().After(deadline.Add(scheduler.waited - waitingAtStart)) {
 					return context.DeadlineExceeded
 				}
 			}

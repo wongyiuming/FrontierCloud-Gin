@@ -1,0 +1,48 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	3.237s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	2.049s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	1.309s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.020s
+flag provided but not defined: -restore
+Usage of verify-backup:
+  -file string
+    	local v2 JSONL artifact (mutually exclusive with master-id)
+  -generation int
+    	exact positive backup generation
+  -master-id string
+    	historical Master ID in the configured cold backup store
+  -scratch-dir string
+    	private scratch directory, never an authoritative database directory
+  -sha256 string
+    	expected SHA-256, required for a local file
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release status=404 duration_ms=19.802 client_ip=192.0.2.1 request_id=c176aa9a53b84a9a9d95dbc2d26c6017 trace_id=c176aa9a53b84a9a9d95dbc2d26c6017
+2026/10/13 03:28:06 INFO request_completed method=POST path=/api/v1/media/admin/nodes/release status=404 duration_ms=2.873 client_ip=192.0.2.2 request_id=60566c590bb24888a6a29b6fbf201925 trace_id=60566c590bb24888a6a29b6fbf201925
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release/history status=404 duration_ms=2.922 client_ip=192.0.2.3 request_id=454b2726c07240389267e1508708d774 trace_id=454b2726c07240389267e1508708d774
+2026/10/13 03:28:06 INFO request_completed method=POST path=/api/v1/media/admin/nodes/release/history status=404 duration_ms=2.869 client_ip=192.0.2.4 request_id=1ed25214eee549ecbe300c23980eb58d trace_id=1ed25214eee549ecbe300c23980eb58d
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release/upgrade status=404 duration_ms=2.884 client_ip=192.0.2.5 request_id=c06936b123094eaeb8f8f7e768c4d1ba trace_id=c06936b123094eaeb8f8f7e768c4d1ba
+2026/10/13 03:28:06 INFO request_completed method=POST path=/api/v1/media/admin/nodes/release/upgrade status=404 duration_ms=2.872 client_ip=192.0.2.6 request_id=c881c0935f184a0da5f67782c5f0a81e trace_id=c881c0935f184a0da5f67782c5f0a81e
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release/rollback status=404 duration_ms=2.847 client_ip=192.0.2.7 request_id=ab3ad77efd584e6e9ae9a3df4b191d1d trace_id=ab3ad77efd584e6e9ae9a3df4b191d1d
+2026/10/13 03:28:06 INFO request_completed method=POST path=/api/v1/media/admin/nodes/release/rollback status=404 duration_ms=2.837 client_ip=192.0.2.8 request_id=279303562b50418fa6bbacce98e999a5 trace_id=279303562b50418fa6bbacce98e999a5
+2026/10/13 03:28:06 INFO request_completed method=GET path=/internal/v1/cluster-update/start status=404 duration_ms=2.833 client_ip=192.0.2.9 request_id=e1b4e7b077b140a181c07d5903a687c8 trace_id=e1b4e7b077b140a181c07d5903a687c8
+2026/10/13 03:28:06 INFO request_completed method=POST path=/internal/v1/cluster-update/start status=404 duration_ms=2.872 client_ip=192.0.2.10 request_id=4d31c8bd85a14e4e88e33c0df3308364 trace_id=4d31c8bd85a14e4e88e33c0df3308364
+2026/10/13 03:28:06 INFO request_completed method=GET path=/internal/v1/cluster-update/status status=404 duration_ms=2.833 client_ip=192.0.2.11 request_id=da9d732c03874538a53a112497af0da4 trace_id=da9d732c03874538a53a112497af0da4
+2026/10/13 03:28:06 INFO request_completed method=POST path=/internal/v1/cluster-update/status status=404 duration_ms=2.821 client_ip=192.0.2.12 request_id=29b952fff61144eea9420a21abc6706f trace_id=29b952fff61144eea9420a21abc6706f
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/catalog/categories status=200 duration_ms=18.163 client_ip=127.0.0.1 request_id=272f120e3dd3408f864378da577c9a7a trace_id=272f120e3dd3408f864378da577c9a7a
+2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/stream status=200 duration_ms=15.975 client_ip=127.0.0.1 request_id=918ffcc41dfb4a05b819ca897d19737d trace_id=918ffcc41dfb4a05b819ca897d19737d
+2026/10/13 03:28:06 INFO request_completed method=GET path=/docs status=401 duration_ms=0.081 client_ip=127.0.0.1 request_id=791aa4959f414f7cae123c8e03a0e28a trace_id=791aa4959f414f7cae123c8e03a0e28a
+2026/10/13 03:28:06 INFO request_completed method=GET path=/redoc status=401 duration_ms=0.068 client_ip=127.0.0.1 request_id=84d79c18201f45a8ae41bf031a3c402a trace_id=84d79c18201f45a8ae41bf031a3c402a
+2026/10/13 03:28:06 INFO request_completed method=GET path=/openapi.json status=401 duration_ms=0.078 client_ip=127.0.0.1 request_id=942d7cc9ddd448e9ad09a1077f67f700 trace_id=942d7cc9ddd448e9ad09a1077f67f700
+2026/10/13 03:28:06 INFO request_completed method=GET path=/metrics status=404 duration_ms=0.116 client_ip=127.0.0.1 request_id=c081e6ea4c104e249d79ed889a8ecd24 trace_id=c081e6ea4c104e249d79ed889a8ecd24
+--- FAIL: TestOperatorStatusPreservesIdentityAndReportsOfflineFenceWithoutNewLocks (0.17s)
+    operator_status_test.go:63: {b1e510dbf35d34875192db0ce93790ad Standalone true true {7 Standalone map[accounts:0 cold_transfers:0 media_mutations:0 migration_binding_orphans:0 migration_capacity:0 migration_scopes:0 migration_storage:0 placements:0 recordings:0 reserved_storage:0 resource_migrations:0 uploads:0 worker_leases:0] 0 true} []} <nil>
+{"time":"2026-10-13T03:28:08.829022024Z","level":"INFO","msg":"request_completed","method":"GET","path":"/","status":404,"duration_ms":0.051,"client_ip":"192.0.2.1","request_id":"04328bb18f9c42c29019941d539a7965","trace_id":"04328bb18f9c42c29019941d539a7965"}
+{"time":"2026-10-13T03:28:08.829171162Z","level":"INFO","msg":"request_completed","method":"GET","path":"/api/v1/media","status":404,"duration_ms":0.035,"client_ip":"192.0.2.1","request_id":"3591302bca714ccbadb714fa850698c9","trace_id":"3591302bca714ccbadb714fa850698c9"}
+{"time":"2026-10-13T03:28:08.829285526Z","level":"INFO","msg":"request_completed","method":"GET","path":"/api/v1/media/admin","status":404,"duration_ms":0.03,"client_ip":"192.0.2.1","request_id":"6ef0ddce70db4a249dc2e41ab0fb0a42","trace_id":"6ef0ddce70db4a249dc2e41ab0fb0a42"}
+{"time":"2026-10-13T03:28:08.829380754Z","level":"INFO","msg":"request_completed","method":"GET","path":"/api/v1/media/admin/nodes","status":404,"duration_ms":0.029,"client_ip":"192.0.2.1","request_id":"d89b79d7ecf74aee82e612328ac5b1b5","trace_id":"d89b79d7ecf74aee82e612328ac5b1b5"}
+{"time":"2026-10-13T03:28:08.829465131Z","level":"INFO","msg":"request_completed","method":"GET","path":"/api/v1/media/admin/nodes/release","status":404,"duration_ms":0.027,"client_ip":"192.0.2.1","request_id":"913c3e3446794f33b6cbae06eebb8aca","trace_id":"913c3e3446794f33b6cbae06eebb8aca"}
+{"time":"2026-10-13T03:28:08.829549739Z","level":"INFO","msg":"request_completed","method":"GET","path":"/api/v1/karaoke/login","status":404,"duration_ms":0.03,"client_ip":"192.0.2.1","request_id":"51231348b0b542acb19ec21c9930d1be","trace_id":"51231348b0b542acb19ec21c9930d1be"}
+{"time":"2026-10-13T03:28:08.829629137Z","level":"INFO","msg":"request_completed","method":"GET","path":"/static/js/player.js","status":404,"duration_ms":0.025,"client_ip":"192.0.2.1","request_id":"5c4dd29db97a4bfc87fb0e63ab45c4c6","trace_id":"5c4dd29db97a4bfc87fb0e63ab45c4c6"}
+{"time":"2026-10-13T03:28:08.829712092Z","level":"INFO","msg":"request_completed","method":"GET","path":"/internal/v1/cluster-update/status","status":404,"duration_ms":0.022,"client_ip":"192.0.2.1","request_id":"d81e9b0ae3f340bda446034675d4e792","trace_id":"d81e9b0ae3f340bda446034675d4e792"}
+{"time":"2026-10-13T03:28:08.82978625Z","level":"INFO","msg":"request_completed","method":"GET","path":"/internal/v1/cluster-update/start","status":404,"duration_ms":0.024,"client_ip":"192.0.2.1","request_id":"401d8bc294b04eaebebc0027ed8e71ac","trace_id":"401d8bc294b04eaebebc0027ed8e71ac"}
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	6.304s
+FAIL

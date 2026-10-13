@@ -1,0 +1,5 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	1.838s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	1.015s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	1.143s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	1.019s [no tests to run]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	55.153s

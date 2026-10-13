@@ -1,0 +1,20 @@
+Unable to find image 'node:24-bookworm-slim' locally
+24-bookworm-slim: Pulling from library/node
+08489011619d: Pulling fs layer
+517d640e3283: Pulling fs layer
+1a0cf4b1ffc8: Pulling fs layer
+11ffcabe0f77: Pulling fs layer
+5d98766f4b4e: Download complete
+08489011619d: Download complete
+517d640e3283: Download complete
+517d640e3283: Pull complete
+ad4671196672: Download complete
+1a0cf4b1ffc8: Download complete
+11ffcabe0f77: Download complete
+1a0cf4b1ffc8: Pull complete
+11ffcabe0f77: Pull complete
+08489011619d: Pull complete
+Digest: sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+Status: Downloaded newer image for node:24-bookworm-slim
+node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+node-retirement-ui-smoke-ok (DOM fixture; native browser acceptance remains external)

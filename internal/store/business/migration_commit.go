@@ -33,6 +33,30 @@ func (r *Repository) migrationWork(ctx context.Context, q queryer, id string) (w
 	if e != nil || digest != w.Task.PlanSHA || w.Plan.ID != id {
 		return w, store.ErrMigrationState
 	}
+	if w.Plan.Format != "" {
+		for u, err := range r.migrationUnits(ctx, q, id) {
+			if err != nil {
+				return w, err
+			}
+			if len(w.Units) >= store.MaxMigrationObjects {
+				return w, store.ErrMigrationInventoryLimit
+			}
+			w.Units = append(w.Units, u)
+		}
+		for cp, err := range r.migrationObjects(ctx, q, id, "") {
+			if err != nil {
+				return w, err
+			}
+			if len(w.Objects) >= store.MaxMigrationObjects {
+				return w, store.ErrMigrationInventoryLimit
+			}
+			w.Objects = append(w.Objects, cp)
+		}
+		if int64(len(w.Objects)) != w.Task.ObjectCount {
+			return w, store.ErrMigrationState
+		}
+		return w, nil
+	}
 	byID := map[string]store.MigrationObject{}
 	for _, o := range w.Plan.Catalog.Objects {
 		byID[o.ID] = o
@@ -223,18 +247,13 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 		if !migrationRunnable(t.State) {
 			return store.ErrMigrationState
 		}
-		w, e := r.migrationWork(ctx, q, l.TaskID)
+		w, e := r.migrationHeader(ctx, q, l.TaskID)
 		if e != nil {
 			return e
 		}
-		var selected *store.MigrationUnit
-		for i := range w.Units {
-			if w.Units[i].ID == unit {
-				selected = &w.Units[i]
-			}
-		}
-		if selected == nil {
-			return store.ErrMigrationState
+		selected, e := scanMigrationUnit(q.QueryRowContext(ctx, "SELECT "+migrationUnitColumns+" FROM migration_units WHERE task_id=? AND unit_id=?", l.TaskID, unit))
+		if e != nil {
+			return e
 		}
 		if selected.State == "committed" || selected.State == "cleanup_pending" || selected.State == "cleaned" {
 			return nil
@@ -271,9 +290,12 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 			}
 		}
 		count := int64(0)
-		expectedObjects := map[string]store.MigrationObject{}
+		var expectedVersions store.MigrationSequence
 		bytes := int64(0)
-		for _, c := range w.Objects {
+		for c, err := range r.migrationObjects(ctx, q, l.TaskID, unit) {
+			if err != nil {
+				return err
+			}
 			if c.UnitID != unit {
 				continue
 			}
@@ -283,7 +305,9 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 			if c.State != "published" || c.SourceSHA != c.TargetSHA || c.VerifiedBytes != c.Object.Bytes {
 				return store.ErrMigrationState
 			}
-			expectedObjects[c.Object.ID] = c.Object
+			if e = expectedVersions.Add(c.Object.ID, c.Object.Version); e != nil {
+				return e
+			}
 			count++
 			bytes += c.Object.Bytes
 		}
@@ -301,6 +325,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 				return e
 			}
 			actual := int64(0)
+			var actualVersions store.MigrationSequence
 			for rows.Next() {
 				var id, object, name, kind, etag, state, owner string
 				var size, updated int64
@@ -334,8 +359,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 					rows.Close()
 					return e
 				}
-				expected, ok := expectedObjects[id]
-				if !ok || owner != t.SourceID || version != expected.Version {
+				if owner != t.SourceID || actualVersions.Add(id, version) != nil {
 					rows.Close()
 					return store.ErrMigrationState
 				}
@@ -346,7 +370,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 			if e != nil {
 				return e
 			}
-			if actual != count {
+			if actual != count || actualVersions.Sum() != expectedVersions.Sum() {
 				return store.ErrMigrationState
 			}
 		} else {
@@ -355,6 +379,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 				return e
 			}
 			actual := int64(0)
+			var actualVersions store.MigrationSequence
 			for rows.Next() {
 				v, e := scanRecording(rows)
 				if e != nil {
@@ -376,8 +401,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 					rows.Close()
 					return e
 				}
-				expected, ok := expectedObjects[v.ID]
-				if !ok || v.State != "ready" || version != expected.Version {
+				if v.State != "ready" || actualVersions.Add(v.ID, version) != nil {
 					rows.Close()
 					return store.ErrMigrationState
 				}
@@ -388,7 +412,7 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 			if e != nil {
 				return e
 			}
-			if actual != count {
+			if actual != count || actualVersions.Sum() != expectedVersions.Sum() {
 				return store.ErrMigrationState
 			}
 		}
@@ -406,22 +430,11 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 		if _, e = r.checkMigrationLease(ctx, q, l); e != nil {
 			return e
 		}
-		objectIDs := make([]string, 0, len(expectedObjects))
-		for id := range expectedObjects {
-			objectIDs = append(objectIDs, id)
-		}
-		sort.Strings(objectIDs)
-		args := []any{t.TargetID, now, t.SourceID}
-		placeholders := make([]string, len(objectIDs))
-		for i, id := range objectIDs {
-			placeholders[i] = "?"
-			args = append(args, id)
-		}
 		table, key := "global_media_objects", "media_id"
 		if selected.Resource == "recording" {
 			table, key = "karaoke_recordings", "recording_id"
 		}
-		result, e := q.ExecContext(ctx, "UPDATE "+table+" SET storage_member_id=?,updated_at=? WHERE storage_member_id=? AND "+key+" IN ("+strings.Join(placeholders, ",")+")", args...)
+		result, e := q.ExecContext(ctx, "UPDATE "+table+" SET storage_member_id=?,updated_at=? WHERE storage_member_id=? AND EXISTS (SELECT 1 FROM migration_objects WHERE task_id=? AND unit_id=? AND logical_id="+table+"."+key+")", t.TargetID, now, t.SourceID, l.TaskID, unit)
 		if e != nil {
 			return e
 		}

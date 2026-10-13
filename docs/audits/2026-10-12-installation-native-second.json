@@ -1,0 +1,888 @@
+{
+  "scope": "compiled shipping fc early guards and private real-Docker Install protocol",
+  "public_release_first_installation_verified": false,
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2",
+  "successful_installation_driver_has_test_only_publication_and_local_ca": true,
+  "guards": [
+    {
+      "case": "dns",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "dns",
+        "state": "blocked",
+        "reason": "hostname does not resolve from this host",
+        "next": "correct public A/AAAA records"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-dns-326c8eddfe; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "dns",
+            "state": "blocked",
+            "reason": "hostname does not resolve from this host",
+            "next": "correct public A/AAAA records"
+          },
+          {
+            "item": "inbound_http01",
+            "state": "unverified",
+            "reason": "local DNS/outbound access does not prove public TCP 80 reaches this host",
+            "next": "verify public reachability independently before certificate issuance"
+          },
+          {
+            "item": "inbound_https",
+            "state": "unverified",
+            "reason": "public TCP reachability cannot be established locally",
+            "next": "verify 443 for Direct/Master or the configured Relay port from an external host"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653797621760 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80 (HTTP-01), tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": []
+    },
+    {
+      "case": "occupied-port",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "ports",
+        "state": "warning",
+        "reason": "listeners exist on configured ports: tcp:48673",
+        "next": "identify their owner; fresh installation must not replace another deployment"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-occupied-port-ca770d8ed7; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "pass",
+            "reason": "no declared existing containers, data or volumes",
+            "next": "installation rechecks before initialization"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653797576704 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:48673",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": []
+    },
+    {
+      "case": "database",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "fresh_target",
+        "state": "warning",
+        "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+        "next": "fresh install will refuse; use status, takeover or restore"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-database-b73a56f3e3; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "warning",
+            "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+            "next": "fresh install will refuse; use status, takeover or restore"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653784973312 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": [],
+      "native_install_guard": {
+        "actual_compose": true,
+        "case": "guard",
+        "database": "sqlite",
+        "host_compilers_on_path": false,
+        "image_resolution_injected": true,
+        "install_pull_calls": 0,
+        "install_up_calls": 0,
+        "production_publication_verified": false,
+        "profile": "business",
+        "publication_proof_injected": true,
+        "target_guard_refused_before_images": true
+      }
+    },
+    {
+      "case": "identity",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "fresh_target",
+        "state": "warning",
+        "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+        "next": "fresh install will refuse; use status, takeover or restore"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-identity-a3b070c408; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "warning",
+            "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+            "next": "fresh install will refuse; use status, takeover or restore"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653741219840 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": [],
+      "native_install_guard": {
+        "actual_compose": true,
+        "case": "guard",
+        "database": "sqlite",
+        "host_compilers_on_path": false,
+        "image_resolution_injected": true,
+        "install_pull_calls": 0,
+        "install_up_calls": 0,
+        "production_publication_verified": false,
+        "profile": "business",
+        "publication_proof_injected": true,
+        "target_guard_refused_before_images": true
+      }
+    },
+    {
+      "case": "changed-mount",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "fresh_target",
+        "state": "warning",
+        "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+        "next": "fresh install will refuse; use status, takeover or restore"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-changed-mount-4a030235b8; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "warning",
+            "reason": "existing default data or identity remains in this bundle; changing mounts is not migration",
+            "next": "fresh install will refuse; use status, takeover or restore"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653740433408 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": [],
+      "native_install_guard": {
+        "actual_compose": true,
+        "case": "guard",
+        "database": "sqlite",
+        "host_compilers_on_path": false,
+        "image_resolution_injected": true,
+        "install_pull_calls": 0,
+        "install_up_calls": 0,
+        "production_publication_verified": false,
+        "profile": "business",
+        "publication_proof_injected": true,
+        "target_guard_refused_before_images": true
+      }
+    },
+    {
+      "case": "project-drift",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "fresh_target",
+        "state": "warning",
+        "reason": "this directory belongs to an existing Compose deployment; changing project name is not takeover",
+        "next": "fresh install will refuse; use status, takeover or restore"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-project-drift-f2b457aa33; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "warning",
+            "reason": "this directory belongs to an existing Compose deployment; changing project name is not takeover",
+            "next": "fresh install will refuse; use status, takeover or restore"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653738164224 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": [
+        {
+          "container": "dcb8b6930950099cc582b4f8e35f353c08fd4e4835467924257925fe6366e3e6",
+          "project": "fc-ops-install-project-drift-f2b457aa33-old"
+        }
+      ],
+      "native_install_guard": {
+        "actual_compose": true,
+        "case": "guard",
+        "database": "sqlite",
+        "host_compilers_on_path": false,
+        "image_resolution_injected": true,
+        "install_pull_calls": 0,
+        "install_up_calls": 0,
+        "production_publication_verified": false,
+        "profile": "business",
+        "publication_proof_injected": true,
+        "target_guard_refused_before_images": true
+      },
+      "old_project_container_unchanged": true
+    },
+    {
+      "case": "owned-volume",
+      "compiled_fc_doctor_and_rejected_install": true,
+      "expected_observation": {
+        "item": "fresh_target",
+        "state": "warning",
+        "reason": "existing or external volume; fresh install refused; use takeover or restore",
+        "next": "fresh install will refuse; use status, takeover or restore"
+      },
+      "doctor_report": {
+        "operation": "doctor",
+        "state": "needs_attention",
+        "read_only": true,
+        "checks": [
+          {
+            "item": "engine",
+            "state": "pass",
+            "reason": "Linux Docker engine available",
+            "next": "none"
+          },
+          {
+            "item": "docker_version",
+            "state": "pass",
+            "reason": "Docker Engine version 29.1.3",
+            "next": "none"
+          },
+          {
+            "item": "architecture",
+            "state": "pass",
+            "reason": "engine architecture: amd64",
+            "next": "verify the selected release publishes this platform"
+          },
+          {
+            "item": "compose",
+            "state": "pass",
+            "reason": "compatible Compose plugin",
+            "next": "none"
+          },
+          {
+            "item": "configuration",
+            "state": "pass",
+            "reason": "project: fc-ops-install-owned-volume-ad688fbb84; role: master; database: sqlite",
+            "next": "configuration changes do not move data"
+          },
+          {
+            "item": "tls",
+            "state": "warning",
+            "reason": "automatic HTTPS is disabled",
+            "next": "enable HTTPS before using fixed Master/Storage roles"
+          },
+          {
+            "item": "fresh_target",
+            "state": "warning",
+            "reason": "existing or external volume; fresh install refused; use takeover or restore",
+            "next": "fresh install will refuse; use status, takeover or restore"
+          },
+          {
+            "item": "disk_free",
+            "state": "pass",
+            "reason": "653738323968 bytes free on the data filesystem",
+            "next": "backup and migration need additional reserved space"
+          },
+          {
+            "item": "write_permissions",
+            "state": "unverified",
+            "reason": "read-only inspection cannot prove the runtime UID can create and sync files",
+            "next": "verify ownership/ACL for UID 10001; no write probe was executed"
+          },
+          {
+            "item": "ports",
+            "state": "warning",
+            "reason": "listeners exist on configured ports: tcp:80",
+            "next": "identify their owner; fresh installation must not replace another deployment"
+          },
+          {
+            "item": "registry",
+            "state": "blocked",
+            "reason": "public registry network request failed; retry connectivity",
+            "next": "correct package access/network/platform; do not fall back to compilation"
+          },
+          {
+            "item": "database_generation",
+            "state": "unverified",
+            "reason": "existing database was not opened by the host doctor",
+            "next": "use status on a running instance or the read-only restore compatibility check"
+          }
+        ]
+      },
+      "state_and_resources_unchanged": true,
+      "host_compilers_on_path": false,
+      "shipping_install_success_claimed": false,
+      "retained_fixture_resources": [
+        {
+          "volume": "fc-ops-install-owned-volume-ad688fbb84_runtime_secrets",
+          "project": "fc-ops-install-owned-volume-ad688fbb84"
+        }
+      ],
+      "native_install_guard": {
+        "actual_compose": true,
+        "case": "guard",
+        "database": "sqlite",
+        "host_compilers_on_path": false,
+        "image_resolution_injected": true,
+        "install_pull_calls": 0,
+        "install_up_calls": 0,
+        "production_publication_verified": false,
+        "profile": "business",
+        "publication_proof_injected": true,
+        "target_guard_refused_before_images": true
+      },
+      "existing_volume_bytes_unchanged": true
+    }
+  ],
+  "private_installations": [
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "9d71f12b3b5795154f3888b1d0bbed1c2b79329aa185f3055fa6fc84b60f55cb",
+        "hostname": "business.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791864478,
+          "port80_active": true,
+          "started_at": 1791864478,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797048458,
+        "not_after": 1799640478,
+        "not_before": 1791864418,
+        "remaining_seconds": 7775993,
+        "san": [
+          "business.fixture.test"
+        ],
+        "serving_fingerprint": "9d71f12b3b5795154f3888b1d0bbed1c2b79329aa185f3055fa6fc84b60f55cb",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "http01"
+      },
+      "database": "sqlite",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 8,
+      "install_up_calls": 2,
+      "native_node_id": "7f8d429147339becaf722eaea865b186",
+      "native_role": "Standalone",
+      "production_publication_verified": false,
+      "profile": "business",
+      "publication_proof_injected": true,
+      "receipt_sha256": "0ab06473ce41621f73ccc8f76503aced2ca3e531485e25bf81f7b3b8b4eecaef",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2/fc-ops-install-master-sqlite-2e5fcaf09e",
+      "retained_resources": {
+        "containers": [
+          "8762a8e0d43e",
+          "6aad31c2c53d",
+          "417a4a4e289b",
+          "84f398ffce9e",
+          "be5a5ad58d0a",
+          "acbbd948b8f7",
+          "ac7d1c9c2b5e",
+          "3d0a793142be"
+        ],
+        "volumes": [
+          "fc-ops-install-master-sqlite-2e5fcaf09e_certificate_published",
+          "fc-ops-install-master-sqlite-2e5fcaf09e_certificate_runtime",
+          "fc-ops-install-master-sqlite-2e5fcaf09e_certificate_state",
+          "fc-ops-install-master-sqlite-2e5fcaf09e_redis_data",
+          "fc-ops-install-master-sqlite-2e5fcaf09e_runtime_secrets",
+          "fc-ops-install-master-sqlite-2e5fcaf09e_web_tmp"
+        ]
+      }
+    },
+    {
+      "actual_compose": true,
+      "case": "success",
+      "certificate": {
+        "auto_renew": true,
+        "controller_running": true,
+        "enabled": true,
+        "fingerprint": "6d1c9a5f7ac0d874fb236757365f1c57d50367c1882f11b3785e15fcf475fb65",
+        "hostname": "business.fixture.test",
+        "https_ready": true,
+        "issuer": "CN=local fixture root",
+        "job": {
+          "completed_at": 1791864520,
+          "port80_active": true,
+          "started_at": 1791864520,
+          "state": "ACTIVE"
+        },
+        "managed": true,
+        "mode": "automatic",
+        "next_renewal": 1797048500,
+        "not_after": 1799640520,
+        "not_before": 1791864460,
+        "remaining_seconds": 7775991,
+        "san": [
+          "business.fixture.test"
+        ],
+        "serving_fingerprint": "6d1c9a5f7ac0d874fb236757365f1c57d50367c1882f11b3785e15fcf475fb65",
+        "serving_matches": true,
+        "state": "ACTIVE",
+        "validation": "http01"
+      },
+      "database": "mysql",
+      "fresh_local_ca_serving_verified": true,
+      "host_compilers_on_path": false,
+      "image_resolution_injected": true,
+      "install_pull_calls": 9,
+      "install_up_calls": 2,
+      "native_node_id": "191bc77c1dadb5b02c0b1a8067387ac3",
+      "native_role": "Standalone",
+      "production_publication_verified": false,
+      "profile": "business",
+      "publication_proof_injected": true,
+      "receipt_sha256": "b2d474624de2e6aa06621b34babc528aadc68db888e8e648fb0bfdf43f63bf58",
+      "recreated_identity_key_and_revision_stable": true,
+      "runtime_web_image_id": "sha256:b27efe740d1a898c812d33b3a0f3396d9e16fa5930b56fc4ef18a4f92896faf3",
+      "schema_generation": 7,
+      "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2/fc-ops-install-master-mysql-4be739dc4a",
+      "retained_resources": {
+        "containers": [
+          "08a03f025daa",
+          "92bd6b79b028",
+          "eba2dfe513eb",
+          "a9d39fe96c11",
+          "122a9f776631",
+          "66bad2c02b0a",
+          "b5bf044e76e5",
+          "f7e1fae9c2d8",
+          "e9dd9cce5fb0"
+        ],
+        "volumes": [
+          "fc-ops-install-master-mysql-4be739dc4a_certificate_published",
+          "fc-ops-install-master-mysql-4be739dc4a_certificate_runtime",
+          "fc-ops-install-master-mysql-4be739dc4a_certificate_state",
+          "fc-ops-install-master-mysql-4be739dc4a_mysql_data",
+          "fc-ops-install-master-mysql-4be739dc4a_redis_data",
+          "fc-ops-install-master-mysql-4be739dc4a_runtime_secrets",
+          "fc-ops-install-master-mysql-4be739dc4a_web_tmp"
+        ]
+      }
+    }
+  ]
+}

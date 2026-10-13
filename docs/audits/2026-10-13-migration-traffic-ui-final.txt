@@ -1,0 +1,2 @@
+node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)
+node-retirement-ui-smoke-ok (DOM fixture; native browser acceptance remains external)

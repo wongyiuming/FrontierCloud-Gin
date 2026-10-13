@@ -17,7 +17,7 @@ var ErrMigrationInventoryLimit = errors.New("resource migration inventory requir
 
 const MaxMigrationObjects = 10000
 const MaxMigrationPlanBytes = 16 << 20
-const MigrationCapability = "resource-migration-v1"
+const MigrationCapability = "resource-migration-direct-v1"
 
 type MigrationBlocker struct {
 	Code     string `json:"code"`
@@ -47,8 +47,26 @@ type MigrationCatalog struct {
 	Objects       []MigrationObject   `json:"objects"`
 	TotalBytes    int64               `json:"total_bytes"`
 	Blockers      []MigrationBlocker  `json:"blockers"`
+	BlockerCount  int64               `json:"blocker_count,omitempty"`
 	Version       string              `json:"catalog_version"`
 }
+
+// Blocker samples stay bounded even when an entire target directory conflicts.
+// The optional total keeps historical task JSON and its digest unchanged.
+func (c MigrationCatalog) TotalBlockers() int64 {
+	return max(c.BlockerCount, int64(len(c.Blockers)))
+}
+func (c *MigrationCatalog) AddBlocker(code, resource string) {
+	c.BlockerCount = c.TotalBlockers() + 1
+	if len(c.Blockers) < 64 {
+		c.Blockers = append(c.Blockers, MigrationBlocker{Code: code, Resource: resource})
+	}
+}
+func (c *MigrationCatalog) MergeBlockers(other MigrationCatalog) {
+	c.BlockerCount = c.TotalBlockers() + other.TotalBlockers()
+	c.Blockers = append(c.Blockers, other.Blockers[:min(len(other.Blockers), max(0, 64-len(c.Blockers)))]...)
+}
+
 type MigrationBackupFact struct {
 	Enabled    int    `json:"enabled"`
 	Generation int64  `json:"generation"`
@@ -96,6 +114,11 @@ type MigrationCleanupGrant struct {
 	TargetVerifiedAt  int64           `json:"target_verified_at"`
 }
 type MigrationPlan struct {
+	Format       string               `json:"format,omitempty"`
+	ObjectCount  int64                `json:"object_count,omitempty"`
+	UnitCount    int64                `json:"unit_count,omitempty"`
+	ObjectsSHA   string               `json:"objects_sha256,omitempty"`
+	ProofsSHA    string               `json:"proofs_sha256,omitempty"`
 	ID           string               `json:"plan_id"`
 	Catalog      MigrationCatalog     `json:"catalog"`
 	Proofs       []MigrationDiskProof `json:"disk_proofs"`

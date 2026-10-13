@@ -1,6 +1,26 @@
 package store
 
-import "context"
+import (
+	"context"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
+)
+
+type MigrationTraffic struct {
+	NodeID string               `json:"node_id"`
+	Role   string               `json:"role"`
+	View   businesstraffic.View `json:"traffic"`
+}
+type MigrationExecution struct {
+	TaskID       string             `json:"task_id"`
+	State        string             `json:"state"`
+	ObjectID     string             `json:"object_id,omitempty"`
+	CurrentBytes int64              `json:"current_bytes"`
+	CurrentTotal int64              `json:"current_total_bytes"`
+	Speed        int64              `json:"bytes_per_second"`
+	ObservedAt   int64              `json:"observed_at_ms"`
+	WaitingNode  string             `json:"waiting_node_id,omitempty"`
+	Traffic      []MigrationTraffic `json:"traffic"`
+}
 
 type MigrationStage struct {
 	State         string `json:"state"`
@@ -25,6 +45,7 @@ type MigrationTaskPage struct {
 	NextTime  int64           `json:"next_time"`
 	NextID    string          `json:"next_id"`
 	Complete  bool            `json:"complete"`
+	Queue     bool            `json:"queue,omitempty"`
 }
 type MigrationStatus struct {
 	Task            MigrationTask           `json:"task"`
@@ -35,6 +56,8 @@ type MigrationStatus struct {
 	Next            string                  `json:"next"`
 	Complete        bool                    `json:"complete"`
 	RetirementReady bool                    `json:"retirement_ready"`
+	QueuePosition   int64                   `json:"queue_position"`
+	Execution       *MigrationExecution     `json:"execution,omitempty"`
 }
 type MigrationAdminRepository interface {
 	MigrationTasksPage(context.Context, int64, string) (MigrationTaskPage, error)

@@ -1,0 +1,8 @@
+Actual Chromium verification passed; native fixture continues.
+Traceback (most recent call last):
+  File "/home/wyium/fc-operations-20261012-01a13082/src/tests/native_migration_acceptance.py", line 193, in <module>
+    run(parser.parse_args())
+    ~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/wyium/fc-operations-20261012-01a13082/src/tests/native_migration_acceptance.py", line 156, in run
+    raise RuntimeError('native acceptance failed; exact fixture evidence retained')
+RuntimeError: native acceptance failed; exact fixture evidence retained

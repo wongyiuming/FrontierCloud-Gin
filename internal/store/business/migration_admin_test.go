@@ -83,8 +83,13 @@ func TestResourceMigrationAdminRevisionFencesAndBoundedStatus(t *testing.T) {
 	// decode. They are fixture rows, not claims of validated byte transfer.
 	for i := 0; i < 35; i++ {
 		id := hashPath(t.Name() + fmt.Sprint(i))
+		resource := "media"
+		if i < 20 {
+			id = fmt.Sprintf("%032x", i+1)
+			resource = "recording"
+		}
 		unit := status.Objects[0].UnitID
-		if _, e = f.raw.Exec("INSERT INTO migration_objects(task_id,unit_id,logical_id,resource_kind,source_object,target_object,source_version,physical_path,expected_bytes,verified_bytes,state,updated_at) VALUES (?, ?, ?, 'media', ?, ?, ?, ?,1,0,'pending',1)", task.ID, unit, id, id, id, strings.Repeat("e", 64), fmt.Sprintf("music/fixture/%d.mp3", i)); e != nil {
+		if _, e = f.raw.Exec("INSERT INTO migration_objects(task_id,unit_id,logical_id,resource_kind,source_object,target_object,source_version,physical_path,expected_bytes,verified_bytes,state,updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?,1,0,'pending',1)", task.ID, unit, id, resource, id, id, strings.Repeat("e", 64), fmt.Sprintf("music/fixture/%d.mp3", i)); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -97,6 +102,9 @@ func TestResourceMigrationAdminRevisionFencesAndBoundedStatus(t *testing.T) {
 		}
 		if len(value.Objects) > 16 || value.RetirementReady {
 			t.Fatal("unbounded status", value)
+		}
+		if after == "" && len(value.Next) != 32 {
+			t.Fatal("fixture did not exercise recording cursor", value.Next)
 		}
 		for _, object := range value.Objects {
 			if seen[object.ID] || object.ID <= after {
@@ -153,6 +161,40 @@ func TestResourceMigrationAdminRevisionFencesAndBoundedStatus(t *testing.T) {
 	}
 	if len(tasks) != 36 {
 		t.Fatal("failed/historical tasks omitted", len(tasks))
+	}
+	// Queue/attention paging has its own ascending cursor and excludes terminal
+	// history. Paused and failed items remain visible without becoming runnable.
+	for i, state := range []string{"completed", "cancelled"} {
+		if _, e = f.raw.Exec("UPDATE migration_tasks SET state=? WHERE task_id=?", state, ids[i]); e != nil {
+			t.Fatal(e)
+		}
+	}
+	queue := admin.(interface {
+		MigrationQueuePage(context.Context, int64, string) (store.MigrationTaskPage, error)
+	})
+	cursor, stamp = "", 0
+	queued := map[string]bool{}
+	for {
+		page, e := queue.MigrationQueuePage(ctx, stamp, cursor)
+		if e != nil || !page.Queue || len(page.Tasks) > 16 {
+			t.Fatal(page, e)
+		}
+		for _, item := range page.Tasks {
+			if queued[item.ID] || item.State == "completed" || item.State == "cancelled" || item.CreatedAt < stamp || item.CreatedAt == stamp && item.ID <= cursor {
+				t.Fatal("queue order/history leak", item)
+			}
+			queued[item.ID] = true
+			stamp, cursor = item.CreatedAt, item.ID
+		}
+		if page.NextID != cursor || page.NextTime != stamp {
+			t.Fatal("incorrect queue cursor", page)
+		}
+		if page.Complete {
+			break
+		}
+	}
+	if len(queued) != 34 {
+		t.Fatal("queue omitted pending items", len(queued))
 	}
 	if _, e = admin.MigrationStatus(ctx, task.ID, "bad-cursor"); e == nil {
 		t.Fatal("invalid object cursor")

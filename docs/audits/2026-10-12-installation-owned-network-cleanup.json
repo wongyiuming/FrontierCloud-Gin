@@ -1,0 +1,32 @@
+[
+  {
+    "directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7/fc-ops-install-suite-s749zp7t/fc-ops-install-master-sqlite-435149a7cf",
+    "removed_containers": 8,
+    "removed_networks": 1,
+    "retained_volumes": 6
+  },
+  {
+    "directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7/fc-ops-install-suite-s749zp7t/fc-ops-install-master-mysql-2d40d90ab7",
+    "removed_containers": 9,
+    "removed_networks": 1,
+    "retained_volumes": 7
+  },
+  {
+    "directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2/fc-ops-install-direct-155a51db67",
+    "removed_containers": 5,
+    "removed_networks": 1,
+    "retained_volumes": 4
+  },
+  {
+    "directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2/fc-ops-install-master-sqlite-2e5fcaf09e",
+    "removed_containers": 8,
+    "removed_networks": 1,
+    "retained_volumes": 6
+  },
+  {
+    "directory": "/home/wyium/fc-operations-20261012-01a13082/native-install-gen7-second/fc-ops-install-suite-wmskdsb2/fc-ops-install-master-mysql-4be739dc4a",
+    "removed_containers": 9,
+    "removed_networks": 1,
+    "retained_volumes": 7
+  }
+]

@@ -1,0 +1,23 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-mysql-rr
+    native_migration_real_test.go:93: pairing private follower 1 go sqlite
+    native_migration_real_test.go:93: pairing private follower 2 go sqlite
+    native_migration_real_test.go:93: pairing private follower 3 go sqlite
+    native_migration_real_test.go:93: pairing private follower 4 go sqlite
+    native_migration_real_test.go:93: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-mysql 2 Direct / 2 Relay
+    native_migration_real_test.go:93: real native five-node certificate observation and sequential UDP STUN passed go-mysql
+    native_migration_real_test.go:93: real native matrix SQLite/MySQL revocation and re-pair passed go-mysql
+    native_migration_real_test.go:93: direct-only native network proof: master total=17309349 source tx=186710423 target rx=188601402 payload=137768329
+    native_migration_real_test.go:93: native migration committed real bytes, kept IDs/encryption and grace copies across restart rr objects 50 bytes 137768329 peak cgroup bytes map[0c33085d84de5fbebb7d92142ec9b8009c0fe5f16b7878f7c974c22e641efc82:213610496 bf7a3e2e4627b108efaccfd3d39b958639d363eff17ad17731a02fbdc8273795:79986688 db77cf6b1e4b0f956c56976747d33229c4943a07d35a4cd82492c7024e5af11d:222642176]
+    native_migration_real_test.go:93: native fixture awaits isolated Chromium result /tmp/fc-native-matrix-qhwnnd3_/go-mysql-rr/go-mysql/browser-fixture.json
+    native_migration_real_test.go:93: actual Chromium Admin task rendering and post-restart encrypted native byte/Range verification passed
+    native_migration_real_test.go:93: real one-hour cleanup not awaited in this cutover run
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [2.839 4.189 4.051 4.122 4.306]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [2.972 3.988 4.048 4.107 4.099]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [4.652 6.039 6.148 5.744 4.735]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [3.876 5.531 5.798 5.458 5.838]
+    native_migration_real_test.go:93: five Web idle CPU (one-core percent): [4.016 5.980 5.597 5.822 5.665]
+    native_migration_real_test.go:93: five Web services passed five consecutive one-second idle CPU samples below 20 percent
+--- PASS: TestRealNativeMatrixFleetMigrations (200.62s)
+    --- PASS: TestRealNativeMatrixFleetMigrations/go-mysql-rr (200.62s)
+PASS

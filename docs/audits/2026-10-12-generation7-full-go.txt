@@ -1,0 +1,58 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	0.006s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.804s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	0.031s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	0.010s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	43.750s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	0.040s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	0.008s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	0.176s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	14.625s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.005s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	0.565s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	0.010s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	0.105s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	0.002s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	77.571s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	0.168s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	0.417s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	13.591s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	0.025s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	3.390s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	0.007s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	0.003s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	3.873s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	0.054s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	6.150s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	0.010s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	5.901s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.515s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	0.082s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	0.205s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	0.265s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	0.150s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	0.098s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	0.179s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store	0.085s
+--- FAIL: TestMaintenanceLogicalSnapshotDoesNotEraseIntentsOrReadCredentials (0.06s)
+    aa_maintenance_test.go:55: future schema accepted {7 Standalone map[accounts:0 cold_transfers:1 media_mutations:0 migration_binding_orphans:0 migration_capacity:0 migration_scopes:0 migration_storage:0 placements:0 recordings:0 reserved_storage:0 resource_migrations:0 uploads:0 worker_leases:0] 1 false} <nil>
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	10.617s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	0.384s
+--- FAIL: TestSharedSchemaBootstrapAndUpgrade (0.05s)
+    schema_test.go:117: got 49 tables, want 46
+--- FAIL: TestRejectsIncompleteAndFutureSchemas (0.13s)
+    --- FAIL: TestRejectsIncompleteAndFutureSchemas/UPDATE_frontiercloud_schema_SET_generation=7 (0.05s)
+        schema_test.go:201: invalid schema was accepted
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	0.803s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	0.805s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	6.971s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	0.021s
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]
+FAIL

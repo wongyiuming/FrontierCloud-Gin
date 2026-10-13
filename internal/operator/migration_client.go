@@ -45,7 +45,7 @@ func validClientTask(task store.MigrationTask, master, id string) bool {
 }
 func (c *NodeClient) MigrationStatus(ctx context.Context, id, after string) (store.MigrationStatus, error) {
 	var report store.MigrationStatus
-	if !nodeClientID(id) || after != "" && !clientHash(after) {
+	if !nodeClientID(id) || after != "" && !clientHash(after) && !nodeClientID(after) {
 		return report, ErrNodeAuthority
 	}
 	master, e := c.migrationMaster(ctx)
@@ -67,6 +67,22 @@ func (c *NodeClient) MigrationStatus(ctx context.Context, id, after string) (sto
 	if !validClientTask(report.Task, master, id) || report.RetirementReady || report.After != after || len(report.Objects) > 16 || len(report.ObjectStages) > 16 || len(report.UnitStages) > 16 {
 		return store.MigrationStatus{}, ErrNodeClient
 	}
+	if report.QueuePosition < 0 {
+		return store.MigrationStatus{}, ErrNodeClient
+	}
+	if v := report.Execution; v != nil {
+		if v.TaskID != id || v.CurrentBytes < 0 || v.CurrentTotal < 0 || v.CurrentBytes > v.CurrentTotal || v.CurrentTotal > report.Task.TotalBytes || v.Speed < 0 || len(v.Traffic) > 3 || v.WaitingNode != "" && v.WaitingNode != master && v.WaitingNode != report.Task.SourceID && v.WaitingNode != report.Task.TargetID {
+			return store.MigrationStatus{}, ErrNodeClient
+		}
+		roles := map[string]string{"master": master, "source": report.Task.SourceID, "target": report.Task.TargetID}
+		seen := map[string]bool{}
+		for _, peer := range v.Traffic {
+			if roles[peer.Role] != peer.NodeID || seen[peer.Role] || peer.View.Ingress < 0 || peer.View.Egress < 0 || peer.View.Recent < 0 || peer.View.High <= peer.View.Low || peer.View.Low < 0 || peer.View.ResumeAfter < 0 || peer.View.ResumeAfter > peer.View.LowSeconds {
+				return store.MigrationStatus{}, ErrNodeClient
+			}
+			seen[peer.Role] = true
+		}
+	}
 	for _, stages := range [][]store.MigrationStage{report.ObjectStages, report.UnitStages} {
 		for _, stage := range stages {
 			if stage.Count < 1 || stage.Bytes < 0 || stage.VerifiedBytes < 0 || stage.VerifiedBytes > stage.Bytes || len(stage.State) > 32 {
@@ -76,7 +92,7 @@ func (c *NodeClient) MigrationStatus(ctx context.Context, id, after string) (sto
 	}
 	last := after
 	for _, object := range report.Objects {
-		if !clientHash(object.ID) || !clientHash(object.UnitID) || object.ID <= last || len(object.Path) > 4096 || len(object.State) > 32 || object.Bytes < 0 || object.VerifiedBytes < 0 || object.VerifiedBytes > object.Bytes {
+		if !clientHash(object.ID) && !nodeClientID(object.ID) || !clientHash(object.UnitID) || object.ID <= last || len(object.Path) > 4096 || len(object.State) > 32 || object.Bytes < 0 || object.VerifiedBytes < 0 || object.VerifiedBytes > object.Bytes {
 			return store.MigrationStatus{}, ErrNodeClient
 		}
 		last = object.ID

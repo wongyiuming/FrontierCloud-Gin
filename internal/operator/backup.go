@@ -13,7 +13,6 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
-	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 type StreamRunner interface {
@@ -82,6 +81,17 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		return empty, e
 	}
 	defer done()
+	return d.backupLocked(ctx, receipt, output, freeze, externalWritersStopped)
+}
+
+// backupLocked shares the already held host-operation lock with approved upgrades.
+func (d *Deployment) backupLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
+	return d.backupSetLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false)
+}
+
+// The set coordinator holds every member lifecycle lease before entering here.
+func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool) (recovery.Report, error) {
+	var empty recovery.Report
 	cfg, e := d.ValidateReceipt(ctx, receipt)
 	if e != nil {
 		return empty, e
@@ -136,13 +146,8 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 	if e = d.stoppedWriters(ctx); e != nil {
 		return empty, e
 	}
-	gate, e := maintenance.Open(data)
-	if e != nil {
-		return empty, e
-	}
-	defer gate.Close()
 	var report recovery.Report
-	e = gate.Inspect(ctx, func(ctx context.Context) error {
+	capture := func(ctx context.Context) error {
 		// Repeat Docker state under the native lease. The native lifecycle fence
 		// blocks concurrent initializer/migration/resume writers for this root.
 		if e := d.stoppedWriters(ctx); e != nil {
@@ -152,7 +157,7 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		if e != nil {
 			return e
 		}
-		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || fact.Database.SchemaGeneration != migrations.Generation {
+		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
 		}
 		workspace, e := os.MkdirTemp(filepath.Dir(output), ".fc-backup-")
@@ -179,7 +184,34 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		}
 		sources := []recovery.Root{{Class: "data", Directory: data}, {Class: "deployment", Directory: deployment}}
 		m := recovery.Manifest{NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, Consistency: "native-offline-and-deployment-writers-stopped", Missing: []string{}, KeyReferences: []string{"runtime_secrets/node-vault.key"}}
+		m.RecoverySet = set
+		m.SchemaGeneration = fact.Database.SchemaGeneration
+		boundClasses := map[string]string{}
+		mountedVolumes := map[string]bool{}
+		for name, service := range cfg.Services {
+			for _, mount := range service.Volumes {
+				if mount.Type == "volume" {
+					mountedVolumes[mount.Source] = true
+				}
+				if mount.Type != "bind" || mount.Source == data && mount.Target == "/app/data" {
+					continue
+				}
+				class := recoveredMountClass(name, mount.Target)
+				expectedRoot := filepath.Join(filepath.Dir(d.Directory), class)
+				if !receipt.Recovered || class == "" || filepath.Clean(mount.Source) != expectedRoot {
+					m.Missing = append(m.Missing, "unclassified bind mount on service "+name+" at "+mount.Target)
+					continue
+				}
+				if prior, ok := boundClasses[class]; ok && prior != mount.Source {
+					return errors.New("multiple binds claim one recovery state class")
+				}
+				boundClasses[class] = mount.Source
+			}
+		}
 		for _, n := range fact.Nodes {
+			if set != "" && n.State != "revoked" {
+				m.Relations = append(m.Relations, recovery.Relation{NodeID: n.NodeID, Direction: n.Direction, State: n.State, Protocol: n.Protocol})
+			}
 			if n.State != "revoked" {
 				m.Missing = append(m.Missing, "matching recovery state for related node "+n.NodeID+" is not included")
 			}
@@ -187,10 +219,31 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		m.CompleteCluster = len(m.Missing) == 0
 		classes := map[string]string{"runtime_secrets": "runtime_secrets", "storage_secrets": "runtime_secrets", "certificate_state": "certificate_state", "certificate_published": "certificate_published", "redis_data": "redis_data"}
 		seen := map[string]bool{}
+		for class, directory := range boundClasses {
+			info, e := os.Lstat(directory)
+			if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return errors.New("recovered state bind is missing or unsafe")
+			}
+			seen[class] = true
+			sources = append(sources, recovery.Root{Class: class, Directory: directory})
+			if class == "runtime_secrets" {
+				if _, e := os.Lstat(filepath.Join(directory, "media-premaster.key")); e == nil {
+					m.KeyReferences = append(m.KeyReferences, "runtime_secrets/media-premaster.key")
+				} else if !os.IsNotExist(e) {
+					return e
+				}
+			}
+		}
 		for logical, volume := range cfg.Volumes {
+			// Generated recovery Compose may retain an old, now-unused volume
+			// declaration. It is not mounted state and must not be inspected or
+			// substituted for the restored bind currently consumed by Web.
+			if receipt.Recovered && !mountedVolumes[logical] {
+				continue
+			}
 			class, ok := classes[logical]
 			if !ok {
-				if logical != "web_tmp" && logical != "certificate_runtime" && logical != "mysql_data" {
+				if logical != "web_tmp" && logical != "certificate_runtime" && logical != "traffic_runtime" && logical != "mysql_data" {
 					m.Missing = append(m.Missing, "unclassified volume "+logical)
 				}
 				continue
@@ -244,6 +297,19 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		m.CompleteCluster = len(m.Missing) == 0
 		report, e = recovery.Create(ctx, output, m, sources)
 		return e
-	})
+	}
+	if held {
+		if set == "" || freeze {
+			return empty, errors.New("invalid shared recovery capture boundary")
+		}
+		e = capture(ctx)
+	} else {
+		gate, err := maintenance.Open(data)
+		if err != nil {
+			return empty, err
+		}
+		defer gate.Close()
+		e = gate.Inspect(ctx, capture)
+	}
 	return report, e
 }

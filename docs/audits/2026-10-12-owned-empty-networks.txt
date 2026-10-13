@@ -1,0 +1,12 @@
+removed empty owned fixture network fc-ops-recovery-60d1f52a95a3467b_default
+removed empty owned fixture network fc-ops-recovery-60d1f52a95a3467b-restore_default
+removed empty owned fixture network fc-ops-recovery-674b9cb513ae45c9_default
+removed empty owned fixture network fc-ops-recovery-674b9cb513ae45c9-restore_default
+removed empty owned fixture network fc-ops-recovery-8808aa19a9464343_default
+removed empty owned fixture network fc-ops-recovery-8808aa19a9464343-restore_default
+removed empty owned fixture network fc-ops-recovery-c18d2ed7de8748b0_default
+removed empty owned fixture network fc-ops-recovery-c18d2ed7de8748b0-restore_default
+removed empty owned fixture network fc-ops-recovery-d5683e5c339a4705_default
+removed empty owned fixture network fc-ops-recovery-d5683e5c339a4705-restore_default
+removed empty owned fixture network fc-ops-recovery-d6ff24b8bae04003_default
+No containers, volumes, fixture data or recovery archives removed.

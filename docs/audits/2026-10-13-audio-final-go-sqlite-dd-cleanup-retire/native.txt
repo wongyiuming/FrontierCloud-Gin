@@ -1,0 +1,17 @@
+=== RUN   TestRealNativeMatrixFleetMigrations
+=== RUN   TestRealNativeMatrixFleetMigrations/go-sqlite-dd
+    native_migration_real_test.go:93: pairing private follower 1 go sqlite
+    native_migration_real_test.go:93: pairing private follower 2 go sqlite
+    native_migration_real_test.go:93: pairing private follower 3 go sqlite
+    native_migration_real_test.go:93: pairing private follower 4 go sqlite
+    native_migration_real_test.go:93: real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed go-sqlite 2 Direct / 2 Relay
+    native_migration_real_test.go:93: real native five-node certificate observation and sequential UDP STUN passed go-sqlite
+    native_migration_real_test.go:93: real native matrix SQLite/MySQL revocation and re-pair passed go-sqlite
+    native_migration_real_test.go:93: direct-only native network proof: master total=4652444 source tx=186734930 target rx=188605290 payload=137768329
+    native_migration_real_test.go:93: native migration committed real bytes, kept IDs/encryption and grace copies across restart dd objects 50 bytes 137768329 peak cgroup bytes map[d3d52b8f93644d3136c04e497a5fc013155a0929183a91601abda0d90e6bd347:222236672 d465020b62bbd3bf0bc194a7253a5c57d97e114adeaa748e2eb8f0bdea83681c:104275968 f3511bd130b6cc7ebf0382e9b40c1970d5a645aa5db534e9a73a3e196b6464e5:224280576]
+    native_migration_real_test.go:93: native fixture awaits isolated Chromium result /tmp/fc-native-matrix-sljp0ood/go-sqlite-dd/go-sqlite/browser-fixture.json
+    native_migration_real_test.go:93: actual Chromium Admin task rendering and post-restart encrypted native byte/Range verification passed
+    native_migration_real_test.go:93: go sqlite GET /nodes/migrations/be0631543f19c50c6db0055d9d16ffa8 503 <nil> API security policy unavailable
+--- FAIL: TestRealNativeMatrixFleetMigrations (1784.48s)
+    --- FAIL: TestRealNativeMatrixFleetMigrations/go-sqlite-dd (1784.08s)
+FAIL

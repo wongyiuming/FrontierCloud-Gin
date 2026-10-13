@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
@@ -55,12 +56,27 @@ func RegisterNodeContentObservation(router *gin.Engine, settings config.Config, 
 		if reader == nil {
 			return resourceinventory.ContentObservation{}, resourceinventory.ErrSession
 		}
+		ctx = resourceinventory.WithContentReadAdmission(ctx, func() error {
+			return businesstraffic.Wait(ctx, control.BusinessTraffic)
+		})
 		return reader.ObserveManagedContent(ctx, item, request.Bytes, check)
 	}, nil)
 	if err != nil {
 		return nil, err
 	}
-	router.POST("/internal/v1/content-observation", func(c *gin.Context) {
+	registerContentObservationRPC(router, "/internal/v1/content-observation", settings, resolver, control, jobs, func(ctx context.Context, request resourceinventory.ContentRequest) error {
+		item, e := repository.ExpectedPhysicalObject(ctx, request.Binding.RelationshipID, request.Binding.MemberID, request.Binding.MasterID, request.Resource, request.ObjectID)
+		if e != nil || item.MetadataSHA256 != request.MetadataSHA || item.ExpectedBytes != nil && *item.ExpectedBytes != request.Bytes {
+			return resourceinventory.ErrSession
+		}
+		return nil
+	})
+	return func() error { jobs.Close(); return nil }, nil
+}
+
+func registerContentObservationRPC(router *gin.Engine, route string, settings config.Config, resolver *network.Resolver, control *node.Service, jobs *resourceinventory.ContentJobs, resolve func(context.Context, resourceinventory.ContentRequest) error) {
+	router.POST(route, func(c *gin.Context) {
+
 		c.Header("Cache-Control", "no-store")
 		if !nodeHTTPS(c, settings, resolver) {
 			return
@@ -106,8 +122,7 @@ func RegisterNodeContentObservation(router *gin.Engine, settings config.Config, 
 		}
 		// Revalidate ready metadata and the live relationship for every operation,
 		// including cached status and cancellation. No caller-supplied path is used.
-		item, e := repository.ExpectedPhysicalObject(c.Request.Context(), rel.ID, identity.ID, rel.PeerID, request.Resource, request.ObjectID)
-		if e != nil || item.MetadataSHA256 != request.MetadataSHA || item.ExpectedBytes != nil && *item.ExpectedBytes != request.Bytes {
+		if e = resolve(c.Request.Context(), request.ContentRequest); e != nil {
 			detail(c, 409, "Content observation metadata changed or unavailable")
 			return
 		}
@@ -140,5 +155,5 @@ func RegisterNodeContentObservation(router *gin.Engine, settings config.Config, 
 		}
 		c.JSON(200, result)
 	})
-	return func() error { jobs.Close(); return nil }, nil
+
 }

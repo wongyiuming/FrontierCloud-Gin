@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -71,6 +73,24 @@ func TestAuthenticatedManagedContentObservation(t *testing.T) {
 		t.Fatal("stale metadata")
 	}
 	request["metadata_sha256"] = item.MetadataSHA256
+	// A content proof is read-only planning work, but still hashes real bytes.
+	// Busy business traffic must keep that worker pending rather than fail it.
+	var clockMutex sync.Mutex
+	clock := time.Now().Add(-businesstraffic.LowInterval)
+	traffic := businesstraffic.New(func() time.Time {
+		clockMutex.Lock()
+		defer clockMutex.Unlock()
+		return clock
+	})
+	advance := func(delta time.Duration) {
+		clockMutex.Lock()
+		clock = clock.Add(delta)
+		clockMutex.Unlock()
+	}
+	advance(businesstraffic.LowInterval)
+	traffic.Snapshot()
+	traffic.Ingress(int(businesstraffic.HighBytesPerSecond))
+	storage.ConfigureBusinessTraffic(traffic)
 	result, e := master.Call(ctx, rel, route, request)
 	if e != nil {
 		t.Fatal(e)
@@ -82,6 +102,17 @@ func TestAuthenticatedManagedContentObservation(t *testing.T) {
 	}
 	request["action"] = "status"
 	request["incarnation"] = job.Incarnation
+	time.Sleep(20 * time.Millisecond)
+	result, e = master.Call(ctx, rel, route, request)
+	if e != nil || decodeInventory(result, &job) != nil || job.State == "observed" || job.State == "failed" {
+		t.Fatal("busy content observation did not remain pending", job.State, e)
+	}
+	advance(businesstraffic.Window)
+	traffic.Snapshot()
+	advance(businesstraffic.LowInterval)
+	if !traffic.Snapshot().CanRun {
+		t.Fatal("quiet observation did not permit source hashing")
+	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		result, e = master.Call(ctx, rel, route, request)

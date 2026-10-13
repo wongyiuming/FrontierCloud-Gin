@@ -9,7 +9,7 @@ import (
 // Explicit confirmation is required. Neither task completion nor retirement
 // calls this automatically. Each side removes only this task-owned restriction.
 func (r *Runner) ReleaseDrain(ctx context.Context, task, confirmation string, a store.NodeAudit) error {
-	w, e := r.Repository.MigrationWork(ctx, task)
+	w, e := r.header(ctx, task)
 	if e != nil {
 		return e
 	}

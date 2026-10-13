@@ -33,7 +33,24 @@ func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.Migr
 				return
 			}
 		}
-		value, e := repository.MigrationTasksPage(c.Request.Context(), stamp, after)
+		var value store.MigrationTaskPage
+		var e error
+		switch c.Query("view") {
+		case "queue":
+			queue, ok := repository.(interface {
+				MigrationQueuePage(context.Context, int64, string) (store.MigrationTaskPage, error)
+			})
+			if !ok {
+				failed(c)
+				return
+			}
+			value, e = queue.MigrationQueuePage(c.Request.Context(), stamp, after)
+		case "", "history":
+			value, e = repository.MigrationTasksPage(c.Request.Context(), stamp, after)
+		default:
+			invalid(c, "query", "view")
+			return
+		}
 		if e != nil {
 			failed(c)
 			return
@@ -49,6 +66,13 @@ func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.Migr
 		if e != nil {
 			failed(c)
 			return
+		}
+		if value.Task.State != "paused" && value.Task.State != "failed" && value.Task.State != "completed" && value.Task.State != "cancelled" && len(releasers) == 1 {
+			if runtime, ok := releasers[0].(interface {
+				ExecutionStatus(string) *store.MigrationExecution
+			}); ok {
+				value.Execution = runtime.ExecutionStatus(value.Task.ID)
+			}
 		}
 		c.JSON(200, value)
 	})

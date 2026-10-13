@@ -18,7 +18,7 @@ func (r *Repository) PeerMigrationUnitCancelWork(ctx context.Context, rel string
 }
 func (r *Repository) CompletePeerMigrationUnitCancellation(ctx context.Context, rel string, l store.MigrationLease, g store.MigrationUnitFinishGrant, a store.NodeAudit) (receipt store.MigrationUnitFinishReceipt, e error) {
 	e = r.write(ctx, func(q queryer) error {
-		if _, e := r.peerUnitFinishWork(ctx, q, rel, l, g, true); e != nil {
+		if e := r.validatePeerUnit(ctx, q, rel, l, g, true, nil); e != nil {
 			return e
 		}
 		n, e := r.ownedStorageNode(ctx, q, rel)
@@ -46,6 +46,18 @@ func (r *Repository) CompletePeerMigrationUnitCancellation(ctx context.Context, 
 			if e = q.QueryRowContext(ctx, "SELECT COALESCE(SUM(expected_bytes),0) FROM migration_storage_journal WHERE task_id=? AND unit_id=? AND state='aborted'", l.TaskID, g.Unit.ID).Scan(&refund); e != nil {
 				return e
 			}
+			record, _, e := r.peerRecord(ctx, q, l.TaskID)
+			if e != nil {
+				return e
+			}
+			if record.CancellationOnly {
+				// A target that never admitted copying must still prove native
+				// staging absent/aborted, but has no original reservation to refund.
+				if refund != g.Unit.Bytes {
+					return store.ErrMigrationState
+				}
+				refund = 0
+			}
 			var reserved, memberReserved int64
 			if e = q.QueryRowContext(ctx, "SELECT reserved_bytes FROM migration_capacity WHERE task_id=? AND member_id=?"+r.lock(), l.TaskID, n.ID).Scan(&reserved); e != nil {
 				return e
@@ -54,6 +66,9 @@ func (r *Repository) CompletePeerMigrationUnitCancellation(ctx context.Context, 
 				return e
 			}
 			if reserved < refund || memberReserved < refund {
+				return store.ErrMigrationState
+			}
+			if record.CancellationOnly && reserved != 0 {
 				return store.ErrMigrationState
 			}
 			now := time.Now().Unix()

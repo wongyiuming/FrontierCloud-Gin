@@ -407,3 +407,68 @@ Retained native-state inventory exceptions require native observations: known ze
 
 
 Terminal peer migration ledgers reconcile scalar task/unit/object rosters and role-specific journal outcomes. Cleaned committed units retain source deleted and target published-or-later-deleted history; cancelled uncommitted units retain source receiving and target aborted/deleted history. A terminal task cannot hide missing bindings/units, mismatched counts/bytes, incomplete grace or active runner leases. Resource ownership, reservations, scopes, reads, physical material and recovery retention are independent gates. These readonly diagnostic queries do not substitute for archived binding integrity validation or a final durable revocation fence.
+
+### Paged migration plans and explicit protocol support
+
+Generation 7 stores plan headers, immutable admitted object bindings and target
+path observations separately. Preview records do not drain members, reserve
+capacity or change ownership. Native inventories, content proofs and keyset SQL
+pages bind the complete source catalog to an incremental digest; a page boundary
+must never become an ownership boundary. Start rechecks identity and catalog
+facts, then admits the task with its source drain, scopes and reservation in one
+transaction. Runtime operations page through the same bound roster. Ownership
+still changes for an entire immediate-parent unit in a short commit transaction;
+copying never holds that transaction open. The bounded legacy task representation
+remains readable for already recorded tasks.
+
+Current nodes explicitly advertise `resource-migration-direct-v1`. Missing optional
+capability fields retain only the historical protocol-v2 baseline. Compatibility
+fallback must never grant a newly added migration, release or restore feature.
+
+Master computation and data traffic must be avoided wherever business work can
+run on storage peers. An administrator-selected Relay deployment remains a
+business transport choice; it never authorizes migration data relay. Migration
+bytes travel directly from source Storage to target Storage for every Direct/Relay
+combination. Master only coordinates tasks, public identity grants, progress and
+ownership commits. Neither administrator approval nor connectivity failure can
+enable a Master migration relay. Unreachable peers retain source authority and
+durable target checkpoints until connectivity is repaired. Source cancellation
+proofs hash bytes locally and return only version-bound proof metadata.
+
+Heavy migration work is queued durably and must yield to external business HTTP
+traffic on Master and both peers. Automatic traffic waiting must retain task
+intent and checkpoints separately from an administrator's manual pause. Resume
+requires a sustained low-traffic interval with hysteresis; migration/control
+traffic must not count as external business traffic or prevent its own resume.
+Admin observation must expose the queue, waiting reason, measured rates, stage,
+objects, byte progress and failures. The HTTP process counts actual request-body
+reads and response writes incrementally, including storage business data routes
+used by Relay. Migration/control and its Admin observation traffic are excluded.
+Five-second rates plus a one-second burst observation pause new chunks at
+256 KiB/s; resumption requires rates at or below 64 KiB/s for thirty continuously
+observed seconds. Startup waits for that low interval too. The persisted task
+remains runnable with `waiting_business_traffic`; manual pause remains a separate
+state and invalidates its runner lease. Local disk scans yield at bounded reads,
+without marking traffic deferral as corruption. Deferred destructive operations
+obtain fresh proofs again before applying their grants. Nginx's bounded native
+counter module measures actual request-length/sent-byte deltas without changing
+sendfile or HTTP/2 delivery. A read-only Unix socket shares aggregate rates with
+Web; missing/stale observations fail closed and a new gateway epoch restarts the
+quiet interval. The IPC volume is reconstructible and is not recovery state.
+Full native fleet and load assertions still require coherent-image acceptance.
+
+### Final retirement admission
+
+Retirement first records a persistent `retiring` relationship and denies normal
+work using that relationship. An independent per-data-root OS request lease joins
+already authenticated internal HTTP requests and asynchronous migration workers.
+Final peer completion holds its exclusive request lease and both native resource
+mutation barriers while rechecking the SQL ledger and native filesystem. A
+previous successful preflight is never accepted as the final proof. Pending
+transactions, reads, sole recovery points and unknown material remain blocking.
+
+Only the narrowly authenticated retirement receipt channel remains usable after
+revocation, so a lost acknowledgement can reconcile the same tombstone without
+restoring normal credentials. Identity reset cannot bypass an unfinished fence.
+Completed history, identities and recovery materials remain retained; business
+retirement never stops containers or removes volumes, certificates or disks.

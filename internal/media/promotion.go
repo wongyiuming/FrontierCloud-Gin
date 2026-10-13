@@ -16,7 +16,7 @@ import (
 )
 
 func (s *Service) ControlLease(ctx context.Context) (func(), error) {
-	if info, err := s.root.Lstat(".node-control.lock"); err == nil && !info.Mode().IsRegular() {
+	if info, err := s.root.Lstat(".node-control.lock"); err == nil && (!info.Mode().IsRegular() || info.Size() != 0) {
 		return nil, ErrRecovery
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -25,7 +25,27 @@ func (s *Service) ControlLease(ctx context.Context) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return filelease.Acquire(ctx, file, true)
+	opened, err := file.Stat()
+	current, e := s.root.Lstat(".node-control.lock")
+	if err != nil || e != nil || !current.Mode().IsRegular() || current.Size() != 0 || !os.SameFile(opened, current) {
+		file.Close()
+		return nil, ErrRecovery
+	}
+	release, err := filelease.Acquire(ctx, file, true)
+	if err != nil {
+		return nil, err
+	}
+	s.controlLeaseMu.Lock()
+	s.controlLeaseFile = file
+	s.controlLeaseMu.Unlock()
+	return func() {
+		s.controlLeaseMu.Lock()
+		if s.controlLeaseFile == file {
+			s.controlLeaseFile = nil
+		}
+		release()
+		s.controlLeaseMu.Unlock()
+	}, nil
 }
 
 func (s *Service) PhysicalCapacity(ctx context.Context) (total, free int64, err error) {

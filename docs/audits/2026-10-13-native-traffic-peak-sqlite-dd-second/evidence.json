@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "database": "go-sqlite",
+  "combination": "dd",
+  "workspace": "/tmp/fc-native-matrix-629kfnpr",
+  "project": "fc-matrix-841bff78-0376-4ebb-b1bb-3a2013eb3146-dd-go-sqlite",
+  "image_ids": {
+    "native": "sha256:becc53b7e256a5a16245d31123997e8cdd01be13683094f81efdf25637011a9d",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:2e15aa9b217895fb416b371449294c2a157d1f1194f2553756fd486e6b2cd3f8"
+  },
+  "test_binary_sha256": "a64fba3773d7f6a30fd938b61c4c2aa796fd96c036b3b34ccf7f216fe789b187",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": true,
+  "unreachable_peer_selected": false,
+  "elapsed_seconds": 255.439,
+  "actual_chromium": {
+    "passed": true,
+    "real_server": true,
+    "decrypted": true,
+    "stage": "complete",
+    "real_task_cleanup_pending": true,
+    "source_target_visible": true,
+    "source_retirement_blocked": true,
+    "plaintext_bytes": 1440000,
+    "plaintext_sha256": "dd5f377088e588878f8ec65b35285acf4491891ec428126926c71dbca1de7c4b",
+    "cross_chunk_range": true,
+    "range_status": 206,
+    "service_worker_controlled": true,
+    "secure_context": true,
+    "network_response_counts": {
+      "crypto_session": 1,
+      "crypto_key": 1,
+      "cipher_response": 4,
+      "service_worker_response": 2
+    },
+    "native_authentication": true,
+    "shipped_browser_modules": true,
+    "no_backend_mocks": true,
+    "audible_playback_verified": false,
+    "browser_private_ca_exception": true
+  },
+  "owned_cleanup_complete": true
+}

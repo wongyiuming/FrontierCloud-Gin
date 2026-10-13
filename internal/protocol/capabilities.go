@@ -14,6 +14,13 @@ func BaselineCapabilities() []string {
 	return []string{"backup-v2", "media-v2", "node-auth-v2", "recordings-v2", "storage-v2"}
 }
 
+// AdvertisedCapabilities is the explicit feature set of this implementation.
+// Keep it separate from the legacy fallback: a missing capability field must
+// never authorize migration on a peer that predates the migration protocol.
+func AdvertisedCapabilities() []string {
+	return []string{"backup-v2", "media-v2", "node-auth-v2", "recordings-v2", "resource-migration-direct-v1", "storage-v2"}
+}
+
 // ReadCapabilities is called only after authenticating a protocol-v2 peer.
 // Older peers lacking the optional field retain the documented v2 baseline;
 // explicit empty lists mean no optional operation and never imply new features.
@@ -56,7 +63,7 @@ func NegotiateCapabilities(message map[string]any, required ...string) ([]string
 		return nil, err
 	}
 	selected := []string{}
-	for _, local := range BaselineCapabilities() {
+	for _, local := range AdvertisedCapabilities() {
 		if slices.Contains(peer, local) {
 			selected = append(selected, local)
 		}

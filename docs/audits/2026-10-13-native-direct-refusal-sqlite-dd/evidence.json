@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "database": "go-sqlite",
+  "combination": "dd",
+  "workspace": "/tmp/fc-native-matrix-g6vzdgqw",
+  "project": "fc-matrix-e42f2633-1161-4f2f-a0e5-a5624de3c050-dd-go-sqlite",
+  "image_ids": {
+    "native": "sha256:becc53b7e256a5a16245d31123997e8cdd01be13683094f81efdf25637011a9d",
+    "agent": "sha256:b3b86ccbc8b6ff73c87d5a4300c429390b2d807d69c0196da1c5faff7227986d",
+    "edge": "sha256:2e15aa9b217895fb416b371449294c2a157d1f1194f2553756fd486e6b2cd3f8"
+  },
+  "test_binary_sha256": "a64fba3773d7f6a30fd938b61c4c2aa796fd96c036b3b34ccf7f216fe789b187",
+  "private_test_images": true,
+  "public_release_proof": false,
+  "real_cleanup_wait_selected": false,
+  "real_business_traffic_selected": false,
+  "unreachable_peer_selected": true,
+  "elapsed_seconds": 99.014,
+  "actual_chromium": null,
+  "owned_cleanup_complete": true
+}

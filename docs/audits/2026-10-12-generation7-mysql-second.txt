@@ -1,0 +1,2 @@
+Error response from daemon: all predefined address pools have been fully subnetted
+Schema acceptance failed; isolated fixture retained: fc-schema-1791862107-3130106-mysql, private material /tmp/fc-schema-secrets-ApYPGSxH

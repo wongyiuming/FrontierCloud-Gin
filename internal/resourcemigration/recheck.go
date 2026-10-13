@@ -16,7 +16,7 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 	if e = r.Repository.ValidateMigrationLease(ctx, l); e != nil {
 		return proof, e
 	}
-	w, e := r.Repository.MigrationWork(ctx, l.TaskID)
+	w, e := r.objectWork(ctx, l.TaskID, id)
 	if e != nil {
 		return proof, e
 	}
@@ -69,7 +69,26 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 	}
 	started := time.Now().Unix()
 	deadline := time.Now().Add(30 * time.Minute)
+	scheduler := trafficSchedule{runner: r, source: source, target: target, task: l.TaskID, master: w.Task.MasterID}
+	ensure := func() error {
+		if err := r.Repository.ValidateMigrationLease(ctx, l); err != nil {
+			return err
+		}
+		if time.Now().Unix() >= l.ExpiresAt-40 {
+			var err error
+			l, err = r.Repository.RenewMigration(ctx, l, time.Minute)
+			if err != nil {
+				return err
+			}
+			req.Lease = l
+			return refresh()
+		}
+		return ctx.Err()
+	}
 	for {
+		if e = scheduler.wait(ctx, &l, w.Task.State, id, ensure); e != nil {
+			return proof, e
+		}
 		if e = r.Repository.ValidateMigrationLease(ctx, l); e != nil {
 			return proof, e
 		}
@@ -102,7 +121,7 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 			}
 			return store.MigrationCleanupProof{MigrationDiskProof: store.MigrationDiskProof{ID: id, Version: o.Version, Bytes: o.Bytes, SHA256: checkpoint.SourceSHA}, VerifiedAt: cp.RecheckedAt}, nil
 		}
-		if time.Now().After(deadline) {
+		if time.Now().After(deadline.Add(scheduler.waited)) {
 			return proof, context.DeadlineExceeded
 		}
 		if e = delay(ctx); e != nil {

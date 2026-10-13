@@ -1,0 +1,42 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	3.469s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  109.5MB
+Step 1/7 : FROM frontiercloud-ops-test:01a13082-web-recovery
+ ---> 2159b3607d1a
+Step 2/7 : USER root
+ ---> Running in ba4018ad535a
+ ---> Removed intermediate container ba4018ad535a
+ ---> 4cdd87426dd0
+Step 3/7 : COPY .ci-out/frontiercloud /app/frontiercloud
+ ---> e61484816856
+Step 4/7 : COPY .ci-out/fc /app/operator/fc
+ ---> 491e6f49be72
+Step 5/7 : COPY --chown=10001:10001 static /app/static
+ ---> ec96cb941bfa
+Step 6/7 : LABEL frontiercloud.test.run="fc-upgrade-01a13082" frontiercloud.test.upgrade="source"
+ ---> Running in 5c3f2b1336bd
+ ---> Removed intermediate container 5c3f2b1336bd
+ ---> ea906405ce28
+Step 7/7 : USER 10001:10001
+ ---> Running in 51627d382498
+ ---> Removed intermediate container 51627d382498
+ ---> 090cf41ac0c9
+Successfully built 090cf41ac0c9
+Successfully tagged frontiercloud-ops-test:01a13082-upgrade-source
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  109.5MB
+Step 1/2 : FROM frontiercloud-ops-test:01a13082-upgrade-source
+ ---> 090cf41ac0c9
+Step 2/2 : LABEL frontiercloud.test.run="fc-upgrade-01a13082" frontiercloud.test.upgrade="target"
+ ---> Running in 6e6dd5d3e506
+ ---> Removed intermediate container 6e6dd5d3e506
+ ---> aa260778705e
+Successfully built aa260778705e
+Successfully tagged frontiercloud-ops-test:01a13082-upgrade-target

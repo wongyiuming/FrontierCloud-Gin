@@ -70,6 +70,14 @@ func TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota(t *test
 func TestAuthenticatedRecordingAnchorWorkerLossRequiresExplicitRetry(t *testing.T) {
 	authenticatedRecordingPublication(t, true, true, false, false, false, false, true)
 }
+func TestAuthenticatedRecordingPagedPlanningRecoveryAcceptance(t *testing.T) {
+	if os.Getenv("FRONTIERCLOUD_TEST_PAGED_RECOVERY") != "1" {
+		t.Skip("isolated native paged recording acceptance")
+	}
+	t.Setenv("FRONTIERCLOUD_TEST_PAGED_RUNNER", "1")
+	t.Run("encrypted-cleanup", func(t *testing.T) { authenticatedRecordingPublication(t, true, true) })
+	t.Run("encrypted-shadow-cancel", func(t *testing.T) { authenticatedRecordingPublication(t, true, true, true) })
+}
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
 	unpublish := len(cleanup) > 2 && cleanup[2]
@@ -197,6 +205,13 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 		}
 		o := catalog.Objects[0]
 		plan := store.MigrationPlan{ID: strings.Repeat("c", 32), Catalog: catalog, TargetAbsent: true, TargetFree: 10 * store.GiB, CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + 120, Proofs: []store.MigrationDiskProof{{ID: id, Version: o.Version, Bytes: o.Bytes, SHA256: sha}}}
+		if os.Getenv("FRONTIERCLOUD_TEST_PAGED_RUNNER") == "1" {
+			observation, err := (&resourcemigration.Runner{Repository: repo, Nodes: mdb.Nodes(), Client: master}).ObservePlan(ctx, plan.ID, srel.PeerID, trel.PeerID, nil)
+			if err != nil || len(observation.Plan.Catalog.Blockers) != 0 {
+				t.Fatal("authenticated recording plan", observation.Plan.Catalog.Blockers, err)
+			}
+			plan = observation.Plan
+		}
 		if _, e = repo.StartMigration(ctx, plan, store.NodeAudit{}); e != nil {
 			t.Fatal(e)
 		}
@@ -497,20 +512,23 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 	req := migrationDataRequest{Lease: l, Spec: migrationdata.Spec{TaskID: task, MasterID: mid.ID, SourceID: srel.PeerID, TargetID: trel.PeerID, LogicalID: id, ObjectID: id, Resource: "recording", TargetPath: o.TargetPath, Bytes: o.Bytes, SHA256: sha, SourceVersion: o.Version, Recording: binding}}
 	prefix := "/internal/v1/resource-migration/data/"
 	call(trel, prefix+"begin", req)
+	req.TargetPublicKey = trel.PublicKey
+	grantReply := call(srel, prefix+"delegate", req)
+	var directGrant migrationdata.Signed
+	if e = migrationDecodePeer(grantReply, &directGrant); e != nil {
+		t.Fatal(e)
+	}
+	req.TargetPublicKey = ""
+	req.SourcePublicKey = srel.PublicKey
+	req.SourceEndpoint = srel.Endpoint
+	req.TransferGrant = &directGrant
 	for offset := 0; offset < len(payload); offset += migrationdata.ChunkBytes {
 		req.Offset = int64(offset)
 		req.Length = min(migrationdata.ChunkBytes, len(payload)-offset)
-		response := call(srel, prefix+"read", req)
-		encoded, _ := response["data"].(string)
-		data, e := base64.StdEncoding.DecodeString(encoded)
-		if e != nil {
-			t.Fatal(e)
+		response := call(trel, prefix+"pull", req)
+		if _, exists := response["data"]; exists {
+			t.Fatal("Master received recording bytes")
 		}
-		req.Data = data
-		req.SHA, _ = response["chunk_sha256"].(string)
-		call(trel, prefix+"append", req)
-		req.Data = nil
-		req.SHA = ""
 	}
 	wait := func(phase string) {
 		t.Helper()

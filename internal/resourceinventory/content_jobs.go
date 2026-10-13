@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -37,18 +38,31 @@ type contentJobState struct {
 	active   bool
 }
 type ContentJobs struct {
-	mutex   sync.Mutex
-	ctx     context.Context
-	cancel  context.CancelFunc
-	observe ContentObserver
-	now     func() time.Time
-	queue   chan *contentJobState
-	current *contentJobState
-	done    chan struct{}
-	closed  bool
+	mutex    sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	observe  ContentObserver
+	now      func() time.Time
+	queue    chan *contentJobState
+	current  *contentJobState
+	done     chan struct{}
+	closed   bool
+	validate func(ContentRequest) bool
 }
 
 func NewContentJobs(parent context.Context, observe ContentObserver, now func() time.Time) (*ContentJobs, error) {
+	return newContentJobs(parent, observe, now, validContentRequest)
+}
+
+// Backup observations retain the same bounded worker lifecycle, but cannot
+// admit media/recordings or arbitrary generation/path formats.
+func NewBackupJobs(parent context.Context, observe ContentObserver, now func() time.Time) (*ContentJobs, error) {
+	return newContentJobs(parent, observe, now, func(request ContentRequest) bool {
+		generation, e := strconv.ParseInt(request.ObjectID, 10, 64)
+		return e == nil && generation > 0 && strconv.FormatInt(generation, 10) == request.ObjectID && request.Resource == "backup" && request.Binding.Scope == "data" && validBinding(request.Binding) && sessionID.MatchString(request.ID) && contentHash(request.MetadataSHA) && request.Bytes >= 0
+	})
+}
+func newContentJobs(parent context.Context, observe ContentObserver, now func() time.Time, validate func(ContentRequest) bool) (*ContentJobs, error) {
 	if parent == nil || observe == nil {
 		return nil, ErrSession
 	}
@@ -56,7 +70,7 @@ func NewContentJobs(parent context.Context, observe ContentObserver, now func() 
 		now = time.Now
 	}
 	ctx, cancel := context.WithCancel(parent)
-	jobs := &ContentJobs{ctx: ctx, cancel: cancel, observe: observe, now: now, queue: make(chan *contentJobState, 1), done: make(chan struct{})}
+	jobs := &ContentJobs{ctx: ctx, cancel: cancel, observe: observe, now: now, validate: validate, queue: make(chan *contentJobState, 1), done: make(chan struct{})}
 	go jobs.run()
 	return jobs, nil
 }
@@ -86,7 +100,7 @@ func (j *ContentJobs) Start(request ContentRequest) (ContentJob, error) {
 	j.mutex.Lock()
 	defer j.mutex.Unlock()
 	j.expireLocked()
-	if j.closed || j.ctx.Err() != nil || !validContentRequest(request) {
+	if j.closed || j.ctx.Err() != nil || !j.validate(request) {
 		return ContentJob{}, ErrSession
 	}
 	if j.current != nil {

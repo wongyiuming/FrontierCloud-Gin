@@ -3,12 +3,14 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
-	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func TestPriorityGenerationThreeUpgradePreservesFactsAndRollsBack(t *testing.T) {
@@ -113,8 +115,8 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 	if err := store.database.QueryRow("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 46 {
-		t.Fatalf("got %d tables, want 46", count)
+	if count != 49 {
+		t.Fatalf("got %d tables, want 49", count)
 	}
 	if _, err := store.database.Exec("DROP TABLE frontiercloud_schema_migrations"); err != nil {
 		t.Fatal(err)
@@ -130,7 +132,7 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	if generation != migrations.Generation {
-		t.Fatalf("generation=%d, want 5", generation)
+		t.Fatalf("generation=%d, want %d", generation, migrations.Generation)
 	}
 	var checksum string
 	if err := store.database.QueryRow("SELECT checksum FROM frontiercloud_schema_migrations WHERE generation=2").Scan(&checksum); err != nil {
@@ -184,7 +186,7 @@ func TestGenerationTwoUpgradeAddsEncryptionWithoutChangingObjects(t *testing.T) 
 }
 
 func TestRejectsIncompleteAndFutureSchemas(t *testing.T) {
-	for _, change := range []string{"DROP TABLE karaoke_users", "UPDATE frontiercloud_schema SET generation=7"} {
+	for _, change := range []string{"DROP TABLE karaoke_users", fmt.Sprintf("UPDATE frontiercloud_schema SET generation=%d", migrations.Generation+1)} {
 		t.Run(change, func(t *testing.T) {
 			store, err := Open(filepath.Join(t.TempDir(), "schema.db"))
 			if err != nil {
