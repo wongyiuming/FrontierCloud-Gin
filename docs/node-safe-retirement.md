@@ -22,7 +22,7 @@ node, wipes storage, reassigns a backup or rotates the local identity.
    manual deletion just to make the report pass. Backup generations, chunks and
    placement remain blockers: an observed backup checksum alone does not prove
    that replacement and retention requirements have been met.
-4. Use **确认安全退役** and enter the exact source NodeID, or:
+4. Use the safe retirement confirmation button and enter the exact source NodeID, or:
 
    ```text
    fc --json node retire apply NODE_ID --confirm-node-id NODE_ID --master https://master.example --credential-stdin
