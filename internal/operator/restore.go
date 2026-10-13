@@ -24,16 +24,17 @@ type InputRunner interface {
 	RunFrom(context.Context, io.Reader, string, ...string) error
 }
 type RestoreState struct {
-	Version          int             `json:"version"`
-	NodeID           string          `json:"node_id"`
-	ArchiveSHA       string          `json:"archive_sha256"`
-	SourceProject    string          `json:"source_project"`
-	Project          string          `json:"target_project"`
-	Phase            string          `json:"phase"`
-	OwnManual        bool            `json:"owns_manual_maintenance"`
-	ManualStaged     bool            `json:"manual_creation_staged,omitempty"`
-	DatabaseImported bool            `json:"database_imported"`
-	Report           recovery.Report `json:"recovery"`
+	Version             int             `json:"version"`
+	NodeID              string          `json:"node_id"`
+	ArchiveSHA          string          `json:"archive_sha256"`
+	SourceProject       string          `json:"source_project"`
+	Project             string          `json:"target_project"`
+	Phase               string          `json:"phase"`
+	OwnManual           bool            `json:"owns_manual_maintenance"`
+	ManualStaged        bool            `json:"manual_creation_staged,omitempty"`
+	StageCleanupWarning string          `json:"stage_cleanup_warning,omitempty"`
+	DatabaseImported    bool            `json:"database_imported"`
+	Report              recovery.Report `json:"recovery"`
 }
 
 var composeProject = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -303,6 +304,9 @@ func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmatio
 	if !r.Recovered || confirmation != state.NodeID || !sourceOffline {
 		return state, errors.New("restored NodeID confirmation and explicit source-offline confirmation required")
 	}
+	if !coordinated && len(state.Report.Manifest.Missing) != 0 {
+		return state, errors.New("incomplete related-node recovery requires coordinated set activation")
+	}
 	if state.Phase == "preparing" {
 		return state, errors.New("finish the matching restore preparation before activation")
 	}
@@ -426,13 +430,16 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 	if e != nil {
 		return state, e
 	}
+	if !coordinated && len(state.Report.Manifest.Missing) != 0 {
+		return state, errors.New("incomplete related-node recovery requires coordinated set opening")
+	}
 	ready := state.Phase == "opened" && r.State == "ready"
 	recovering := state.Phase == "opening" || state.Phase == "opened"
 	if !r.Recovered || state.NodeID != confirmation || (!ready && state.Phase != "verified" && !recovering) || (!state.OwnManual && state.Phase != "opened") || !state.Report.BusinessVerified {
 		return state, errors.New("opening requires a verified restored identity and maintenance owned by this restore; prior administrator maintenance is preserved")
 	}
 	if ready {
-		return state, nil
+		return d.cleanupRestoreStage(ctx, state)
 	}
 	data, e := os.OpenRoot(filepath.Join(filepath.Dir(d.Directory), "data"))
 	if e != nil {
@@ -510,6 +517,9 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 	}
 	state.OwnManual = false
 	state.Phase = "opened"
+	if state.ManualStaged {
+		state.StageCleanupWarning = "ready restored deployment retains generated ownership staging pending cleanup"
+	}
 	e = d.saveRestore(state)
 	if e == nil {
 		r.State = "ready"
@@ -521,10 +531,16 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 		state.Phase = "verified"
 		_ = d.saveRestore(state)
 	} else if state.ManualStaged {
-		// Ready state is durable; this generated ownership inode is no longer
-		// needed and must not become unowned scratch in a later recovery.
-		_ = data.Remove(restoreManualStage)
-		_ = fsutil.SyncDirectory(data, ".")
+		// The site lease is already held; finish the generated private cleanup
+		// without touching public administrator maintenance.
+		cleanupErr := data.Remove(restoreManualStage)
+		if cleanupErr == nil || os.IsNotExist(cleanupErr) {
+			cleanupErr = fsutil.SyncDirectory(data, ".")
+		}
+		if cleanupErr == nil {
+			state.StageCleanupWarning = ""
+		}
+		e = d.saveRestore(state)
 	}
 	return state, e
 }

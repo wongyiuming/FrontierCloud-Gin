@@ -150,3 +150,17 @@ The actual native driver now exercises separate CLI preparation on existing
 restored material. Fresh native validation and exact-head CI/review for the
 latest fixes remain pending. No production changes or public target release
 proof are claimed.
+
+## Sixth review checkpoint
+
+`15a8d2d` passes actual native SQLite/MySQL upgrade/resume, separate CLI restore
+preparation/activation/opening with HTTP Range, two-node coordinated recovery,
+Master/Direct pre-initialization install resume, and full Go race. Three subsequent
+findings are corrected: incomplete related-node manifests cannot use single-node
+prepare/activate/open; recovery JSON output failure returns nonzero; ready restore
+staging cleanup is recorded and retryable without changing administrator manual
+maintenance. Pending cleanup blocks another backup so generated staging cannot
+become unowned later recovery material. `pr14-sixth-review-race` passes the affected
+operator/recovery/CLI packages, including real incomplete archive rejection,
+output writer failure and ready cleanup/admin preservation. Latest exact native
+and CI/review gates remain pending. Production is still untouched.

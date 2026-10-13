@@ -428,3 +428,15 @@ Administrator maintenance blocks activation before consumers start; after separa
 administrator clearance, repeat the same activation rather than claiming that
 marker's ownership. Exclusive JSON intent publication is synced and atomic,
 with no-overwrite final-name semantics.
+
+`restore prepare` rejects archives with missing related-node recovery material,
+even if someone extracted the tar externally. Those archives require the verified
+coordinated recovery-set path. Activation/opening enforce the same boundary.
+Recovery commands return a nonzero status if their result JSON cannot be written;
+completed side effects and recovery artifacts remain available for inspection.
+
+Restore opening records a generated staging cleanup warning before cleanup.
+Successful ready-state retries remove only the recorded private ownership stage,
+preserving administrator public maintenance. A pending or unverified restore-stage
+cleanup blocks another operator backup, preventing that staging file from becoming
+unowned material in a later recovery archive.

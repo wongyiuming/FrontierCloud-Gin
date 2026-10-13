@@ -5,7 +5,9 @@ import (
 	"errors"
 	"os"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
+	"path/filepath"
 )
 
 const restoreManualStage = ".fc-restore-manual"
@@ -38,4 +40,36 @@ func (d *Deployment) prepareRestoreManual(ctx context.Context, data string, stat
 		}
 	}
 	return ensureStagedManual(root, restoreManualStage, state.Phase == "creating_manual")
+}
+
+func (d *Deployment) cleanupRestoreStage(ctx context.Context, state RestoreState) (RestoreState, error) {
+	if !state.ManualStaged {
+		return state, nil
+	}
+	root, e := os.OpenRoot(filepath.Join(filepath.Dir(d.Directory), "data"))
+	if e != nil {
+		return state, e
+	}
+	defer root.Close()
+	done, e := sitecontrol.Lease(ctx, root, true)
+	if e != nil {
+		return state, e
+	}
+	defer done()
+	if info, err := root.Lstat(restoreManualStage); err == nil {
+		content, readErr := root.ReadFile(restoreManualStage)
+		if !info.Mode().IsRegular() || readErr != nil || string(content) != "manual\n" {
+			return state, errors.New("recorded restore stage cleanup evidence changed")
+		}
+		if e = root.Remove(restoreManualStage); e != nil {
+			return state, e
+		}
+	} else if !os.IsNotExist(err) {
+		return state, err
+	}
+	if e = fsutil.SyncDirectory(root, "."); e != nil {
+		return state, e
+	}
+	state.StageCleanupWarning = ""
+	return state, d.saveRestore(state)
 }

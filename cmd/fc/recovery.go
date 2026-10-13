@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -14,6 +15,10 @@ import (
 )
 
 func recoveryCommand(ctx context.Context, directory string, args []string) int {
+	return recoveryCommandOutput(ctx, directory, args, os.Stdout, os.Stderr)
+}
+
+func recoveryCommandOutput(ctx context.Context, directory string, args []string, outputWriter, errorWriter io.Writer) int {
 	if len(args) < 2 {
 		return 2
 	}
@@ -63,6 +68,10 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 			err = errors.New("restore preparation NodeID mismatch")
 			break
 		}
+		if len(report.Manifest.Missing) != 0 {
+			err = errors.New("incomplete related-node recovery requires a verified coordinated recovery set")
+			break
+		}
 		deployment := filepath.Join(*target, "deployment")
 		check := recovery.CheckMaterial
 		if _, e := os.Lstat(filepath.Join(deployment, operator.RestoreJournal)); e == nil {
@@ -109,8 +118,7 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		_ = json.NewEncoder(os.Stdout).Encode(state)
-		return 0
+		return encodeRecoveryOutput(outputWriter, errorWriter, state)
 	default:
 		err = errors.New("unsupported recovery command")
 	}
@@ -118,6 +126,13 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(report)
+	return encodeRecoveryOutput(outputWriter, errorWriter, report)
+}
+
+func encodeRecoveryOutput(output, diagnostic io.Writer, value any) int {
+	if err := json.NewEncoder(output).Encode(value); err != nil {
+		fmt.Fprintln(diagnostic, "recovery operation output could not be written; preserve its recorded state and recovery material")
+		return 2
+	}
 	return 0
 }

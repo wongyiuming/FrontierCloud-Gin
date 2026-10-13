@@ -97,6 +97,16 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 	if e != nil {
 		return empty, e
 	}
+	if state, err := d.restoreState(); err == nil {
+		if state.Phase == "opened" && state.ManualStaged {
+			stage := filepath.Join(filepath.Dir(d.Directory), "data", restoreManualStage)
+			if _, err = os.Lstat(stage); !os.IsNotExist(err) || state.StageCleanupWarning != "" {
+				return empty, errors.New("finish recorded restore-stage cleanup before creating another recovery archive")
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return empty, errors.New("restore journal cannot be verified before backup")
+	}
 	if output == "" {
 		return empty, errors.New("backup output required")
 	}
