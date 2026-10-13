@@ -957,6 +957,8 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	if e = engine.ReleaseDrain(ctx, plan.ID, tr.PeerID, store.NodeAudit{}); !errors.Is(e, store.ErrMigrationState) {
 		t.Fatal("wrong source confirmation released drain", e)
 	}
+	assertTerminalPeerLedger(t, ctx, sourceDB, sr.ID, sr.PeerID)
+	assertTerminalPeerLedger(t, ctx, targetDB, tr.ID, tr.PeerID)
 	if len(modes) > 0 && modes[0] == "reverse" {
 		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
 			t.Fatal(e)
@@ -992,6 +994,8 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 				t.Fatal("reverse quota", used, reserved, e)
 			}
 		}
+		assertTerminalPeerLedger(t, ctx, sourceDB, sr.ID, sr.PeerID)
+		assertTerminalPeerLedger(t, ctx, targetDB, tr.ID, tr.PeerID)
 		t.Logf("forward task=%s reverse task=%s; original IDs and source business bytes restored through authenticated copy and managed cleanup", plan.ID, reverse)
 		return
 	}
@@ -1019,4 +1023,21 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 		}
 	}
 	t.Logf("Master runner moved %d actual bytes across one complete parent; lost acknowledgement, SQL cutover failure and authenticated source cleanup safely retried; fixture-only grace advance", catalog.TotalBytes)
+}
+
+func assertTerminalPeerLedger(t *testing.T, ctx context.Context, db store.Store, relationship, member string) {
+	t.Helper()
+	ledger, e := db.Pool().(store.RetirementRepository).RetirementLedger(ctx, relationship, member)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, block := range ledger.Blockers {
+		switch block.Code {
+		case "migration_journals", "migration_terminal_rosters", "migration_unit_receipts", "migration_runner_leases":
+			t.Fatal("actual completed byte migration has unresolved terminal facts", block)
+		}
+	}
+	if !ledger.RequiresPhysicalVerification {
+		t.Fatal("ledger granted retirement", ledger)
+	}
 }

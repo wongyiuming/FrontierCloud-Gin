@@ -457,6 +457,8 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 					t.Fatal("reverse recording quota", used, reserved, e)
 				}
 			}
+			assertTerminalPeerLedger(t, ctx, sdb, srid, srel.PeerID)
+			assertTerminalPeerLedger(t, ctx, tdb, trid, trel.PeerID)
 			t.Logf("fresh reverse recording task=%s encrypted=%v; original opaque bytes, logical ID, descriptor and personal quota retained", reverse, encrypted)
 		}
 		t.Logf("authenticated recording cleanup bytes=%d encrypted=%v; audit rollback/lost receipt and client read verified; fixture-only grace advance", len(payload), encrypted)

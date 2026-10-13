@@ -390,6 +390,8 @@
                     finish_or_cancel_uploads: '等待上传安全完成，或取消未完成上传。',
                     reconcile_used_and_reserved_bytes: '核对已用容量、预留容量及对应业务事务。',
                     finish_or_resolve_migration: '完成迁移，或处理失败、取消和清理待办。',
+                    wait_for_or_resolve_migration_runner: '等待迁移执行租约结束，或通过任务控制完成对账。',
+                    reconcile_terminal_task_unit_and_object_rosters: '核对终态任务、归属单元和对象清单的数量、字节及完成回执。',
                     reconcile_task_scope_receipts: '核对迁移范围锁与双方完成回执。',
                     reconcile_task_reservations: '核对迁移预留与清理回执。',
                     wait_for_or_resolve_read_dependencies: '等待有效读取结束，再重新检查。',

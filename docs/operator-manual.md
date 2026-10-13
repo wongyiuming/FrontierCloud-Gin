@@ -331,3 +331,6 @@ Retirement preflight now observes the data directory and the actual native media
 
 
 Retirement reports distinguish verified retained native state from unmanaged leftovers. Recognized items include the exact built-in default lyric and idle coordination inodes; a recording lease additionally needs the local deleted-recording tombstone. Held, nonempty, unknown or changed items remain blockers. Retained items still count toward observed filesystem bytes and should remain with node history. This classification does not authorize deleting node identity, certificates, the database or the volume, and a completed preflight still requires the final fenced retirement operation.
+
+
+Completed or cancelled migration task labels alone do not satisfy retire check. The server reconciles each peer's task/unit/object roster, role-specific journal outcome and expired grace, and reports live runner leases. A cancelled source can retain receiving history while its files remain authoritative and block retirement. A target's earlier published history can become deleted after a later managed deletion or reverse migration. These are historical facts, not permission to erase disks; mismatched or incomplete receipts require task reconciliation first.

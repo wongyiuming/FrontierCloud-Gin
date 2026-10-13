@@ -45,6 +45,7 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 		{"uploads", "cluster_upload_sessions WHERE storage_member_id=? AND state NOT IN ('complete','cancelled')", "upload_id", "finish_or_cancel_uploads", []any{member}},
 		{"storage_accounting", "cluster_storage_members WHERE member_id=? AND (used_bytes<>0 OR reserved_bytes<>0)", "member_id", "reconcile_used_and_reserved_bytes", []any{member}},
 		{"migration_tasks", "migration_tasks WHERE (source_id=? OR target_id=?) AND state NOT IN ('completed','cancelled')", "task_id", "finish_or_resolve_migration", []any{member, member}},
+		{"migration_runner_leases", "migration_runners r LEFT JOIN migration_tasks t ON t.task_id=r.task_id WHERE r.expires_at>? AND (t.task_id IS NULL OR t.source_id=? OR t.target_id=?)", "r.task_id", "wait_for_or_resolve_migration_runner", []any{now, member, member}},
 		{"migration_scopes", "migration_scopes WHERE member_id=?", "scope_id", "reconcile_task_scope_receipts", []any{member}},
 		{"migration_reservations", "migration_capacity WHERE member_id=? AND reserved_bytes<>0", "task_id", "reconcile_task_reservations", []any{member}},
 		{"active_read_leases", "migration_read_leases WHERE member_id=? AND expires_at>?", "lease_id", "wait_for_or_resolve_read_dependencies", []any{member, now}},
@@ -54,8 +55,8 @@ func (r *Repository) RetirementLedger(ctx context.Context, relationship, member 
 			retirementQuery{"managed_media", "media_objects WHERE object_kind IN ('audio','video')", "media_id", "migrate_or_resolve_media", nil},
 			retirementQuery{"backup_generations", "cluster_business_backups", "CAST(generation AS CHAR)", "retain_or_replace_verified_recovery_points", nil},
 			retirementQuery{"backup_chunks", "cluster_business_backup_chunks", "CAST(generation AS CHAR)", "reconcile_receiving_or_orphan_backup_material", nil},
-			retirementQuery{"file_transactions", "media_delete_operations WHERE state<>'rename_done'", "operation_id", "finish_native_file_recovery", nil},
-			retirementQuery{"migration_journals", "migration_storage_journal j LEFT JOIN migration_tasks t ON t.task_id=j.task_id WHERE (j.source_id=? OR j.target_id=?) AND (t.task_id IS NULL OR t.state NOT IN ('completed','cancelled') OR j.state NOT IN ('published','deleted','aborted'))", "j.task_id", "reconcile_peer_task_and_file_receipts", []any{member, member}})
+			retirementQuery{"file_transactions", "media_delete_operations WHERE state<>'rename_done'", "operation_id", "finish_native_file_recovery", nil})
+		checks = append(checks, retirementPeerMigrations(member, peer, relationship, now)...)
 	} else {
 		checks = append(checks,
 			retirementQuery{"managed_media", "global_media_objects WHERE storage_member_id=? AND state<>'deleted'", "media_id", "migrate_or_resolve_media", []any{member}},
