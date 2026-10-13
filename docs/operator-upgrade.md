@@ -175,3 +175,10 @@ partial archive is preserved unchanged beside the recorded output with an
 `.interrupted-<timestamp>` suffix before a new capture. Symlinks/nonregular
 outputs, changed source image locks and mismatching verified archives are
 refused. A fresh verified recovery point is durably recorded before switching.
+
+Upgrade activation/opening also retains a generated staged marker inode before
+public marker publication. A manual marker written by an administrator after
+intent persistence has a different inode and is never adopted or removed. The
+staged ownership file is removed only after durable successful ready publication.
+A verified backup with a scratch-cleanup warning remains a valid recovery point;
+its warning and retained scratch location are recorded in the upgrade journal.

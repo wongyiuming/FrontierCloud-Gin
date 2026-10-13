@@ -115,3 +115,23 @@ The first marker-helper error regression is retained separately and corrected.
 Fresh native validation and exact-head CI/review for these changes are pending
 at this checkpoint. Earlier native records remain scoped to `1fe1fbe`; production
 is still untouched.
+
+## Fourth review and native checkpoint
+
+On `2cdd92c`, actual native SQLite/MySQL 6→7 upgrade/resume, CLI restoration with
+staged marker ownership and HTTP Range, and two-node coordinated recovery pass.
+Its first pre-initialization native install attempt fails only because the
+private CA-file bind was created as a directory by the early read-only inspector;
+the fixture now precreates that regular trust file. The failed record is retained.
+
+Latest fixes admit only known regular metadata atomic-write residue in set
+preparation, retain staged inode evidence for upgrade maintenance ownership,
+publish the initializing receipt before its image lock, bind complete effective
+root Compose definitions, and preserve verified backup success with explicit
+scratch-cleanup warning/retention fields. `pr14-fourth-review-race-second` passes
+operator/recovery/CLI race, including missing-lock reconstruction, volume driver
+and other root-definition drift, administrator marker refusal, retained atomic
+residue and actual verified archive survival through cleanup failure. The prior
+opening fixture is updated to model its real retained ownership inode. Fresh
+native validation and exact-head CI/review remain pending for these changes;
+production is still untouched.

@@ -234,6 +234,9 @@ def private_install(args, work, path_env, name, role, database, profile, case, w
             env.write('TLS_ENABLED=true\nSERVER_NAME=business.fixture.test\n')
     control = directory / 'control'
     control.mkdir(mode=0o755)
+    # A read-only pre-initialization inspector can create the consumer first.
+    # Precreate the fixture trust-file mount so Docker cannot make it a directory.
+    (control / 'ca.pem').write_bytes(b'')
     cfg = json.loads(compose(directory, role, database, 'config', '--format', 'json'))
     actual, mappings = {}, {}
     for name, service in cfg['services'].items():

@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +17,23 @@ func (d *Deployment) ResumeInstall(ctx context.Context, receipt Receipt) (Receip
 		return receipt, e
 	}
 	defer done()
+	if receipt.State == "initializing" {
+		if _, err := os.Lstat(filepath.Join(d.Directory, ImagesFile)); os.IsNotExist(err) {
+			bare, err := d.Config(ctx, false)
+			if err != nil || bare.Name != receipt.Project || selectionHash(bare) != receipt.SelectionHash {
+				return receipt, errors.New("initializing configuration changed before image-lock recovery")
+			}
+			lock := map[string]map[string]string{}
+			for name, image := range receipt.ServiceImages {
+				lock[name] = map[string]string{"image": image}
+			}
+			if e = exclusiveJSON(filepath.Join(d.Directory, ImagesFile), map[string]any{"services": lock}); e != nil {
+				return receipt, e
+			}
+		} else if err != nil {
+			return receipt, err
+		}
+	}
 	cfg, e := d.ValidateReceipt(ctx, receipt)
 	if e != nil {
 		return receipt, e

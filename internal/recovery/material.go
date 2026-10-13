@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"strings"
 )
 
 // CheckMaterial verifies an extracted member against its already hash-checked
@@ -61,7 +62,17 @@ func checkMaterial(ctx context.Context, directory string, expected Report, prepa
 			return e
 		}
 		if !allowed[name] {
-			return ErrUnsafe
+			knownScratch := false
+			if preparing && item.Type().IsRegular() {
+				for final := range mutable {
+					if name == final+".next" || strings.HasPrefix(name, final+".next-") {
+						knownScratch = true
+					}
+				}
+			}
+			if !knownScratch {
+				return ErrUnsafe
+			}
 		}
 		if item.Type()&os.ModeSymlink != 0 || !item.IsDir() && !item.Type().IsRegular() {
 			return ErrUnsafe

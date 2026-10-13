@@ -114,6 +114,8 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 			return state, errors.New("interrupted backup identity/generation mismatch")
 		}
 		state.BackupSHA = backup.SHA256
+		state.BackupCleanupWarning = backup.CleanupWarning
+		state.BackupScratch = backup.RetainedScratch
 		state.BackupCompleteCluster = backup.Manifest.CompleteCluster
 		state.Phase = "backed_up_fenced"
 		if e = d.saveUpgrade(state); e != nil {

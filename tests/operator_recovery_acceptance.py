@@ -81,7 +81,9 @@ def fingerprint(configuration):
                for value in [configuration['volumes'][name]]}
     # Go sorts map keys, but retains declared struct-field order for mounts,
     # ports and volumes. This fixture reproduces those bytes exactly.
-    value = {'project': configuration['name'], 'services': services, 'volumes': volumes}
+    definitions = canonical({key: value for key, value in configuration.items()
+                             if key not in ('name', 'services') and not key.startswith('x-')})
+    value = {'definitions': definitions, 'project': configuration['name'], 'services': services, 'volumes': volumes}
     encoded = json.dumps(value, separators=(',', ':'), ensure_ascii=False)
     # encoding/json escapes HTML characters and the two JavaScript separators.
     for character, escaped in [('&', r'\u0026'), ('<', r'\u003c'), ('>', r'\u003e'),

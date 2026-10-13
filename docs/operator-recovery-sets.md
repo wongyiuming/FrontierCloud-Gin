@@ -131,3 +131,8 @@ changed resources, projects or receipts remain blocked. `set-activate` also
 admits `activating_fenced`: already verified followers are reconciled and the
 remaining members start behind maintenance, with Master last. Failures retain
 the entire set and attempt to refence every prepared member.
+
+Same-intent preparation recovery also admits retained regular atomic-write
+siblings of the known mutable metadata files (`.next`/`.next-*`). It preserves
+those files unchanged for inspection; links, unknown files and extra resource
+material remain blocked.

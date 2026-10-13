@@ -21,6 +21,7 @@ import (
 )
 
 const UpgradeJournal = ".fc-upgrade.json"
+const upgradeManualStage = ".fc-upgrade-manual"
 
 // A plan is public review material, not an authorization token. Apply requires
 // its digest, the source NodeID, a new recovery output and fresh remote proof.
@@ -52,7 +53,10 @@ type UpgradeState struct {
 	BackupFile            string      `json:"backup_file"`
 	BackupSHA             string      `json:"backup_sha256,omitempty"`
 	BackupCompleteCluster bool        `json:"backup_complete_cluster"`
+	BackupCleanupWarning  string      `json:"backup_cleanup_warning,omitempty"`
+	BackupScratch         string      `json:"backup_retained_scratch,omitempty"`
 	ManualOwned           bool        `json:"owns_manual_maintenance"`
+	ManualStaged          bool        `json:"manual_creation_staged,omitempty"`
 	Failure               string      `json:"failure,omitempty"`
 	BusinessVerified      bool        `json:"business_verified"`
 }
@@ -274,6 +278,8 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 		return fail("saved backup could not be independently verified")
 	}
 	state.BackupSHA = backup.SHA256
+	state.BackupCleanupWarning = backup.CleanupWarning
+	state.BackupScratch = backup.RetainedScratch
 	state.BackupCompleteCluster = backup.Manifest.CompleteCluster
 	state.Phase = "backed_up_fenced"
 	if e = d.saveUpgrade(state); e != nil {

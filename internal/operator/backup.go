@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -307,7 +306,8 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 			return e
 		}
 		if e = removeBackupScratch(scratch, workspace); e != nil {
-			return fmt.Errorf("recovery archive verified; private backup scratch cleanup failed at %s: %w", workspace, e)
+			report.CleanupWarning = "verified recovery archive retained; generated private scratch cleanup requires operator attention"
+			report.RetainedScratch = workspace
 		}
 		return nil
 	}

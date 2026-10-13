@@ -154,7 +154,7 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	}
 	if markerPresent {
 		raw, err := readRegular(filepath.Join(data, sitecontrol.Manual), 32)
-		if prepared || !state.ManualOwned || err != nil || string(raw) != "manual\n" {
+		if prepared || !state.ManualOwned || !state.ManualStaged || err != nil || string(raw) != "manual\n" {
 			return state, errors.New("existing manual maintenance is not owned by this upgrade")
 		}
 	}
@@ -162,7 +162,13 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 		return state, errors.New("existing force-open state requires separate administrator review")
 	}
 	priorPhase := state.Phase
+	if !state.ManualStaged {
+		if _, err := root.Lstat(upgradeManualStage); !os.IsNotExist(err) {
+			return state, errors.New("unowned upgrade marker scratch exists")
+		}
+	}
 	state.ManualOwned = true
+	state.ManualStaged = true
 	state.Phase = "activating_fenced"
 	fail := func(message string) (UpgradeState, error) {
 		state.Phase = "failed_fenced"
@@ -176,21 +182,8 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	if e = d.saveUpgrade(state); e != nil {
 		return fail("activation intent could not be persisted")
 	}
-	if !markerPresent {
-		f, err := root.OpenFile(sitecontrol.Manual, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if err != nil {
-			return fail("owned public maintenance could not be restored")
-		}
-		err = fsutil.InheritOwner(f, root)
-		if err == nil {
-			_, err = f.WriteString("manual\n")
-		}
-		if err == nil {
-			err = f.Sync()
-		}
-		if err = errors.Join(err, f.Close(), fsutil.SyncDirectory(root, ".")); err != nil {
-			return fail("owned public maintenance durability failed")
-		}
+	if e = ensureStagedManual(root, upgradeManualStage, prepared || priorPhase == "activating_fenced"); e != nil {
+		return fail("owned staged public maintenance could not be restored")
 	}
 	if recovering {
 		if e = checkRecovery(); e != nil {
@@ -242,6 +235,11 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	if e != nil || string(raw) != "manual\n" {
 		return fail("public maintenance changed during activation")
 	}
+	stage, stageErr := root.Lstat(upgradeManualStage)
+	marker, markerErr := root.Lstat(sitecontrol.Manual)
+	if stageErr != nil || markerErr != nil || !os.SameFile(stage, marker) {
+		return fail("administrator maintenance replaced upgrade marker")
+	}
 	if e = root.Remove(sitecontrol.Manual); e != nil {
 		return fail("public maintenance could not be removed")
 	}
@@ -257,5 +255,7 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	if e = replaceJSON(filepath.Join(d.Directory, ReceiptFile), r); e != nil {
 		return fail("ready deployment receipt could not be persisted")
 	}
+	_ = root.Remove(upgradeManualStage)
+	_ = fsutil.SyncDirectory(root, ".")
 	return state, nil
 }

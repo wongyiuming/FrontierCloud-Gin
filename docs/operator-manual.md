@@ -403,3 +403,12 @@ Restore activation first records `creating_manual` intent. Its generated staged
 marker inode is retained through activation/opening, so a retry can finish marker
 publication and distinguish it from an administrator-created marker with the
 same text. Successful ready publication removes only that generated staging file.
+
+The initializing receipt is durable before its image lock. If interrupted between
+those publications, resume reconstructs only that receipt's original pinned
+lock after checking the unchanged bare configuration. Complete effective
+volume/network/config/secret definitions are bound to the selection hash;
+volume driver options cannot silently redirect restored or initializing state.
+Verified backups report `cleanup_warning` and `retained_scratch` when removing
+only generated scratch fails. This does not invalidate the durable archive;
+upgrade journals retain its checksum and cleanup warning while staying resumable.

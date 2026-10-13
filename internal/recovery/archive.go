@@ -77,6 +77,8 @@ type Report struct {
 	Verified         bool     `json:"integrity_verified"`
 	RestoreReady     bool     `json:"restore_ready"`
 	BusinessVerified bool     `json:"restored_business_verified"`
+	CleanupWarning   string   `json:"cleanup_warning,omitempty"`
+	RetainedScratch  string   `json:"retained_scratch,omitempty"`
 }
 type Root struct {
 	Class     string

@@ -96,7 +96,63 @@ type Config struct {
 		Name     string `json:"name"`
 		External bool   `json:"external"`
 	} `json:"volumes"`
+	Definitions map[string]json.RawMessage `json:"-"`
 }
+
+func (c *Config) UnmarshalJSON(raw []byte) error {
+	type plain Config
+	var value plain
+	if e := json.Unmarshal(raw, &value); e != nil {
+		return e
+	}
+	var definitions map[string]json.RawMessage
+	if e := json.Unmarshal(raw, &definitions); e != nil {
+		return e
+	}
+	for name := range definitions {
+		if name == "name" || name == "services" || strings.HasPrefix(name, "x-") {
+			delete(definitions, name)
+		}
+	}
+	*c = Config(value)
+	c.Definitions = definitions
+	return nil
+}
+
+func (c Config) MarshalJSON() ([]byte, error) {
+	type plain Config
+	raw, e := json.Marshal(plain(c))
+	if e != nil {
+		return nil, e
+	}
+	var fields map[string]json.RawMessage
+	if e = json.Unmarshal(raw, &fields); e != nil {
+		return nil, e
+	}
+	for name, value := range c.Definitions {
+		fields[name] = value
+	}
+	if raw, ok := c.Definitions["volumes"]; ok {
+		var volumes map[string]map[string]any
+		if json.Unmarshal(raw, &volumes) == nil {
+			for name, volume := range c.Volumes {
+				if volumes[name] == nil {
+					volumes[name] = map[string]any{}
+				}
+				volumes[name]["name"] = volume.Name
+				if _, present := volumes[name]["external"]; present || volume.External {
+					volumes[name]["external"] = volume.External
+				}
+			}
+			fields["volumes"], e = json.Marshal(volumes)
+			if e != nil {
+				return nil, e
+			}
+		}
+	}
+	return json.Marshal(fields)
+}
+
 type Receipt struct {
 	Version       int                           `json:"configuration_version"`
 	Role          string                        `json:"role"`
@@ -222,6 +278,19 @@ func (d *Deployment) Config(ctx context.Context, pinned bool) (Config, error) {
 // database endpoints, role/network settings, execution/isolation and project identity.
 func selectionHash(cfg Config) string {
 	values := map[string]any{"project": cfg.Name, "volumes": cfg.Volumes}
+	definitions := map[string]any{}
+	for name, raw := range cfg.Definitions {
+		var value any
+		_ = json.Unmarshal(raw, &value)
+		definitions[name] = value
+	}
+	if _, exists := definitions["volumes"]; !exists {
+		raw, _ := json.Marshal(cfg.Volumes)
+		var volumes any
+		_ = json.Unmarshal(raw, &volumes)
+		definitions["volumes"] = volumes
+	}
+	values["definitions"] = definitions
 	services := map[string]any{}
 	for name, s := range cfg.Services {
 		env := map[string]string{}
@@ -488,10 +557,10 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	if err = d.Empty(ctx, cfg); err != nil {
 		return r, err
 	}
-	if err = exclusiveJSON(filepath.Join(d.Directory, ImagesFile), map[string]any{"services": override}); err != nil {
+	if err = exclusiveJSON(filepath.Join(d.Directory, ReceiptFile), r); err != nil {
 		return r, err
 	}
-	if err = exclusiveJSON(filepath.Join(d.Directory, ReceiptFile), r); err != nil {
+	if err = exclusiveJSON(filepath.Join(d.Directory, ImagesFile), map[string]any{"services": override}); err != nil {
 		return r, err
 	}
 	if _, err = d.ValidateReceipt(ctx, r); err != nil {
