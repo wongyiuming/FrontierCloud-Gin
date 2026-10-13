@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -41,7 +42,9 @@ func run(args []string) int {
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
-		fmt.Println(Revision)
+		if _, e := fmt.Fprintln(os.Stdout, Revision); e != nil {
+			return 2
+		}
 		return 0
 	}
 	parent, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -57,15 +60,8 @@ func run(args []string) int {
 	if args[0] == "upgrade" {
 		return upgradeCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}
-	emit := func(v any) {
-		if !*structured {
-			if r, ok := v.(operator.Report); ok {
-				fmt.Print(r.Human())
-				return
-			}
-		}
-		_ = json.NewEncoder(os.Stdout).Encode(v)
-	}
+	emit := func(v any) error { return writeOperatorOutput(os.Stdout, *structured, v) }
+
 	if len(args) == 2 && args[0] == "install" && args[1] == "resume" {
 		d, receipt, e := operator.Open(*directory)
 		if e != nil {
@@ -78,7 +74,10 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, e)
 			return 2
 		}
-		emit(receipt)
+		if e := emit(receipt); e != nil {
+			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+			return 2
+		}
 		return 0
 	}
 	if args[0] == "doctor" || args[0] == "install" {
@@ -102,11 +101,17 @@ func run(args []string) int {
 		d.ImageInspector = registry
 		report := d.Doctor(ctx)
 		if args[0] == "doctor" {
-			emit(report)
+			if e := emit(report); e != nil {
+				fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+				return 2
+			}
 			return report.ExitCode()
 		}
 		if report.ExitCode() == 2 {
-			emit(report)
+			if e := emit(report); e != nil {
+				fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+				return 2
+			}
 			return 2
 		}
 		for _, check := range report.Checks {
@@ -137,7 +142,10 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		emit(receipt)
+		if e := emit(receipt); e != nil {
+			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+			return 2
+		}
 		return 0
 	}
 	if len(args) != 1 {
@@ -153,7 +161,10 @@ func run(args []string) int {
 	case "status", "diagnose":
 		report := d.Status(ctx, receipt)
 		report.Operation = args[0]
-		emit(report)
+		if e := emit(report); e != nil {
+			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+			return 2
+		}
 		return report.ExitCode()
 	case "logs":
 		report, e := d.Logs(ctx, receipt)
@@ -161,7 +172,10 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, e)
 			return 2
 		}
-		emit(report)
+		if e := emit(report); e != nil {
+			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+			return 2
+		}
 		return 0
 	case "restart":
 		if _, markerErr := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); markerErr == nil || !os.IsNotExist(markerErr) {
@@ -186,7 +200,10 @@ func run(args []string) int {
 			return 2
 		}
 		report := d.Status(ctx, receipt)
-		emit(report)
+		if e := emit(report); e != nil {
+			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
+			return 2
+		}
 		return report.ExitCode()
 	default:
 		fmt.Fprintln(os.Stderr, "unknown command")
@@ -194,10 +211,23 @@ func run(args []string) int {
 	}
 }
 
+func writeOperatorOutput(output io.Writer, structured bool, value any) error {
+	if !structured {
+		if report, ok := value.(operator.Report); ok {
+			_, e := fmt.Fprint(output, report.Human())
+			return e
+		}
+	}
+	return json.NewEncoder(output).Encode(value)
+}
+
 // Bulk recovery includes complete archive hashing, logical dumps and restore
 // passes. Its duration follows the state size; cancellation is operator-owned.
 func commandContext(parent context.Context, args []string) (context.Context, context.CancelFunc) {
 	if len(args) != 0 && (args[0] == "backup" || args[0] == "restore" || args[0] == "upgrade") {
+		return context.WithCancel(parent)
+	}
+	if len(args) > 1 && args[0] == "node" && args[1] == "retire" {
 		return context.WithCancel(parent)
 	}
 	return context.WithTimeout(parent, 15*time.Minute)

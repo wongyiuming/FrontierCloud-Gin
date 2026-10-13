@@ -41,7 +41,7 @@ func NewNodeClient(master string) (*NodeClient, error) {
 	transport.MaxResponseHeaderBytes = 64 << 10
 	transport.MaxIdleConns = 2
 	transport.MaxIdleConnsPerHost = 1
-	return &NodeClient{origin: origin, client: &http.Client{Jar: jar, Transport: transport, Timeout: 270 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	return &NodeClient{origin: origin, client: &http.Client{Jar: jar, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func nodeClientID(value string) bool {
 	decoded, e := hex.DecodeString(value)
@@ -51,6 +51,11 @@ func (c *NodeClient) request(ctx context.Context, method, path, body, contentTyp
 	return c.requestQuery(ctx, method, path, "", body, contentType, target)
 }
 func (c *NodeClient) requestQuery(ctx context.Context, method, path, query, body, contentType string, target any) (int, error) {
+	if !strings.HasSuffix(path, "/retire/check") && !strings.HasSuffix(path, "/retire/apply") {
+		bounded, cancel := context.WithTimeout(ctx, 270*time.Second)
+		defer cancel()
+		ctx = bounded
+	}
 	endpoint := *c.origin
 	endpoint.Path = "/api/v1/media/admin" + path
 	endpoint.RawQuery = query

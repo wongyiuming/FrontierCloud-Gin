@@ -521,7 +521,7 @@ func (r *Runner) observePlanContent(ctx context.Context, rel store.Relationship,
 	var pollWait time.Duration
 	for {
 		now := time.Now().Unix()
-		if job.Request != req || !planHex(job.Incarnation, 16) || job.Incarnation != incarnation || job.CreatedAt != first.CreatedAt || first.CreatedAt < startedAt-30 || job.ExpiresAt != first.ExpiresAt || job.CreatedAt > now+30 || job.CreatedAt < now-300 || job.ExpiresAt <= now || job.ExpiresAt != job.CreatedAt+300 || job.ErrorCode != "" {
+		if job.Request != req || !planHex(job.Incarnation, 16) || job.Incarnation != incarnation || job.CreatedAt != first.CreatedAt || first.CreatedAt < startedAt-30 || job.ExpiresAt != first.ExpiresAt || job.CreatedAt > now+30 || job.ExpiresAt <= now || job.ExpiresAt != job.CreatedAt+int64(resourceinventory.ContentObservationTTL(req.Bytes)/time.Second) || job.ErrorCode != "" {
 			return proof, ErrPlanObservation
 		}
 		if job.State == "observed" {

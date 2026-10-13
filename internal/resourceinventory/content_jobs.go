@@ -17,6 +17,25 @@ type ContentRequest struct {
 	MetadataSHA string  `json:"metadata_sha256"`
 	Bytes       int64   `json:"expected_bytes"`
 }
+
+// ContentObservationTTL admits slow storage without inheriting cursor lifetime.
+// One MiB/s is the explicit minimum throughput budget; callers can cancel sooner.
+func ContentObservationTTL(bytes int64) time.Duration {
+	const rate = int64(1 << 20)
+	const maximum = 24 * time.Hour
+	if bytes <= 0 {
+		return SessionTTL
+	}
+	seconds := bytes / rate
+	if bytes%rate != 0 {
+		seconds++
+	}
+	if seconds >= int64((maximum-time.Minute)/time.Second) {
+		return maximum
+	}
+	return max(SessionTTL, time.Minute+time.Duration(seconds)*time.Second)
+}
+
 type ContentJob struct {
 	Request     ContentRequest      `json:"request"`
 	Incarnation string              `json:"incarnation"`
@@ -119,8 +138,9 @@ func (j *ContentJobs) Start(request ContentRequest) (ContentJob, error) {
 		return ContentJob{}, e
 	}
 	now := j.now()
-	ctx, cancel := context.WithTimeout(j.ctx, SessionTTL)
-	state := &contentJobState{snapshot: ContentJob{Request: request, Incarnation: hex.EncodeToString(raw), State: "queued", CreatedAt: now.Unix(), ExpiresAt: now.Add(SessionTTL).Unix()}, deadline: now.Add(SessionTTL), ctx: ctx, cancel: cancel, active: true}
+	ttl := ContentObservationTTL(request.Bytes)
+	ctx, cancel := context.WithTimeout(j.ctx, ttl)
+	state := &contentJobState{snapshot: ContentJob{Request: request, Incarnation: hex.EncodeToString(raw), State: "queued", CreatedAt: now.Unix(), ExpiresAt: now.Add(ttl).Unix()}, deadline: now.Add(ttl), ctx: ctx, cancel: cancel, active: true}
 	j.current = state
 	j.queue <- state
 	return contentJobCopy(state.snapshot), nil

@@ -60,6 +60,18 @@ def fingerprint(configuration):
             return int(value)
         return value
 
+    def redis_location(value):
+        value = value or 'redis://redis:6379/0'
+        parsed = urllib.parse.urlsplit(value)
+        if not parsed.hostname or parsed.scheme not in ('redis', 'rediss'):
+            return 'invalid:' + hashlib.sha256(value.encode()).hexdigest()
+        host = parsed.hostname.lower()
+        if ':' in host:
+            host = '[' + host + ']'
+        query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        query = sorted((key, value) for key, value in query if key not in ('username', 'password', 'token'))
+        return urllib.parse.urlunsplit((parsed.scheme, host + ':' + str(parsed.port or 6379), parsed.path or '/0', urllib.parse.urlencode(query), parsed.fragment))
+
     services = {}
     for name in sorted(configuration['services']):
         service = configuration['services'][name]
@@ -76,6 +88,8 @@ def fingerprint(configuration):
                           'execution': canonical({key: value for key, value in service.items()
                                                   if key not in ('image', 'environment', 'volumes', 'ports', 'build')}),
                           'mounts': mounts, 'ports': ports}
+    for name in services:
+        services[name]['environment']['REDIS_URL'] = redis_location(configuration['services'][name].get('environment', {}).get('REDIS_URL', ''))
     volumes = {name: {'name': value['name'], 'external': value.get('external', False)}
                for name in sorted(configuration.get('volumes', {}))
                for value in [configuration['volumes'][name]]}

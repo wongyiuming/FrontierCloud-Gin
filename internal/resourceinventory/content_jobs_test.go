@@ -15,6 +15,53 @@ import (
 func contentRequestFixture() ContentRequest {
 	return ContentRequest{ID: strings.Repeat("1", 32), Binding: Binding{MemberID: strings.Repeat("2", 32), MasterID: strings.Repeat("3", 32), RelationshipID: strings.Repeat("4", 32), Scope: "data"}, Resource: "media", ObjectID: strings.Repeat("5", 64), MetadataSHA: strings.Repeat("6", 64), Bytes: 7}
 }
+
+func TestLargeContentJobSurvivesCursorExpiryAndHonorsOwnDeadline(t *testing.T) {
+	var offset atomic.Int64
+	epoch := time.Now()
+	started := make(chan context.Context, 1)
+	jobs, e := NewContentJobs(context.Background(), func(ctx context.Context, _ ContentRequest) (ContentObservation, error) {
+		started <- ctx
+		<-ctx.Done()
+		return ContentObservation{}, ctx.Err()
+	}, func() time.Time { return epoch.Add(time.Duration(offset.Load()) * time.Second) })
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer jobs.Close()
+	request := contentRequestFixture()
+	request.Bytes = 10 << 30
+	job, e := jobs.Start(request)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx := <-started
+	ttl := ContentObservationTTL(request.Bytes)
+	if ttl != 10240*time.Second+time.Minute || job.ExpiresAt-job.CreatedAt != int64(ttl/time.Second) {
+		t.Fatal("size-aware deadline", job, ttl)
+	}
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) < ttl-time.Second {
+		t.Fatal("worker still uses short cursor deadline")
+	}
+	offset.Store(301)
+	value, e := jobs.Status(request.ID, job.Incarnation, request.Binding)
+	if e != nil || value.State == "expired" || ctx.Err() != nil {
+		t.Fatal("large observation expired with cursor", value, e)
+	}
+	offset.Store(int64(ttl/time.Second) + 1)
+	value, e = jobs.Status(request.ID, job.Incarnation, request.Binding)
+	if e != nil || value.State != "expired" {
+		t.Fatal("size-aware expiry missing", value, e)
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("expired worker was not cancelled")
+	}
+	if ContentObservationTTL(7) != SessionTTL || ContentObservationTTL(1<<62) != 24*time.Hour {
+		t.Fatal("deadline bounds")
+	}
+}
 func awaitContentJob(t *testing.T, jobs *ContentJobs, job ContentJob, state string) ContentJob {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)

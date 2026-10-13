@@ -148,16 +148,21 @@ func PublishSet(ctx context.Context, directory string, m SetManifest) (SetReport
 		return SetReport{}, e
 	}
 	raw = append(raw, '\n')
-	f, e := os.OpenFile(filepath.Join(directory, SetFile), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, e := os.CreateTemp(directory, SetFile+".next-")
 	if e != nil {
 		return SetReport{}, e
 	}
+	temporary := f.Name()
+	defer os.Remove(temporary)
 	_, e = f.Write(raw)
 	if e == nil {
 		e = f.Sync()
 	}
 	e = errors.Join(e, f.Close())
 	if e != nil {
+		return SetReport{}, e
+	}
+	if e = os.Link(temporary, filepath.Join(directory, SetFile)); e != nil {
 		return SetReport{}, e
 	}
 	root, e := os.OpenRoot(directory)

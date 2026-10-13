@@ -208,7 +208,7 @@ func (p *Planner) observe(w *plannedWork) {
 	starting := w.view.State == "starting"
 	id, source, target := w.view.ID, w.view.Source.ID, w.view.Target.ID
 	p.mutex.Unlock()
-	ctx, cancel := context.WithTimeout(p.ctx, 30*time.Minute)
+	ctx, cancel := context.WithCancel(p.ctx)
 	defer cancel()
 	observation, e := p.builder.ObservePlan(ctx, id, source, target, func(count, bytes int64) {
 		p.mutex.Lock()

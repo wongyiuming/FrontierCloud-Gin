@@ -17,7 +17,7 @@ import (
 // it neither pins retention nor proves a complete disaster-recovery package.
 func (s *Service) ObserveBackup(ctx context.Context, relationship string, expected store.BackupManifest) (resourceinventory.ContentObservation, error) {
 	var empty resourceinventory.ContentObservation
-	ctx, stop := context.WithTimeout(ctx, resourceinventory.SessionTTL)
+	ctx, stop := context.WithTimeout(ctx, resourceinventory.ContentObservationTTL(expected.Bytes))
 	defer stop()
 	rel, err := s.backupRelation(ctx, relationship, nil)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *Service) ObserveBackup(ctx context.Context, relationship string, expect
 			return empty, store.ErrBackupState
 		}
 		now := time.Now().Unix()
-		if job.CreatedAt < now-30 && first.Incarnation == "" || job.CreatedAt > now+30 || job.ExpiresAt <= now || job.ExpiresAt != job.CreatedAt+int64(resourceinventory.SessionTTL/time.Second) {
+		if job.CreatedAt < now-30 && first.Incarnation == "" || job.CreatedAt > now+30 || job.ExpiresAt <= now || job.ExpiresAt != job.CreatedAt+int64(resourceinventory.ContentObservationTTL(expected.Bytes)/time.Second) {
 			return empty, store.ErrBackupState
 		}
 		if first.Incarnation == "" {

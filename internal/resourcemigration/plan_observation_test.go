@@ -17,12 +17,15 @@ func (f planCall) Call(ctx context.Context, rel store.Relationship, route string
 	return f(ctx, rel, route, value)
 }
 func TestPlanContentRejectsReboundExpiryAndSpeculativeResult(t *testing.T) {
-	for _, mode := range []string{"valid", "expiry_changed", "observed_error", "speculative", "old_creation", "wrong_path", "wrong_request"} {
+	for _, mode := range []string{"valid", "large_valid", "large_short_expiry", "expiry_changed", "observed_error", "speculative", "old_creation", "wrong_path", "wrong_request"} {
 		t.Run(mode, func(t *testing.T) {
 			now := time.Now().Unix()
 			cancelled := 0
 			rel := store.Relationship{ID: strings.Repeat("1", 32), PeerID: strings.Repeat("2", 32)}
 			o := store.MigrationObject{ID: strings.Repeat("3", 64), ObjectID: strings.Repeat("4", 64), Resource: "media", Version: strings.Repeat("5", 64), Bytes: 7}
+			if strings.HasPrefix(mode, "large_") {
+				o.Bytes = 10 << 30
+			}
 			item := store.ExpectedPhysicalItem{Path: "media/music/unit/a.mp3", MetadataSHA256: strings.Repeat("6", 64)}
 			r := &Runner{Client: planCall(func(ctx context.Context, rel store.Relationship, route string, value any) (map[string]any, error) {
 				raw, _ := json.Marshal(value)
@@ -37,8 +40,10 @@ func TestPlanContentRejectsReboundExpiryAndSpeculativeResult(t *testing.T) {
 					cancelled++
 					return map[string]any{}, nil
 				}
-				job := resourceinventory.ContentJob{Request: request.ContentRequest, Incarnation: strings.Repeat("7", 32), CreatedAt: now, ExpiresAt: now + 300, State: "observed", Observation: &resourceinventory.ContentObservation{Path: item.Path, Bytes: 7, SHA256: strings.Repeat("8", 64)}}
+				job := resourceinventory.ContentJob{Request: request.ContentRequest, Incarnation: strings.Repeat("7", 32), CreatedAt: now, ExpiresAt: now + int64(resourceinventory.ContentObservationTTL(o.Bytes)/time.Second), State: "observed", Observation: &resourceinventory.ContentObservation{Path: item.Path, Bytes: o.Bytes, SHA256: strings.Repeat("8", 64)}}
 				switch mode {
+				case "large_short_expiry":
+					job.ExpiresAt = now + 300
 				case "expiry_changed":
 					if request.Action == "start" {
 						job.State = "running"
@@ -65,8 +70,8 @@ func TestPlanContentRejectsReboundExpiryAndSpeculativeResult(t *testing.T) {
 				return response, nil
 			})}
 			proof, e := r.observePlanContent(context.Background(), rel, strings.Repeat("9", 32), o, item)
-			if mode == "valid" {
-				if e != nil || proof.Bytes != 7 {
+			if mode == "valid" || mode == "large_valid" {
+				if e != nil || proof.Bytes != o.Bytes {
 					t.Fatal(proof, e)
 				}
 			} else if e == nil {

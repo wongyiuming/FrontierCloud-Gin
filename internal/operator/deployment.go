@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -299,6 +301,7 @@ func selectionHash(cfg Config) string {
 				env[key] = v
 			}
 		}
+		env["REDIS_URL"] = redisLocation(s.Environment["REDIS_URL"])
 		execution := map[string]any{}
 		for name, raw := range s.Execution {
 			var value any
@@ -311,6 +314,32 @@ func selectionHash(cfg Config) string {
 	raw, _ := json.Marshal(values)
 	h := sha256.Sum256(raw)
 	return hex.EncodeToString(h[:])
+}
+
+func redisLocation(value string) string {
+	if value == "" {
+		value = "redis://redis:6379/0"
+	}
+	u, e := url.Parse(value)
+	if e != nil || u.Hostname() == "" || (u.Scheme != "redis" && u.Scheme != "rediss") {
+		h := sha256.Sum256([]byte(value))
+		return "invalid:" + hex.EncodeToString(h[:])
+	}
+	u.User = nil
+	port := u.Port()
+	if port == "" {
+		port = "6379"
+	}
+	u.Host = net.JoinHostPort(strings.ToLower(u.Hostname()), port)
+	if u.Path == "" {
+		u.Path = "/0"
+	}
+	query := u.Query()
+	for _, key := range []string{"username", "password", "token"} {
+		query.Del(key)
+	}
+	u.RawQuery = query.Encode()
+	return u.String()
 }
 func readRegular(path string, limit int64) ([]byte, error) {
 	info, err := os.Lstat(path)

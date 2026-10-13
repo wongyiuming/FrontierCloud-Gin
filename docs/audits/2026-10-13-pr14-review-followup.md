@@ -164,3 +164,18 @@ become unowned later recovery material. `pr14-sixth-review-race` passes the affe
 operator/recovery/CLI packages, including real incomplete archive rejection,
 output writer failure and ready cleanup/admin preservation. Latest exact native
 and CI/review gates remain pending. Production is still untouched.
+
+## Seventh review checkpoint
+
+`e331497` passes actual native SQLite/MySQL upgrade/resume, CLI restore/Range,
+two-node coordinated recovery and full Go race. Latest fixes bind normalized
+Redis location/database/TLS into deployment selection while permitting credential
+rotation; publish complete synced recovery-set manifests by exclusive hard link;
+propagate shared CLI output errors; let retirement scans follow caller cancellation;
+and budget managed-content hashing by size at one MiB/s plus one minute, with a
+five-minute minimum and 24-hour maximum. Migration planning and backup observers
+validate that same deadline without the old five-minute age rejection or blanket
+30-minute planner timeout. Tests simulate a 10-GiB observation beyond cursor expiry
+and verify cancellation; this is not a claim of an actual 10-GiB transfer.
+Affected-package race passes. Latest exact native, source CI and review gates are
+pending. Production remains unchanged until those gates and public publication pass.
