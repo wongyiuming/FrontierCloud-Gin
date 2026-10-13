@@ -63,4 +63,3 @@ class Fixture:
         self.images.append((revision, component))
         return {'image': 'ghcr.io/wongyiuming/frontiercloud-gin-' + component + '@sha256:' + 'c' * 64,
                 'tag_digest': 'sha256:' + 'd' * 64, 'config_digest': 'sha256:' + 'e' * 64}
-

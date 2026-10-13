@@ -30,5 +30,3 @@ def publication_jobs(read, plan):
             all(job.get('run_id') == plan['publish_run_id'] and
                 job.get('status') == 'completed' and job.get('conclusion') == 'success' for job in actual),
             'All exact publication jobs must succeed before alias promotion')
-
-
