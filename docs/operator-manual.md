@@ -224,3 +224,30 @@ relationship, remove files or stop containers. Final fenced admission, verified
 backup replacement/retention and full transaction/reference reconciliation are
 still under implementation; the development UI must not be used as evidence that
 a disk can be erased. Native browser/fleet acceptance is still outstanding.
+
+
+### CLI retirement preflight
+
+The dev operator client uses the same Admin API and retirement service as the
+node card. Run `fc node retire check NODE_ID --master https://master.example
+--credential-stdin --json`, piping an existing Admin or temporary credential into
+standard input. Do not place the credential in an argument, URL or environment
+variable. Input accepts a single token with an optional trailing newline and ends
+at EOF. The client creates an in-memory session, uses the server's CSRF cookie
+name, verifies one active downstream relationship for the exact NodeID, and
+attempts logout on exit; sessions are never saved to disk. Interrupted or failed
+logout leaves only the existing server session expiry policy.
+
+Standard TLS verification remains enabled. An internal CA may be supplied using
+`--ca-file /path/to/public-ca.pem`; this is a public trust certificate, not a node
+identity or private key. Credential-bearing URLs, HTTP origins, URL paths/queries,
+redirects and insecure TLS bypass are rejected. No SQL, SSH or Docker operation
+is used for this business command.
+
+Exit 0 means the observation completed with no reported blockers; exit 1 means
+it completed with blockers; exit 2 means invalid input, transport/authentication
+failure or incomplete observation. Every report remains `preflight_only`: exit 0
+never grants permission to revoke a node or erase its disk. Human output quotes
+sample paths to avoid terminal control sequences; `--json` emits the bounded typed
+report, including available partial observations on failure. `retire apply` is
+not yet implemented.

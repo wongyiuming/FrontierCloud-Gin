@@ -34,7 +34,7 @@ func run(args []string) int {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage | status | logs | restart | diagnose\nRead-only: doctor/status/logs/diagnose. Writes: install/restart. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage | status | logs | restart | diagnose | node retire check NODE_ID\nRead-only: doctor/status/logs/diagnose/node retire check. Writes: install/restart. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -43,6 +43,9 @@ func run(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+	if args[0] == "node" {
+		return nodeCommand(ctx, args, *structured, os.Stdin, os.Stdout, os.Stderr)
+	}
 	if args[0] == "backup" || args[0] == "restore" {
 		return recoveryCommand(ctx, *directory, args)
 	}

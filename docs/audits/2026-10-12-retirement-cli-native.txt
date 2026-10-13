@@ -1,0 +1,69 @@
+=== RUN   TestNodeCLIRejectsUnsafeAuthorityBeforeCredentialInput
+--- PASS: TestNodeCLIRejectsUnsafeAuthorityBeforeCredentialInput (0.00s)
+=== RUN   TestNodeCLIExitCodesDoNotGrantRetirement
+--- PASS: TestNodeCLIExitCodesDoNotGrantRetirement (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.015s
+=== RUN   TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal
+2026/10/13 00:08:23 http: TLS handshake error from 127.0.0.1:38194: remote error: tls: bad certificate
+--- PASS: TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal (0.90s)
+=== RUN   TestNodeClientRejectsCredentialURLsAndNonOrigins
+--- PASS: TestNodeClientRejectsCredentialURLsAndNonOrigins (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	1.930s
+=== RUN   TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation
+2026/10/13 00:08:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.155 client_ip=192.0.2.1 request_id=c7cc17fcc2cf4c9080b5227dd27d8c35 trace_id=c7cc17fcc2cf4c9080b5227dd27d8c35
+2026/10/13 00:08:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.118 client_ip=192.0.2.1 request_id=bc1e8eb50bb741eeb1ffc8194c262d2f trace_id=bc1e8eb50bb741eeb1ffc8194c262d2f
+2026/10/13 00:08:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.091 client_ip=192.0.2.1 request_id=4c7ec9406f424e87ae2e28443420d9da trace_id=4c7ec9406f424e87ae2e28443420d9da
+2026/10/13 00:08:29 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.045 client_ip=192.0.2.1 request_id=347519022220402b9b2478ce76e433e6 trace_id=347519022220402b9b2478ce76e433e6
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.969 client_ip=192.0.2.1 request_id=b909dc32b7654a16946204885f573726 trace_id=b909dc32b7654a16946204885f573726
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.424 client_ip=192.0.2.1 request_id=8385caf4345c43fba913fbc61e197684 trace_id=8385caf4345c43fba913fbc61e197684
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/elevate status=200 duration_ms=4.4 client_ip=127.0.0.1 request_id=a9525dcf825e4ff1b0a4a07c93e72422 trace_id=a9525dcf825e4ff1b0a4a07c93e72422
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/status status=200 duration_ms=1.095 client_ip=127.0.0.1 request_id=3a09a224f184456ebc3143ec85286b2d trace_id=3a09a224f184456ebc3143ec85286b2d
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=200 duration_ms=6.78 client_ip=127.0.0.1 request_id=ad375a695be9424ba6939478a3edbcaf trace_id=ad375a695be9424ba6939478a3edbcaf
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.384 client_ip=192.0.2.1 request_id=3b1798c7caa94282b1f3e8e1f45b318f trace_id=3b1798c7caa94282b1f3e8e1f45b318f
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=9.117 client_ip=192.0.2.1 request_id=4646300563014b41923922ed9d26fc88 trace_id=4646300563014b41923922ed9d26fc88
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.478 client_ip=192.0.2.1 request_id=a8f464e4cf384f22a49142c9d488c310 trace_id=a8f464e4cf384f22a49142c9d488c310
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.715 client_ip=192.0.2.1 request_id=d47c822fdf2749fa9524fc9e73b842f6 trace_id=d47c822fdf2749fa9524fc9e73b842f6
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.022 client_ip=192.0.2.1 request_id=79ed151bd0d44f09826448b46819c13a trace_id=79ed151bd0d44f09826448b46819c13a
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4 client_ip=192.0.2.1 request_id=d00c3b8b0b314fd3915812ffe6228e33 trace_id=d00c3b8b0b314fd3915812ffe6228e33
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.148 client_ip=192.0.2.1 request_id=bde5931eb0ba46e3898c2f93c6c730c0 trace_id=bde5931eb0ba46e3898c2f93c6c730c0
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.698 client_ip=192.0.2.1 request_id=b3183726df304b9d8654445632671129 trace_id=b3183726df304b9d8654445632671129
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.173 client_ip=192.0.2.1 request_id=bf9c4fd47165489eb30ec0e90b2afc75 trace_id=bf9c4fd47165489eb30ec0e90b2afc75
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/nodes/fca0f14507900c45d503026cfdb82a33/retire/check status=200 duration_ms=63.27 client_ip=127.0.0.1 request_id=e5e34ad4b4d24859be0c0bbc2ed46c61 trace_id=e5e34ad4b4d24859be0c0bbc2ed46c61
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/logout status=200 duration_ms=1.007 client_ip=127.0.0.1 request_id=ed1a6b686ec44171a7d8b6d96b361928 trace_id=ed1a6b686ec44171a7d8b6d96b361928
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=401 duration_ms=0.04 client_ip=127.0.0.1 request_id=f32b5b37dcc743fcb517a40610186fd7 trace_id=f32b5b37dcc743fcb517a40610186fd7
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/elevate status=200 duration_ms=1.053 client_ip=127.0.0.1 request_id=dc6c1845e3424f38a7e47b03a40e3354 trace_id=dc6c1845e3424f38a7e47b03a40e3354
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/status status=200 duration_ms=0.878 client_ip=127.0.0.1 request_id=418b9cd1aa034a6581a7ca35c53ff0c9 trace_id=418b9cd1aa034a6581a7ca35c53ff0c9
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=200 duration_ms=5.364 client_ip=127.0.0.1 request_id=ccaecc1920e94860a5c9a80ef3f69d16 trace_id=ccaecc1920e94860a5c9a80ef3f69d16
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.056 client_ip=192.0.2.1 request_id=6c4d583245f34288bb1447c81d25a4fd trace_id=6c4d583245f34288bb1447c81d25a4fd
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.297 client_ip=192.0.2.1 request_id=7286ce3f59f84c75ae616664e61438ba trace_id=7286ce3f59f84c75ae616664e61438ba
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.295 client_ip=192.0.2.1 request_id=e0643d5a881e4852b5f707dfa14eb5ad trace_id=e0643d5a881e4852b5f707dfa14eb5ad
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.531 client_ip=192.0.2.1 request_id=7ce203f31efd4493bb42e32851815732 trace_id=7ce203f31efd4493bb42e32851815732
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.036 client_ip=192.0.2.1 request_id=d249e3c7cf524a808e813d16976314ba trace_id=d249e3c7cf524a808e813d16976314ba
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.408 client_ip=192.0.2.1 request_id=4d40504ab6bb4fafa9feb0f6f31837c4 trace_id=4d40504ab6bb4fafa9feb0f6f31837c4
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.166 client_ip=192.0.2.1 request_id=e4cb0d185c9e40f2bfaca00e4064dab7 trace_id=e4cb0d185c9e40f2bfaca00e4064dab7
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.795 client_ip=192.0.2.1 request_id=37443fa09575450d859321389590ba6d trace_id=37443fa09575450d859321389590ba6d
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.019 client_ip=192.0.2.1 request_id=5118bb4003a54469bec15222cc475ee6 trace_id=5118bb4003a54469bec15222cc475ee6
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/nodes/fca0f14507900c45d503026cfdb82a33/retire/check status=200 duration_ms=61.86 client_ip=127.0.0.1 request_id=be652de59f4c45bdbf8171cedb484cc2 trace_id=be652de59f4c45bdbf8171cedb484cc2
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/logout status=200 duration_ms=1.14 client_ip=127.0.0.1 request_id=c3679bb68384491bbc2df8e9ae900f3d trace_id=c3679bb68384491bbc2df8e9ae900f3d
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/elevate status=200 duration_ms=1.457 client_ip=127.0.0.1 request_id=44772a274008498f8e7e8d71a606d67a trace_id=44772a274008498f8e7e8d71a606d67a
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/status status=200 duration_ms=0.862 client_ip=127.0.0.1 request_id=a79b7a2c91cb4a8bac2a551c7e608714 trace_id=a79b7a2c91cb4a8bac2a551c7e608714
+2026/10/13 00:08:29 INFO request_completed method=GET path=/api/v1/media/admin/nodes status=200 duration_ms=5.276 client_ip=127.0.0.1 request_id=3291fc06a38a45158c63161290c5ebe6 trace_id=3291fc06a38a45158c63161290c5ebe6
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.027 client_ip=192.0.2.1 request_id=fc5b2620ab1649b9a60e1f6644968b4f trace_id=fc5b2620ab1649b9a60e1f6644968b4f
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=9.27 client_ip=192.0.2.1 request_id=7ccdd758925d4f99bca43339d0d48dd9 trace_id=7ccdd758925d4f99bca43339d0d48dd9
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=6.37 client_ip=192.0.2.1 request_id=07ce41dd588a4013acf108ac664bc47b trace_id=07ce41dd588a4013acf108ac664bc47b
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=6.735 client_ip=192.0.2.1 request_id=95a058db0b9b4ca8aad7a4411dda6895 trace_id=95a058db0b9b4ca8aad7a4411dda6895
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.185 client_ip=192.0.2.1 request_id=b7df14ff0a4a464ea2f01ee9855f127a trace_id=b7df14ff0a4a464ea2f01ee9855f127a
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.116 client_ip=192.0.2.1 request_id=ace96f758a7b4fdaa700fc1b6f31aabd trace_id=ace96f758a7b4fdaa700fc1b6f31aabd
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.335 client_ip=192.0.2.1 request_id=7cbfca80f3394189b6e1ac37156e638c trace_id=7cbfca80f3394189b6e1ac37156e638c
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.93 client_ip=192.0.2.1 request_id=ec31a96b2c0648acbda0946e7c58bd88 trace_id=ec31a96b2c0648acbda0946e7c58bd88
+2026/10/13 00:08:29 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.187 client_ip=192.0.2.1 request_id=e0f5acf5cf6b42f29d467614c90edf14 trace_id=e0f5acf5cf6b42f29d467614c90edf14
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/nodes/fca0f14507900c45d503026cfdb82a33/retire/check status=200 duration_ms=68.308 client_ip=127.0.0.1 request_id=686a1c23c6964e21bc9987319fddf207 trace_id=686a1c23c6964e21bc9987319fddf207
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/logout status=200 duration_ms=0.908 client_ip=127.0.0.1 request_id=7ea2760e19d444d0afd2f218e8ee0c84 trace_id=7ea2760e19d444d0afd2f218e8ee0c84
+2026/10/13 00:08:29 INFO request_completed method=POST path=/api/v1/media/admin/logout status=401 duration_ms=0.059 client_ip=127.0.0.1 request_id=229090d6eb264fe09e6ab19eb56f677e trace_id=229090d6eb264fe09e6ab19eb56f677e
+--- PASS: TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation (1.38s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	2.425s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	0.004s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	0.159s
