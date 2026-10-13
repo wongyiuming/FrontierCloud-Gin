@@ -74,7 +74,7 @@ func TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses(t *testing
 	caller := &retirementCaller{Caller: master}
 	service := noderetirement.Service{Repository: mdb.Pool().(store.RetirementRepository), Nodes: mdb.Nodes(), Client: caller}
 	report, e := service.Check(ctx, rel.PeerID, rid)
-	if e != nil || !report.ObservationComplete || !report.PreflightOnly || report.PhysicalEntries < 90 || report.ExpectedItems != 2 || caller.closes != 1 {
+	if e != nil || !report.ObservationComplete || !report.PreflightOnly || report.PhysicalEntries < 90 || report.ExpectedItems != 2 || caller.closes != 3 {
 		t.Fatal("incomplete report", report, e, caller.closes)
 	}
 	concerns := map[string]noderetirement.Concern{}
@@ -87,7 +87,7 @@ func TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses(t *testing
 	if concerns["physical_unmanaged_file"].Count < 90 || concerns["expected_missing"].Count != 1 || concerns["backup_retention_required"].Count != 1 || concerns["expected_database_backed_unverified"].Count != 1 {
 		t.Fatal("omitted independent blockers", concerns)
 	}
-	for _, fault := range []string{"sequence", "binding", "digest", "cursor"} {
+	for _, fault := range []string{"sequence", "binding", "digest", "cursor", "volumes", "capacity"} {
 		t.Run(fault, func(t *testing.T) {
 			caller.mutate = func(action string, value map[string]any) {
 				if action == "page" {
@@ -99,6 +99,14 @@ func TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses(t *testing
 						value["session"].(map[string]any)["binding"].(map[string]any)["member_id"] = identity.ID
 					case "digest":
 						page["observation_sha256"] = strings.Repeat("0", 64)
+					}
+				}
+				if action == "volumes" {
+					if fault == "volumes" {
+						value["volumes"] = []any{}
+					}
+					if fault == "capacity" {
+						value["volumes"].([]any)[0].(map[string]any)["free_bytes"] = -1
 					}
 				}
 				if action == "expected" && fault == "cursor" {

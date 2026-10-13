@@ -36,6 +36,13 @@ type Concern struct {
 	Count   int64    `json:"count"`
 	Samples []string `json:"samples"`
 }
+type VolumeReport struct {
+	resourceinventory.Volume
+	Entries           uint64 `json:"entries"`
+	LogicalBytes      int64  `json:"logical_bytes"`
+	ObservationSHA256 string `json:"observation_sha256"`
+}
+
 type Report struct {
 	MemberID            string                 `json:"member_id"`
 	CheckedAt           int64                  `json:"checked_at"`
@@ -46,6 +53,7 @@ type Report struct {
 	PhysicalEntries     uint64                 `json:"physical_entries"`
 	LogicalBytes        int64                  `json:"logical_bytes"`
 	ExpectedItems       uint64                 `json:"expected_items"`
+	Volumes             []VolumeReport         `json:"volumes"`
 	Concerns            []Concern              `json:"concerns"`
 }
 
@@ -124,10 +132,15 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 		return report, e
 	}
 	request["incarnation"] = session.Incarnation
+	scope := "data"
+	sessionOpen := true
 	defer func() {
+		if !sessionOpen {
+			return
+		}
 		finish, stop := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stop()
-		closeRequest := map[string]any{"action": "close", "member_id": member, "scope": "data", "session_id": sessionID, "incarnation": session.Incarnation}
+		closeRequest := map[string]any{"action": "close", "member_id": member, "scope": scope, "session_id": sessionID, "incarnation": session.Incarnation}
 		_, e := s.Client.Call(finish, rel, route, closeRequest)
 		if e != nil {
 			report.ObservationComplete = false
@@ -158,57 +171,33 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 	if !ledgerMatches(report.Peer, member, relationship, "Follower") {
 		return report, ErrObservation
 	}
-	digest := sha256.New()
-	complete := false
-	for sequence := uint64(0); sequence < MaxPages; sequence++ {
-		request["sequence"] = sequence
-		value, e = call("page")
-		if e != nil {
-			return report, e
-		}
-		var page struct {
-			resourceinventory.SessionPage
-			Facts []store.PhysicalInventoryFact `json:"facts"`
-		}
-		if e = decode(value, &page); e != nil {
-			return report, e
-		}
-		if page.Session != session || page.Page.Sequence != sequence || len(page.Page.Entries) > resourceinventory.PageEntries || len(page.Facts) != len(page.Page.Entries) {
-			return report, ErrObservation
-		}
-		for i, entry := range page.Page.Entries {
-			if entry.LogicalBytes < 0 || entry.LogicalBytes > math.MaxInt64-report.LogicalBytes || report.PhysicalEntries == math.MaxUint64 {
-				return report, ErrObservation
-			}
-			report.PhysicalEntries++
-			report.LogicalBytes += entry.LogicalBytes
-			encoded, e := json.Marshal(entry)
-			if e != nil {
-				return report, e
-			}
-			digest.Write(encoded)
-			digest.Write([]byte{'\n'})
-			fact := page.Facts[i]
-			if fact.Blocking {
-				if e = report.concern("physical_"+fact.Category, entry.Path); e != nil {
-					return report, e
-				}
-			}
-		}
-		if page.Page.EntryCount != report.PhysicalEntries || page.Page.LogicalBytes != report.LogicalBytes || page.Page.ObservationSHA256 != hex.EncodeToString(digest.Sum(nil)) {
-			return report, ErrObservation
-		}
-		if page.Page.Complete {
-			complete = true
-			break
-		}
-		if len(page.Page.Entries) == 0 {
-			return report, ErrObservation
-		}
+	request["sequence"] = uint64(0)
+	value, e = call("volumes")
+	if e != nil {
+		return report, e
 	}
-	if !complete {
+	var mounts struct {
+		Session resourceinventory.Session  `json:"session"`
+		Volumes []resourceinventory.Volume `json:"volumes"`
+	}
+	if e = decode(value, &mounts); e != nil {
+		return report, e
+	}
+	if mounts.Session != session || len(mounts.Volumes) != 3 {
 		return report, ErrObservation
 	}
+	for i, expectedScope := range []string{"data", "media", "recordings"} {
+		volume := mounts.Volumes[i]
+		now := time.Now().Unix()
+		if volume.Scope != expectedScope || volume.TotalBytes < 0 || volume.FreeBytes < 0 || volume.FreeBytes > volume.TotalBytes || volume.ObservedAt < now-30 || volume.ObservedAt > now+30 || volume.WritableVerified || i == 0 && volume.InDataRoot {
+			return report, ErrObservation
+		}
+		report.Volumes = append(report.Volumes, VolumeReport{Volume: volume})
+	}
+	if e = scanScope(ctx, &report, &report.Volumes[0], session, scope, request, call); e != nil {
+		return report, e
+	}
+	complete := false
 	request["sequence"] = uint64(0)
 	for _, resource := range []string{"media", "recording", "backup", "backup_chunk"} {
 		request["resource"] = resource
@@ -281,6 +270,36 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 	}
 	delete(request, "resource")
 	delete(request, "after")
+	for i, nativeScope := range []string{"media", "recordings"} {
+		request["sequence"] = uint64(0)
+		if _, e = call("close"); e != nil {
+			return report, e
+		}
+		sessionOpen = false
+		if _, e = rand.Read(nonce); e != nil {
+			return report, e
+		}
+		sessionID = hex.EncodeToString(nonce)
+		scope = nativeScope
+		request = map[string]any{"action": "open", "member_id": member, "scope": scope, "session_id": sessionID}
+		value, e = s.Client.Call(ctx, rel, route, request)
+		if e != nil {
+			return report, e
+		}
+		session = resourceinventory.Session{}
+		if e = decode(value, &session); e != nil {
+			return report, e
+		}
+		sessionOpen = true
+		if session.ID != sessionID || !validToken(session.Incarnation) || session.Binding != (resourceinventory.Binding{MemberID: member, MasterID: identity.ID, RelationshipID: relationship, Scope: scope}) || session.CreatedAt < time.Now().Unix()-30 || session.CreatedAt > time.Now().Unix()+30 || session.ExpiresAt <= time.Now().Unix() || session.ExpiresAt > time.Now().Add(resourceinventory.SessionTTL).Unix() {
+			return report, ErrObservation
+		}
+		request["incarnation"] = session.Incarnation
+		if e = scanScope(ctx, &report, &report.Volumes[i+1], session, scope, request, call); e != nil {
+			return report, e
+		}
+	}
+	request["sequence"] = uint64(0)
 	value, e = call("ledger")
 	if e != nil {
 		return report, e
@@ -312,4 +331,65 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 	}
 	report.ObservationComplete = true
 	return report, nil
+}
+
+func scanScope(ctx context.Context, report *Report, volume *VolumeReport, session resourceinventory.Session, scope string, request map[string]any, call func(string) (map[string]any, error)) error {
+	digest := sha256.New()
+	complete := false
+	for sequence := uint64(0); sequence < MaxPages; sequence++ {
+		request["sequence"] = sequence
+		value, e := call("page")
+		if e != nil {
+			return e
+		}
+		var page struct {
+			resourceinventory.SessionPage
+			Facts []store.PhysicalInventoryFact `json:"facts"`
+		}
+		if e = decode(value, &page); e != nil {
+			return e
+		}
+		if page.Session != session || page.Page.Sequence != sequence || len(page.Page.Entries) > resourceinventory.PageEntries || len(page.Facts) != len(page.Page.Entries) {
+			return ErrObservation
+		}
+		for i, entry := range page.Page.Entries {
+			if entry.LogicalBytes < 0 || entry.LogicalBytes > math.MaxInt64-volume.LogicalBytes || volume.Entries == math.MaxUint64 {
+				return ErrObservation
+			}
+			volume.Entries++
+			volume.LogicalBytes += entry.LogicalBytes
+			if entry.LogicalBytes > math.MaxInt64-report.LogicalBytes || report.PhysicalEntries == math.MaxUint64 {
+				return ErrObservation
+			}
+			report.PhysicalEntries++
+			report.LogicalBytes += entry.LogicalBytes
+			encoded, e := json.Marshal(entry)
+			if e != nil {
+				return e
+			}
+			digest.Write(encoded)
+			digest.Write([]byte{'\n'})
+			fact := page.Facts[i]
+			if fact.Blocking {
+				if e = report.concern("physical_"+fact.Category, scope+"/"+entry.Path); e != nil {
+					return e
+				}
+			}
+		}
+		if page.Page.EntryCount != volume.Entries || page.Page.LogicalBytes != volume.LogicalBytes || page.Page.ObservationSHA256 != hex.EncodeToString(digest.Sum(nil)) {
+			return ErrObservation
+		}
+		if page.Page.Complete {
+			complete = true
+			break
+		}
+		if len(page.Page.Entries) == 0 {
+			return ErrObservation
+		}
+	}
+	if !complete {
+		return ErrObservation
+	}
+	volume.ObservationSHA256 = hex.EncodeToString(digest.Sum(nil))
+	return nil
 }

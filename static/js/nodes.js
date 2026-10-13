@@ -375,6 +375,12 @@
             section.append(make('p', '', `${report?.observation_complete ? '盘点已完成' : '检查未完成'} · ${new Date(saved.at).toLocaleString()} · 历史观察，需重新检查`));
             if (report) {
                 section.append(kv([['物理条目', report.physical_entries], ['逻辑字节', dataSize(report.logical_bytes)], ['预期资源', report.expected_items]]));
+                if (Array.isArray(report.volumes)) {
+                    for (const volume of report.volumes) {
+                        section.append(kv([['盘点范围', volume.scope], ['条目', volume.entries], ['逻辑字节', dataSize(volume.logical_bytes)], ['所在文件系统空闲', dataSize(volume.free_bytes)], ['默认数据目录内', volume.in_data_root ? '是' : '否'], ['写入能力', '未验证']]));
+                    }
+                    section.append(make('p', 'node-note', '空闲空间为各挂载的观察值；同一文件系统可能共享空间，不能相加作为可用容量。'));
+                }
                 const list = make('ul');
                 const steps = {
                     finish_or_reconcile_worker_jobs: '完成或对账后台任务及其有效执行租约。',

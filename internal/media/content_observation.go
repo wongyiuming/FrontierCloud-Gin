@@ -4,8 +4,13 @@ import (
 	"context"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"os"
 	"strings"
 )
+
+// InventoryRoot borrows the actual service mount. Only internal inventory
+// registration may retain it; its workers must close before Service.Close.
+func (s *Service) InventoryRoot() *os.Root { return s.root }
 
 // ObserveManagedContent borrows the native media root. Admission is rechecked
 // at short native mutation boundaries before and after reading bytes.

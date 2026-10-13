@@ -7,20 +7,22 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
 
-// RegisterNodePhysicalInventory exposes only metadata under the configured
-// data root. It accepts no arbitrary path, URL, role, identity or expiry.
+// RegisterNodePhysicalInventory observes the data root and optional borrowed
+// native media/recording mounts. It accepts no arbitrary path, URL, role, identity or expiry.
 // This observation endpoint does not grant migration, deletion or retirement.
-func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, resolver *network.Resolver, control *node.Service, repository store.PhysicalInventoryRepository) (func() error, error) {
+func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, resolver *network.Resolver, control *node.Service, repository store.PhysicalInventoryRepository, nativeRoots ...*os.Root) (func() error, error) {
 	if repository == nil {
 		return nil, errors.New("physical inventory repository unavailable")
 	}
@@ -33,7 +35,32 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		root.Close()
 		return nil, errors.New("expected physical inventory repository unavailable")
 	}
+	roots := map[string]*os.Root{"data": root}
+	excluded := map[string]os.FileInfo{}
 	sessions := resourceinventory.NewSessions(root, nil)
+	if len(nativeRoots) != 0 {
+		if len(nativeRoots) != 2 || nativeRoots[0] == nil || nativeRoots[1] == nil {
+			root.Close()
+			return nil, resourceinventory.ErrSession
+		}
+		roots["media"], roots["recordings"] = nativeRoots[0], nativeRoots[1]
+		for _, scope := range []string{"media", "recordings"} {
+			actual, err := roots[scope].Stat(".")
+			if err != nil {
+				root.Close()
+				return nil, err
+			}
+			local, err := root.Lstat(scope)
+			if err == nil && local.IsDir() && local.Mode()&os.ModeSymlink == 0 && os.SameFile(local, actual) {
+				excluded[scope] = actual
+			}
+		}
+		sessions, e = resourceinventory.NewVolumeSessions(root, nativeRoots[0], nativeRoots[1], excluded, nil)
+		if e != nil {
+			root.Close()
+			return nil, e
+		}
+	}
 	shutdown, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -104,7 +131,7 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		if decodeError == nil && decoder.Decode(&tail) != io.EOF {
 			decodeError = resourceinventory.ErrSession
 		}
-		if decodeError != nil || request.MemberID != identity.ID || request.Scope != "data" || request.Action != "expected" && (request.Resource != "" || request.After != "") {
+		if decodeError != nil || request.MemberID != identity.ID || roots[request.Scope] == nil || request.Action != "expected" && (request.Resource != "" || request.After != "") {
 			detail(c, 400, "Invalid identity-bound inventory request")
 			return
 		}
@@ -113,6 +140,10 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			defer func() { <-slots }()
 		default:
 			detail(c, 429, "Inventory page is already being observed")
+			return
+		}
+		if request.Scope != "data" && (request.Action == "expected" || request.Action == "volumes") {
+			detail(c, 400, "Metadata requires the data scope")
 			return
 		}
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -140,10 +171,23 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			entries := make([]store.PhysicalInventoryEntry, 0, len(observed.Page.Entries))
 			for _, entry := range observed.Page.Entries {
-				entries = append(entries, store.PhysicalInventoryEntry{Path: entry.Path, Kind: entry.Kind, LogicalBytes: entry.LogicalBytes})
+				name := entry.Path
+				if request.Scope != "data" {
+					name = request.Scope + "/" + name
+				}
+				entries = append(entries, store.PhysicalInventoryEntry{Path: name, Kind: entry.Kind, LogicalBytes: entry.LogicalBytes})
 			}
 			var facts []store.PhysicalInventoryFact
 			facts, e = repository.ClassifyPhysicalInventory(ctx, rel.ID, identity.ID, rel.PeerID, entries)
+			if e == nil && len(facts) == len(entries) && request.Scope == "data" && len(nativeRoots) == 2 {
+				for i, entry := range observed.Page.Entries {
+					for _, scope := range []string{"media", "recordings"} {
+						if excluded[scope] == nil && (entry.Path == scope || strings.HasPrefix(entry.Path, scope+"/")) && entry.Kind == "regular" {
+							facts[i] = store.PhysicalInventoryFact{Category: "unmanaged_file", Blocking: true, Reason: "outside_native_mount"}
+						}
+					}
+				}
+			}
 			if e == nil && len(facts) != len(entries) {
 				e = resourceinventory.ErrLimit
 			}
@@ -194,7 +238,15 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 					observations = append(observations, resourceinventory.Presence{State: state})
 					continue
 				}
-				present, err := resourceinventory.PresenceAt(ctx, root, item.Path)
+				presenceRoot, name := root, item.Path
+				for _, scope := range []string{"media", "recordings"} {
+					if roots[scope] != nil && strings.HasPrefix(name, scope+"/") {
+						presenceRoot = roots[scope]
+						name = strings.TrimPrefix(name, scope+"/")
+						break
+					}
+				}
+				present, err := resourceinventory.PresenceAt(ctx, presenceRoot, name)
 				if err != nil {
 					e = err
 					break
@@ -212,6 +264,35 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 			}
 			lastExpected = &expectedResponse{Session: session, Manifest: manifest, Presence: observations}
 			result = lastExpected
+		case "volumes":
+			if request.Sequence != 0 || len(nativeRoots) != 2 {
+				e = resourceinventory.ErrSession
+				break
+			}
+			if _, e = sessions.Validate(request.SessionID, request.Incarnation, binding); e != nil {
+				break
+			}
+			volumes := make([]resourceinventory.Volume, 0, 3)
+			for _, scope := range []string{"data", "media", "recordings"} {
+				total, free, err := fsutil.DiskUsage(roots[scope])
+				if err != nil {
+					e = err
+					break
+				}
+				if total < 0 || free < 0 || free > total {
+					e = resourceinventory.ErrSession
+					break
+				}
+				volumes = append(volumes, resourceinventory.Volume{Scope: scope, InDataRoot: excluded[scope] != nil, TotalBytes: total, FreeBytes: free, ObservedAt: time.Now().Unix()})
+			}
+			if e == nil {
+				_, e = sessions.Validate(request.SessionID, request.Incarnation, binding)
+			}
+			if e == nil {
+				session, err := sessions.Validate(request.SessionID, request.Incarnation, binding)
+				e = err
+				result = gin.H{"session": session, "volumes": volumes}
+			}
 		case "ledger":
 			if request.Sequence != 0 {
 				e = resourceinventory.ErrSession

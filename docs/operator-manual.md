@@ -325,3 +325,6 @@ or permits volume cleanup. Final retirement remains a separate unfinished flow.
 
 
 The internal managed-content observation endpoint uses each native media or recording mount, authenticates the current upstream Master and hashes exact managed bytes in one bounded worker. It reports an ephemeral observation with a five-minute expiry and process incarnation. It does not freeze content, generate a migration plan, reserve space or authorize deletion/retirement. Operators should continue using the exposed node task/retire-check commands; there is no supported direct content-observation operator command.
+
+
+Retirement preflight now observes the data directory and the actual native media/recording mounts. Default subdirectories matching those mounts are scanned once; obsolete copies left in default directories after an external mount change are reported as unmanaged leftovers. The report shows per-scope logical bytes and filesystem total/free observations. Different scopes may share one filesystem: never add their free values to estimate target capacity. Writability is unverified until the approved migration admission performs its required checks. An older node without the three-scope observation protocol returns an incomplete check rather than retirement approval. The checks do not delete files or revoke the node.

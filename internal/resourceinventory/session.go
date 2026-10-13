@@ -43,21 +43,39 @@ type observation struct {
 // Sessions holds one scanner/replay page. Caller authorization must still be
 // rechecked for every operation; a session ID alone conveys no authority.
 type Sessions struct {
-	mutex   sync.Mutex
-	root    *os.Root
-	now     func() time.Time
-	current *observation
-	closed  bool
+	mutex    sync.Mutex
+	root     *os.Root
+	roots    map[string]*os.Root
+	excluded map[string]os.FileInfo
+	now      func() time.Time
+	current  *observation
+	closed   bool
 }
 
 func NewSessions(root *os.Root, now func() time.Time) *Sessions {
 	if now == nil {
 		now = time.Now
 	}
-	return &Sessions{root: root, now: now}
+	return &Sessions{root: root, roots: map[string]*os.Root{"data": root}, now: now}
+}
+
+// NewVolumeSessions borrows exactly the data and two native resource roots.
+// A single active scanner slot is shared across all three scopes.
+func NewVolumeSessions(data, media, recordings *os.Root, excluded map[string]os.FileInfo, now func() time.Time) (*Sessions, error) {
+	if data == nil || media == nil || recordings == nil || len(excluded) > 2 {
+		return nil, ErrSession
+	}
+	s := NewSessions(data, now)
+	s.roots["media"] = media
+	s.roots["recordings"] = recordings
+	s.excluded = make(map[string]os.FileInfo, len(excluded))
+	for name, info := range excluded {
+		s.excluded[name] = info
+	}
+	return s, nil
 }
 func validBinding(b Binding) bool {
-	return sessionID.MatchString(b.MemberID) && sessionID.MatchString(b.MasterID) && b.MemberID != b.MasterID && sessionID.MatchString(b.RelationshipID) && b.Scope == "data"
+	return sessionID.MatchString(b.MemberID) && sessionID.MatchString(b.MasterID) && b.MemberID != b.MasterID && sessionID.MatchString(b.RelationshipID) && (b.Scope == "data" || b.Scope == "media" || b.Scope == "recordings")
 }
 func (s *Sessions) expire() error {
 	if s.current != nil && s.current.session.ExpiresAt <= s.now().Unix() {
@@ -74,7 +92,7 @@ func (s *Sessions) Open(ctx context.Context, id string, b Binding) (Session, err
 	if e := ctx.Err(); e != nil {
 		return Session{}, e
 	}
-	if s.closed || !sessionID.MatchString(id) || !validBinding(b) {
+	if s.closed || !sessionID.MatchString(id) || !validBinding(b) || s.roots[b.Scope] == nil {
 		return Session{}, ErrSession
 	}
 	if e := s.expire(); e != nil {
@@ -95,7 +113,11 @@ func (s *Sessions) Open(ctx context.Context, id string, b Binding) (Session, err
 		}
 		s.current = nil
 	}
-	scanner, e := New(s.root)
+	var excluded map[string]os.FileInfo
+	if b.Scope == "data" {
+		excluded = s.excluded
+	}
+	scanner, e := NewExcluding(s.roots[b.Scope], excluded)
 	if e != nil {
 		return Session{}, e
 	}

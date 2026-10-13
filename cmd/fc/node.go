@@ -49,6 +49,12 @@ func nodeCommand(ctx context.Context, args []string, structured bool, input io.R
 			}
 		} else {
 			fmt.Fprintf(output, "Member: %s\nObservation complete: %t\nPreflight only: true; final retirement approval is still required.\nPhysical entries: %d; logical bytes: %d; expected items: %d\n", member, report.ObservationComplete, report.PhysicalEntries, report.LogicalBytes, report.ExpectedItems)
+			for _, volume := range report.Volumes {
+				fmt.Fprintf(output, "Volume %q: entries=%d logical_bytes=%d filesystem_total=%d filesystem_free=%d in_data_root=%t writable=unverified\n", volume.Scope, volume.Entries, volume.LogicalBytes, volume.TotalBytes, volume.FreeBytes, volume.InDataRoot)
+			}
+			if len(report.Volumes) > 0 {
+				fmt.Fprintln(output, "Filesystem free values may share the same disk; do not add them as available capacity.")
+			}
 			for _, ledger := range []string{"Master", "Storage"} {
 				blocks := report.Master.Blockers
 				if ledger == "Storage" {

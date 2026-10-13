@@ -65,7 +65,7 @@ func contentHash(value string) bool {
 	return e == nil && len(raw) == 32 && hex.EncodeToString(raw) == value
 }
 func validContentRequest(request ContentRequest) bool {
-	return sessionID.MatchString(request.ID) && validBinding(request.Binding) && contentHash(request.MetadataSHA) && request.Bytes >= 0 && (request.Resource == "media" && contentHash(request.ObjectID) || request.Resource == "recording" && sessionID.MatchString(request.ObjectID))
+	return sessionID.MatchString(request.ID) && validBinding(request.Binding) && request.Binding.Scope == "data" && contentHash(request.MetadataSHA) && request.Bytes >= 0 && (request.Resource == "media" && contentHash(request.ObjectID) || request.Resource == "recording" && sessionID.MatchString(request.ObjectID))
 }
 func contentJobCopy(job ContentJob) ContentJob {
 	if job.Observation != nil {

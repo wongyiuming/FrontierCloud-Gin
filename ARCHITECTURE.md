@@ -394,3 +394,10 @@ promotion should retry after publication completes or pin the exact SHA.
 Reviewed upgrades, CD, rollback, schema and provenance checks still use exact
 source/digest evidence. Defaults must not permit pull failure to trigger a build,
 change database identity, migrate existing data or replace generated secrets.
+
+
+### Native resource observations
+
+Internal retirement inventory uses fixed `data`, `media` and `recordings` namespaces. The latter two borrow the actual rooted handles of the native services, so configurable mounts are not replaced by defaults under DataRoot. A default child is omitted from the data walk only when its inode matches that native root; its pinned identity is checked before/after scan pages. Unused default subtrees remain visible as unmanaged residual data. A single scanner slot, bounded pages/depth/path lengths, exact relationship binding, process incarnation and five-minute expiry apply across all three scopes. Every request uses the existing HTTPS/raw-HMAC/nonce control authentication and requires the active upstream Master.
+
+Expected managed presence resolves at native roots. The Master independently checks every scope transcript and combines it with fresh SQL retirement ledgers; missing native-scope support yields an incomplete check. Per-scope filesystem total/free values are observations, may share one filesystem and must not be added into a capacity promise. No write probe or reservation is inferred. Observations do not freeze concurrent writers and are never migration-start, managed-delete or final node-revocation grants. Native workers/scanners must be cancelled and joined before the services close their borrowed roots. Independent retire apply still requires a final durable fence and reconciliation; a completed diagnostic report cannot substitute for it.

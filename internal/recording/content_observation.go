@@ -4,8 +4,12 @@ import (
 	"context"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"os"
 	"strings"
 )
+
+// InventoryRoot borrows the native recording mount, never a caller path.
+func (s *Storage) InventoryRoot() *os.Root { return s.root }
 
 // ObserveManagedContent hashes opaque bytes at the native recording mount.
 // Admission must resolve current ready metadata and the active relationship.

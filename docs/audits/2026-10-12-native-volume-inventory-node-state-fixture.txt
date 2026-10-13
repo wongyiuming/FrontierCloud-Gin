@@ -1,0 +1,295 @@
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:44:41 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.644 client_ip=192.0.2.1 request_id=aff7058123ed42d79720c5b9b955e45a trace_id=aff7058123ed42d79720c5b9b955e45a
+2026/10/13 01:44:41 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.147 client_ip=192.0.2.1 request_id=d912a3ee94754ef8befd45b2a3a528b3 trace_id=d912a3ee94754ef8befd45b2a3a528b3
+2026/10/13 01:44:41 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.043 client_ip=192.0.2.1 request_id=fc6eba1b5aec4c9eb740746772967b7e trace_id=fc6eba1b5aec4c9eb740746772967b7e
+2026/10/13 01:44:41 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.07 client_ip=192.0.2.1 request_id=97eaf244c5874efea2cf54d7b30542a7 trace_id=97eaf244c5874efea2cf54d7b30542a7
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.448 client_ip=192.0.2.1 request_id=11c130cc3f5b4608a34a0dcc9ad06bfc trace_id=11c130cc3f5b4608a34a0dcc9ad06bfc
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.367 client_ip=192.0.2.1 request_id=4bfee3b3babb49a088aeeaa214e7f8be trace_id=4bfee3b3babb49a088aeeaa214e7f8be
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.051 client_ip=192.0.2.1 request_id=9c97a56ce4c94864ae7f73ff626bff5e trace_id=9c97a56ce4c94864ae7f73ff626bff5e
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.822 client_ip=192.0.2.1 request_id=93202f1c83df40cdb7f24ae64128f96b trace_id=93202f1c83df40cdb7f24ae64128f96b
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.742 client_ip=192.0.2.1 request_id=227746158f0d403a9fd33dd543851a76 trace_id=227746158f0d403a9fd33dd543851a76
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.828 client_ip=192.0.2.1 request_id=efe1ff1a1cf54d5dab89c48017153a9b trace_id=efe1ff1a1cf54d5dab89c48017153a9b
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.909 client_ip=192.0.2.1 request_id=21ef5e7c4c604dbbb5a707925e3194c9 trace_id=21ef5e7c4c604dbbb5a707925e3194c9
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.013 client_ip=192.0.2.1 request_id=5264f372149d44c6b06d45a1455464f1 trace_id=5264f372149d44c6b06d45a1455464f1
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=19.759 client_ip=192.0.2.1 request_id=0ed470294d974784ab95076a1d8181f3 trace_id=0ed470294d974784ab95076a1d8181f3
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.832 client_ip=192.0.2.1 request_id=dff1fbff3894430db67005c6e472332a trace_id=dff1fbff3894430db67005c6e472332a
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.853 client_ip=192.0.2.1 request_id=38fa2e55296545dabb01b649a9a61cb3 trace_id=38fa2e55296545dabb01b649a9a61cb3
+2026/10/13 01:44:41 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.606 client_ip=192.0.2.1 request_id=2ed62a5a6ace4428bcf66ff40782ade0 trace_id=2ed62a5a6ace4428bcf66ff40782ade0
+--- PASS: TestAuthenticatedManagedContentObservation (1.08s)
+=== RUN   TestNativeVolumeRetirementExternalMountsAndStaleDefaultCopies
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.137 client_ip=192.0.2.1 request_id=722f6aa3d0f848509876e161292d218c trace_id=722f6aa3d0f848509876e161292d218c
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.161 client_ip=192.0.2.1 request_id=29ad45fcdd69420aa930386179f2a3ef trace_id=29ad45fcdd69420aa930386179f2a3ef
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.115 client_ip=192.0.2.1 request_id=6b1d630f37bf453cbec5430bca149c43 trace_id=6b1d630f37bf453cbec5430bca149c43
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.112 client_ip=192.0.2.1 request_id=2ad10244390e4dc2972771e9e1b45ea0 trace_id=2ad10244390e4dc2972771e9e1b45ea0
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.115 client_ip=192.0.2.1 request_id=69d03064495d4fd5a9c33489397bef59 trace_id=69d03064495d4fd5a9c33489397bef59
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.379 client_ip=192.0.2.1 request_id=dc395ea4f5854fc0b79659fb2f6ee15b trace_id=dc395ea4f5854fc0b79659fb2f6ee15b
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.043 client_ip=192.0.2.1 request_id=5dc1d226f25d47f2b43fb0ec5bf31a35 trace_id=5dc1d226f25d47f2b43fb0ec5bf31a35
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.693 client_ip=192.0.2.1 request_id=2d48cd96321649feae317057f6cb696e trace_id=2d48cd96321649feae317057f6cb696e
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.272 client_ip=192.0.2.1 request_id=1c1ddf582bdf468597ec062593845b36 trace_id=1c1ddf582bdf468597ec062593845b36
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=11.84 client_ip=192.0.2.1 request_id=0d9a4b616efe4fdfa2046c11c082610f trace_id=0d9a4b616efe4fdfa2046c11c082610f
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.413 client_ip=192.0.2.1 request_id=befa7140c9054291b37c1f6be012ee84 trace_id=befa7140c9054291b37c1f6be012ee84
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.854 client_ip=192.0.2.1 request_id=c783dbc7412d47c9a2a5fb4e45ae42e3 trace_id=c783dbc7412d47c9a2a5fb4e45ae42e3
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.904 client_ip=192.0.2.1 request_id=aeb36562149442c5b2b699e91ea0efb5 trace_id=aeb36562149442c5b2b699e91ea0efb5
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.045 client_ip=192.0.2.1 request_id=ccc1a4c567e64415b02b18c4af5793c7 trace_id=ccc1a4c567e64415b02b18c4af5793c7
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.781 client_ip=192.0.2.1 request_id=4459c6de91914824ac5ab3a43c421951 trace_id=4459c6de91914824ac5ab3a43c421951
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.807 client_ip=192.0.2.1 request_id=365b84d4e11e4b50802b1c216d30c5e3 trace_id=365b84d4e11e4b50802b1c216d30c5e3
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.707 client_ip=192.0.2.1 request_id=6e48162325314ffbab19d97451035c53 trace_id=6e48162325314ffbab19d97451035c53
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.809 client_ip=192.0.2.1 request_id=1da67b0c0dc14cec8669bb7dd67a9591 trace_id=1da67b0c0dc14cec8669bb7dd67a9591
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.827 client_ip=192.0.2.1 request_id=6be3a20c7eef4927984a9310d5173f8a trace_id=6be3a20c7eef4927984a9310d5173f8a
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.266 client_ip=192.0.2.1 request_id=90297f21a5db44909b7b0259598a73a7 trace_id=90297f21a5db44909b7b0259598a73a7
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=10.487 client_ip=192.0.2.1 request_id=a723877501284fc693f43dcfa02d4bec trace_id=a723877501284fc693f43dcfa02d4bec
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.086 client_ip=192.0.2.1 request_id=8a46a731ed05404aa2999b3ed4a7a255 trace_id=8a46a731ed05404aa2999b3ed4a7a255
+    node_native_volume_test.go:65: wrong mount [{{data false 979639799808 660866371584 1791855882 false} 20 823932 4ae715f0519dc19c64f2da34b319c8027fdd475c32ad248172331eeb87531d10} {{media false 979639799808 660866371584 1791855882 false} 6 55 aa3c60857c41bff17d2b583b988216e75b777e27d7294e865344489cc74be763} {{recordings false 979639799808 660866371584 1791855882 false} 2 24 7159b8d7cd740ca5da98c373983f6e20ae60596c63b3f33a0ea206e7325922ad}]
+--- FAIL: TestNativeVolumeRetirementExternalMountsAndStaleDefaultCopies (0.56s)
+=== RUN   TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.209 client_ip=192.0.2.1 request_id=cb55f2e2503c421e81f39cb7fda8ee6d trace_id=cb55f2e2503c421e81f39cb7fda8ee6d
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.147 client_ip=192.0.2.1 request_id=249cb3e98d984a029ff6b044a088d0e0 trace_id=249cb3e98d984a029ff6b044a088d0e0
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.164 client_ip=192.0.2.1 request_id=6cfaae42dfde456b9fd7df33b608b592 trace_id=6cfaae42dfde456b9fd7df33b608b592
+2026/10/13 01:44:42 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.114 client_ip=192.0.2.1 request_id=e68f7ab0854d4a3686fe2ad29178d1b1 trace_id=e68f7ab0854d4a3686fe2ad29178d1b1
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.36 client_ip=192.0.2.1 request_id=78baeb3d4e1546b582dfac2bcbb73b78 trace_id=78baeb3d4e1546b582dfac2bcbb73b78
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.318 client_ip=192.0.2.1 request_id=f6db762fbab24c0192e73cea19d2ac58 trace_id=f6db762fbab24c0192e73cea19d2ac58
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=0.059 client_ip=192.0.2.1 request_id=839b5761970e46dbbdaf87d0de5e31ce trace_id=839b5761970e46dbbdaf87d0de5e31ce
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.894 client_ip=192.0.2.1 request_id=8c0f7571e83744bf8edd03486b8cda45 trace_id=8c0f7571e83744bf8edd03486b8cda45
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.929 client_ip=192.0.2.1 request_id=8bab30489a694a33bc784140f935e504 trace_id=8bab30489a694a33bc784140f935e504
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.825 client_ip=192.0.2.1 request_id=364ce940b2224a8d81c158ace0f7deb9 trace_id=364ce940b2224a8d81c158ace0f7deb9
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.893 client_ip=192.0.2.1 request_id=c441acf0944644f284aca1cce1d9295d trace_id=c441acf0944644f284aca1cce1d9295d
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.84 client_ip=192.0.2.1 request_id=ac98469673334c65a77162dca4a641e5 trace_id=ac98469673334c65a77162dca4a641e5
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=429 duration_ms=2.851 client_ip=192.0.2.1 request_id=57c3fccba0a54d4881f0b2b86ca75d55 trace_id=57c3fccba0a54d4881f0b2b86ca75d55
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.112 client_ip=192.0.2.1 request_id=7735175a38a04fafb7ca45f0211ad01b trace_id=7735175a38a04fafb7ca45f0211ad01b
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.969 client_ip=192.0.2.1 request_id=f89d598932d7474281f2836bf16f6cff trace_id=f89d598932d7474281f2836bf16f6cff
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.061 client_ip=192.0.2.1 request_id=79327d4bb0134c82aeb358f9f4a91ca5 trace_id=79327d4bb0134c82aeb358f9f4a91ca5
+2026/10/13 01:44:42 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.98 client_ip=192.0.2.1 request_id=16a42cdbefd648c2a15bc0c1c8b4466b trace_id=16a42cdbefd648c2a15bc0c1c8b4466b
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=18.541 client_ip=192.0.2.1 request_id=853c1b9260b440aabf7810de4cfcc3ef trace_id=853c1b9260b440aabf7810de4cfcc3ef
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.517 client_ip=192.0.2.1 request_id=55caccebb7234f0f9f524725c08cfdf5 trace_id=55caccebb7234f0f9f524725c08cfdf5
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=12.015 client_ip=192.0.2.1 request_id=ba5060555a9b4e619fde82d60c508ae3 trace_id=ba5060555a9b4e619fde82d60c508ae3
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=14.625 client_ip=192.0.2.1 request_id=1ef6931fc97d48dab144825c97b91009 trace_id=1ef6931fc97d48dab144825c97b91009
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.272 client_ip=192.0.2.1 request_id=eae95f0065f04f2483d0f4f0c33d7ab3 trace_id=eae95f0065f04f2483d0f4f0c33d7ab3
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.957 client_ip=192.0.2.1 request_id=81edc8e4bac8417e99b245cabf490e79 trace_id=81edc8e4bac8417e99b245cabf490e79
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.516 client_ip=192.0.2.1 request_id=59cb98c864e649b6bcdbb3626ee09d93 trace_id=59cb98c864e649b6bcdbb3626ee09d93
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.904 client_ip=192.0.2.1 request_id=5bf6ecd83659467a85528cb7e73d2460 trace_id=5bf6ecd83659467a85528cb7e73d2460
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.214 client_ip=192.0.2.1 request_id=91246a35856b463eaa42e5620caa952e trace_id=91246a35856b463eaa42e5620caa952e
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.939 client_ip=192.0.2.1 request_id=76d8233ff80c465a850af8c5fe9f33d5 trace_id=76d8233ff80c465a850af8c5fe9f33d5
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=1.709 client_ip=192.0.2.1 request_id=df382fbfeec646299b6ae9b75644b6f3 trace_id=df382fbfeec646299b6ae9b75644b6f3
+--- PASS: TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation (0.58s)
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses
+2026/10/13 01:44:43 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.155 client_ip=192.0.2.1 request_id=a41c0399911f43b6bae5b9714507f5f3 trace_id=a41c0399911f43b6bae5b9714507f5f3
+2026/10/13 01:44:43 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.11 client_ip=192.0.2.1 request_id=bafc2790fe7541d5a185bd6f3805908c trace_id=bafc2790fe7541d5a185bd6f3805908c
+2026/10/13 01:44:43 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.118 client_ip=192.0.2.1 request_id=bb625ba4ee804843add661145b603454 trace_id=bb625ba4ee804843add661145b603454
+2026/10/13 01:44:43 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.066 client_ip=192.0.2.1 request_id=a1c6d05af9e24870a8c7c569e62a4a9c trace_id=a1c6d05af9e24870a8c7c569e62a4a9c
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.506 client_ip=192.0.2.1 request_id=d36523016da448989245d90d446f3add trace_id=d36523016da448989245d90d446f3add
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=5.107 client_ip=192.0.2.1 request_id=471c5e146a784a929bb357fba33cd25c trace_id=471c5e146a784a929bb357fba33cd25c
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.928 client_ip=192.0.2.1 request_id=a6e2f59d9c574bceac9c5a00efd9d8a4 trace_id=a6e2f59d9c574bceac9c5a00efd9d8a4
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.959 client_ip=192.0.2.1 request_id=d421b812235d4e66a5843a3a38c291e4 trace_id=d421b812235d4e66a5843a3a38c291e4
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.929 client_ip=192.0.2.1 request_id=32d4477837f44b3589ed3f31c9168f74 trace_id=32d4477837f44b3589ed3f31c9168f74
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.935 client_ip=192.0.2.1 request_id=657cf52603384aaf8d431512726cafb9 trace_id=657cf52603384aaf8d431512726cafb9
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.333 client_ip=192.0.2.1 request_id=d326d916d50b4ca3b0354a4e3d1797bc trace_id=d326d916d50b4ca3b0354a4e3d1797bc
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.046 client_ip=192.0.2.1 request_id=07d26b1ae6a3427d9ceb0ac5ed62149e trace_id=07d26b1ae6a3427d9ceb0ac5ed62149e
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.032 client_ip=192.0.2.1 request_id=a65037a2a06e40bd9bf7b24ef6e540d5 trace_id=a65037a2a06e40bd9bf7b24ef6e540d5
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.009 client_ip=192.0.2.1 request_id=af4ca86a9c1e40fba111233b77b4857e trace_id=af4ca86a9c1e40fba111233b77b4857e
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.797 client_ip=192.0.2.1 request_id=5e85ce7b9ca94718880e1a9f4d803389 trace_id=5e85ce7b9ca94718880e1a9f4d803389
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.839 client_ip=192.0.2.1 request_id=b6c38bd67a424402a1f5e90383aff560 trace_id=b6c38bd67a424402a1f5e90383aff560
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=16.887 client_ip=192.0.2.1 request_id=1e402fb16abf42619d1ada767af90cc7 trace_id=1e402fb16abf42619d1ada767af90cc7
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=12.34 client_ip=192.0.2.1 request_id=17c102e2b6dc4050adcab6075133bfeb trace_id=17c102e2b6dc4050adcab6075133bfeb
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.932 client_ip=192.0.2.1 request_id=f5661d437bcd43709accb44b067c7c4a trace_id=f5661d437bcd43709accb44b067c7c4a
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.923 client_ip=192.0.2.1 request_id=619034a3368640c8b263d5a21f3d05eb trace_id=619034a3368640c8b263d5a21f3d05eb
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.889 client_ip=192.0.2.1 request_id=b3ca21d7656b4406ba1747edd4674162 trace_id=b3ca21d7656b4406ba1747edd4674162
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.698 client_ip=192.0.2.1 request_id=1d4bb0759310433ea67b710a3f2b335f trace_id=1d4bb0759310433ea67b710a3f2b335f
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.11 client_ip=192.0.2.1 request_id=d0e390b3cde54572b37d4ed3808484ae trace_id=d0e390b3cde54572b37d4ed3808484ae
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/sequence
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.857 client_ip=192.0.2.1 request_id=0890374c6b06496fadec9f75984ad635 trace_id=0890374c6b06496fadec9f75984ad635
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.936 client_ip=192.0.2.1 request_id=cbe04317a0c54ddab0dfb1ac6a5046b7 trace_id=cbe04317a0c54ddab0dfb1ac6a5046b7
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.96 client_ip=192.0.2.1 request_id=1acf4dd7de634e238d3a463a2eda7fe8 trace_id=1acf4dd7de634e238d3a463a2eda7fe8
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.067 client_ip=192.0.2.1 request_id=45e0b71ff6db42d29d6b33b8ba1c17e4 trace_id=45e0b71ff6db42d29d6b33b8ba1c17e4
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.061 client_ip=192.0.2.1 request_id=040714871ec748d2baa25b5568fcc7db trace_id=040714871ec748d2baa25b5568fcc7db
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/binding
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.896 client_ip=192.0.2.1 request_id=ce4101be7fff4474b125182680a6448b trace_id=ce4101be7fff4474b125182680a6448b
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.782 client_ip=192.0.2.1 request_id=204eee12d42a4e29a02f59a3a7af4f21 trace_id=204eee12d42a4e29a02f59a3a7af4f21
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.948 client_ip=192.0.2.1 request_id=55881548b8434737809920b5e2530fe1 trace_id=55881548b8434737809920b5e2530fe1
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.99 client_ip=192.0.2.1 request_id=ad1ed5e047464a57b45851bed6fafdfb trace_id=ad1ed5e047464a57b45851bed6fafdfb
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.969 client_ip=192.0.2.1 request_id=e1306a3880f74b38a07d2e24b9d3b593 trace_id=e1306a3880f74b38a07d2e24b9d3b593
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/digest
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.866 client_ip=192.0.2.1 request_id=a074e35b6ec64d829ff8462097d93d88 trace_id=a074e35b6ec64d829ff8462097d93d88
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.645 client_ip=192.0.2.1 request_id=50a79544ce01445c946204a0eb8bf6c9 trace_id=50a79544ce01445c946204a0eb8bf6c9
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.897 client_ip=192.0.2.1 request_id=6a227ec59716484d94310f803499ea80 trace_id=6a227ec59716484d94310f803499ea80
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.847 client_ip=192.0.2.1 request_id=54734a398fac42efb063bda1daf00877 trace_id=54734a398fac42efb063bda1daf00877
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.95 client_ip=192.0.2.1 request_id=6a7f2440b4044055b80b41d9ce5eee3f trace_id=6a7f2440b4044055b80b41d9ce5eee3f
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/cursor
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.816 client_ip=192.0.2.1 request_id=d6c954d7f9774dfea213f7ce8ba330fb trace_id=d6c954d7f9774dfea213f7ce8ba330fb
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=9.736 client_ip=192.0.2.1 request_id=910f086304e343948e9dd8ef956403dc trace_id=910f086304e343948e9dd8ef956403dc
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.901 client_ip=192.0.2.1 request_id=1e800cc5f3a74ca2aab1feea0c196666 trace_id=1e800cc5f3a74ca2aab1feea0c196666
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.846 client_ip=192.0.2.1 request_id=0978883abc3d445dbc25038f99a659b8 trace_id=0978883abc3d445dbc25038f99a659b8
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.495 client_ip=192.0.2.1 request_id=c24ca9a24b38478fb25c32787361193d trace_id=c24ca9a24b38478fb25c32787361193d
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.888 client_ip=192.0.2.1 request_id=1f3300b99e444459b9eaf13578bfc73c trace_id=1f3300b99e444459b9eaf13578bfc73c
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/volumes
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.243 client_ip=192.0.2.1 request_id=f272ce40359442bfb594877720198f65 trace_id=f272ce40359442bfb594877720198f65
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.519 client_ip=192.0.2.1 request_id=7cea1efcaf244f54ad54efe5b3af64a2 trace_id=7cea1efcaf244f54ad54efe5b3af64a2
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.872 client_ip=192.0.2.1 request_id=a400c40e2f0e49daa6012ba8be7d2f5d trace_id=a400c40e2f0e49daa6012ba8be7d2f5d
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.442 client_ip=192.0.2.1 request_id=6f35a9fdc61c4ed085bc3b2339773522 trace_id=6f35a9fdc61c4ed085bc3b2339773522
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/capacity
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.684 client_ip=192.0.2.1 request_id=c4158c84769d44fca6120ecc3601b48e trace_id=c4158c84769d44fca6120ecc3601b48e
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=10.149 client_ip=192.0.2.1 request_id=59b0e6c6026f401cb05479f2ead22751 trace_id=59b0e6c6026f401cb05479f2ead22751
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.895 client_ip=192.0.2.1 request_id=037c72ba5675422e8a16333f4b45fd11 trace_id=037c72ba5675422e8a16333f4b45fd11
+2026/10/13 01:44:43 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.847 client_ip=192.0.2.1 request_id=9ca27e97f92d46759cbeaa896c1dd612 trace_id=9ca27e97f92d46759cbeaa896c1dd612
+--- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses (0.74s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/sequence (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/binding (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/digest (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/cursor (0.04s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/volumes (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/capacity (0.03s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.148 client_ip=192.0.2.1 request_id=255716c260be48a5b07e697156eabd9c trace_id=255716c260be48a5b07e697156eabd9c
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.125 client_ip=192.0.2.1 request_id=4f341c690c6a4370a526894e82ef9545 trace_id=4f341c690c6a4370a526894e82ef9545
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.136 client_ip=192.0.2.1 request_id=72be529b3427499293b1eab2ac45072a trace_id=72be529b3427499293b1eab2ac45072a
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.115 client_ip=192.0.2.1 request_id=393a2ac480074db19bf3fa1dbb89b754 trace_id=393a2ac480074db19bf3fa1dbb89b754
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.915 client_ip=192.0.2.1 request_id=bb9506876fe34d0a88e9141d8648e45c trace_id=bb9506876fe34d0a88e9141d8648e45c
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.145 client_ip=192.0.2.1 request_id=8325f590449b45279320fe990c53497c trace_id=8325f590449b45279320fe990c53497c
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.048 client_ip=192.0.2.1 request_id=db40be52a5bc4878ac2dced9f4ef3c80 trace_id=db40be52a5bc4878ac2dced9f4ef3c80
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.766 client_ip=192.0.2.1 request_id=3f99b80b23864d9195d508a8ff1dfdd3 trace_id=3f99b80b23864d9195d508a8ff1dfdd3
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.739 client_ip=192.0.2.1 request_id=e2e3aaf417f9414cb286983ef33a2c2f trace_id=e2e3aaf417f9414cb286983ef33a2c2f
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.746 client_ip=192.0.2.1 request_id=8b645c26df3c4565afe0137e26939e25 trace_id=8b645c26df3c4565afe0137e26939e25
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.969 client_ip=192.0.2.1 request_id=de84c3982c7f4d5ca84210f098d6ea8c trace_id=de84c3982c7f4d5ca84210f098d6ea8c
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.156 client_ip=192.0.2.1 request_id=ab8b4237c76d4e7182235a09865a5828 trace_id=ab8b4237c76d4e7182235a09865a5828
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=18.715 client_ip=192.0.2.1 request_id=4df7efec95744938a3878f2340a7eab2 trace_id=4df7efec95744938a3878f2340a7eab2
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.781 client_ip=192.0.2.1 request_id=024634f2bd3b40ac9ff7d947bb73219e trace_id=024634f2bd3b40ac9ff7d947bb73219e
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.82 client_ip=192.0.2.1 request_id=1391dfd50a01448cbb11ea3761c7eaa0 trace_id=1391dfd50a01448cbb11ea3761c7eaa0
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.532 client_ip=192.0.2.1 request_id=894c97435cc24db7804e9ecd2fbf63a3 trace_id=894c97435cc24db7804e9ecd2fbf63a3
+--- PASS: TestAuthenticatedManagedContentObservation (0.47s)
+=== RUN   TestNativeVolumeRetirementExternalMountsAndStaleDefaultCopies
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.093 client_ip=192.0.2.1 request_id=b8e8716f37c645a09bab3904e1a68343 trace_id=b8e8716f37c645a09bab3904e1a68343
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.05 client_ip=192.0.2.1 request_id=a854154c5d3244799abb770f5c215073 trace_id=a854154c5d3244799abb770f5c215073
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.091 client_ip=192.0.2.1 request_id=fd286c6f34514a52a2609db7b3d430c3 trace_id=fd286c6f34514a52a2609db7b3d430c3
+2026/10/13 01:44:44 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.096 client_ip=192.0.2.1 request_id=50327750a9ca4eb89aa48fea1760d72b trace_id=50327750a9ca4eb89aa48fea1760d72b
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.056 client_ip=192.0.2.1 request_id=ec57b5827c234c93898b50dfdd594fe8 trace_id=ec57b5827c234c93898b50dfdd594fe8
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.224 client_ip=192.0.2.1 request_id=4d23a23247344b30bec72c1e1ad321a7 trace_id=4d23a23247344b30bec72c1e1ad321a7
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.789 client_ip=192.0.2.1 request_id=2a9a809ac01846988cceee6a67a85fa4 trace_id=2a9a809ac01846988cceee6a67a85fa4
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.296 client_ip=192.0.2.1 request_id=b3a3e00e797a4fba8e0836668800d81e trace_id=b3a3e00e797a4fba8e0836668800d81e
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.473 client_ip=192.0.2.1 request_id=024d7e9068d047db88e7e0474ba5dc20 trace_id=024d7e9068d047db88e7e0474ba5dc20
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.457 client_ip=192.0.2.1 request_id=792301b3e5b242a39416f9a427673bbe trace_id=792301b3e5b242a39416f9a427673bbe
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.124 client_ip=192.0.2.1 request_id=258cf3cd99e04f72bf994699f404f5a6 trace_id=258cf3cd99e04f72bf994699f404f5a6
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.768 client_ip=192.0.2.1 request_id=c0a3f115a1b9413783f26cd28b3a636f trace_id=c0a3f115a1b9413783f26cd28b3a636f
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.814 client_ip=192.0.2.1 request_id=800dea254bfe43e3be6156c9f2944dae trace_id=800dea254bfe43e3be6156c9f2944dae
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.987 client_ip=192.0.2.1 request_id=c7b35df4151c47dd8f8ce185fa80dcfa trace_id=c7b35df4151c47dd8f8ce185fa80dcfa
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.485 client_ip=192.0.2.1 request_id=a858687270af4f53a3bacd55d7e5bb1e trace_id=a858687270af4f53a3bacd55d7e5bb1e
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.853 client_ip=192.0.2.1 request_id=2b33f783bc9047a6812f89b4c46d834f trace_id=2b33f783bc9047a6812f89b4c46d834f
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=5.635 client_ip=192.0.2.1 request_id=b0b74ba8fc184023a027e6aa5bdce17c trace_id=b0b74ba8fc184023a027e6aa5bdce17c
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.861 client_ip=192.0.2.1 request_id=34095e2e10f944ca800efadea613ba12 trace_id=34095e2e10f944ca800efadea613ba12
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.925 client_ip=192.0.2.1 request_id=23d4d1b2eea34ce8aed3bd957b720b30 trace_id=23d4d1b2eea34ce8aed3bd957b720b30
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.642 client_ip=192.0.2.1 request_id=eff5156ee5114025a9faeb7ab897c865 trace_id=eff5156ee5114025a9faeb7ab897c865
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.832 client_ip=192.0.2.1 request_id=c482d5facffb47c6b46ee23e574dfced trace_id=c482d5facffb47c6b46ee23e574dfced
+2026/10/13 01:44:44 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.855 client_ip=192.0.2.1 request_id=c7d68b6c943f4f449f8e3392bce7f9e6 trace_id=c7d68b6c943f4f449f8e3392bce7f9e6
+    node_native_volume_test.go:65: wrong mount [{{data false 979639799808 660877811712 1791855884 false} 20 823932 b1ae174345a189b8d745d63d5255527172027a3e69382fc50ac04c906a306eee} {{media false 979639799808 660877811712 1791855884 false} 6 55 7200280b064effe41e33dd1064611d8bdff31c432cc0289cf0a7e6ded73e8df3} {{recordings false 979639799808 660877811712 1791855884 false} 2 24 fceb895f4d494af2e28a5849169953501001f35eef6a0b59b52df48bed3d7480}]
+--- FAIL: TestNativeVolumeRetirementExternalMountsAndStaleDefaultCopies (0.52s)
+=== RUN   TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.109 client_ip=192.0.2.1 request_id=e7587131e5584d868ab46d16df40d7c3 trace_id=e7587131e5584d868ab46d16df40d7c3
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.043 client_ip=192.0.2.1 request_id=583ae577852a49e18183212490c0586d trace_id=583ae577852a49e18183212490c0586d
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.073 client_ip=192.0.2.1 request_id=6b92203dd5504e369897a2b528eadffb trace_id=6b92203dd5504e369897a2b528eadffb
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.08 client_ip=192.0.2.1 request_id=5dd406901be948c393abaf31bc3483d7 trace_id=5dd406901be948c393abaf31bc3483d7
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.856 client_ip=192.0.2.1 request_id=451b903ae1f642dca716cd3eb3f9716f trace_id=451b903ae1f642dca716cd3eb3f9716f
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.126 client_ip=192.0.2.1 request_id=ff2e59d4f151445d8d35897cb14249a1 trace_id=ff2e59d4f151445d8d35897cb14249a1
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=0.04 client_ip=192.0.2.1 request_id=55f50fb394b341dd91c93905bc918dae trace_id=55f50fb394b341dd91c93905bc918dae
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.862 client_ip=192.0.2.1 request_id=ca4fc89bb9214086a54f30ee4ab8ce0f trace_id=ca4fc89bb9214086a54f30ee4ab8ce0f
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.827 client_ip=192.0.2.1 request_id=bc6df3c95c6c4eabb24737dd571bb5a3 trace_id=bc6df3c95c6c4eabb24737dd571bb5a3
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.756 client_ip=192.0.2.1 request_id=292888c291714438a73fa59ffc493031 trace_id=292888c291714438a73fa59ffc493031
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.781 client_ip=192.0.2.1 request_id=0395e5513bb7444e9093606e9c3bdcd6 trace_id=0395e5513bb7444e9093606e9c3bdcd6
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=400 duration_ms=2.74 client_ip=192.0.2.1 request_id=060b914c847c48028786803660b9965f trace_id=060b914c847c48028786803660b9965f
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=429 duration_ms=2.77 client_ip=192.0.2.1 request_id=172503cc2a78414c962a834c869a4fbb trace_id=172503cc2a78414c962a834c869a4fbb
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.888 client_ip=192.0.2.1 request_id=24d942442d64493280622c3896aee195 trace_id=24d942442d64493280622c3896aee195
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.84 client_ip=192.0.2.1 request_id=70a6c3b99b1149d8a23d59ca6ac86010 trace_id=70a6c3b99b1149d8a23d59ca6ac86010
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.82 client_ip=192.0.2.1 request_id=378cb74867824bf0ab9f6182c6ff68b3 trace_id=378cb74867824bf0ab9f6182c6ff68b3
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.775 client_ip=192.0.2.1 request_id=6184279e6b5a4329b7ab8a6e1b9930f7 trace_id=6184279e6b5a4329b7ab8a6e1b9930f7
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=17.965 client_ip=192.0.2.1 request_id=48ecc75798f34df3b304a30bb7789986 trace_id=48ecc75798f34df3b304a30bb7789986
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.196 client_ip=192.0.2.1 request_id=d8d4cdb7b7554ff0bceb13f5d92de931 trace_id=d8d4cdb7b7554ff0bceb13f5d92de931
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=10.916 client_ip=192.0.2.1 request_id=b1d0178f6a964526aa6f2db05817f106 trace_id=b1d0178f6a964526aa6f2db05817f106
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.98 client_ip=192.0.2.1 request_id=e0f47d740cd2433bab62a0ff55fa968b trace_id=e0f47d740cd2433bab62a0ff55fa968b
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.82 client_ip=192.0.2.1 request_id=54cafd864fa24817a44a2138a592fdbf trace_id=54cafd864fa24817a44a2138a592fdbf
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.854 client_ip=192.0.2.1 request_id=bc248cf3f1a045c28e95d85ae7f4ef47 trace_id=bc248cf3f1a045c28e95d85ae7f4ef47
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.23 client_ip=192.0.2.1 request_id=eeb272eeabef4d2ca0bd7b373595d507 trace_id=eeb272eeabef4d2ca0bd7b373595d507
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.752 client_ip=192.0.2.1 request_id=6269e0a3bbf44ceba55326912ff9a7af trace_id=6269e0a3bbf44ceba55326912ff9a7af
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.988 client_ip=192.0.2.1 request_id=7861e179aec8496abb0ed7ad176749ef trace_id=7861e179aec8496abb0ed7ad176749ef
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.903 client_ip=192.0.2.1 request_id=1a1d2bf413f64377ab005901dd5c17c3 trace_id=1a1d2bf413f64377ab005901dd5c17c3
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=401 duration_ms=1.568 client_ip=192.0.2.1 request_id=64e52b4fe92845b4a6a982195c623b7b trace_id=64e52b4fe92845b4a6a982195c623b7b
+--- PASS: TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation (0.54s)
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.126 client_ip=192.0.2.1 request_id=ac4568a7c3c34493a706310016d4c4fd trace_id=ac4568a7c3c34493a706310016d4c4fd
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.123 client_ip=192.0.2.1 request_id=5257abc54c9d4a0f87162bc27a2dbdc3 trace_id=5257abc54c9d4a0f87162bc27a2dbdc3
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.106 client_ip=192.0.2.1 request_id=625ad5a0806c406f9f6ea89049534494 trace_id=625ad5a0806c406f9f6ea89049534494
+2026/10/13 01:44:45 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.047 client_ip=192.0.2.1 request_id=10219a388e1748d9ac6c7d07d302ddbd trace_id=10219a388e1748d9ac6c7d07d302ddbd
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.59 client_ip=192.0.2.1 request_id=18e8ce16954748b1b20e1500dc423f80 trace_id=18e8ce16954748b1b20e1500dc423f80
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.109 client_ip=192.0.2.1 request_id=c8ebde7a61254903a2f7e7f4841c1cc8 trace_id=c8ebde7a61254903a2f7e7f4841c1cc8
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.925 client_ip=192.0.2.1 request_id=ee78197748eb42af940e2efb5ec5a813 trace_id=ee78197748eb42af940e2efb5ec5a813
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.685 client_ip=192.0.2.1 request_id=f90dc3af3a6e463cbb1043853f38f517 trace_id=f90dc3af3a6e463cbb1043853f38f517
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.866 client_ip=192.0.2.1 request_id=8088644f4f66471d906c2ef1d75ce9fe trace_id=8088644f4f66471d906c2ef1d75ce9fe
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.813 client_ip=192.0.2.1 request_id=762e542c45494394bacfbf982915ec09 trace_id=762e542c45494394bacfbf982915ec09
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.167 client_ip=192.0.2.1 request_id=574f420f0c344630875e829e9b313976 trace_id=574f420f0c344630875e829e9b313976
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.772 client_ip=192.0.2.1 request_id=b284b71b00c14244a5bd1fb836f122ff trace_id=b284b71b00c14244a5bd1fb836f122ff
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.964 client_ip=192.0.2.1 request_id=bcb0997545bb48ccaf87a3a6e2074a5d trace_id=bcb0997545bb48ccaf87a3a6e2074a5d
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.95 client_ip=192.0.2.1 request_id=40c34fc26ff24d119dccd22426499ff2 trace_id=40c34fc26ff24d119dccd22426499ff2
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.715 client_ip=192.0.2.1 request_id=ad9f8c608d014ad6abbe8c959c8f1b7e trace_id=ad9f8c608d014ad6abbe8c959c8f1b7e
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.801 client_ip=192.0.2.1 request_id=c8b42634ecfd4529a8652749a4ff9ea0 trace_id=c8b42634ecfd4529a8652749a4ff9ea0
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=16.303 client_ip=192.0.2.1 request_id=01f20b9449fa4d6fb0bfbea1dc027367 trace_id=01f20b9449fa4d6fb0bfbea1dc027367
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=11.421 client_ip=192.0.2.1 request_id=7eb379f428ba4b5eac7226ad3a469c98 trace_id=7eb379f428ba4b5eac7226ad3a469c98
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.884 client_ip=192.0.2.1 request_id=1edc22a76d624b60bffd6a18165864bf trace_id=1edc22a76d624b60bffd6a18165864bf
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.82 client_ip=192.0.2.1 request_id=8efbd917bcf0457fa8b42673aaf16da9 trace_id=8efbd917bcf0457fa8b42673aaf16da9
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.439 client_ip=192.0.2.1 request_id=6fdc410477b34185a46152c29f5ab73d trace_id=6fdc410477b34185a46152c29f5ab73d
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.596 client_ip=192.0.2.1 request_id=4badb74a7d9c4870aa02eff209f4ae00 trace_id=4badb74a7d9c4870aa02eff209f4ae00
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.928 client_ip=192.0.2.1 request_id=c6d48fa49983498e8431f650d3f7f222 trace_id=c6d48fa49983498e8431f650d3f7f222
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/sequence
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.821 client_ip=192.0.2.1 request_id=c12c2ef486674343adec2cc282744dda trace_id=c12c2ef486674343adec2cc282744dda
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.649 client_ip=192.0.2.1 request_id=74392baa1ac448b7b7644189eb234623 trace_id=74392baa1ac448b7b7644189eb234623
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.871 client_ip=192.0.2.1 request_id=7b445412af94485b8d24b94655a97a97 trace_id=7b445412af94485b8d24b94655a97a97
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.83 client_ip=192.0.2.1 request_id=ec4d3b3f8c4f425eaeea3217e6ecf3d4 trace_id=ec4d3b3f8c4f425eaeea3217e6ecf3d4
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.877 client_ip=192.0.2.1 request_id=c30b680546ca4f0c8873213f869a1f95 trace_id=c30b680546ca4f0c8873213f869a1f95
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/binding
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.807 client_ip=192.0.2.1 request_id=ef6d5d7d6f09456eaeb4fdbbfffef1a4 trace_id=ef6d5d7d6f09456eaeb4fdbbfffef1a4
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.671 client_ip=192.0.2.1 request_id=68b9abb1ebce481ba2183722eb8201af trace_id=68b9abb1ebce481ba2183722eb8201af
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.923 client_ip=192.0.2.1 request_id=78f8a18fa82d41fa90d7c06c51137690 trace_id=78f8a18fa82d41fa90d7c06c51137690
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.792 client_ip=192.0.2.1 request_id=5142752458194d5a8fc21d1778a30a1e trace_id=5142752458194d5a8fc21d1778a30a1e
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.864 client_ip=192.0.2.1 request_id=2e69b430c63e43f79eb0bdd19dac6149 trace_id=2e69b430c63e43f79eb0bdd19dac6149
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/digest
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.745 client_ip=192.0.2.1 request_id=bc26adbadb744727997c211edbf52d91 trace_id=bc26adbadb744727997c211edbf52d91
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.549 client_ip=192.0.2.1 request_id=2b10d8ecd3544e7fad1a53cbf9068794 trace_id=2b10d8ecd3544e7fad1a53cbf9068794
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.859 client_ip=192.0.2.1 request_id=a1fa403abeaf4526a7168eeb6a41402f trace_id=a1fa403abeaf4526a7168eeb6a41402f
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.071 client_ip=192.0.2.1 request_id=e664fecc39ed479494fbe7bebfe6c2ec trace_id=e664fecc39ed479494fbe7bebfe6c2ec
+2026/10/13 01:44:45 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.307 client_ip=192.0.2.1 request_id=a502293fd0ab4afda64c77c16afd5647 trace_id=a502293fd0ab4afda64c77c16afd5647
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/cursor
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.891 client_ip=192.0.2.1 request_id=08e167d0dd3342c0b0e2eac56f233d9d trace_id=08e167d0dd3342c0b0e2eac56f233d9d
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=9.1 client_ip=192.0.2.1 request_id=68567353cd194130af0df0ca5339df75 trace_id=68567353cd194130af0df0ca5339df75
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.94 client_ip=192.0.2.1 request_id=11d7bb716a814da281450c3490fec04b trace_id=11d7bb716a814da281450c3490fec04b
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.985 client_ip=192.0.2.1 request_id=6a7f043f3f1648db82a4ec994a5cf4eb trace_id=6a7f043f3f1648db82a4ec994a5cf4eb
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=4.399 client_ip=192.0.2.1 request_id=9486ff67370f43aba09926d0c390fa0a trace_id=9486ff67370f43aba09926d0c390fa0a
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.11 client_ip=192.0.2.1 request_id=2ea284ab03574d69ba57bad698ce6e24 trace_id=2ea284ab03574d69ba57bad698ce6e24
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/volumes
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.832 client_ip=192.0.2.1 request_id=cc0d2643b0e1403f959917b41954502d trace_id=cc0d2643b0e1403f959917b41954502d
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.814 client_ip=192.0.2.1 request_id=eae27c0846424da49b73b6da9960ef02 trace_id=eae27c0846424da49b73b6da9960ef02
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.799 client_ip=192.0.2.1 request_id=9b1cf669266b4a46a21239038e1d1179 trace_id=9b1cf669266b4a46a21239038e1d1179
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=3.356 client_ip=192.0.2.1 request_id=faf93fd19a1b4f2c8505ef4845baea07 trace_id=faf93fd19a1b4f2c8505ef4845baea07
+=== RUN   TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/capacity
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.895 client_ip=192.0.2.1 request_id=b608804dce9046ca9d5d6412329fcc8d trace_id=b608804dce9046ca9d5d6412329fcc8d
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=8.41 client_ip=192.0.2.1 request_id=41b02e4b1b2a43aa85f9816f4852360b trace_id=41b02e4b1b2a43aa85f9816f4852360b
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.814 client_ip=192.0.2.1 request_id=117cf0744acc48b1a95eee0def4f12a2 trace_id=117cf0744acc48b1a95eee0def4f12a2
+2026/10/13 01:44:46 INFO request_completed method=POST path=/internal/v1/resource-inventory status=200 duration_ms=2.851 client_ip=192.0.2.1 request_id=4bc9812ccc75431b86498cec7631e8c2 trace_id=4bc9812ccc75431b86498cec7631e8c2
+--- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses (0.71s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/sequence (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/binding (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/digest (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/cursor (0.04s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/volumes (0.03s)
+    --- PASS: TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses/capacity (0.02s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	5.266s
+=== RUN   TestVolumeSessionsPinnedExclusionsScopeAndSingleSlot
+--- PASS: TestVolumeSessionsPinnedExclusionsScopeAndSingleSlot (0.00s)
+=== RUN   TestVolumeSessionsPinnedExclusionsScopeAndSingleSlot
+--- PASS: TestVolumeSessionsPinnedExclusionsScopeAndSingleSlot (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.019s
+=== RUN   TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal
+2026/10/13 01:44:42 http: TLS handshake error from 127.0.0.1:54654: remote error: tls: bad certificate
+--- PASS: TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal (0.97s)
+=== RUN   TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal
+2026/10/13 01:44:43 http: TLS handshake error from 127.0.0.1:48302: remote error: tls: bad certificate
+--- PASS: TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal (0.85s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	2.853s
+FAIL

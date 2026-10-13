@@ -61,19 +61,49 @@ type Scanner struct {
 	bytes            int64
 	last             *Page
 	complete, closed bool
+	excluded         map[string]os.FileInfo
 }
 
 // New borrows the already-authorized root; it never creates or writes files.
 // Close releases only the scanner's directory handles, not the borrowed root.
 func New(root *os.Root) (*Scanner, error) {
+	return NewExcluding(root, nil)
+}
+
+// NewExcluding omits descent only into two explicitly pinned native mounts.
+// It still reports each directory entry and rejects replacement of the pin.
+func NewExcluding(root *os.Root, excluded map[string]os.FileInfo) (*Scanner, error) {
 	if root == nil {
 		return nil, os.ErrInvalid
 	}
+	if len(excluded) > 2 {
+		return nil, ErrLimit
+	}
 	s := &Scanner{root: root, digest: sha256.New()}
+	s.excluded = make(map[string]os.FileInfo, len(excluded))
+	for name, info := range excluded {
+		if name != "media" && name != "recordings" || info == nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, ErrLimit
+		}
+		s.excluded[name] = info
+	}
+	if e := s.checkExcluded(); e != nil {
+		return nil, e
+	}
 	if e := s.openDirectory("."); e != nil {
 		return nil, e
 	}
 	return s, nil
+}
+
+func (s *Scanner) checkExcluded() error {
+	for name, pin := range s.excluded {
+		info, e := s.root.Lstat(name)
+		if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !os.SameFile(pin, info) {
+			return ErrChanged
+		}
+	}
+	return nil
 }
 func (s *Scanner) openDirectory(name string) error {
 	if len(s.stack) >= MaxDepth {
@@ -155,6 +185,9 @@ func (s *Scanner) Next(ctx context.Context, sequence uint64) (page Page, result 
 		}
 	}()
 	page = Page{Sequence: sequence, Entries: []Entry{}}
+	if e := s.checkExcluded(); e != nil {
+		return page, e
+	}
 	encodedBytes := 0
 	if e := s.checkDirectories(); e != nil {
 		return page, e
@@ -202,14 +235,20 @@ func (s *Scanner) Next(ctx context.Context, sequence uint64) (page Page, result 
 			if e != nil {
 				return page, e
 			}
+			pin := s.excluded[name]
+			if pin != nil && (!info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !os.SameFile(pin, info)) {
+				return page, ErrChanged
+			}
 			entry = Entry{Path: name, ModifiedNS: info.ModTime().UnixNano()}
 			switch {
 			case info.Mode()&os.ModeSymlink != 0:
 				entry.Kind = "symlink"
 			case info.IsDir():
 				entry.Kind = "directory"
-				if e = s.openDirectory(name); e != nil {
-					return page, e
+				if pin == nil {
+					if e = s.openDirectory(name); e != nil {
+						return page, e
+					}
 				}
 			case info.Mode().IsRegular():
 				entry.Kind = "regular"
@@ -243,6 +282,9 @@ func (s *Scanner) Next(ctx context.Context, sequence uint64) (page Page, result 
 		return page, e
 	}
 	page.EntryCount = s.count
+	if e := s.checkExcluded(); e != nil {
+		return page, e
+	}
 	page.LogicalBytes = s.bytes
 	page.ObservationSHA256 = hex.EncodeToString(s.digest.Sum(nil))
 	s.next++

@@ -174,6 +174,24 @@ func (c *NodeClient) RetirementCheck(ctx context.Context, member string) (nodere
 	if report.MemberID != member || !report.PreflightOnly || len(report.Concerns) > noderetirement.MaxCategories {
 		return noderetirement.Report{}, ErrNodeClient
 	}
+	if len(report.Volumes) > 3 || report.ObservationComplete && len(report.Volumes) != 3 {
+		return noderetirement.Report{}, ErrNodeClient
+	}
+	var entries uint64
+	var bytes int64
+	for i, volume := range report.Volumes {
+		if volume.Scope != []string{"data", "media", "recordings"}[i] || volume.FreeBytes < 0 || volume.TotalBytes < volume.FreeBytes || volume.LogicalBytes < 0 || volume.WritableVerified || i == 0 && volume.InDataRoot || volume.Entries > ^uint64(0)-entries || volume.LogicalBytes > int64(^uint64(0)>>1)-bytes {
+			return noderetirement.Report{}, ErrNodeClient
+		}
+		entries += volume.Entries
+		bytes += volume.LogicalBytes
+		if report.ObservationComplete && (!clientHash(volume.ObservationSHA256)) {
+			return noderetirement.Report{}, ErrNodeClient
+		}
+	}
+	if report.ObservationComplete && (entries != report.PhysicalEntries || bytes != report.LogicalBytes) {
+		return noderetirement.Report{}, ErrNodeClient
+	}
 	for _, concern := range report.Concerns {
 		if concern.Count < 1 || len(concern.Code) > 80 || len(concern.Samples) > 8 {
 			return noderetirement.Report{}, ErrNodeClient

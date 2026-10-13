@@ -100,60 +100,84 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	req["incarnation"] = session.Incarnation
 	seen := map[string]bool{}
 	categories := map[string]string{}
-	for sequence := uint64(0); ; sequence++ {
-		req["sequence"] = sequence
-		value, e := master.Call(ctx, rel, route, req)
-		if e != nil {
-			t.Fatal(e)
-		}
-		// Mutate metadata only in this isolated fixture, after observing the
-		// physical page, to prove acknowledgment replay keeps the original facts.
-		var first struct {
-			Page resourceinventory.Page `json:"page"`
-		}
-		if e = decodeInventory(value, &first); e != nil {
-			t.Fatal(e)
-		}
-		changed := false
-		for _, entry := range first.Page.Entries {
-			if entry.Path == "media/"+managed {
-				changed = true
-			}
-		}
-		if changed {
-			if _, e = sdb.Database().Exec("UPDATE media_objects SET object_kind='lyric' WHERE media_path=?", managed); e != nil {
+	for _, scope := range []string{"data", "media"} {
+		if scope == "media" {
+			req["action"] = "close"
+			req["sequence"] = uint64(0)
+			if _, e = master.Call(ctx, rel, route, req); e != nil {
 				t.Fatal(e)
 			}
-		}
-		replay, e := master.Call(ctx, rel, route, req)
-		if changed {
-			if _, err := sdb.Database().Exec("UPDATE media_objects SET object_kind='audio' WHERE media_path=?", managed); err != nil {
-				t.Fatal(err)
+			req = map[string]any{"action": "open", "scope": scope, "member_id": rel.PeerID, "session_id": strings.Repeat("3", 32)}
+			value, e := master.Call(ctx, rel, route, req)
+			if e != nil {
+				t.Fatal(e)
 			}
+			session = resourceinventory.Session{}
+			if e = decodeInventory(value, &session); e != nil {
+				t.Fatal(e)
+			}
+			req["incarnation"] = session.Incarnation
+			req["action"] = "page"
 		}
-		if e != nil || !reflect.DeepEqual(value, replay) {
-			t.Fatal("page acknowledgment replay", e)
-		}
-		var page resourceinventory.SessionPage
-		if e = decodeInventory(value, &page); e != nil {
-			t.Fatal(e)
-		}
-		if page.Session != session || len(page.Page.Entries) > resourceinventory.PageEntries {
-			t.Fatal("page binding", page)
-		}
-		var annotated struct {
-			Facts []store.PhysicalInventoryFact `json:"facts"`
-		}
-		if e = decodeInventory(value, &annotated); e != nil || len(annotated.Facts) != len(page.Page.Entries) {
-			t.Fatal("missing page facts", e)
-		}
-		for i, entry := range page.Page.Entries {
-			seen[entry.Path] = true
-			categories[entry.Path] = annotated.Facts[i].Category
-		}
+		for sequence := uint64(0); ; sequence++ {
+			req["sequence"] = sequence
+			value, e := master.Call(ctx, rel, route, req)
+			if e != nil {
+				t.Fatal(e)
+			}
+			// Mutate metadata only in this isolated fixture, after observing the
+			// physical page, to prove acknowledgment replay keeps the original facts.
+			var first struct {
+				Page resourceinventory.Page `json:"page"`
+			}
+			if e = decodeInventory(value, &first); e != nil {
+				t.Fatal(e)
+			}
+			changed := false
+			for _, entry := range first.Page.Entries {
+				if req["scope"] == "media" && entry.Path == managed {
+					changed = true
+				}
+			}
+			if changed {
+				if _, e = sdb.Database().Exec("UPDATE media_objects SET object_kind='lyric' WHERE media_path=?", managed); e != nil {
+					t.Fatal(e)
+				}
+			}
+			replay, e := master.Call(ctx, rel, route, req)
+			if changed {
+				if _, err := sdb.Database().Exec("UPDATE media_objects SET object_kind='audio' WHERE media_path=?", managed); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if e != nil || !reflect.DeepEqual(value, replay) {
+				t.Fatal("page acknowledgment replay", e)
+			}
+			var page resourceinventory.SessionPage
+			if e = decodeInventory(value, &page); e != nil {
+				t.Fatal(e)
+			}
+			if page.Session != session || len(page.Page.Entries) > resourceinventory.PageEntries {
+				t.Fatal("page binding", page)
+			}
+			var annotated struct {
+				Facts []store.PhysicalInventoryFact `json:"facts"`
+			}
+			if e = decodeInventory(value, &annotated); e != nil || len(annotated.Facts) != len(page.Page.Entries) {
+				t.Fatal("missing page facts", e)
+			}
+			for i, entry := range page.Page.Entries {
+				name := entry.Path
+				if req["scope"] == "media" {
+					name = "media/" + name
+				}
+				seen[name] = true
+				categories[name] = annotated.Facts[i].Category
+			}
 
-		if page.Page.Complete {
-			break
+			if page.Page.Complete {
+				break
+			}
 		}
 	}
 	for _, name := range []string{"media/music/hidden/089.mp3", ".business-backups/only-recovery.tar"} {
@@ -176,6 +200,21 @@ func TestAuthenticatedPhysicalInventoryReadOnlyScopeReplayAndRevocation(t *testi
 	if e = os.Remove(filepath.Join(dir, "media", managed)); e != nil {
 		t.Fatal(e)
 	}
+	req["action"] = "close"
+	req["sequence"] = uint64(0)
+	if _, e = master.Call(ctx, rel, route, req); e != nil {
+		t.Fatal(e)
+	}
+	req = map[string]any{"action": "open", "scope": "data", "member_id": rel.PeerID, "session_id": strings.Repeat("4", 32)}
+	valueOpen, e := master.Call(ctx, rel, route, req)
+	if e != nil {
+		t.Fatal(e)
+	}
+	session = resourceinventory.Session{}
+	if e = decodeInventory(valueOpen, &session); e != nil {
+		t.Fatal(e)
+	}
+	req["incarnation"] = session.Incarnation
 	req["action"] = "expected"
 	req["resource"] = "media"
 	req["after"] = ""

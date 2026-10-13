@@ -115,7 +115,7 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		httpapi.RegisterNodeMigrationControl(handler, settings, resolver, controlService, mediaService, peers)
 		closers = append(closers, httpapi.RegisterNodeMigrationData(handler, settings, resolver, controlService, mediaService, recordingStorage, peers))
 	}
-	closeInventory, err := httpapi.RegisterNodePhysicalInventory(handler, settings, resolver, controlService, database.Pool().(store.PhysicalInventoryRepository))
+	closeInventory, err := httpapi.RegisterNodePhysicalInventory(handler, settings, resolver, controlService, database.Pool().(store.PhysicalInventoryRepository), mediaService.InventoryRoot(), recordingStorage.InventoryRoot())
 	if err != nil {
 		return nil, nil, err
 	}

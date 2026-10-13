@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,9 @@ func TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal(t *testing.T) {
 	checked := 0
 	logout := 0
 	report := noderetirement.Report{MemberID: member, PreflightOnly: true, ObservationComplete: true, Concerns: []noderetirement.Concern{{Code: "backup_retention_required", Count: 1, Samples: []string{"backup"}}}, Master: store.RetirementLedger{MemberID: member, RelationshipID: rel, Role: "Master"}, Peer: store.RetirementLedger{MemberID: member, RelationshipID: rel, Role: "Follower"}}
+	for _, scope := range []string{"data", "media", "recordings"} {
+		report.Volumes = append(report.Volumes, noderetirement.VolumeReport{Volume: resourceinventory.Volume{Scope: scope}, ObservationSHA256: strings.Repeat("0", 64)})
+	}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS == nil {
 			t.Error("plaintext request")
@@ -64,6 +68,8 @@ func TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal(t *testing.T) {
 			}
 			value := report
 			switch mode {
+			case "volumes":
+				value.Volumes = nil
 			case "foreign":
 				value.MemberID = master
 			case "oversized":
@@ -98,7 +104,7 @@ func TestNodeClientTLSCookieCSRFBoundReportsAndRedirectRefusal(t *testing.T) {
 	if e != nil || !result.ObservationComplete || !authenticated || checked != 1 || len(result.Concerns) != 1 {
 		t.Fatal("check", result, e)
 	}
-	for _, fault := range []string{"ambiguous", "foreign", "samples", "oversized", "incomplete"} {
+	for _, fault := range []string{"volumes", "ambiguous", "foreign", "samples", "oversized", "incomplete"} {
 		mode = fault
 		result, e = client.RetirementCheck(context.Background(), member)
 		if e == nil || result.ObservationComplete {

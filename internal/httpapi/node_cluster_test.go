@@ -139,6 +139,10 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 }
 
 func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty bool, withRecordings ...bool) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
+	return clusterFixtureRoots(t, origin, transport, empty, withRecordings, nil)
+}
+
+func clusterFixtureRoots(t *testing.T, origin string, transport *clusterHTTP, empty bool, withRecordings []bool, nativeDirectories map[string]string) (*gin.Engine, *storeSQLite.Store, string, *Public, *node.Service) {
 	t.Helper()
 	router, db, dir, public := publicFixture(t, false)
 	if empty {
@@ -151,7 +155,11 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	if err := os.Mkdir(filepath.Join(dir, "recordings"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	recordingRoot, err := os.OpenRoot(filepath.Join(dir, "recordings"))
+	recordingDirectory := filepath.Join(dir, "recordings")
+	if nativeDirectories["recordings"] != "" {
+		recordingDirectory = nativeDirectories["recordings"]
+	}
+	recordingRoot, err := os.OpenRoot(recordingDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +167,20 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	identity, err := node.Initialize(context.Background(), db.Nodes(), filepath.Join(dir, "secrets"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if nativeDirectories["media"] != "" {
+		mountedDirectory := nativeDirectories["media"]
+		for _, category := range []string{"music", "vido", "lyrics"} {
+			if err := os.Mkdir(filepath.Join(mountedDirectory, category), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		mounted, err := media.New(mountedDirectory, db.Media(), identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		public.media = mounted
+		t.Cleanup(func() { mounted.Close() })
 	}
 	service := node.NewService(db.Nodes(), identity, transport)
 	service.ConfigureVolumes(db.Pool(), public.media, recordingRoot)
@@ -181,7 +203,7 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 	}
 	closeMigration := RegisterNodeMigrationData(router, public.settings, resolver, service, public.media, privateRecordings, db.Pool().(store.MigrationPeerRepository))
 	t.Cleanup(func() { closeMigration() })
-	closeInventory, err := RegisterNodePhysicalInventory(router, public.settings, resolver, service, db.Pool().(store.PhysicalInventoryRepository))
+	closeInventory, err := RegisterNodePhysicalInventory(router, public.settings, resolver, service, db.Pool().(store.PhysicalInventoryRepository), public.media.InventoryRoot(), recordingRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
