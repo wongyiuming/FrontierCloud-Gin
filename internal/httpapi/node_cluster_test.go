@@ -186,6 +186,15 @@ func clusterFixture(t *testing.T, origin string, transport *clusterHTTP, empty b
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { closeInventory() })
+	var recordingReader managedContentReader
+	if privateRecordings != nil {
+		recordingReader = privateRecordings
+	}
+	closeContent, err := RegisterNodeContentObservation(router, public.settings, resolver, service, db.Pool().(store.ManagedPhysicalRepository), public.media, recordingReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeContent() })
 	transport.routers[origin] = router
 	return router, db, dir, public, service
 }

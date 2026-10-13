@@ -1,0 +1,116 @@
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.209 client_ip=192.0.2.1 request_id=26f96873b07743f690e5883b2b477eda trace_id=26f96873b07743f690e5883b2b477eda
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.073 client_ip=192.0.2.1 request_id=60e95391ed3d4849ad881882cb06ad85 trace_id=60e95391ed3d4849ad881882cb06ad85
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.108 client_ip=192.0.2.1 request_id=05aa3e63e23645038b43528acb8db667 trace_id=05aa3e63e23645038b43528acb8db667
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.027 client_ip=192.0.2.1 request_id=497cdedf73084a9babf9c05a212fc00e trace_id=497cdedf73084a9babf9c05a212fc00e
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.864 client_ip=192.0.2.1 request_id=bd45634de3b64349862ce0dfa36a5c31 trace_id=bd45634de3b64349862ce0dfa36a5c31
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.422 client_ip=192.0.2.1 request_id=bac34869ef224a84971ef4391d6fd6da trace_id=bac34869ef224a84971ef4391d6fd6da
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.04 client_ip=192.0.2.1 request_id=05f8edcf9fe5426d84254858acf48223 trace_id=05f8edcf9fe5426d84254858acf48223
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.875 client_ip=192.0.2.1 request_id=b59fc814fafb4eee890b2fb173e7d401 trace_id=b59fc814fafb4eee890b2fb173e7d401
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.763 client_ip=192.0.2.1 request_id=24ff283a31f549558a413e8c142f15a8 trace_id=24ff283a31f549558a413e8c142f15a8
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.804 client_ip=192.0.2.1 request_id=7f55153fe2a04770b88f0a244e41a149 trace_id=7f55153fe2a04770b88f0a244e41a149
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.915 client_ip=192.0.2.1 request_id=c9fcc49c706f472f9c2ee5e141014486 trace_id=c9fcc49c706f472f9c2ee5e141014486
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.126 client_ip=192.0.2.1 request_id=bf15b43ecbf74643b809bbca97968342 trace_id=bf15b43ecbf74643b809bbca97968342
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=19.089 client_ip=192.0.2.1 request_id=2e7b47650f7347ed80474ad92b3654b7 trace_id=2e7b47650f7347ed80474ad92b3654b7
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.154 client_ip=192.0.2.1 request_id=678593d107b8401c82996bd23ac97eb9 trace_id=678593d107b8401c82996bd23ac97eb9
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.076 client_ip=192.0.2.1 request_id=68164b73dfc242f187718624f8dc629a trace_id=68164b73dfc242f187718624f8dc629a
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.692 client_ip=192.0.2.1 request_id=7cc1e06ecbe34bcf90e46d965b2873f3 trace_id=7cc1e06ecbe34bcf90e46d965b2873f3
+--- PASS: TestAuthenticatedManagedContentObservation (1.03s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.153 client_ip=192.0.2.1 request_id=a226785de44d4cedb1a68a8fae09b499 trace_id=a226785de44d4cedb1a68a8fae09b499
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.385 client_ip=192.0.2.1 request_id=91fdc5e027aa4dda9d237a47218b4128 trace_id=91fdc5e027aa4dda9d237a47218b4128
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.04 client_ip=192.0.2.1 request_id=b6188d8f5e69496ba3e40244f401f6cb trace_id=b6188d8f5e69496ba3e40244f401f6cb
+2026/10/13 01:30:59 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.057 client_ip=192.0.2.1 request_id=4e9e122cce844587983bf967ee189c28 trace_id=4e9e122cce844587983bf967ee189c28
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.726 client_ip=192.0.2.1 request_id=d8a84168b83945a3a3dd9ca947edaac1 trace_id=d8a84168b83945a3a3dd9ca947edaac1
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.104 client_ip=192.0.2.1 request_id=86c28eb2fff345f6a113f875e3e9db6c trace_id=86c28eb2fff345f6a113f875e3e9db6c
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.048 client_ip=192.0.2.1 request_id=a09018a8a84641019e07209e5624b64e trace_id=a09018a8a84641019e07209e5624b64e
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.75 client_ip=192.0.2.1 request_id=7d012a4839b942c0b4b9a3c115136e58 trace_id=7d012a4839b942c0b4b9a3c115136e58
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.704 client_ip=192.0.2.1 request_id=6fb31fbea28343f0b561e2f52ec5b426 trace_id=6fb31fbea28343f0b561e2f52ec5b426
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.709 client_ip=192.0.2.1 request_id=b568b1dc95e44aa4bf9668eec358bb92 trace_id=b568b1dc95e44aa4bf9668eec358bb92
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.83 client_ip=192.0.2.1 request_id=9a1285517c464c5cbbb5cc8e24c34ade trace_id=9a1285517c464c5cbbb5cc8e24c34ade
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.862 client_ip=192.0.2.1 request_id=d0f6e3e7d897428aa253b60b96107707 trace_id=d0f6e3e7d897428aa253b60b96107707
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=19.839 client_ip=192.0.2.1 request_id=1c6c3c09e02d4c77ac238afb884ed576 trace_id=1c6c3c09e02d4c77ac238afb884ed576
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=4.047 client_ip=192.0.2.1 request_id=ff8524baed8d4a6b8a30271d4d7ff741 trace_id=ff8524baed8d4a6b8a30271d4d7ff741
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.868 client_ip=192.0.2.1 request_id=936fb85baabd40ab9046b3e2e800732b trace_id=936fb85baabd40ab9046b3e2e800732b
+2026/10/13 01:30:59 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=1.607 client_ip=192.0.2.1 request_id=8efc56eecf274336933ce1b931e20867 trace_id=8efc56eecf274336933ce1b931e20867
+--- PASS: TestAuthenticatedManagedContentObservation (0.42s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	2.498s
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	1.039s
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	1.022s
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.00s)
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.01s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.038s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	2.321s
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-tls-edge	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud-updater	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/staging-trigger	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/admin	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/backup	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/bootstrap	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/brand	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certedge	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/certificate	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/config	0.005s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/deployment	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/filelease	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	72.221s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	19.024s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	4.432s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.318s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	7.131s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]

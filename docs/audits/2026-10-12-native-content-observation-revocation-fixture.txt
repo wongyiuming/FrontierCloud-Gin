@@ -1,0 +1,69 @@
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:30:00 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.174 client_ip=192.0.2.1 request_id=16bf469cd9504147a383103891661246 trace_id=16bf469cd9504147a383103891661246
+2026/10/13 01:30:00 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.049 client_ip=192.0.2.1 request_id=6822dd87c0064483ab6ddc312ad18ae0 trace_id=6822dd87c0064483ab6ddc312ad18ae0
+2026/10/13 01:30:00 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.061 client_ip=192.0.2.1 request_id=4a9251f7ab1a4dba975e9b7e7f7d689c trace_id=4a9251f7ab1a4dba975e9b7e7f7d689c
+2026/10/13 01:30:00 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.025 client_ip=192.0.2.1 request_id=c73801ecc83940fa9dfba0aaadd4d1f0 trace_id=c73801ecc83940fa9dfba0aaadd4d1f0
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=6.525 client_ip=192.0.2.1 request_id=0ba3990767684da79b5cede615ce5f92 trace_id=0ba3990767684da79b5cede615ce5f92
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.481 client_ip=192.0.2.1 request_id=d7e87773ef234b8482817ea064400eb8 trace_id=d7e87773ef234b8482817ea064400eb8
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.051 client_ip=192.0.2.1 request_id=de4592d484f2427aa2692f7180e86f59 trace_id=de4592d484f2427aa2692f7180e86f59
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=4.613 client_ip=192.0.2.1 request_id=298e9163056e4c2ba9fb03f5f2c9563e trace_id=298e9163056e4c2ba9fb03f5f2c9563e
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=3.172 client_ip=192.0.2.1 request_id=f6e5b7ade68a4fea98863d86a8cda734 trace_id=f6e5b7ade68a4fea98863d86a8cda734
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.799 client_ip=192.0.2.1 request_id=06ec4b29e4934fdeac77bd07a002396c trace_id=06ec4b29e4934fdeac77bd07a002396c
+2026/10/13 01:30:00 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.927 client_ip=192.0.2.1 request_id=66375a21bf314187bd0dc59d1656e53e trace_id=66375a21bf314187bd0dc59d1656e53e
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=4.072 client_ip=192.0.2.1 request_id=361b35ee317e4961a1ac5fc588bd2dbc trace_id=361b35ee317e4961a1ac5fc588bd2dbc
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=20.357 client_ip=192.0.2.1 request_id=49b6aeeb895c4b0c935b580759ab6abe trace_id=49b6aeeb895c4b0c935b580759ab6abe
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.829 client_ip=192.0.2.1 request_id=fe2aa1d773774577897c92a04a4f49b6 trace_id=fe2aa1d773774577897c92a04a4f49b6
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.817 client_ip=192.0.2.1 request_id=6ab15368ae724d48be52915a1ac21f7e trace_id=6ab15368ae724d48be52915a1ac21f7e
+    node_content_observation_test.go:122: node state conflict: Follower still holds valid Storage Pool files
+--- FAIL: TestAuthenticatedManagedContentObservation (1.03s)
+=== RUN   TestAuthenticatedManagedContentObservation
+2026/10/13 01:30:01 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.122 client_ip=192.0.2.1 request_id=bcf869113505431aad5b8002eda73cb6 trace_id=bcf869113505431aad5b8002eda73cb6
+2026/10/13 01:30:01 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.098 client_ip=192.0.2.1 request_id=2226d1c551b945468e464b72c1cd72cb trace_id=2226d1c551b945468e464b72c1cd72cb
+2026/10/13 01:30:01 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.068 client_ip=192.0.2.1 request_id=8fce6b6ffabe43a98dfd2cff79219aba trace_id=8fce6b6ffabe43a98dfd2cff79219aba
+2026/10/13 01:30:01 INFO request_completed method=GET path=/internal/v1/identity status=200 duration_ms=1.074 client_ip=192.0.2.1 request_id=a6db78e403324aa4b50205fd1dba43c7 trace_id=a6db78e403324aa4b50205fd1dba43c7
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/pair status=200 duration_ms=5.906 client_ip=192.0.2.1 request_id=769599d9157c48dc89cf649b02dc9da7 trace_id=769599d9157c48dc89cf649b02dc9da7
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/confirm status=200 duration_ms=4.126 client_ip=192.0.2.1 request_id=190c6f19987f4420885ede8d4669691d trace_id=190c6f19987f4420885ede8d4669691d
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=401 duration_ms=0.043 client_ip=192.0.2.1 request_id=cc9e79fbef654701a665483ff431eb03 trace_id=cc9e79fbef654701a665483ff431eb03
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.731 client_ip=192.0.2.1 request_id=10e6acaebf934de7b61ae571652282ce trace_id=10e6acaebf934de7b61ae571652282ce
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.733 client_ip=192.0.2.1 request_id=4f3b3635cbf84960a778d069d23df535 trace_id=4f3b3635cbf84960a778d069d23df535
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=400 duration_ms=2.739 client_ip=192.0.2.1 request_id=4cffa42fdaf34ab5958ca80876d9dbdd trace_id=4cffa42fdaf34ab5958ca80876d9dbdd
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.816 client_ip=192.0.2.1 request_id=781121b7ff39428bb43308c8cd3860da trace_id=781121b7ff39428bb43308c8cd3860da
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.905 client_ip=192.0.2.1 request_id=1e30d167d9c8462c8d32ea0e2147a908 trace_id=1e30d167d9c8462c8d32ea0e2147a908
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=18.89 client_ip=192.0.2.1 request_id=bb7644991aa84d4db3a723868d1dcf1e trace_id=bb7644991aa84d4db3a723868d1dcf1e
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=409 duration_ms=3.817 client_ip=192.0.2.1 request_id=53ae323e43954ab2859f47463bb9d19b trace_id=53ae323e43954ab2859f47463bb9d19b
+2026/10/13 01:30:01 INFO request_completed method=POST path=/internal/v1/content-observation status=200 duration_ms=3.806 client_ip=192.0.2.1 request_id=d8de549cb33d43bead44dcde7a348a74 trace_id=d8de549cb33d43bead44dcde7a348a74
+    node_content_observation_test.go:122: node state conflict: Follower still holds valid Storage Pool files
+--- FAIL: TestAuthenticatedManagedContentObservation (0.42s)
+FAIL
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	1.495s
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+=== RUN   TestManagedContentNativeMediaRootAndMetadataRecheck
+--- PASS: TestManagedContentNativeMediaRootAndMetadataRecheck (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	1.039s
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+=== RUN   TestManagedContentNativeRecordingRoot
+--- PASS: TestManagedContentNativeRecordingRoot (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	1.022s
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.00s)
+=== RUN   TestContentJobsActualBytesBindingReplayAndClose
+--- PASS: TestContentJobsActualBytesBindingReplayAndClose (0.00s)
+=== RUN   TestContentJobsCancellationExpiryAndSanitizedFailure
+--- PASS: TestContentJobsCancellationExpiryAndSanitizedFailure (0.00s)
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.036s
+FAIL

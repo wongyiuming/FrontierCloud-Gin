@@ -1,0 +1,6 @@
+=== RUN   TestManagedContentEncryptedDescriptorAndOpaqueBytes
+--- PASS: TestManagedContentEncryptedDescriptorAndOpaqueBytes (0.00s)
+=== RUN   TestManagedContentEncryptedDescriptorAndOpaqueBytes
+--- PASS: TestManagedContentEncryptedDescriptorAndOpaqueBytes (0.00s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	1.023s
