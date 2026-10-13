@@ -4,7 +4,9 @@ Audit date: 2026-10-12. Branch: `dev`; base HEAD:
 `0fb4a9a9b9717c2f7892c3cb63465633c62ee7af`. Implementation remains uncommitted.
 The logs cover identified working snapshots and private fixture image IDs.
 They are **not** exact-source CI for a new commit or public release proof.
-Final whole-source integration is coordinated separately.
+Final whole-source integration is recorded in the
+[completion audit](2026-10-13-completion-audit.md). This document retains the
+original evidence snapshot and its verification boundaries.
 
 | Requirement | Implementation and evidence | Boundary |
 | --- | --- | --- |

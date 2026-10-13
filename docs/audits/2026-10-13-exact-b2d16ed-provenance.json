@@ -1,0 +1,42 @@
+{
+  "source_commit": "b2d16edc4f9d0ab419f5324d52e3829ba90c8f18",
+  "sqlite_runtime_commit": "abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133",
+  "production_inputs_compared": 542,
+  "production_input_sha256": "f32da8e53ef2e370adf04e041ef06641a08367a9b4edc61c1f963cb16395601f",
+  "production_content_drift": [],
+  "runtime_inputs_identical": true,
+  "images": {
+    "web": {
+      "id": "sha256:50d33effa92db31849d67b4fb669615886a3c8979cc3ece23960b8ab5bf8643a",
+      "revision": "b2d16edc4f9d0ab419f5324d52e3829ba90c8f18"
+    },
+    "nginx": {
+      "id": "sha256:4f95e27402ea798c0587d3ea2c87abe93e35d2723a8593c3bdc2f93eac0c1462",
+      "revision": "b2d16edc4f9d0ab419f5324d52e3829ba90c8f18"
+    }
+  },
+  "binary_sha256": {
+    "frontiercloud": "9887ef3a3f14e823ab7e2db94b92a9faecfb6bf818884dad0b6b8662c986e757",
+    "fc": "c43e06b0b97fcbb11b4de4915949b8095cd3e5cad245a073139378d838713de1",
+    "updater.test": "94814dcfe312dfacf2dfbc82ff57a94e24c9a0c172a56cbfd5bd55626dfec4b2"
+  },
+  "fc_revision_embedding_differs": true,
+  "private_test_images": true,
+  "public_release_proof": false,
+  "source_ci_run_id": 38421332613,
+  "asset_ci_run_id": 38421332621,
+  "application_vcs_build_info": {
+    "abc15db": [
+      "build\tvcs=git",
+      "build\tvcs.revision=abc15db5ed9c17f9cc9c7e3d463ce9ba9bcbd133",
+      "build\tvcs.time=2026-10-13T14:41:38Z",
+      "build\tvcs.modified=false"
+    ],
+    "b2d16ed": [
+      "build\tvcs=git",
+      "build\tvcs.revision=b2d16edc4f9d0ab419f5324d52e3829ba90c8f18",
+      "build\tvcs.time=2026-10-13T15:21:12Z",
+      "build\tvcs.modified=false"
+    ]
+  }
+}

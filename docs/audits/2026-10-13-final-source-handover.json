@@ -1,0 +1,2554 @@
+{
+  "branch": "dev",
+  "base_commit": "0fb4a9a9b9717c2f7892c3cb63465633c62ee7af",
+  "runtime_acceptance_commit": "b2d16edc4f9d0ab419f5324d52e3829ba90c8f18",
+  "changed_tracked_files_since_base": 508,
+  "changes": [
+    {
+      "change": "M",
+      "path": ".dockerignore",
+      "git_blob_id": "a3bcc11353d8bfbf1bfd13de8d78555196f43437"
+    },
+    {
+      "change": "M",
+      "path": "ARCHITECTURE.md",
+      "git_blob_id": "5d99ce83e18e695afc9019921e31cef75b95b377"
+    },
+    {
+      "change": "M",
+      "path": "Dockerfile",
+      "git_blob_id": "4a6b108e9af5c33fc4b583d937d7cd02aac5ddc5"
+    },
+    {
+      "change": "M",
+      "path": "Dockerfile.gin",
+      "git_blob_id": "4a6b108e9af5c33fc4b583d937d7cd02aac5ddc5"
+    },
+    {
+      "change": "M",
+      "path": "README.md",
+      "git_blob_id": "6afdbe0b8ec57f0534eb174143fa0fd495b777e8"
+    },
+    {
+      "change": "M",
+      "path": "ci/Dockerfile.updater",
+      "git_blob_id": "83953f3d735cfc73fa0e7afb8000106a310f659b"
+    },
+    {
+      "change": "M",
+      "path": "ci/Dockerfile.web",
+      "git_blob_id": "367c325c8b6a00ef0d98ad8ceba76ea800b6f2d8"
+    },
+    {
+      "change": "M",
+      "path": "cmd/fc/docker.go",
+      "git_blob_id": "b36e1d6533d317fe540ac8d026a93a5b91b2bd9a"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/docker_test.go",
+      "git_blob_id": "253438ecab464f7f1a1f428cda8ee4f69595edae"
+    },
+    {
+      "change": "M",
+      "path": "cmd/fc/main.go",
+      "git_blob_id": "4803bb1338619193ddf88e8a2add59b43200e03c"
+    },
+    {
+      "change": "M",
+      "path": "cmd/fc/migration.go",
+      "git_blob_id": "f67437d0656d9da43ad5bd2b0bd39c046c820b6a"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/migration_plan.go",
+      "git_blob_id": "73e07cc9eec649461aef901422197e6107c19116"
+    },
+    {
+      "change": "M",
+      "path": "cmd/fc/node.go",
+      "git_blob_id": "b9c396f4bb1fa55c5a05bfcb84046e11915f017b"
+    },
+    {
+      "change": "M",
+      "path": "cmd/fc/recovery.go",
+      "git_blob_id": "87f548a2491ceb3700e7868acc3cc22d7d678afa"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/recovery_set.go",
+      "git_blob_id": "276845c807938adca5eb7a31a04c99ff718933d3"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/retirement_apply.go",
+      "git_blob_id": "b0096192359eb2d7cf4c7184cdfb9ca511d81b7c"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/retirement_apply_test.go",
+      "git_blob_id": "ad02d1487034debacdb4df64bc3a25b106ae1d85"
+    },
+    {
+      "change": "A",
+      "path": "cmd/fc/upgrade.go",
+      "git_blob_id": "9bd7aede41fb2ad03968f1c70edb604850de275e"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/http.go",
+      "git_blob_id": "13285a4a638333afe80fcdb2d00580fe8879cf64"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/main.go",
+      "git_blob_id": "3e8deb255b660509bb736da40882b95f865cbcc1"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/operator_status_test.go",
+      "git_blob_id": "6ea85261bd3afdbf8b5f63cd985090dfc8f9a720"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/release.go",
+      "git_blob_id": "a78e173e63cb07105047837eedd01a23d0db06b2"
+    },
+    {
+      "change": "A",
+      "path": "cmd/frontiercloud/release_generation_test.go",
+      "git_blob_id": "047734c3e3347c2d4dbd10fd99511484814b43f2"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/release_test.go",
+      "git_blob_id": "d30604b9725382300651f7cce276f6c7021ae85a"
+    },
+    {
+      "change": "M",
+      "path": "cmd/frontiercloud/storage.go",
+      "git_blob_id": "079f4ea75fb3aac77fb62b0d9aaf1f956dd02939"
+    },
+    {
+      "change": "M",
+      "path": "docker-compose.gin.yaml",
+      "git_blob_id": "8de8733cd489de7e8465ff8fef6b7254a7dac25b"
+    },
+    {
+      "change": "M",
+      "path": "docker-compose.yaml",
+      "git_blob_id": "8de8733cd489de7e8465ff8fef6b7254a7dac25b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-backup-observation-final.txt",
+      "git_blob_id": "f0cd594c9ff55ca9f2333e0b6fbd656fe845766f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-backup-observation-initial.txt",
+      "git_blob_id": "6989b03eb821c8b10854640c77087874ad29e7b2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-backup-observation-race.txt",
+      "git_blob_id": "5969b7079849f2b169975238d4efb941d5833747"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-bounded-shadow-large-race.txt",
+      "git_blob_id": "69a230641d24a57e36e5ed776971798f884cd847"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-direct-migration-first.txt",
+      "git_blob_id": "0bed256794cdb9cba7a93641debb746ce15bd827"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-direct-migration-fourth.txt",
+      "git_blob_id": "25d7d48b3c6638b4d35538b91d50271018a357d3"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-direct-migration-second.txt",
+      "git_blob_id": "34070715c05ebd81741f45da181dfa4726ccfffc"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-direct-migration-security-race.txt",
+      "git_blob_id": "4a359be59e66072da96613d36b7db15ab0416b5f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-direct-migration-third.txt",
+      "git_blob_id": "d60e2fccc296e68455b806beba07a43b2266f04a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-full-go.txt",
+      "git_blob_id": "388cf4c7a371f9694fb5199e0acd051c9aa6be15"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-image.txt",
+      "git_blob_id": "092b04e2cffb375b2006197bc6a5dedb16434dea"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-mysql-first.txt",
+      "git_blob_id": "5c4fedcca4d08bc55d1561dd2a70ee2072e23b34"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-mysql-second.txt",
+      "git_blob_id": "1196efaad6ab99588e033f7afe9975afc5aa9298"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-mysql-third.txt",
+      "git_blob_id": "22e25516548a9c531401fbf7246120553620719b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-native-build.txt",
+      "git_blob_id": "8b276c83039a2292c819da5e7208b452d3c693ce"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-release-first.txt",
+      "git_blob_id": "5e3bee03358e6e6519e52613243d94a532ce9da7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-generation7-schema-first.txt",
+      "git_blob_id": "fac815659c6f7090f70af507d068204d25a48c6f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-install-repeat-build.txt",
+      "git_blob_id": "dc75b9b2eac9c3a3d70bc5cae27494bffca95eb4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-acceptance-matrix.json",
+      "git_blob_id": "1a7aff39aa8ef350526d5007d3bdecc9d1c02a03"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-fifth.json",
+      "git_blob_id": "562885015e4127f82cc24c305895e509bc4a1c85"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-fifth.txt",
+      "git_blob_id": "91e32599b030970c6efef89a7795cc14727d2007"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-first.json",
+      "git_blob_id": "0f40b5ee3785bdd7d3d02759911f77b1985dc07d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-first.txt",
+      "git_blob_id": "4d176a26ed0785e7bc18981b6ba72bcf2b13b180"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-fourth.json",
+      "git_blob_id": "9220de81f4728235e9f706a614f9a7150620ce62"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-fourth.txt",
+      "git_blob_id": "be1852bec6eb017d9d4597c2413270ea8892b75a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-second.json",
+      "git_blob_id": "515d0f8627c05187928e3b21af9e98c2546b0733"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-second.txt",
+      "git_blob_id": "52acd1ebe7e44fe6798df75d987007a0767c1db1"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-sixth.json",
+      "git_blob_id": "e2ecffb88c38e9296f27b23a74ec9a000784992e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-sixth.txt",
+      "git_blob_id": "a0369936739e50209cb6e34752dc1294e39311eb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-third.json",
+      "git_blob_id": "bb656defea960cd11d3c8fdbb75d1c102ca288d1"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-native-third.txt",
+      "git_blob_id": "585b48356e5eb3a39b1761b65b76c96173e8f22a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-obsolete-case-cleanup.json",
+      "git_blob_id": "c38640bee6987ee2f184198f69d083e0936adc51"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-owned-network-cleanup.json",
+      "git_blob_id": "d5f47b88f20354d81e48d5a0ea239e5861d5760f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-readiness-race-final.txt",
+      "git_blob_id": "547d5fa7683c85f112324e62133af7c33c901aae"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-installation-readiness-race.txt",
+      "git_blob_id": "cc9dc516201fc8e62ea1cf0e3eb78ae4f3ec158d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-large-migration-mysql.txt",
+      "git_blob_id": "5dc2ef405429b5aca61c31ff42875e4fcea6869d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-large-migration-sqlite-native-speed.txt",
+      "git_blob_id": "1c22e849f3f7a8458d716dd007e3dd1aeb35b063"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-large-migration-sqlite-race-third.txt",
+      "git_blob_id": "9279b494f925e4f1e1ed49f634dcb19a8e0487d1"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-large-migration-sqlite-second.txt",
+      "git_blob_id": "40cb798f8cd25e3abacdef1adb9102552f0c3d52"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-large-migration-sqlite.txt",
+      "git_blob_id": "21de3751f9068f2625661aba63191d2e29bd7561"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-migration-traffic-second.txt",
+      "git_blob_id": "279a8320fea67490be25d14b388f242c3b054069"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-migration-traffic-third.txt",
+      "git_blob_id": "813ba6abf8e521c6e5b2897a77c44ee8c24ace05"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-migration-dd-fifth.txt",
+      "git_blob_id": "3a3d3b40bfc355a8b2548b0aca653e9cbfcb970b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-migration-dd-first.txt",
+      "git_blob_id": "79113efb0715678a8218c9b6374ec688578c7899"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-migration-dd-sixth.txt",
+      "git_blob_id": "65ed12883bad1bc9b164fceb91448aec887a2338"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-plan-10008-first.txt",
+      "git_blob_id": "27620dd4b33d7767077836f541eb077a5afed814"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-plan-diagnostic-build.txt",
+      "git_blob_id": "d0930c34b013ed4284aab2691126d4ab2ea7afd4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-native-sqlite-dd-second/evidence.json",
+      "git_blob_id": "e78556f3c7cefe5b8d7cc1f9a929599da62f923a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-node-operations-browser-final.txt",
+      "git_blob_id": "4645ec1a4a33c94ff7ef1771648a57933d748500"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-node-operations-browser-second.txt",
+      "git_blob_id": "9b2cb2f31269fd5358a495b1e6c40258dc092c4c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-node-operations-browser/evidence.json",
+      "git_blob_id": "4aad82a5d3c813aa295912ee8a9e6995aff4d09d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-node-operations-browser/failure.json",
+      "git_blob_id": "a00bf712288146657a0d9866aa645821e2439e18"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-node-operations-browser/node-operations.png",
+      "git_blob_id": "d03ad5ac4d550e35031a8898ddd46aa92e26e1eb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-operator-pull-diagnostics.txt",
+      "git_blob_id": "1ce62503b8e20d8f5dce40e9758b55e85b3a1753"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-operator-requirements-audit.md",
+      "git_blob_id": "bf3d71f83c45333da21adbeb5fc571f6a4ef3438"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-owned-empty-networks.txt",
+      "git_blob_id": "a186fc24ecaf27ee93e2967d936c27c29f52dd92"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-paged-cli-retirement-tls.txt",
+      "git_blob_id": "077ac43199408024994b5dd1af8fd48943f87edb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-paged-fault-set-latest.txt",
+      "git_blob_id": "7e0cfb35bd9f8d2f03608f598b61addc34f848af"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-paged-migration-compile-first.txt",
+      "git_blob_id": "d8655ad833b0c586df304fc2e45cdaedc7b7924e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-paged-migration-second.txt",
+      "git_blob_id": "ff51b64c129cc1c4a7be8f5ec2632fb1f4ed801f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-cancel-backup.txt",
+      "git_blob_id": "cc699202a615ccd9191b2ad80434543e1a6b4224"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-full-go.txt",
+      "git_blob_id": "e488a085c48cf8c4ec3a39e68eb0b6798e0d1c9e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-integration-first.txt",
+      "git_blob_id": "78ed36a5317f1f96d92dbeab5524a4fec761f971"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-integration-second.txt",
+      "git_blob_id": "3f664c8053242b4365b16d06216959dc9f34efc6"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-mysql.txt",
+      "git_blob_id": "815db20e95ec2b588eb7b5b02f7042193680cda2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-plan-cli.txt",
+      "git_blob_id": "fdde6d4516307eaaba84c529d5a648a10c6423af"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-recovery-set.txt",
+      "git_blob_id": "f8948cf47363aea32920134eb30a2b23bbee1f8d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-retirement-fence.txt",
+      "git_blob_id": "38f4eea4396f2c5a4233bb91379d01ab27b0e68e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-retirement-second.txt",
+      "git_blob_id": "7c28628833ad07740385f4cd03255b341e0aa44a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-source-ci.txt",
+      "git_blob_id": "9dfb832681850b0de18447f96bee122c3495ebe8"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-upgrade-first.txt",
+      "git_blob_id": "1ddc16392c82f9e9b7578bdc4b57c2de39b93041"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-parallel-work.md",
+      "git_blob_id": "62664c2eb3e1b446a606e9353e8bc3c62e6796e0"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-plan-controlled-error-reasons.txt",
+      "git_blob_id": "2493e71ddd2e43a16f3af60fa6982803e48154a5"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-recovery-set-activation-first.txt",
+      "git_blob_id": "ea9855d79be9430110e4b7ba52a8966f3f9c2da0"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-recovery-set-native-final.json",
+      "git_blob_id": "e64d20413be154aceb6c0fe029d3a428a595a9ea"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-recovery-set-native-final.txt",
+      "git_blob_id": "18cd7be841b2a32b3a12958e46287f2cb9167e6f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-restore-failure-fence.txt",
+      "git_blob_id": "f69c02c571cf463d61ef25d707a781ed033dddd7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-retirement-native-markers-second.txt",
+      "git_blob_id": "0ba0d8ceeca21fd69767dd7f49cd7bdf130466ab"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-retirement-native-markers.txt",
+      "git_blob_id": "eed7c2b8cb8d91353beff6d78b91bd92f2dce36e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-shadow-scaling.txt",
+      "git_blob_id": "362914fecfa762000cbd1f33166bae578bc8cc71"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-failure.json",
+      "git_blob_id": "925a176edcafb4445bf8196b38d9d884919ece25"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-failure.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-mysql.json",
+      "git_blob_id": "45c7c9f705ef99e55d74e7168667f4f9c4dbcf6d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-mysql.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-sqlite.json",
+      "git_blob_id": "51a0f869284fe6a8d9511bfa262cd212a145c303"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-6to7-sqlite.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-build.txt",
+      "git_blob_id": "596094cc973f43b952e54359c0b6c0860dd4fb1b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-failure-final.json",
+      "git_blob_id": "d403d3c8c532b8f76470bb1418874f3fe88ad7b5"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-failure-final.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-failure.txt",
+      "git_blob_id": "f5aa447304f725fbdbb54ce43cb73871dd922917"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-mysql.json",
+      "git_blob_id": "1b11f4d59e67473929ecef3a0a02ca10a74ebef5"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-mysql.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-sqlite.json",
+      "git_blob_id": "5d89e099db21c2dd33893e7b0b59eac48b563644"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-12-upgrade-native-sqlite.txt",
+      "git_blob_id": "861576e570fac27eff1bb4ef7f25e24136bfd74a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-dd-refusal/evidence.json",
+      "git_blob_id": "4ccee0f5dca6442bc9fda03a7f6d9494f0e5bdc7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-dd-refusal/native.txt",
+      "git_blob_id": "b17be994864b779a64d0aed6e0405554c1ed92e0"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-dr-cutover/evidence.json",
+      "git_blob_id": "f24c8c529d9e6a70dd7f18ac3174082ef432a417"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-dr-cutover/native.txt",
+      "git_blob_id": "52f55a671c3d019e21990b5cb9237841bce3f08a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-rd-cutover/evidence.json",
+      "git_blob_id": "ed7a75ead6551dd5e5f805e51e08d5100d4f5bd2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-rd-cutover/native.txt",
+      "git_blob_id": "397a5ccae5d2cbc826626fe9b43426fbd2f35a19"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-rr-cutover/evidence.json",
+      "git_blob_id": "f7e797b46347e83c93ad25a8366fcc679b970bc7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-mysql-rr-cutover/native.txt",
+      "git_blob_id": "2c09228fa0a5d3d92192fa6667bc3593e39fa0d7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-sqlite-dd-cleanup-retire-driver.txt",
+      "git_blob_id": "393aaa038dab2e0ad48b467f1dcc5a149f9e4d87"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-sqlite-dd-cleanup-retire/evidence.json",
+      "git_blob_id": "088725c55c42d27dd50413441540e0a2f0a3d29e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-sqlite-dd-cleanup-retire/native.txt",
+      "git_blob_id": "aa2e88f5a416bfa251e3523143dd2b8831ba3a23"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-sqlite-rr-cutover/evidence.json",
+      "git_blob_id": "de472c740ed0cbd309341e70d04134346d9f9f7c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-audio-final-go-sqlite-rr-cutover/native.txt",
+      "git_blob_id": "657c73c810d0866098dd843684a1c36e6ef6aa41"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-completion-audit.md",
+      "git_blob_id": "a4a5f4abec65448508e7eed2e858d5c4dc0fdfbd"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-content-observation-traffic-race-final.txt",
+      "git_blob_id": "33d02e0d339b7b94420431c0807e1fc6327b512e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-content-observation-traffic-race.txt",
+      "git_blob_id": "267177c676148d9ffa1e9fc7523cee82d0a26def"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-development-ci.json",
+      "git_blob_id": "7b8406129f89f97ca2444ec64b2396e0cde4cd54"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-direct-traffic-native-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-direct-traffic-native-image.txt",
+      "git_blob_id": "ce79c2a8e307381a17723333e7514a59ec93214c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-evidence-privacy-scan.json",
+      "git_blob_id": "e62d813720d44c4190ceed5a3f4d05571c97a81a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-3a174c2-go-sqlite-dd/evidence.json",
+      "git_blob_id": "c41f2f8228e0afa5d41fa5576676f59a475e708d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-3a174c2-go-sqlite-dd/native.txt",
+      "git_blob_id": "16f1a7b3be89384af3cb74ce8638ee1cad879276"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-go-sqlite-dd/evidence.json",
+      "git_blob_id": "bb9bcfaccb5a2bce0946ac364bd3feeb2c144abb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-go-sqlite-dd/native.txt",
+      "git_blob_id": "1e92750abb24dda7cde9ff797a480868ba81f207"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-nginx-image.txt",
+      "git_blob_id": "aae125bc27e750d8b4ada6f1740291c6f20a9b59"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-serial-matrix.json",
+      "git_blob_id": "a515ad0fefb8fab58662320c69a5a0fcc7a091b5"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-a759466-web-image.txt",
+      "git_blob_id": "4f4312b874bce405edb5b5db5b380f205b63fa21"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-mysql-dd/evidence.json",
+      "git_blob_id": "071cab966c1d51a604b6e4854470445779e9aa4d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-mysql-dd/native.txt",
+      "git_blob_id": "3b73cbf009437561bf25c919a47f6365be565da2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dd/browser.txt",
+      "git_blob_id": "00e80d676c3afb80cb32514631cc3b4c8693dc08"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dd/evidence.json",
+      "git_blob_id": "e62c6dd1edf997ca59b5b939b050ac302bd9557d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dd/native.txt",
+      "git_blob_id": "dbaca3dab75daef6ec117d31e607c769ed1cd6fc"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr/browser-during.txt",
+      "git_blob_id": "43d4a4f97424d82293cccaf8a592c428af4bfa75"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr/browser.txt",
+      "git_blob_id": "00e80d676c3afb80cb32514631cc3b4c8693dc08"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr/evidence.json",
+      "git_blob_id": "ef9cc70104794418e0bb4185d2cbc9a52d6822c1"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-dr/native.txt",
+      "git_blob_id": "d136d56dc4b5e3c6da261f652109528deb9f043d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd/browser-during.txt",
+      "git_blob_id": "43d4a4f97424d82293cccaf8a592c428af4bfa75"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd/browser.txt",
+      "git_blob_id": "00e80d676c3afb80cb32514631cc3b4c8693dc08"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd/evidence.json",
+      "git_blob_id": "4d92b6aba0a6741352618f86900e8c03deaa8088"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rd/native.txt",
+      "git_blob_id": "df8c159f1cec3180d783e327e0e3ca6d6c63602e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr/browser-during.txt",
+      "git_blob_id": "43d4a4f97424d82293cccaf8a592c428af4bfa75"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr/browser.txt",
+      "git_blob_id": "00e80d676c3afb80cb32514631cc3b4c8693dc08"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr/evidence.json",
+      "git_blob_id": "756df033e9c2413455610e328630e471d3a5bb2b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-go-sqlite-rr/native.txt",
+      "git_blob_id": "b0eaf6a8361f386e32fde1dceec15cf1211f187c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-nginx-image.txt",
+      "git_blob_id": "520381fbd3672602696f91e03f111218a48fd35a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-provenance.json",
+      "git_blob_id": "6ef489b950f322420880d708df70e5898e44d286"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-serial-matrix.json",
+      "git_blob_id": "f922ac8e67ccf4bd92e772185e08e4fd34a1596d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-abc15db-web-image.txt",
+      "git_blob_id": "7445a28b199167920319911744ee3af5f9bfa237"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-source-build-provenance.json",
+      "git_blob_id": "81e133e7fe981bec0fd9b50c9b299d7054410659"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-source-native-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-source-native-image.txt",
+      "git_blob_id": "9e8438c92a1d245064172ddc01bb34fc61731cc4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-source-nginx-image.txt",
+      "git_blob_id": "dfa34acf1d73c5e3160a5a0cb6d431272e9e6e1c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-exact-source-serial-matrix.json",
+      "git_blob_id": "4e7a9707ab863a3f85da1a8da2fe4b252c20ab06"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-driver-source-checks.txt",
+      "git_blob_id": "42a0231fe17a81cd40ac3262102aa6b46245fd80"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-go-race-preflight.txt",
+      "git_blob_id": "33d6181be239191024727a53ea341c2700f03848"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-go-race.txt",
+      "git_blob_id": "742c2da319ad856d553df839e5e9d0da0c84c0a1"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-mysql-race-second.txt",
+      "git_blob_id": "08862b1fe9136788218a6639531051eafb45faab"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-mysql-race-third.txt",
+      "git_blob_id": "4bd661f8c093f105ed820cacfb88275a979b2828"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-mysql-race.txt",
+      "git_blob_id": "07355eefd582dfc2f31c1a1b45091abfdedae18a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-mysql-dd-traffic-driver.txt",
+      "git_blob_id": "a9f9f0cf6715f48c13bfdf6484febbdd0bd990f4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-mysql-dd-traffic/browser.txt",
+      "git_blob_id": "09a0c1c3617fc35c42df31d644ff6c0aa1162fef"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-mysql-dd-traffic/evidence.json",
+      "git_blob_id": "cabbc3a5b5aab8e32d079437225a3abeb66f103f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-mysql-dd-traffic/native.txt",
+      "git_blob_id": "f31a2901f879dc48a99e6a3788c9ab9ab459a8e3"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-sqlite-dr-cutover/evidence.json",
+      "git_blob_id": "d91ec333cfc155ddd5614c9cecc61d082bf8c675"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-sqlite-dr-cutover/native.txt",
+      "git_blob_id": "c7f6bf2c424897c1ff58619f7afa897442b41052"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-sqlite-rd-cutover-driver.txt",
+      "git_blob_id": "1a090ac35b8551cb3927e7d99e67fd0963ed33ff"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-sqlite-rd-cutover/evidence.json",
+      "git_blob_id": "fe29aebdfd09e4f03ef23ca7548f2e8e66886a3e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-native-go-sqlite-rd-cutover/native.txt",
+      "git_blob_id": "c090f1982151c4ce136fa6a3b151f6409b85bac8"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-source-js.txt",
+      "git_blob_id": "a74b0a6194c5df260b1754b1a01388a8422f543b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-source-python-second.txt",
+      "git_blob_id": "f4a13d5939992e917e363d485eedfad7f4a91bd9"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-final-source-python.txt",
+      "git_blob_id": "ccdc0fc44c5cadcb2f98343917eee52ab7e283fb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-gateway-traffic-go-second.txt",
+      "git_blob_id": "0f40e3d3ecee14938d9eecc026b8d788327855f0"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-gateway-traffic-recovery-compose.txt",
+      "git_blob_id": "b686709b2c9cb2f2bed0451555fd7adf90caeedb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-queue-paging.txt",
+      "git_blob_id": "7b768e251cbf181b10bb6623fdc6feafe787d11d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-traffic-gateway-guard.txt",
+      "git_blob_id": "cfaa775086a0974697ae69eed9cfd2c7416c644c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-traffic-race-final.txt",
+      "git_blob_id": "928b6f049d95917f0832a008afff2ef6310c3973"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-traffic-race.txt",
+      "git_blob_id": "3e2a3768f53f017d2a408b3b2645202e6c4975d7"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-traffic-ui-final.txt",
+      "git_blob_id": "fdb4013ece17486ab64435948789e25dbd54d7b0"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-migration-traffic-ui.txt",
+      "git_blob_id": "aa703d948afde50e4a81ff030a5574fff05137f2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-mysql-isolated-final-driver.txt",
+      "git_blob_id": "d3e23e942f6c5987c5e427b6314a904f7c84f36a"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-mysql-isolated-final/evidence.json",
+      "git_blob_id": "c308329cf651e68613d74adf23ba19b6236f6b75"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-mysql-isolated-final/tests.txt",
+      "git_blob_id": "4ff31099ba99810223a3e76816d0480e7425668d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-harness-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-lyric-harness-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd-driver.txt",
+      "git_blob_id": "1a090ac35b8551cb3927e7d99e67fd0963ed33ff"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd-second-driver.txt",
+      "git_blob_id": "8225407b05fe602eb4c8611efc34239a2c968f79"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd-second/browser.txt",
+      "git_blob_id": "09a0c1c3617fc35c42df31d644ff6c0aa1162fef"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd-second/evidence.json",
+      "git_blob_id": "4c6ba21c7f73a9c26b84586a245bacaf97862b1f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd-second/native.txt",
+      "git_blob_id": "fa3de369c1c0213a82e63fd1273f07cfee5a45c9"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd/evidence.json",
+      "git_blob_id": "c5b759da02c485133e95ab41644396c213be9d9c"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-audio-sqlite-rd/native.txt",
+      "git_blob_id": "237269d14073fa2fe1a8ec0f6f4ea4abd643c961"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-cleanup-retire-harness-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-cleanup-running-snapshot.json",
+      "git_blob_id": "d0dc080827d14ddcf2ace7e51041ce981fd57358"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-path-proof-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-proof-sqlite-dr-driver.txt",
+      "git_blob_id": "734ce24531fdb136377ea8254d3732a8660bcb11"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-proof-sqlite-dr/browser.txt",
+      "git_blob_id": "09a0c1c3617fc35c42df31d644ff6c0aa1162fef"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-proof-sqlite-dr/evidence.json",
+      "git_blob_id": "3233aa97ea1c92051d24e4c9ec9f51de12115d77"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-proof-sqlite-dr/native.txt",
+      "git_blob_id": "1036b8b2b2059c8940f74c58edbbb18790e55848"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-refusal-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-refusal-sqlite-dd-driver.txt",
+      "git_blob_id": "bdd3e031fab402712cea4ea39675b6f500da2841"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-refusal-sqlite-dd/evidence.json",
+      "git_blob_id": "a055ffc44f1a9d19224fd69a5b0ffb267fa0fd64"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-refusal-sqlite-dd/native.txt",
+      "git_blob_id": "158bc2e99892f14513b770064b1bdc4f46aa3775"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-mysql-dd-driver.txt",
+      "git_blob_id": "a9f9f0cf6715f48c13bfdf6484febbdd0bd990f4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-mysql-dd/browser.txt",
+      "git_blob_id": "09a0c1c3617fc35c42df31d644ff6c0aa1162fef"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-mysql-dd/evidence.json",
+      "git_blob_id": "007a77ba6622ba3f492a1afff21b1ab71dd19ea4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-mysql-dd/native.txt",
+      "git_blob_id": "98d36f37be24ada3ebd63f84af00bb7d59c05618"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-sqlite-dd-driver.txt",
+      "git_blob_id": "ce7c7af7be98da7bcb0d21bbca5afa4751968a9e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-direct-traffic-sqlite-dd/evidence.json",
+      "git_blob_id": "72930c9647db85036f6f4b9c0b06d7787547ad3e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-during-harness-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-many-harness-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-many-observer-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-sql-network-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-fresh-wait-build.txt",
+      "git_blob_id": "4b963c57152f78b830cba8e48a9e2538ae0e3b9d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-fresh-wait-image.txt",
+      "git_blob_id": "91aa01ab9ec9a21235aa5fb059620a06372cbedb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-harness-compile.txt",
+      "git_blob_id": "6f0ad8ead6a1868b888d5d9b1de399a7d9c64fe9"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-build.txt",
+      "git_blob_id": "11a7ddbe3f00bec0f0b95f79800aa06748e3a3a8"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-image.txt",
+      "git_blob_id": "b8ff04f58cc114e50c76e2cbfdccddbb29b3b9b6"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-driver.txt",
+      "git_blob_id": "92bf42e47d5cbd988ca2b1af7d8fe05a88142c22"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-second-driver.txt",
+      "git_blob_id": "ce7c7af7be98da7bcb0d21bbca5afa4751968a9e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-second/browser.txt",
+      "git_blob_id": "09a0c1c3617fc35c42df31d644ff6c0aa1162fef"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-second/evidence.json",
+      "git_blob_id": "d11b4a8b061f47bd1a67a13af5aa892aee5bf75d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd-second/native.txt",
+      "git_blob_id": "e2d5114eb3e6f747d1f05c4913740b4a4accccfc"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd/evidence.json",
+      "git_blob_id": "fa05fc84b026af3829f92efead863828c8470dc4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-native-traffic-peak-sqlite-dd/native.txt",
+      "git_blob_id": "a12b80e2b24f7ed855e013d651b9c5d4c639ac6b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-first.json",
+      "git_blob_id": "851431d6d5d9f869490a83efee4833b9453654f9"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-first.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-http2.json",
+      "git_blob_id": "3bdcdffaa809267f00c63b87282a113845720fd2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-http2.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-second.json",
+      "git_blob_id": "ea36d316ea1f8b781df00488e2cff521f3d49eb4"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-upload.json",
+      "git_blob_id": "e226ea8f6b9fc65cf2d58db90550364940d4a986"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-native-upload.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-nginx-traffic-runtime-build.txt",
+      "git_blob_id": "b4e9f72a55ac8611bc977842a369ec647f6e7101"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-obsolete-empty-network-cleanup.json",
+      "git_blob_id": "b751e7f77c31c34bad02e35e931a85c78b0c82eb"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-peer-job-backoff-race.txt",
+      "git_blob_id": "f03039eb2a76d953e584abd9831f80dab55dc16d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/browser-during.txt",
+      "git_blob_id": "43d4a4f97424d82293cccaf8a592c428af4bfa75"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/browser.txt",
+      "git_blob_id": "00e80d676c3afb80cb32514631cc3b4c8693dc08"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/evidence.json",
+      "git_blob_id": "febe9889603017f760136f2421e2b86eaaacf505"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/native.txt",
+      "git_blob_id": "237308fba406c82eb4a6012294316f405c8c289e"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-second/browser-during.txt",
+      "git_blob_id": "ddc05eee427afcc0a45963d9a4e064aacbe4c51f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-second/evidence.json",
+      "git_blob_id": "848b917a75caabdd82aec9f8511eaf43f7af8f8b"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk-second/native.txt",
+      "git_blob_id": "85a027a3a5983961d2903444e0b5e6c9842ec840"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk/browser-during.txt",
+      "git_blob_id": "ddc05eee427afcc0a45963d9a4e064aacbe4c51f"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk/evidence.json",
+      "git_blob_id": "cf22dc15da19247bfa06de4954c001c078ef80b2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-disk/native.txt",
+      "git_blob_id": "09a6f7a3b288fd59b3c574df664253588a841db2"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire-driver.txt",
+      "git_blob_id": "47d7c2dc4fa31d9eae08a26d2c6f5a244e9dc301"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire/evidence.json",
+      "git_blob_id": "e29986e24237a5c4c5d853f2e25427a89f083265"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-native-during-cleanup-retire/native.txt",
+      "git_blob_id": "fe1b0d783dd76ee490d787ff75a7523f7f54131d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-traffic-build.txt",
+      "git_blob_id": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-preflight-traffic-image.txt",
+      "git_blob_id": "1322909d32c8951fd1b5710fef0ebc827dbc8155"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-runtime-source-comparison.json",
+      "git_blob_id": "90a2f6f81289a767c16ac058af3fd63ee2c6870d"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-source-final-preflight-python.txt",
+      "git_blob_id": "e3044775764f6c869ff2ecebdf3b218d6ff56a77"
+    },
+    {
+      "change": "A",
+      "path": "docs/audits/2026-10-13-terminal-fixture-disk-archive.json",
+      "git_blob_id": "497adb9c8ef3b99e63bd4c45d70b0c9328ffebae"
+    },
+    {
+      "change": "A",
+      "path": "docs/node-safe-retirement.md",
+      "git_blob_id": "eb56a30121ab71e34a8e5aba4750e3922cb2e3d0"
+    },
+    {
+      "change": "A",
+      "path": "docs/operator-install-acceptance.md",
+      "git_blob_id": "0b4310e7877861750df2c691c81e88e3c640b487"
+    },
+    {
+      "change": "M",
+      "path": "docs/operator-manual.md",
+      "git_blob_id": "95e226aebd1113d6d88b302d83385b5ce708db52"
+    },
+    {
+      "change": "A",
+      "path": "docs/operator-recovery-sets.md",
+      "git_blob_id": "c79f699fa3f4e13b5ff2b6a4692fa2301fbae7a0"
+    },
+    {
+      "change": "A",
+      "path": "docs/operator-upgrade.md",
+      "git_blob_id": "4dc329aa76a07c86272091ac2227706f10b764b1"
+    },
+    {
+      "change": "A",
+      "path": "docs/resource-migration-planning.md",
+      "git_blob_id": "20127ec5d14eadfb9d3d6cdc1efc61c4fb458846"
+    },
+    {
+      "change": "A",
+      "path": "internal/businesstraffic/gateway.go",
+      "git_blob_id": "23463ecb2012ae0e585bdfc0c73ef39dc861604c"
+    },
+    {
+      "change": "A",
+      "path": "internal/businesstraffic/gateway_test.go",
+      "git_blob_id": "bbe7f38c6cd88dd226c362aaa455155514ecc997"
+    },
+    {
+      "change": "A",
+      "path": "internal/businesstraffic/monitor.go",
+      "git_blob_id": "e1ca9f2e16f7471bbb2eb21a18ffb9b31153550f"
+    },
+    {
+      "change": "A",
+      "path": "internal/businesstraffic/monitor_test.go",
+      "git_blob_id": "e20dee9d41d691d3e93e69dcf9af274d37a4e559"
+    },
+    {
+      "change": "A",
+      "path": "internal/certmanager/install_real_test.go",
+      "git_blob_id": "92ffa7700c01213975183c300879cc48f929e537"
+    },
+    {
+      "change": "A",
+      "path": "internal/deployment/retained.go",
+      "git_blob_id": "6f78ea7414a0a0841713c5997bfa55368157d7d1"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/backup_observation_client_test.go",
+      "git_blob_id": "073f53995bd840f1e90a5a83ddb0d5c08f57a88c"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/business_traffic.go",
+      "git_blob_id": "b0538901a483cb7fd747a48b3b9c4f33e9b9e256"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/business_traffic_test.go",
+      "git_blob_id": "046b3acb491cacbea80c05560ce6c81b1fa41e67"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/migration_runner_test.go",
+      "git_blob_id": "de0c181e42fdcd80ee55a798205c00f88e464b9e"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_backup_observation.go",
+      "git_blob_id": "1ca00e4f934f571fb904b3ee9545a30bcd024f82"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_backup_observation_test.go",
+      "git_blob_id": "d20ed9e1197c159a26f22f4ba36036b9665d3503"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_cluster_test.go",
+      "git_blob_id": "510baf2cb6cd12bfd1cb3f11018d2176f424b0ac"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_content_observation.go",
+      "git_blob_id": "46261be5d6533e59ec2f65dc2d3aa2aca0a871f4"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_content_observation_test.go",
+      "git_blob_id": "b4d3f2afffa362e817cf42c887b1d346b00f2510"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_migration_admin.go",
+      "git_blob_id": "ea503144d543e40133e86ea8a3b28abc0a6db586"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_migration_data.go",
+      "git_blob_id": "e84ae713ff0c7f299369a1ed4d14114e0cc1172c"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_migration_data_test.go",
+      "git_blob_id": "7baab1657b619b4739e6acd14c1084223d389d9c"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_pages.go",
+      "git_blob_id": "badc16aa88f6841dcac3c6569d1e61bfbca3260c"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_peer_decode.go",
+      "git_blob_id": "cc93db2203b622d21ced1923e164b18d19f2bc3c"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_plan_admin.go",
+      "git_blob_id": "de71afd0385f6034e3a6c535abe2bfecd9f51738"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_plan_admin_test.go",
+      "git_blob_id": "7885f128d759cd172ea4da7400c66ead7dcab0a5"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_plan_large_test.go",
+      "git_blob_id": "1d1b4d3e0369ac29a3d138cab0cccaadb9e71c37"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_migration_recording_test.go",
+      "git_blob_id": "1a3b1599e18111452c8c0b85dff8b013b9313940"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_migration_traffic.go",
+      "git_blob_id": "90fe4bfd2c536c91181daf4e81a921ac0436644a"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_resource_inventory.go",
+      "git_blob_id": "71ec749536aea174f8df5f4d2194b7509cc9e866"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_retirement_admin.go",
+      "git_blob_id": "ef25342586259bafb4a70e174013d513ece84f22"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/node_retirement_admin_test.go",
+      "git_blob_id": "d94a401b9ac4845b19d528e41b59cf801da88127"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_apply_test.go",
+      "git_blob_id": "05ecc41bfde5446b869cb9246ca4fea83b94a909"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_gate.go",
+      "git_blob_id": "db96f13613b140ca248e8fe360289afc82a8d7dc"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_gate_test.go",
+      "git_blob_id": "5fbd4c2170a25da15db3687d03d11e24ccb2ee79"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_inventory.go",
+      "git_blob_id": "ec1516f1e42afff322fb705c26da8a93ac052a6c"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_inventory_test.go",
+      "git_blob_id": "603f39eebcd4e06a8c574480a446faee8819591e"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_native.go",
+      "git_blob_id": "3306ce983008a41a3316a5c3ad4ba4736ef3e061"
+    },
+    {
+      "change": "A",
+      "path": "internal/httpapi/node_retirement_peer.go",
+      "git_blob_id": "526b31462602adcb840b71393deaf56d8a1cf848"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/nodes_admin.go",
+      "git_blob_id": "8a81ad0c1bbc4d9bf1d694730cb000f5639345ab"
+    },
+    {
+      "change": "M",
+      "path": "internal/httpapi/nodes_admin_test.go",
+      "git_blob_id": "83474dfb8c799d7c001e02abb58c01f57ec8858d"
+    },
+    {
+      "change": "M",
+      "path": "internal/media/migration_cleanup.go",
+      "git_blob_id": "6967596defc4cc1968dc6e3a9aa9e33ab891ddf6"
+    },
+    {
+      "change": "M",
+      "path": "internal/media/owned_storage.go",
+      "git_blob_id": "7617642209f33633c9b61040132f2a21c791feb7"
+    },
+    {
+      "change": "M",
+      "path": "internal/media/promotion.go",
+      "git_blob_id": "4154751042e708fb3544825f4858a9e00040182a"
+    },
+    {
+      "change": "A",
+      "path": "internal/media/retirement.go",
+      "git_blob_id": "01c399b6f00bd3729f122d2ce595681952fd55d6"
+    },
+    {
+      "change": "A",
+      "path": "internal/media/retirement_test.go",
+      "git_blob_id": "638daabc387ec9aa679ecbd8cb5215f0079251df"
+    },
+    {
+      "change": "M",
+      "path": "internal/media/service.go",
+      "git_blob_id": "d1afb49690a2bad831c8aee79ea7e7cb30dd1b98"
+    },
+    {
+      "change": "M",
+      "path": "internal/media/upload.go",
+      "git_blob_id": "f1f2e7e7489278d612d46bc55804485c76c8f5cd"
+    },
+    {
+      "change": "M",
+      "path": "internal/migrationdata/blob.go",
+      "git_blob_id": "a60f7712315268bb2bd004310a5c51789e0698a5"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/inventory.go",
+      "git_blob_id": "8132f007ea5c55b7446da142974a68f3d38f211c"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/inventory_open_unix.go",
+      "git_blob_id": "15c52effa3447c75703f10c4898a0d0c38cfebfc"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/inventory_open_windows.go",
+      "git_blob_id": "106512745a4935f0749677ad8c1d6cb3c8bf81cb"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/inventory_test.go",
+      "git_blob_id": "9259721d9c3404185f94437a02b3095578ee4133"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/peer.go",
+      "git_blob_id": "3d12788571563fea5f3b735ce73ba2157b914342"
+    },
+    {
+      "change": "M",
+      "path": "internal/migrationdata/request.go",
+      "git_blob_id": "f1f90635064c4fe413f925dc1175f84a093b748c"
+    },
+    {
+      "change": "A",
+      "path": "internal/migrationdata/traffic_test.go",
+      "git_blob_id": "f96919941bc7de699c329b2c2092c4f8f0c0f7ac"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/backup_observation.go",
+      "git_blob_id": "8ed0754bad2519097b6db2f4cad134043fc20b56"
+    },
+    {
+      "change": "M",
+      "path": "internal/node/capabilities_test.go",
+      "git_blob_id": "c8a3a021fcd9cfe866fb5ef2ca6876b1ba1a90f2"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/migration_direct.go",
+      "git_blob_id": "9ec85ff1cd790bd9ef07dc393d2ce60e7413ec57"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/retirement.go",
+      "git_blob_id": "7aba04ec0f2a14636c1b10646c39f5c497dea4ab"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/retirement_gate.go",
+      "git_blob_id": "bc635c0af83ddd7884e4e188dde207ea735fde47"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/retirement_gate_test.go",
+      "git_blob_id": "fcfdbeec14f5ec16a8b4d85d786b01b26c0e20aa"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/retirement_identity.go",
+      "git_blob_id": "6a4bde609f663706d3ab56b45241c8ea6259caa7"
+    },
+    {
+      "change": "A",
+      "path": "internal/node/retirement_runtime.go",
+      "git_blob_id": "de217492a33ed44ea7d32512b4b7169c23ba7624"
+    },
+    {
+      "change": "M",
+      "path": "internal/node/runtime.go",
+      "git_blob_id": "ea46bd4f7d410493d6eb62d86f62404a73048a7a"
+    },
+    {
+      "change": "M",
+      "path": "internal/node/service.go",
+      "git_blob_id": "1011c1b29dfb32611832bdb116a6307b6ed711d6"
+    },
+    {
+      "change": "A",
+      "path": "internal/noderetirement/apply.go",
+      "git_blob_id": "db439f5ebe5051c74c5c171e72db3015de51a1b3"
+    },
+    {
+      "change": "M",
+      "path": "internal/noderetirement/check.go",
+      "git_blob_id": "817d789b0953dee6fea44d70d7d1352d1ab064b7"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/backup.go",
+      "git_blob_id": "6c5b536e00847808ee0eaad32d45537cadd5a710"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/command_errors.go",
+      "git_blob_id": "c419debc099986cc0464b665f06336291130538f"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/command_errors_test.go",
+      "git_blob_id": "eb10f95bfdc4b4dcee90f764733008e0c38f8f41"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/deployment.go",
+      "git_blob_id": "c32f08d4a62dafa2e117fb57bb711cd019372add"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/deployment_test.go",
+      "git_blob_id": "b1cfa948856fe173f0789cf6ab1790acd1d2a51d"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/install_compose_test.go",
+      "git_blob_id": "8246fc1b2dcdba5cedada213552703379978da52"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/install_readiness.go",
+      "git_blob_id": "e8d36a246e530ca3ade66bd6bba27b9cf43714b4"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/install_readiness_test.go",
+      "git_blob_id": "657fffa47d9f326e61288c709c3c46388860fa0a"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/migration_client.go",
+      "git_blob_id": "e3dbf1bf458529f244ef512257ad45213b2de250"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/migration_client_test.go",
+      "git_blob_id": "b19999ebb597e1748542e561a9ee8a1c568a5c0e"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/migration_plan_client.go",
+      "git_blob_id": "6b730cc812ab435793f17ac0a0e9678a31456fb1"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/migration_plan_client_test.go",
+      "git_blob_id": "555f4c2ed17d969fe77d2202738b3d707ccb91cd"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/migration_plan_large_test.go",
+      "git_blob_id": "d65f6caaeaf81c81b24e8e1a943da1db989dd18d"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/node_client.go",
+      "git_blob_id": "b3da98b7ff59a288ea6431b467a53c780a1201a6"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_mounts.go",
+      "git_blob_id": "fc5298509ba3b13ed10e42b331f1058f56a554ee"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_repeat_test.go",
+      "git_blob_id": "e4a4a5e82ff357ab6c9f86a97ef26273a3f355db"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_set.go",
+      "git_blob_id": "f74f1a5f50e93b13cfe276b650a2717eff1a2acb"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_set_activate.go",
+      "git_blob_id": "c3eeaa7ab20898d29ce1b1b200f155d347181339"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_set_activate_test.go",
+      "git_blob_id": "4c89f2f04690636f97b36ed3568a632170f5beb7"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_set_native_seed_test.go",
+      "git_blob_id": "bdb4676ad30de15fe287c088ba51a95727ebcff4"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/recovery_set_test.go",
+      "git_blob_id": "b828fcea7c25035e13f9babe049ce0977d5e40a9"
+    },
+    {
+      "change": "M",
+      "path": "internal/operator/restore.go",
+      "git_blob_id": "4ca4b773bae58e8e7ab288ae519cd8a87fe94c74"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/restore_failure_test.go",
+      "git_blob_id": "d4445492e1fa2a4f503f697c4cbb2c55e6756c19"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/retirement_client.go",
+      "git_blob_id": "7b906dd9e7c17391fdb920540806fde62b10f05f"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/retirement_client_test.go",
+      "git_blob_id": "74912842e3d0597fbd21aa32c7eb7056f318ba05"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/upgrade.go",
+      "git_blob_id": "745f0bc52112d8ff4417c108b2922730acda644a"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/upgrade_compose_test.go",
+      "git_blob_id": "59eb47b29bac092e9c40bef368260f4f96da4c60"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/upgrade_open.go",
+      "git_blob_id": "ffa733395cc465bee2d8bb0e56b8f63930f22427"
+    },
+    {
+      "change": "A",
+      "path": "internal/operator/upgrade_test.go",
+      "git_blob_id": "d07d7ab8b0ec848d06ff3658c1f4e68dad7b8bde"
+    },
+    {
+      "change": "M",
+      "path": "internal/protocol/capabilities.go",
+      "git_blob_id": "30db438c62141d9548876ddf66e307b614faaae3"
+    },
+    {
+      "change": "M",
+      "path": "internal/protocol/capabilities_test.go",
+      "git_blob_id": "ee880f4d19d697e78b0a4bf5d66c1909b3241196"
+    },
+    {
+      "change": "M",
+      "path": "internal/recording/adoption_test.go",
+      "git_blob_id": "c660eef31a5bc8d613bddb5b2bce11dd62c592dd"
+    },
+    {
+      "change": "M",
+      "path": "internal/recording/migration_cleanup.go",
+      "git_blob_id": "15900687e652a97f33eb34c55aa8a77acaa824c9"
+    },
+    {
+      "change": "A",
+      "path": "internal/recording/retirement.go",
+      "git_blob_id": "0b41522f086edf3dd72737af00e9db8a8f5eaa6c"
+    },
+    {
+      "change": "M",
+      "path": "internal/recovery/archive.go",
+      "git_blob_id": "a58363c2cf2c1e36057b6cec72ed4ec0502f64fa"
+    },
+    {
+      "change": "A",
+      "path": "internal/recovery/generation.go",
+      "git_blob_id": "4ebf62556a24f18a4c64f2a52a67fa7ccd2bfea2"
+    },
+    {
+      "change": "A",
+      "path": "internal/recovery/generation_test.go",
+      "git_blob_id": "8c1e2ca945fd1154573a6c6f5bc1bdde8f1a197c"
+    },
+    {
+      "change": "A",
+      "path": "internal/recovery/material.go",
+      "git_blob_id": "b761f7636e30b6c5efc78e51742b461fa7e41882"
+    },
+    {
+      "change": "A",
+      "path": "internal/recovery/set.go",
+      "git_blob_id": "1eb654853dcd1ce87645d3538a62952f3fadb0e6"
+    },
+    {
+      "change": "M",
+      "path": "internal/release/image_proof_test.go",
+      "git_blob_id": "cb15660d5632b393d70293fe8b2ce99ef2301bf2"
+    },
+    {
+      "change": "A",
+      "path": "internal/release/manifest_generation_test.go",
+      "git_blob_id": "f514f29b4a65cf882bc27eaa59052a628fcff0a6"
+    },
+    {
+      "change": "M",
+      "path": "internal/release/manifest_test.go",
+      "git_blob_id": "2a06a37c07df2304d7ec37b71f35ce83748721e7"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourceinventory/backup_jobs_test.go",
+      "git_blob_id": "2d8d185cbbe55ab317569533b53baff7cafba366"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourceinventory/content.go",
+      "git_blob_id": "987ec04dc99aa819c7bd3a7cc058ab6ab936a412"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourceinventory/content_jobs.go",
+      "git_blob_id": "6ddef5321f6228b8160878bd825ac90af576d967"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourceinventory/content_test.go",
+      "git_blob_id": "9681ef6daffa95676f699560cd69065d9282bceb"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/cancel.go",
+      "git_blob_id": "a1efe51339511598303141e3d84aa347481c0ad1"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/cleanup.go",
+      "git_blob_id": "1fe7c985e8629f30478ef72ff51b88d2c10acc2b"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/drain.go",
+      "git_blob_id": "6421f5ec71062eb63217b036dfc600532cafe4fe"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/pages.go",
+      "git_blob_id": "fcb44f844553c1666a78b92d4a1e2337e51242f1"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_errors.go",
+      "git_blob_id": "f298c4c5a4cdb967d70b92d74275ce866d89256a"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_errors_test.go",
+      "git_blob_id": "189d9e1ca499adc962bd916e1566862970010629"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_jobs.go",
+      "git_blob_id": "86c907065c1bc5ee4432a768f5b1a80ebf9d8e77"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_jobs_test.go",
+      "git_blob_id": "abeff2645d889c63e5a2240129abe260b740b285"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_observation.go",
+      "git_blob_id": "21087fd5ed8ddb93b38f1c985aa9d12eb6bc9fe4"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_observation_test.go",
+      "git_blob_id": "7a0396456f879fab74840fdf8c3c0c5d0f716b2c"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/plan_scope_test.go",
+      "git_blob_id": "9427baac72d799ffc176e9ec8decd1f26d928308"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/recheck.go",
+      "git_blob_id": "99b8d3d79b132790e946edd031d7e9a685d84188"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/runner.go",
+      "git_blob_id": "5808a766b829a333cdb7873a51b6ccabdf2cef66"
+    },
+    {
+      "change": "M",
+      "path": "internal/resourcemigration/shadow.go",
+      "git_blob_id": "d694da5882fda48740b90fdd653335580f7a0937"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/traffic.go",
+      "git_blob_id": "4425887fdee119b605950ca1a5fd4536e4d6c2f1"
+    },
+    {
+      "change": "A",
+      "path": "internal/resourcemigration/traffic_test.go",
+      "git_blob_id": "ed4caec40fef94d8260a2a87df52424ca6402b25"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/backup.go",
+      "git_blob_id": "81afc28a73b80b952843260287f6223b6e157df7"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/aa_maintenance_test.go",
+      "git_blob_id": "0f2845847e7197eabb6a23e85992273e0e65655e"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/backup_file_read.go",
+      "git_blob_id": "c119379c26e21126824babe580c75e47dd390f3a"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/backup_files.go",
+      "git_blob_id": "daf984e37d276911be3be9842cef2aa99d788e1d"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/backup_observation.go",
+      "git_blob_id": "ba877e104f51c80765e3675a68e75489d2f01f9a"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/backup_observation_test.go",
+      "git_blob_id": "4cffe28fcabb9c5cb4de73770bd2e60409d9d301"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/backup_read.go",
+      "git_blob_id": "5ee0be6cdbe3bed54a185c7d36d9bd7df6aff46c"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_admin.go",
+      "git_blob_id": "7bf8503a91e53fbca1acb914e18fc2a9aed2159a"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_admin_test.go",
+      "git_blob_id": "b94a70a6af8603ed6211f0bd4cf0fdbd5c746cd5"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_cancel.go",
+      "git_blob_id": "4c2b6ca14c3ea96b353a8fa972ff012edd3f0054"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_cancel_admission_test.go",
+      "git_blob_id": "8f3e3788e19b98b2d54ad9334201c3a7566d3f0a"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_cancel_object.go",
+      "git_blob_id": "c0163a3eb6b072311d5fe19878db85780938c5de"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_catalog.go",
+      "git_blob_id": "676326971f5492d3d8a240910e4f81b29056a5de"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_cleanup.go",
+      "git_blob_id": "d6576e6bc3ad0b81b7fe7e988b5d7aecf674f6d4"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_commit.go",
+      "git_blob_id": "dceed0228d4954fb6cd82290fb99b0682772a739"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_finish.go",
+      "git_blob_id": "5b75f8af64d852c6d8ba17d0179adc3f35668238"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_peer.go",
+      "git_blob_id": "0a8fb960075db2644a4f815a6302ef47699ec7c6"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_peer_cancel.go",
+      "git_blob_id": "58a72ed9d045dcbeffd76fb754f98a56d75decf9"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_peer_finish.go",
+      "git_blob_id": "133671593ad0e25ac08a85322085ba04af82c6fa"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_peer_pages.go",
+      "git_blob_id": "b0c9b0cdeb2d73829b7a0c7f790580369feb8d82"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_peer_shadow.go",
+      "git_blob_id": "2f71ae1058b57f3afae0eecc0a122e3972037e92"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_peer_task_finish.go",
+      "git_blob_id": "f23a5375daab861ffccdaf8b70941cfb40d31c8a"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_batch.go",
+      "git_blob_id": "dfc4d457c5058cb517ca26add1da757cfbe47a85"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_catalog.go",
+      "git_blob_id": "18e390d89a99d6280b96019b719aa814ea1e4605"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_changed_test.go",
+      "git_blob_id": "767479806f235f9c18f351a7fb50239714406868"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_conflicts.go",
+      "git_blob_id": "f4f85ae45ac2be79ebd31b2613ce4ebd046dc369"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_conflicts_test.go",
+      "git_blob_id": "e18f5ac793117e7d665710a8b4c69fe6bb2706a3"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_pages.go",
+      "git_blob_id": "1a1e06741a30cb33c4cf99772853c15c45fa68c7"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_pages_test.go",
+      "git_blob_id": "174edd02bc74e3e82cf6142bf9851d6d4f61cf27"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_plan_start.go",
+      "git_blob_id": "17f5cb9a3649adf920d07d3f3380f172d13d8d1e"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_run.go",
+      "git_blob_id": "ea8a9d5485ce57f29c19ac3ce1d21524e2c41514"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_shadow.go",
+      "git_blob_id": "18c6eabd37c79c3fc0aac574d2c1dea11a5fb21a"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_shadow_scale_test.go",
+      "git_blob_id": "7efc546d6e526d35537d39b85ef1a64c63ee96d1"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_source_receipt_test.go",
+      "git_blob_id": "2079bf621c8531080a083c394ada45d66527ecac"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_task_finish.go",
+      "git_blob_id": "5fc69111bd20b54a115e151c03d01bc93c752a1a"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/migration_tasks.go",
+      "git_blob_id": "2e8265698c26caf6777704bfeda8a2306bd8ec5a"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/migration_work_pages.go",
+      "git_blob_id": "c731a12131d55ca8a20f0e217593416c8fb58cce"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/node.go",
+      "git_blob_id": "ba489a577da973f67325ab2f6667d2c8d2ad809f"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/node_reset.go",
+      "git_blob_id": "e5a4acb30b8a9bc133b06186cb67a9119e7ab7b9"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/physical_inventory.go",
+      "git_blob_id": "3cc8322928cd18c442ca0ab3a3d739e305408dd7"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/repository_test.go",
+      "git_blob_id": "a12aeadcd90982913ddb600539bdb450ab6481e4"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/retirement.go",
+      "git_blob_id": "f341ddd7d5ec1009bd5bde2b5b0ee9d6aaebecfc"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_checkpoint.go",
+      "git_blob_id": "78312e1c74f78dbc6f5b47ca7b16677b916cfee3"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_checkpoint_test.go",
+      "git_blob_id": "f9bc0df0d5acc766c4f2dd696e8e5a3cfe496f6f"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_fence.go",
+      "git_blob_id": "6985c5549a75f76a9fef84a1f549ff1bcdc1d934"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_fence_test.go",
+      "git_blob_id": "883af48431c8bbe64b900e29515a18e793813c83"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_native.go",
+      "git_blob_id": "e8af6b01d1f3aa79154fc974586b05745f8098bf"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_plans.go",
+      "git_blob_id": "a367e6784ccfb5e84012730f57c46debb93f8caf"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_plans_test.go",
+      "git_blob_id": "b1f486921eb288f34295a06e9d6ce4bcc38822ca"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/business/retirement_reset_test.go",
+      "git_blob_id": "8376eacd05737997ab00102478454449e35cf55f"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/business/retirement_transactions.go",
+      "git_blob_id": "07a5db1235ec2964c1823a480f61c10820e9d59e"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/migration.go",
+      "git_blob_id": "51805d68c4698ebd94ada559e6daf75c1f8e50b2"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/migration_admin.go",
+      "git_blob_id": "4dc8794f3e6078f3bbdd0978a9f99cf330477f1e"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/migration_observation.go",
+      "git_blob_id": "b089b8a3e0468d7f205e0b52b54f024caabb999d"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/migration_pages.go",
+      "git_blob_id": "77a164418d3b9f4b5861854a777a851ee71d94ba"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/migration_pages_test.go",
+      "git_blob_id": "b04460d85321b271198e31ced1a94b5809ccd789"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/retirement.go",
+      "git_blob_id": "9ec2a7c37c4c66ea97f422e20ad5cbb0fdb5e969"
+    },
+    {
+      "change": "A",
+      "path": "internal/store/retirement_native.go",
+      "git_blob_id": "beeae20715954852717f97723f5d018ab52eb5c3"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/schema/resource_migration_test.go",
+      "git_blob_id": "70827298484113a2b10ec10b37dab8747075b849"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/schema/schema.go",
+      "git_blob_id": "707cfbc0bc304f7cece0a4f9922d46bb68461a7c"
+    },
+    {
+      "change": "M",
+      "path": "internal/store/sqlite/schema_test.go",
+      "git_blob_id": "ad4f81cda65ee7d842013890f59b9f7ce544fbe5"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/cleanup_test.go",
+      "git_blob_id": "7fad0fa8031969d4a84932d4883617448edc89e3"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/executor_test.go",
+      "git_blob_id": "a0aaf3d7e1d563ccb6184d6e23a1891d76705771"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/joint_source_test.go",
+      "git_blob_id": "c4631b926db5f47bd0847e4a521bf47bb255404c"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/manifest_test.go",
+      "git_blob_id": "7ef0776add184c933d9c8dd6c03cf387579ce38c"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/native_matrix_real_test.go",
+      "git_blob_id": "7415b0c9a759e01905bd3427cae5d2c6a45b0bd2"
+    },
+    {
+      "change": "A",
+      "path": "internal/updater/native_migration_real_test.go",
+      "git_blob_id": "4058ede51bac86b34b81075ef86500c80270f005"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/public_images_test.go",
+      "git_blob_id": "bea96dec635317fb9405da6048d4a60e85583294"
+    },
+    {
+      "change": "M",
+      "path": "internal/updater/publication_real_test.go",
+      "git_blob_id": "21332d5c3064232255f40eb18e543384d03b6bfb"
+    },
+    {
+      "change": "A",
+      "path": "migrations/mysql/0007-schema.json",
+      "git_blob_id": "8bd860871cc9f1161dce1ecb3925fd48fc568d48"
+    },
+    {
+      "change": "M",
+      "path": "migrations/schema.go",
+      "git_blob_id": "2b5c455740f4bd56022e13bd2c440be0e731e269"
+    },
+    {
+      "change": "A",
+      "path": "migrations/sqlite/0007-schema.json",
+      "git_blob_id": "0454866b244ca6a03705b81bd3622fff020a5169"
+    },
+    {
+      "change": "M",
+      "path": "nginx/Dockerfile",
+      "git_blob_id": "ea3e9c1894b3387e4d69ab81abdfd1e19dca9b1f"
+    },
+    {
+      "change": "M",
+      "path": "nginx/nginx.conf",
+      "git_blob_id": "6dd04cc988ffd6e85300770a616a0d0d5cc06428"
+    },
+    {
+      "change": "A",
+      "path": "nginx/traffic/config",
+      "git_blob_id": "cb0e78b236e1f252099aef4899bb40a5a25b529e"
+    },
+    {
+      "change": "A",
+      "path": "nginx/traffic/ngx_http_fc_traffic_module.c",
+      "git_blob_id": "5b92798b0338159bfb6a0f35b62ebe90a4555c85"
+    },
+    {
+      "change": "M",
+      "path": "protocol/v2/backup-transfer.md",
+      "git_blob_id": "7b6bef64a58ee6422da1fa459bd8d2e6210122d7"
+    },
+    {
+      "change": "M",
+      "path": "protocol/v2/release-manifest.md",
+      "git_blob_id": "6fad7f27c88d0b859e8e9d92599eeaf76b996ab9"
+    },
+    {
+      "change": "M",
+      "path": "protocol/v2/schemas/release-manifest.json",
+      "git_blob_id": "3b8fe08d4fef00d99c88c0cc95ea734ea4d5a7da"
+    },
+    {
+      "change": "A",
+      "path": "protocol/v2/vectors/release-manifest-generation7.json",
+      "git_blob_id": "b674b297387b65347d3f1cd9f9361e0e5448f5a5"
+    },
+    {
+      "change": "M",
+      "path": "scripts/registry_images.py",
+      "git_blob_id": "956a5305216c226b39657260eaa6c439e6776e43"
+    },
+    {
+      "change": "M",
+      "path": "scripts/test-go-business.sh",
+      "git_blob_id": "dd5096a5bf5f283378357eab94d2a457ced46448"
+    },
+    {
+      "change": "M",
+      "path": "scripts/test-native-matrix.sh",
+      "git_blob_id": "82569dfb8b0b921345bf89385a2a033dfbde49f4"
+    },
+    {
+      "change": "M",
+      "path": "scripts/test-resource-schema.sh",
+      "git_blob_id": "e875f13b98863dbe24837270c352e601998447cc"
+    },
+    {
+      "change": "M",
+      "path": "static/js/nodes.js",
+      "git_blob_id": "e2a16c560d47c48061f1099c94d7605b530af21c"
+    },
+    {
+      "change": "A",
+      "path": "tests/fixtures/nginx-traffic-backend/main.go",
+      "git_blob_id": "d2e2c2765a73e2afbaded2775f353ff96a3893e2"
+    },
+    {
+      "change": "A",
+      "path": "tests/mysql_store_acceptance.py",
+      "git_blob_id": "a6c0c09b6545882d7eda05ae86378130285b1620"
+    },
+    {
+      "change": "A",
+      "path": "tests/native_migration_acceptance.py",
+      "git_blob_id": "65b6d148452cc86f6ea9e5c7b4a89c6353a899d7"
+    },
+    {
+      "change": "A",
+      "path": "tests/nginx_traffic_acceptance.py",
+      "git_blob_id": "a0c175e443acdff0ec0429ecb75a5c96ac8d949b"
+    },
+    {
+      "change": "A",
+      "path": "tests/node_migration_native_browser.py",
+      "git_blob_id": "8d9c981a3fe539a4ef1ea39cc335c8b33e7e47bc"
+    },
+    {
+      "change": "M",
+      "path": "tests/node_migration_ui_smoke.mjs",
+      "git_blob_id": "1fafd6b3460914234e931560f1997dd3300229b3"
+    },
+    {
+      "change": "A",
+      "path": "tests/node_operations_browser.py",
+      "git_blob_id": "99d4aa62ce98b4d529d7a7bc2341c4b9308ce31a"
+    },
+    {
+      "change": "M",
+      "path": "tests/node_retirement_ui_smoke.mjs",
+      "git_blob_id": "19f87acf7c6118d5abd5a5bb6447f7b09a51432e"
+    },
+    {
+      "change": "A",
+      "path": "tests/operator_install_acceptance.py",
+      "git_blob_id": "8192c47cee7497dbc4410e46c3f2796e5a67113f"
+    },
+    {
+      "change": "M",
+      "path": "tests/operator_recovery_acceptance.py",
+      "git_blob_id": "64183910f9db9405a7456d52c0c6ddcc3cc68934"
+    },
+    {
+      "change": "A",
+      "path": "tests/operator_recovery_set_acceptance.py",
+      "git_blob_id": "ba6facd2fc0fe8b0087b48dbeaa1a59c92b90591"
+    },
+    {
+      "change": "M",
+      "path": "tests/publication-oci.Dockerfile",
+      "git_blob_id": "a0bb3b6b7e8bac5ec83345cb97fbc6b69ebd86fb"
+    },
+    {
+      "change": "M",
+      "path": "tests/test_registry_images.py",
+      "git_blob_id": "355ad286c826db2953add9e0bf9cc9f92cb721e8"
+    },
+    {
+      "change": "M",
+      "path": "tests/test_trusted_native_publish.py",
+      "git_blob_id": "64d476b7be7a4417aa0a74dac964b5d87e245cf3"
+    },
+    {
+      "change": "M",
+      "path": "updater/Dockerfile",
+      "git_blob_id": "0914b0a5f3f2fd056da80d3e8fd5fc9d9539bc9a"
+    },
+    {
+      "change": "M",
+      "path": "updater/Dockerfile.gin",
+      "git_blob_id": "0914b0a5f3f2fd056da80d3e8fd5fc9d9539bc9a"
+    }
+  ],
+  "runtime_drift_outside_audits": [],
+  "source_comparison": "Git-normalized working content versus fixed acceptance commit. Windows checkout CRLF is not runtime content drift; Linux clean-clone raw-byte provenance is separate.",
+  "runtime_build_provenance": "2026-10-13-exact-b2d16ed-provenance.json",
+  "native_acceptance": "2026-10-13-final-native-matrix.json",
+  "final_audit_commit_ci": "Inspect dev Actions runs for the commit containing this manifest; final handover reports actual run URLs.",
+  "public_release_or_production_deployment": false
+}
