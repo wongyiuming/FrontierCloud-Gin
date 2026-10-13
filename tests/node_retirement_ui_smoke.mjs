@@ -35,7 +35,7 @@ const button = all(panel).find(item => item.tag === 'button');
 const pending = button.onclick();
 assert.equal(button.disabled, true);
 release({preflight_only: true, observation_complete: true, physical_entries: 91, logical_bytes: 273, expected_items: 1,
-    volumes: [{scope: "media", entries: 90, logical_bytes: 273, free_bytes: 1024, in_data_root: false}],
+    volumes: [{scope: "media", retained_entries: 3, entries: 90, logical_bytes: 273, free_bytes: 1024, in_data_root: false}],
     master: {blockers: []}, peer: {blockers: []}, concerns: [{code: 'physical_unmanaged_file', count: 90, samples: Array(20).fill('<img src=x onerror=alert(1)>')}, {code: 'backup_retention_required', count: 1, samples: ['backup']}],
 });
 await pending;
@@ -48,6 +48,7 @@ assert.match(text(panel), /历史观察，需重新检查/);
 assert.match(text(panel), /先验证替代恢复点/);
 assert.match(text(panel), /不能相加作为可用容量/);
 assert.match(text(panel), /未验证/);
+assert.match(text(panel), /保留原生状态/);
 assert.equal(all(panel).filter(item => item.textContent === '<img src=x onerror=alert(1)>').length, 8);
 assert.equal(all(panel).filter(item => item.tag === 'button').length, 1);
 assert.match(text(panelFor()), /physical_unmanaged_file/);

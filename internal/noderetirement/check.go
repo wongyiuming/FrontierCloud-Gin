@@ -38,6 +38,7 @@ type Concern struct {
 }
 type VolumeReport struct {
 	resourceinventory.Volume
+	RetainedEntries   uint64 `json:"retained_entries"`
 	Entries           uint64 `json:"entries"`
 	LogicalBytes      int64  `json:"logical_bytes"`
 	ObservationSHA256 string `json:"observation_sha256"`
@@ -370,6 +371,12 @@ func scanScope(ctx context.Context, report *Report, volume *VolumeReport, sessio
 			digest.Write(encoded)
 			digest.Write([]byte{'\n'})
 			fact := page.Facts[i]
+			if fact.Category == "retained_native_state" {
+				if fact.Blocking || volume.RetainedEntries == math.MaxUint64 {
+					return ErrObservation
+				}
+				volume.RetainedEntries++
+			}
 			if fact.Blocking {
 				if e = report.concern("physical_"+fact.Category, scope+"/"+entry.Path); e != nil {
 					return e

@@ -180,7 +180,7 @@ func (c *NodeClient) RetirementCheck(ctx context.Context, member string) (nodere
 	var entries uint64
 	var bytes int64
 	for i, volume := range report.Volumes {
-		if volume.Scope != []string{"data", "media", "recordings"}[i] || volume.FreeBytes < 0 || volume.TotalBytes < volume.FreeBytes || volume.LogicalBytes < 0 || volume.WritableVerified || i == 0 && volume.InDataRoot || volume.Entries > ^uint64(0)-entries || volume.LogicalBytes > int64(^uint64(0)>>1)-bytes {
+		if volume.Scope != []string{"data", "media", "recordings"}[i] || volume.FreeBytes < 0 || volume.TotalBytes < volume.FreeBytes || volume.LogicalBytes < 0 || volume.RetainedEntries > volume.Entries || volume.WritableVerified || i == 0 && volume.InDataRoot || volume.Entries > ^uint64(0)-entries || volume.LogicalBytes > int64(^uint64(0)>>1)-bytes {
 			return noderetirement.Report{}, ErrNodeClient
 		}
 		entries += volume.Entries

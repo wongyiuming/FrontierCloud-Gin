@@ -8,8 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
@@ -185,6 +187,41 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 						if excluded[scope] == nil && (entry.Path == scope || strings.HasPrefix(entry.Path, scope+"/")) && entry.Kind == "regular" {
 							facts[i] = store.PhysicalInventoryFact{Category: "unmanaged_file", Blocking: true, Reason: "outside_native_mount"}
 						}
+					}
+				}
+			}
+			if e == nil && len(facts) == len(entries) && request.Scope != "data" {
+				original := append([]store.PhysicalInventoryFact(nil), facts...)
+				indices := []int{}
+				for i, entry := range observed.Page.Entries {
+					handled := false
+					if request.Scope == "media" {
+						facts[i], handled = media.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+					}
+					if request.Scope == "recordings" {
+						facts[i], handled = recording.InventoryState(ctx, roots[request.Scope], entry, facts[i])
+					}
+					if handled {
+						indices = append(indices, i)
+					}
+				}
+				if len(indices) > 0 {
+					repeated, err := repository.ClassifyPhysicalInventory(ctx, rel.ID, identity.ID, rel.PeerID, entries)
+					e = err
+					if e == nil {
+						if len(repeated) != len(original) {
+							e = resourceinventory.ErrChanged
+						} else {
+							for _, i := range indices {
+								if repeated[i] != original[i] {
+									e = resourceinventory.ErrChanged
+									break
+								}
+							}
+						}
+					}
+					if e != nil {
+						_ = sessions.Cancel(request.SessionID, request.Incarnation, binding)
 					}
 				}
 			}

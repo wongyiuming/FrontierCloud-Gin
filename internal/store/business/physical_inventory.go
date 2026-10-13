@@ -17,6 +17,7 @@ import (
 
 var inventoryTransactionName = regexp.MustCompile(`^(\.delete-[a-f0-9]{32}|\.rename-[a-f0-9]{32}(\.json)?|\.upload-[a-f0-9]{32}\.(part|json|lock)|\.recording-[a-f0-9]{32}\.(json|part|tmp|deleted|lock))$`)
 var inventoryMigrationName = regexp.MustCompile(`^\.migration-data-[a-f0-9]{32}-[a-f0-9]{64}\.(part|json|lock)$`)
+var inventoryRecordingLeaseName = regexp.MustCompile(`^\.recording-([a-f0-9]{32})\.lease$`)
 
 // Short read-only SQL snapshots add metadata facts to one bounded native page.
 // No filesystem I/O, account/key query, reservation or mutation occurs here.
@@ -51,7 +52,23 @@ func (r *Repository) ClassifyPhysicalInventory(ctx context.Context, relationship
 			fact.Reason = "inspect_link_or_special"
 		case "regular":
 			parts := strings.Split(name, "/")
-			if (parts[0] == "media" || parts[0] == "recordings") && len(parts) > 1 && inventoryTransactionName.MatchString(parts[1]) {
+			if parts[0] == "recordings" && len(parts) == 2 && inventoryRecordingLeaseName.MatchString(parts[1]) {
+				id := inventoryRecordingLeaseName.FindStringSubmatch(parts[1])[1]
+				var owner, state string
+				var updated int64
+				err := tx.QueryRowContext(ctx, "SELECT storage_member_id,state,updated_at FROM karaoke_recordings WHERE recording_id=?", id).Scan(&owner, &state, &updated)
+				fact = store.PhysicalInventoryFact{Category: "recording_lease_unverified", ObjectID: id, Blocking: true, Reason: "reconcile_recording_tombstone_and_native_lease"}
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return nil, err
+				}
+				if err == nil && owner == member && state == "deleted" && entry.LogicalBytes == 0 {
+					digest, err := store.MigrationDigest([]any{id, owner, state, updated})
+					if err != nil {
+						return nil, err
+					}
+					fact = store.PhysicalInventoryFact{Category: "deleted_recording_lease", ObjectID: id, State: state, Blocking: true, Reason: "verify_idle_native_inode", MetadataSHA256: digest}
+				}
+			} else if (parts[0] == "media" || parts[0] == "recordings") && len(parts) > 1 && inventoryTransactionName.MatchString(parts[1]) {
 				fact.Category = "transaction_material"
 				fact.Reason = "reconcile_native_transaction"
 			} else if (parts[0] == "media" || parts[0] == "recordings") && len(parts) == 2 && inventoryMigrationName.MatchString(parts[1]) {

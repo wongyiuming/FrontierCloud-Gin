@@ -1,0 +1,6 @@
+=== RUN   TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone
+--- PASS: TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone (0.18s)
+=== RUN   TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone
+--- PASS: TestPeerPhysicalInventoryDeletedRecordingLeaseRequiresExactTombstone (0.18s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.380s

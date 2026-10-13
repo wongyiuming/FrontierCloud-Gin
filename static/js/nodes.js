@@ -377,9 +377,10 @@
                 section.append(kv([['物理条目', report.physical_entries], ['逻辑字节', dataSize(report.logical_bytes)], ['预期资源', report.expected_items]]));
                 if (Array.isArray(report.volumes)) {
                     for (const volume of report.volumes) {
-                        section.append(kv([['盘点范围', volume.scope], ['条目', volume.entries], ['逻辑字节', dataSize(volume.logical_bytes)], ['所在文件系统空闲', dataSize(volume.free_bytes)], ['默认数据目录内', volume.in_data_root ? '是' : '否'], ['写入能力', '未验证']]));
+                        section.append(kv([['盘点范围', volume.scope], ['条目', volume.entries], ['保留原生状态', volume.retained_entries || 0], ['逻辑字节', dataSize(volume.logical_bytes)], ['所在文件系统空闲', dataSize(volume.free_bytes)], ['默认数据目录内', volume.in_data_root ? '是' : '否'], ['写入能力', '未验证']]));
                     }
                     section.append(make('p', 'node-note', '空闲空间为各挂载的观察值；同一文件系统可能共享空间，不能相加作为可用容量。'));
+                    section.append(make('p', 'node-note', '保留原生状态应随节点历史保留；盘点完成不代表磁盘可以擦除。'));
                 }
                 const list = make('ul');
                 const steps = {
