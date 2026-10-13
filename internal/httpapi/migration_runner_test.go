@@ -39,6 +39,7 @@ type runnerFaultCaller struct {
 	client                    *node.Service
 	lost                      bool
 	lostCleanup               bool
+	droppedRetire             bool
 	lostUnit                  bool
 	lostTask                  bool
 	lostAbort                 bool
@@ -53,6 +54,10 @@ type runnerFaultCaller struct {
 }
 
 func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, path string, value any) (map[string]any, error) {
+	if c.droppedRetire && strings.HasSuffix(path, "/retire") {
+		c.droppedRetire = false
+		return map[string]any{"state": "working"}, nil
+	}
 	if strings.HasSuffix(path, "/begin") && c.blockBegin != nil && c.blockBegin() {
 		return nil, errors.New("injected stop after committed unit")
 	}

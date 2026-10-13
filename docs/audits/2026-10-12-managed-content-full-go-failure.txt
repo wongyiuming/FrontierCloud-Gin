@@ -1,0 +1,138 @@
+Observed terminal failure from go test -p=2 ./...; preceding repetitive request logs omitted.
+panic: test timed out after 10m0s
+	running tests:
+		TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota (9m7s)
+		TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota/encrypted (9m2s)
+
+goroutine 53756 [running]:
+testing.(*M).startAlarm.func1()
+	/usr/local/go/src/testing/testing.go:2802 +0x354
+created by time.goFunc
+	/usr/local/go/src/time/sleep.go:215 +0x2d
+
+goroutine 1 [chan receive, 9 minutes]:
+testing.(*T).Run(0x208af2470b48, {0x1bfaa02?, 0x0?}, 0x1d775b8)
+	/usr/local/go/src/testing/testing.go:2109 +0x4e5
+testing.runTests.func1(0x208af2470b48)
+	/usr/local/go/src/testing/testing.go:2585 +0x3e
+testing.tRunner(0x208af2470b48, 0x208af263fc58)
+	/usr/local/go/src/testing/testing.go:2036 +0xea
+testing.runTests({0x1bdc522, 0x28}, {0x1bf1af0, 0x39}, 0x208af232a300, {0x2e0ede0, 0x5b, 0x5b}, {0xc2ab7ec521191ad2, 0x8bb31b0d56, ...})
+	/usr/local/go/src/testing/testing.go:2583 +0x505
+testing.(*M).Run(0x208af25b6460)
+	/usr/local/go/src/testing/testing.go:2443 +0x6ac
+main.main()
+	_testmain.go:226 +0x9b
+
+goroutine 45777 [select, 9 minutes]:
+database/sql.(*DB).connectionOpener(0x208af3e001a0, {0x1d9cb18, 0x208af39ed040})
+	/usr/local/go/src/database/sql/sql.go:1261 +0x89
+created by database/sql.OpenDB in goroutine 45758
+	/usr/local/go/src/database/sql/sql.go:841 +0x130
+
+goroutine 45794 [select]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory.func1()
+	/workspace/internal/httpapi/node_resource_inventory.go:44 +0x108
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory in goroutine 45758
+	/workspace/internal/httpapi/node_resource_inventory.go:39 +0x265
+
+goroutine 45821 [select, 9 minutes]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData.func5()
+	/workspace/internal/httpapi/node_migration_data.go:89 +0x185
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData in goroutine 45758
+	/workspace/internal/httpapi/node_migration_data.go:86 +0x3bc
+
+goroutine 41238 [chan receive, 9 minutes]:
+testing.(*T).Run(0x208af2c4e248, {0x1ba63d6?, 0x208af478fe55?}, 0x208af2f2d280)
+	/usr/local/go/src/testing/testing.go:2109 +0x4e5
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota(0x208af2c4e248)
+	/workspace/internal/httpapi/node_migration_recording_test.go:67 +0x94
+testing.tRunner(0x208af2c4e248, 0x1d775b8)
+	/usr/local/go/src/testing/testing.go:2036 +0xea
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2101 +0x4c5
+
+goroutine 45775 [select, 9 minutes]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData.func5()
+	/workspace/internal/httpapi/node_migration_data.go:89 +0x185
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData in goroutine 45758
+	/workspace/internal/httpapi/node_migration_data.go:86 +0x3bc
+
+goroutine 45793 [select, 9 minutes]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData.func5()
+	/workspace/internal/httpapi/node_migration_data.go:89 +0x185
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodeMigrationData in goroutine 45758
+	/workspace/internal/httpapi/node_migration_data.go:86 +0x3bc
+
+goroutine 45822 [select]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory.func1()
+	/workspace/internal/httpapi/node_resource_inventory.go:44 +0x108
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory in goroutine 45758
+	/workspace/internal/httpapi/node_resource_inventory.go:39 +0x265
+
+goroutine 45795 [select, 9 minutes]:
+database/sql.(*DB).connectionOpener(0x208af3f37860, {0x1d9cb18, 0x208af3c0a140})
+	/usr/local/go/src/database/sql/sql.go:1261 +0x89
+created by database/sql.OpenDB in goroutine 45758
+	/usr/local/go/src/database/sql/sql.go:841 +0x130
+
+goroutine 45759 [select, 9 minutes]:
+database/sql.(*DB).connectionOpener(0x208af3d99ba0, {0x1d9cb18, 0x208af39ec050})
+	/usr/local/go/src/database/sql/sql.go:1261 +0x89
+created by database/sql.OpenDB in goroutine 45758
+	/usr/local/go/src/database/sql/sql.go:841 +0x130
+
+goroutine 45758 [select]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration.delay({0x1d9c958, 0x2e3cb80})
+	/workspace/internal/resourcemigration/runner.go:38 +0xc8
+github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration.(*Runner).cleanup(0x208af3c67278, {0x1d9c958, 0x2e3cb80}, {0x208af436cb00, 0x20}, {0x208af3f4cee0, 0x20})
+	/workspace/internal/resourcemigration/cleanup.go:225 +0x317d
+github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration.(*Runner).Run(0x208af3c67278, {0x1d9c958, 0x2e3cb80}, {0x208af436cb00, 0x20}, {0x208af3f4cee0, 0x20})
+	/workspace/internal/resourcemigration/runner.go:55 +0x246
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.authenticatedRecordingPublication(0x208af32b8908, 0x1, {0x208af3c67f5b, 0x5, 0x5?})
+	/workspace/internal/httpapi/node_migration_recording_test.go:335 +0x5e36
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota.func1(0x208af32b8908?)
+	/workspace/internal/httpapi/node_migration_recording_test.go:67 +0x3b
+testing.tRunner(0x208af32b8908, 0x208af2f2d280)
+	/usr/local/go/src/testing/testing.go:2036 +0xea
+created by testing.(*T).Run in goroutine 41238
+	/usr/local/go/src/testing/testing.go:2101 +0x4c5
+
+goroutine 45776 [select]:
+github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory.func1()
+	/workspace/internal/httpapi/node_resource_inventory.go:44 +0x108
+created by github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi.RegisterNodePhysicalInventory in goroutine 45758
+	/workspace/internal/httpapi/node_resource_inventory.go:39 +0x265
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	600.020s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/media	12.041s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/migrationproof	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/network	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/node	2.387s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/observation	0.029s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/protocol	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recording	2.241s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	0.242s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	0.185s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/search	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/security	0.052s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	4.482s
+?   	github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql	[no test files]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/schema	0.115s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite	0.292s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/stun	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/updater	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
+?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
+?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]
+FAIL
+

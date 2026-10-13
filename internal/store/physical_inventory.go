@@ -48,3 +48,9 @@ type ExpectedPhysicalPage struct {
 type ExpectedPhysicalRepository interface {
 	ExpectedPhysicalInventory(context.Context, string, string, string, string, string) (ExpectedPhysicalPage, error)
 }
+
+// Managed lookup resolves only a local media/ready-recording identifier. It
+// never accepts caller-selected filesystem paths or exposes recovery material.
+type ManagedPhysicalRepository interface {
+	ExpectedPhysicalObject(context.Context, string, string, string, string, string) (ExpectedPhysicalItem, error)
+}

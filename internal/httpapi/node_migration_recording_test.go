@@ -67,6 +67,9 @@ func TestAuthenticatedRecordingNewReverseTaskPreservesCiphertextAndQuota(t *test
 		t.Run(map[bool]string{false: "plain", true: "encrypted"}[encrypted], func(t *testing.T) { authenticatedRecordingPublication(t, encrypted, true, false, false, false, true) })
 	}
 }
+func TestAuthenticatedRecordingAnchorWorkerLossRequiresExplicitRetry(t *testing.T) {
+	authenticatedRecordingPublication(t, true, true, false, false, false, false, true)
+}
 func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...bool) {
 	ctx := context.Background()
 	unpublish := len(cleanup) > 2 && cleanup[2]
@@ -331,6 +334,20 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 		}
 		if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
 			t.Fatal(e)
+		}
+		if len(cleanup) > 5 && cleanup[5] {
+			fault.droppedRetire = true
+			started := time.Now()
+			if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e == nil || time.Since(started) > 10*time.Second {
+				t.Fatal("lost worker was treated as success or polled indefinitely", e)
+			}
+			pending, e := repo.MigrationTask(ctx, plan.ID)
+			if e != nil || pending.State != "cleanup_pending" || pending.ErrorCode == "" {
+				t.Fatal("lost worker not recoverable", pending, e)
+			}
+			if _, e = repo.ControlMigration(ctx, plan.ID, "retry", store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
 		}
 		if e = engine.Run(ctx, plan.ID, strings.Repeat("3", 32)); e != nil {
 			t.Fatal(e)

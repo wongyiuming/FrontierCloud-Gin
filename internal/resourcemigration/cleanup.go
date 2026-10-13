@@ -219,6 +219,12 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 			if checkpoint.AnchorRetired && !checkpoint.AnchorRetiring {
 				break
 			}
+			// A worker can reject admission before writing AnchorError, or a
+			// restart can lose an accepted job. Idle is never successful work.
+			if active, ok := value["worker_active"].(bool); submitted && ok && !active {
+				return store.ErrMigrationState
+			}
+
 			if time.Now().After(deadline) {
 				return context.DeadlineExceeded
 			}

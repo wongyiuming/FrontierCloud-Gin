@@ -1,0 +1,14 @@
+=== RUN   TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO
+--- PASS: TestContentOpenRejectsLinkAndDoesNotBlockOnReplacedFIFO (0.00s)
+=== RUN   TestContentObservationActualBytesPathsAndMutation
+--- PASS: TestContentObservationActualBytesPathsAndMutation (0.03s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.043s
+=== RUN   TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations
+--- PASS: TestPeerExpectedPhysicalInventoryBackupsIncludeLegacyAndForeignGenerations (0.23s)
+=== RUN   TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects
+--- PASS: TestPeerExpectedPhysicalInventoryPagesIncludeHiddenAndAbsentObjects (0.25s)
+=== RUN   TestPeerExpectedPhysicalInventoryExactManagedLookup
+--- PASS: TestPeerExpectedPhysicalInventoryExactManagedLookup (0.17s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/store/business	1.681s

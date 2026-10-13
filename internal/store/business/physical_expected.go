@@ -9,6 +9,22 @@ import (
 
 // Keyset pages retain no full roster and include no visibility/page filter.
 func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member, master, resource, after string) (store.ExpectedPhysicalPage, error) {
+	return r.expectedPhysicalInventory(ctx, rel, member, master, resource, after, "")
+}
+func (r *Repository) ExpectedPhysicalObject(ctx context.Context, rel, member, master, resource, id string) (store.ExpectedPhysicalItem, error) {
+	if resource != "media" && resource != "recording" || resource == "media" && !nodeHashPattern.MatchString(id) || resource == "recording" && !nodeIDPattern.MatchString(id) {
+		return store.ExpectedPhysicalItem{}, store.ErrMigrationState
+	}
+	page, e := r.expectedPhysicalInventory(ctx, rel, member, master, resource, "", id)
+	if e != nil {
+		return store.ExpectedPhysicalItem{}, e
+	}
+	if !page.Complete || len(page.Items) != 1 || page.Items[0].ObjectID != id {
+		return store.ExpectedPhysicalItem{}, store.ErrMigrationState
+	}
+	return page.Items[0], nil
+}
+func (r *Repository) expectedPhysicalInventory(ctx context.Context, rel, member, master, resource, after, selected string) (store.ExpectedPhysicalPage, error) {
 	page := store.ExpectedPhysicalPage{Resource: resource, After: after, Next: after, Items: []store.ExpectedPhysicalItem{}}
 	if !nodeIDPattern.MatchString(rel) || !nodeIDPattern.MatchString(member) || !nodeIDPattern.MatchString(master) || resource != "media" && resource != "recording" && resource != "backup" && resource != "backup_chunk" || after != "" && (resource == "media" && !nodeHashPattern.MatchString(after) || resource == "recording" && !nodeIDPattern.MatchString(after)) {
 		return page, store.ErrMigrationState
@@ -23,7 +39,13 @@ func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member,
 	}
 	candidates := make([]store.ExpectedPhysicalItem, 0, 17)
 	if resource == "media" {
-		rows, e := tx.QueryContext(ctx, "SELECT media_id,media_path,object_kind FROM media_objects WHERE object_kind IN ('audio','video') AND media_id>? ORDER BY media_id LIMIT 17", after)
+		query := "SELECT media_id,media_path,object_kind FROM media_objects WHERE object_kind IN ('audio','video') AND media_id>? ORDER BY media_id LIMIT 17"
+		value := after
+		if selected != "" {
+			query = "SELECT media_id,media_path,object_kind FROM media_objects WHERE object_kind IN ('audio','video') AND media_id=?"
+			value = selected
+		}
+		rows, e := tx.QueryContext(ctx, query, value)
 		if e != nil {
 			return page, e
 		}
@@ -61,7 +83,13 @@ func (r *Repository) ExpectedPhysicalInventory(ctx context.Context, rel, member,
 			candidates = append(candidates, item)
 		}
 	} else if resource == "recording" {
-		rows, e := tx.QueryContext(ctx, "SELECT recording_id,user_id,size_bytes,sha256,filename,content_type FROM karaoke_recordings WHERE storage_member_id=? AND state='ready' AND recording_id>? ORDER BY recording_id LIMIT 17", member, after)
+		query := "SELECT recording_id,user_id,size_bytes,sha256,filename,content_type FROM karaoke_recordings WHERE storage_member_id=? AND state='ready' AND recording_id>? ORDER BY recording_id LIMIT 17"
+		value := after
+		if selected != "" {
+			query = "SELECT recording_id,user_id,size_bytes,sha256,filename,content_type FROM karaoke_recordings WHERE storage_member_id=? AND state='ready' AND recording_id=?"
+			value = selected
+		}
+		rows, e := tx.QueryContext(ctx, query, member, value)
 		if e != nil {
 			return page, e
 		}

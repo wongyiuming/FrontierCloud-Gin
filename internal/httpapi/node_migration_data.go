@@ -283,6 +283,9 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		return cp, e
 	})
 	register("status", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
+		mutex.Lock()
+		working := active[key(v)]
+		mutex.Unlock()
 		r, e := receiver(c.Request.Context(), v.Spec)
 		if e != nil {
 			return nil, e
@@ -291,7 +294,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		if e != nil {
 			return nil, e
 		}
-		return gin.H{"checkpoint": cp, "peer_state": p.State}, nil
+		return gin.H{"checkpoint": cp, "peer_state": p.State, "worker_active": working}, nil
 	})
 	register("append", func(c *gin.Context, rel store.Relationship, v migrationDataRequest, p store.MigrationPeerObject) (any, error) {
 		if len(v.Data) < 1 || len(v.Data) > migrationdata.ChunkBytes {
@@ -349,7 +352,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"status": "working"}, nil
+			return gin.H{"status": "waiting"}, nil
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "publish"}:
@@ -380,7 +383,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"status": "working"}, nil
+			return gin.H{"status": "waiting"}, nil
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "recheck"}:
@@ -428,7 +431,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"state": "working"}, nil
+			return gin.H{"state": "waiting"}, nil
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "retire"}:
@@ -479,7 +482,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"state": "working"}, nil
+			return gin.H{"state": "waiting"}, nil
 		}
 		// Storage restart can lose a queued worker, but never its durable intent.
 		// Require a newly authenticated source proof before scheduling it again.
@@ -547,7 +550,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"state": "working"}, nil
+			return gin.H{"state": "waiting"}, nil
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, r, "shadow"}:
@@ -614,7 +617,7 @@ func RegisterNodeMigrationData(router *gin.Engine, settings config.Config, resol
 		mutex.Lock()
 		defer mutex.Unlock()
 		if active[key(v)] {
-			return gin.H{"state": "working"}, nil
+			return gin.H{"state": "waiting"}, nil
 		}
 		select {
 		case jobs <- migrationVerifyJob{v, rel.ID, nil, "cleanup"}:
