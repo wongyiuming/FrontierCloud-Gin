@@ -80,11 +80,13 @@ http {
   ssl_certificate_key /fixture/key.pem;
   location = /slow { alias /fixture/payload.bin; limit_rate 512k; }
   location = /fast { alias /fixture/payload.bin; }
+  location = /h2-business { alias /fixture/payload.bin; limit_rate 32k; }
   location = /upload { proxy_request_buffering off; client_max_body_size 32m; proxy_pass http://127.0.0.1:8082; }
   location = /accelerated { proxy_pass http://127.0.0.1:8082; }
   location /_protected_media/ { internal; alias /fixture/; limit_rate 512k; }
   location = /deny-counter { fc_business_traffic_status; }
   location = /api/v1/media/admin/nodes/migrations/fixture { alias /fixture/payload.bin; }
+  location = /api/v1/media/admin/nodes/migrations/h2-control { alias /fixture/payload.bin; }
  }
 }
 """, encoding="utf-8")
@@ -176,6 +178,26 @@ http {
                 break
             time.sleep(0.1)
         assert after["egress_bytes_per_second"] == 0
+        # One TLS connection carries two active business streams and a fast
+        # excluded 2-MiB control response. A shared connection counter would
+        # charge that response to both business streams and falsely cross peak.
+        transfer = subprocess.Popen(["docker", "exec", project, "/fixture-backend",
+                                     "--multiplex", "https://127.0.0.1:8443"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        multiplex_peak = 0
+        deadline = time.monotonic() + 22
+        while transfer.poll() is None and time.monotonic() < deadline:
+            multiplex_peak = max(multiplex_peak, snapshot(counter / "counter.sock")["recent_bytes_per_second"])
+            time.sleep(0.1)
+        stdout, stderr = transfer.communicate(timeout=3)
+        assert transfer.returncode == 0, "same-connection HTTP/2 fixture failed"
+        result = json.loads(stdout)
+        assert result["single_connection"] and result["http2"]
+        assert result["business_bytes"] == 512 * 1024 and result["excluded_bytes"] == 2 * 1024 * 1024
+        assert 32 * 1024 <= multiplex_peak < 192 * 1024, "HTTP/2 streams inflated business traffic"
+        report["same_connection_http2_multiplex"] = result
+        report["multiplex_business_peak"] = multiplex_peak
+        time.sleep(5.1)
         connection = http.client.HTTPConnection("127.0.0.1",port,timeout=5)
         connection.putrequest("POST","/upload")
         connection.putheader("Content-Length",str(4*1024*1024))

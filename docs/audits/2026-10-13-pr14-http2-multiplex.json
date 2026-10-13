@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "project": "fc-nginx-traffic-d728a1f08dbb4fc487ffcadb461aa16e",
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/live-acceptance/fc-nginx-traffic-n624kak9",
+  "private_test_image": true,
+  "image_id": "sha256:7039f1711e77d867619511b27ecdf72742873f44255b14ee68226abca0ddb4a5",
+  "payload_sha256": "a06c26cbac8b80704f420222dae5658b88ff2da96702d12ef7a4223e9361f7c1",
+  "ongoing_sendfile_peak": 524288,
+  "partial_received_bytes": 4259840,
+  "abort_before_completion": true,
+  "in_flight_observation": true,
+  "actual_range": true,
+  "actual_http2": true,
+  "http2_in_flight_peak": 524864,
+  "actual_x_accel_redirect": true,
+  "tcp_counter_rejected": true,
+  "reload_epoch_retained": true,
+  "same_connection_http2_multiplex": {
+    "business_bytes": 524288,
+    "control_overlapped_two_business_streams": true,
+    "excluded_bytes": 2097152,
+    "http2": true,
+    "single_connection": true
+  },
+  "multiplex_business_peak": 65666,
+  "actual_upload_bytes": 4194304,
+  "upload_in_flight_peak": 589971,
+  "migration_observation_excluded": true,
+  "owned_container_removed": true
+}

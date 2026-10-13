@@ -1,5 +1,6 @@
-// Package operator is a short-lived host-side Compose client. It is never
-// linked into the business service and requires no Docker socket in Web.
+// Package operator implements short-lived host-side Compose workflows. Native
+// status shares its readonly fact types; Web never invokes the host workflows
+// or receives Docker socket authority.
 package operator
 
 import (
@@ -43,12 +44,51 @@ type Port struct {
 	Protocol  string `json:"protocol"`
 }
 type Service struct {
-	Image       string            `json:"image"`
-	Environment map[string]string `json:"environment"`
-	Volumes     []Mount           `json:"volumes"`
-	Ports       []Port            `json:"ports"`
-	Build       json.RawMessage   `json:"build"`
+	Image       string                     `json:"image"`
+	Environment map[string]string          `json:"environment"`
+	Volumes     []Mount                    `json:"volumes"`
+	Ports       []Port                     `json:"ports"`
+	Build       json.RawMessage            `json:"build"`
+	Execution   map[string]json.RawMessage `json:"-"`
 }
+
+// Retain effective Compose execution/isolation settings, including fields added
+// by future Compose versions. Images and secret environment values have their
+// own bindings; no raw command/configuration is written into the receipt.
+func (s *Service) UnmarshalJSON(raw []byte) error {
+	type plain Service
+	var value plain
+	if e := json.Unmarshal(raw, &value); e != nil {
+		return e
+	}
+	var execution map[string]json.RawMessage
+	if e := json.Unmarshal(raw, &execution); e != nil {
+		return e
+	}
+	for _, name := range []string{"image", "environment", "volumes", "ports", "build"} {
+		delete(execution, name)
+	}
+	*s = Service(value)
+	s.Execution = execution
+	return nil
+}
+
+func (s Service) MarshalJSON() ([]byte, error) {
+	type plain Service
+	raw, e := json.Marshal(plain(s))
+	if e != nil {
+		return nil, e
+	}
+	var fields map[string]json.RawMessage
+	if e = json.Unmarshal(raw, &fields); e != nil {
+		return nil, e
+	}
+	for name, value := range s.Execution {
+		fields[name] = value
+	}
+	return json.Marshal(fields)
+}
+
 type Config struct {
 	Name     string             `json:"name"`
 	Services map[string]Service `json:"services"`
@@ -178,8 +218,8 @@ func (d *Deployment) Config(ctx context.Context, pinned bool) (Config, error) {
 	return cfg, nil
 }
 
-// selectionHash excludes secrets and image versions, but binds all mounts,
-// database endpoints, role/network settings and project identity.
+// selectionHash excludes secret environment values and image versions, but binds all mounts,
+// database endpoints, role/network settings, execution/isolation and project identity.
 func selectionHash(cfg Config) string {
 	values := map[string]any{"project": cfg.Name, "volumes": cfg.Volumes}
 	services := map[string]any{}
@@ -190,7 +230,13 @@ func selectionHash(cfg Config) string {
 				env[key] = v
 			}
 		}
-		services[name] = map[string]any{"environment": env, "mounts": s.Volumes, "ports": s.Ports}
+		execution := map[string]any{}
+		for name, raw := range s.Execution {
+			var value any
+			_ = json.Unmarshal(raw, &value) // Config accepted this JSON before hashing.
+			execution[name] = value
+		}
+		services[name] = map[string]any{"environment": env, "mounts": s.Volumes, "ports": s.Ports, "execution": execution}
 	}
 	values["services"] = services
 	raw, _ := json.Marshal(values)

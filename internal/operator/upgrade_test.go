@@ -201,6 +201,9 @@ func TestUpgradeUsesRealRecoveryBytesBeforeTargetAndExplicitOpen(t *testing.T) {
 	if state.Phase != "prepared_fenced" || state.BackupSHA == "" || state.BusinessVerified || !runner.stopped {
 		t.Fatal(state)
 	}
+	if scratch, e := filepath.Glob(filepath.Join(d.Directory, ".fc-backup-*")); e != nil || len(scratch) != 0 {
+		t.Fatal("successful backup retained private scratch", scratch, e)
+	}
 	check, e := recovery.Check(ctx, output, state.BackupSHA)
 	if e != nil {
 		t.Fatal(e)

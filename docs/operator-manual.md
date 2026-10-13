@@ -94,6 +94,15 @@ Storage/Backup and allocates logical capacity.
 
 ## Backup and restore
 
+Bulk backup, archive verification, restoration and upgrade commands run until
+completion or explicit operator cancellation; media size does not impose a
+fixed fifteen-minute deadline. Ctrl-C or SIGTERM requests cancellation. Keep
+the resulting fence and retained failure materials until their state is checked.
+Successful archive creation removes its private deployment/MySQL dump scratch
+only after the archive and its directory are durable. Failed capture retains
+scratch for diagnosis; source data and prior recovery points are never cleanup
+targets.
+
 Built-in business backups are database/business recovery artifacts. They exclude
 media bytes, node private keys, media premaster, certificate state and complete
 node journals; they are not full disaster recovery points. Preserve those

@@ -80,8 +80,9 @@ func serviceImageMap(cfg Config) map[string]string {
 	return result
 }
 
-// OpenUpgrade is a second explicit approval. It never opens failed/interrupted
-// work, reverts DDL, rewrites an old identity or overrides prior maintenance.
+// OpenUpgrade is a second explicit approval. An interrupted owned opening can
+// be rechecked under public maintenance. Failed work, DDL rollback and unrelated
+// administrator maintenance are never admitted by that recovery path.
 func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node string) (UpgradeState, error) {
 	var state UpgradeState
 	done, e := d.AcquireOperation()
@@ -97,19 +98,37 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	if e != nil {
 		return state, e
 	}
-	if state.Phase != "prepared_fenced" || state.Plan.SHA256 != approval || state.Plan.NodeID != node || r.Revision != state.Plan.Target || r.State != "upgrade_fenced" || r.SourceSHA != state.Plan.SourceSHA || r.SelectionHash != state.Previous.SelectionHash || !reflect.DeepEqual(r.ServiceImages, state.Plan.ServiceImages) {
+	prepared := state.Phase == "prepared_fenced"
+	recovering := state.Phase == "activating_fenced" || state.Phase == "verified_fenced" || state.Phase == "opening" || state.Phase == "opened"
+	ready := state.Phase == "opened" && r.State == "ready"
+	if (!prepared && !recovering) || state.Plan.SHA256 != approval || state.Plan.NodeID != node || r.Revision != state.Plan.Target || (r.State != "upgrade_fenced" && !ready) || r.SourceSHA != state.Plan.SourceSHA || r.SelectionHash != state.Previous.SelectionHash || !reflect.DeepEqual(r.ServiceImages, state.Plan.ServiceImages) {
 		return state, errors.New("opening requires a prepared upgrade, approved plan digest and exact NodeID")
+	}
+	if recovering && ((!state.ManualOwned && state.Phase != "opened") || (!state.BusinessVerified && state.Phase != "activating_fenced")) {
+		return state, errors.New("interrupted opening lacks owned maintenance or verified business facts")
+	}
+	if ready {
+		return state, nil
 	}
 	if e = d.localUpgradeEngine(ctx, state.Plan.Architecture); e != nil {
 		return state, e
 	}
-	backup, e := recovery.Check(ctx, state.BackupFile, state.BackupSHA)
-	if e != nil || !backup.Verified || backup.Manifest.NodeID != node || backup.Manifest.Revision != state.Previous.Revision {
-		return state, errors.New("verified original recovery point is no longer available")
+	checkRecovery := func() error {
+		backup, err := recovery.Check(ctx, state.BackupFile, state.BackupSHA)
+		if err != nil || !backup.Verified || backup.Manifest.NodeID != node || backup.Manifest.Revision != state.Previous.Revision {
+			return errors.New("verified original recovery point is no longer available")
+		}
+		return nil
 	}
-	fact, e := d.runtimeFact(ctx)
-	if e != nil || fact.NodeID != node || !fact.NativeMaintenance || !fact.Database.LogicalIdle || fact.Database.SchemaGeneration != state.Plan.Generation {
-		return state, errors.New("prepared identity or native offline state changed; refused to resume")
+	var fact RuntimeFact
+	if prepared {
+		if e = checkRecovery(); e != nil {
+			return state, e
+		}
+		fact, e = d.runtimeFact(ctx)
+		if e != nil || fact.NodeID != node || !fact.NativeMaintenance || !fact.Database.LogicalIdle || fact.Database.SchemaGeneration != state.Plan.Generation {
+			return state, errors.New("prepared identity or native offline state changed; refused to resume")
+		}
 	}
 	data, e := upgradeDataRoot(cfg)
 	if e != nil {
@@ -125,28 +144,24 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 		return state, e
 	}
 	defer lease()
-	// Preserve administrator maintenance; a separate change is required for it.
-	if _, e = root.Lstat(sitecontrol.Manual); !os.IsNotExist(e) {
-		return state, errors.New("existing manual maintenance is not owned by this upgrade")
+	// An interrupted opening may already have removed its public marker. Restore
+	// that gate before archive hashing or runtime inspection can take significant
+	// time. A prepared operation cannot claim a preexisting administrator marker.
+	_, markerErr := root.Lstat(sitecontrol.Manual)
+	markerPresent := markerErr == nil
+	if !os.IsNotExist(markerErr) && !markerPresent {
+		return state, errors.New("public maintenance cannot be inspected")
+	}
+	if markerPresent {
+		raw, err := readRegular(filepath.Join(data, sitecontrol.Manual), 32)
+		if prepared || !state.ManualOwned || err != nil || string(raw) != "manual\n" {
+			return state, errors.New("existing manual maintenance is not owned by this upgrade")
+		}
 	}
 	if _, e = root.Lstat(sitecontrol.ForceOpen); !os.IsNotExist(e) {
 		return state, errors.New("existing force-open state requires separate administrator review")
 	}
-	f, e := root.OpenFile(sitecontrol.Manual, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if e != nil {
-		return state, e
-	}
-	e = fsutil.InheritOwner(f, root)
-	if e == nil {
-		_, e = f.WriteString("manual\n")
-	}
-	if e == nil {
-		e = f.Sync()
-	}
-	e = errors.Join(e, f.Close(), fsutil.SyncDirectory(root, "."))
-	if e != nil {
-		return state, e
-	}
+	priorPhase := state.Phase
 	state.ManualOwned = true
 	state.Phase = "activating_fenced"
 	fail := func(message string) (UpgradeState, error) {
@@ -161,8 +176,35 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	if e = d.saveUpgrade(state); e != nil {
 		return fail("activation intent could not be persisted")
 	}
-	if _, e = d.Compose(ctx, true, "run", "--rm", "--no-deps", "-T", "web", "maintenance", "resume"); e != nil {
-		return fail("native target resume failed")
+	if !markerPresent {
+		f, err := root.OpenFile(sitecontrol.Manual, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			return fail("owned public maintenance could not be restored")
+		}
+		err = fsutil.InheritOwner(f, root)
+		if err == nil {
+			_, err = f.WriteString("manual\n")
+		}
+		if err == nil {
+			err = f.Sync()
+		}
+		if err = errors.Join(err, f.Close(), fsutil.SyncDirectory(root, ".")); err != nil {
+			return fail("owned public maintenance durability failed")
+		}
+	}
+	if recovering {
+		if e = checkRecovery(); e != nil {
+			return fail("original recovery point verification failed during opening recovery")
+		}
+		fact, e = d.runtimeFact(ctx)
+		if e != nil || fact.NodeID != node || !fact.Database.LogicalIdle || fact.Database.SchemaGeneration != state.Plan.Generation || (fact.NativeMaintenance && priorPhase != "activating_fenced") {
+			return fail("interrupted target identity/schema or independent native maintenance changed")
+		}
+	}
+	if fact.NativeMaintenance {
+		if _, e = d.Compose(ctx, true, "run", "--rm", "--no-deps", "-T", "web", "maintenance", "resume"); e != nil {
+			return fail("native target resume failed")
+		}
 	}
 	var resident []string
 	for _, name := range sortedServices(r.ServiceImages) {
@@ -189,6 +231,12 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	state.Phase = "verified_fenced"
 	if e = d.saveUpgrade(state); e != nil {
 		return fail("verification could not be persisted")
+	}
+	// This intent admits a retry on either side of durable marker removal.
+	// Only after rechecking the same target may it finish journal/receipt writes.
+	state.Phase = "opening"
+	if e = d.saveUpgrade(state); e != nil {
+		return fail("public opening intent could not be persisted")
 	}
 	raw, e := readRegular(filepath.Join(data, sitecontrol.Manual), 32)
 	if e != nil || string(raw) != "manual\n" {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
@@ -164,8 +166,13 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		if e != nil {
 			return e
 		}
-		// Private scratch is retained on failure for diagnosis. No recursive
-		// cleanup command can accidentally erase a source or old recovery point.
+		scratch, e := os.OpenRoot(workspace)
+		if e != nil {
+			return e
+		}
+		defer scratch.Close()
+		// Private scratch is retained on failure. Successful durable archives
+		// remove only the generated trees through the pinned workspace root.
 		deployment := filepath.Join(workspace, "deployment")
 		if e = os.Mkdir(deployment, 0700); e != nil {
 			return e
@@ -296,7 +303,13 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		}
 		m.CompleteCluster = len(m.Missing) == 0
 		report, e = recovery.Create(ctx, output, m, sources)
-		return e
+		if e != nil {
+			return e
+		}
+		if e = removeBackupScratch(scratch, workspace); e != nil {
+			return fmt.Errorf("recovery archive verified; private backup scratch cleanup failed at %s: %w", workspace, e)
+		}
+		return nil
 	}
 	if held {
 		if set == "" || freeze {
@@ -312,4 +325,29 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		e = gate.Inspect(ctx, capture)
 	}
 	return report, e
+}
+
+// Delete only the two generated trees inside the pinned private workspace.
+// Failure retains diagnostic material; the source and durable archive are not
+// cleanup targets, including when a workspace path is replaced or rebound.
+func removeBackupScratch(root *os.Root, workspace string) error {
+	bound, e := root.Stat(".")
+	path, pathErr := os.Lstat(workspace)
+	if e != nil || pathErr != nil || !os.SameFile(bound, path) || path.Mode()&os.ModeSymlink != 0 {
+		return errors.New("backup scratch identity changed")
+	}
+	for _, name := range []string{"deployment", "mysql_dump"} {
+		if e = root.RemoveAll(name); e != nil {
+			return e
+		}
+	}
+	if e = os.Remove(workspace); e != nil {
+		return e
+	}
+	parent, e := os.OpenRoot(filepath.Dir(workspace))
+	if e != nil {
+		return e
+	}
+	defer parent.Close()
+	return fsutil.SyncDirectory(parent, ".")
 }

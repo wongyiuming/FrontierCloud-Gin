@@ -1,0 +1,23 @@
+fatal: not a git repository (or any of the parent directories): .git
+E
+======================================================================
+ERROR: test_committed_archive_contains_every_local_web_copy_source (tests.test_build_archive_inputs.ArchivedBuildInputs.test_committed_archive_contains_every_local_web_copy_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/wyium/fc-operations-20261012-01a13082/src/tests/test_build_archive_inputs.py", line 18, in test_committed_archive_contains_every_local_web_copy_source
+    revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+               ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 473, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               **kwargs).stdout
+               ^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+
+----------------------------------------------------------------------
+Ran 1 test in 0.007s
+
+FAILED (errors=1)

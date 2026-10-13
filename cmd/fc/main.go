@@ -7,8 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
@@ -42,7 +44,9 @@ func run(args []string) int {
 		fmt.Println(Revision)
 		return 0
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	parent, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := commandContext(parent, args)
 	defer cancel()
 	if args[0] == "node" {
 		return nodeCommand(ctx, args, *structured, os.Stdin, os.Stdout, os.Stderr)
@@ -173,6 +177,15 @@ func run(args []string) int {
 		fmt.Fprintln(os.Stderr, "unknown command")
 		return 2
 	}
+}
+
+// Bulk recovery includes complete archive hashing, logical dumps and restore
+// passes. Its duration follows the state size; cancellation is operator-owned.
+func commandContext(parent context.Context, args []string) (context.Context, context.CancelFunc) {
+	if len(args) != 0 && (args[0] == "backup" || args[0] == "restore" || args[0] == "upgrade") {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, 15*time.Minute)
 }
 
 // Keep the small global FlagSet while accepting common command-first syntax.

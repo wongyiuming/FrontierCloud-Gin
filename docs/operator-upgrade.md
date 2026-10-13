@@ -67,6 +67,18 @@ maintenance flag. A preexisting administrator maintenance flag is preserved and
 blocks this operation. Container health is not claimed to prove browser playback,
 cross-node Range routing or every object in a large catalog.
 
+An `opening` intent is durable before public maintenance is removed. If a
+process or host stops during activation/opening or between journal and ready
+receipt updates, repeat the same explicitly approved `upgrade open` after
+reviewing any interrupted operation lock. The retry restores owned public
+maintenance before archive hashing/runtime checks, revalidates the original
+recovery point and target business reads, then finishes journal/receipt updates
+idempotently. It does not steal an operation lock, reopen failed phases, remove
+new unowned administrator maintenance, or resume an independent native fence.
+The receipt also binds effective Compose execution/isolation fields, including
+commands, entrypoint, user, capabilities, privileged/read-only state and network
+mode. Those edits require their own reviewed configuration procedure.
+
 ## Failure and recovery boundary
 
 `.fc-upgrade.json` records phases, the previous receipt, the approved plan,
