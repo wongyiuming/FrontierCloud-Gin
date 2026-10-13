@@ -31,6 +31,7 @@ type RestoreState struct {
 	Project          string          `json:"target_project"`
 	Phase            string          `json:"phase"`
 	OwnManual        bool            `json:"owns_manual_maintenance"`
+	ManualStaged     bool            `json:"manual_creation_staged,omitempty"`
 	DatabaseImported bool            `json:"database_imported"`
 	Report           recovery.Report `json:"recovery"`
 }
@@ -296,43 +297,17 @@ func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmatio
 	if state.Phase == "preparing" {
 		return state, errors.New("finish the matching restore preparation before activation")
 	}
-	if state.Phase == "verified" || state.Phase == "opened" {
-		return state, nil
-	}
 	// A source on this engine must actually be stopped; an operator attestation
 	// cannot override known running containers with the original project name.
 	ids, e := d.Runner.Run(ctx, "docker", "ps", "--filter", "label=com.docker.compose.project="+state.SourceProject, "--filter", "label=com.docker.compose.service=web", "--format", "{{.ID}}")
 	if e != nil || strings.TrimSpace(string(ids)) != "" {
 		return state, errors.New("source business process is still running or its state cannot be verified")
 	}
+	if state.Phase == "verified" || state.Phase == "opened" {
+		return state, nil
+	}
 	data := filepath.Join(filepath.Dir(d.Directory), "data")
-	manual := filepath.Join(data, sitecontrol.Manual)
-	if _, e = os.Lstat(manual); os.IsNotExist(e) {
-		f, e := os.OpenFile(manual, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if e != nil {
-			return state, e
-		}
-		ownerRoot, e := os.OpenRoot(data)
-		if e != nil {
-			f.Close()
-			return state, e
-		}
-		e = fsutil.InheritOwner(f, ownerRoot)
-		ownerRoot.Close()
-		if e != nil {
-			f.Close()
-			return state, e
-		}
-		_, e = f.WriteString("manual\n")
-		if e == nil {
-			e = f.Sync()
-		}
-		e = errors.Join(e, f.Close())
-		if e != nil {
-			return state, e
-		}
-		state.OwnManual = true
-	} else if e != nil {
+	if e = d.prepareRestoreManual(ctx, data, &state); e != nil {
 		return state, e
 	}
 	state.Phase = "activating"
@@ -465,7 +440,26 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 	if (!missing && (e != nil || string(content) != "manual\n")) || (!missing && !state.OwnManual) {
 		return state, errors.New("maintenance state changed; refused to reopen")
 	}
+	if state.ManualStaged && !missing {
+		stage, stageErr := data.Lstat(restoreManualStage)
+		manual, manualErr := data.Lstat(sitecontrol.Manual)
+		if stageErr != nil || manualErr != nil || !os.SameFile(stage, manual) {
+			return state, errors.New("administrator maintenance replaced the restore-owned marker")
+		}
+	}
 	refence := func() error {
+		if state.ManualStaged {
+			err := data.Link(restoreManualStage, sitecontrol.Manual)
+			if os.IsExist(err) {
+				stage, a := data.Lstat(restoreManualStage)
+				manual, b := data.Lstat(sitecontrol.Manual)
+				if a != nil || b != nil || !os.SameFile(stage, manual) {
+					return errors.New("unowned maintenance blocks restore refencing")
+				}
+				err = nil
+			}
+			return errors.Join(err, fsutil.SyncDirectory(data, "."))
+		}
 		f, err := data.OpenFile(sitecontrol.Manual, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err == nil {
 			err = fsutil.InheritOwner(f, data)
@@ -517,6 +511,11 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 		state.OwnManual = true
 		state.Phase = "verified"
 		_ = d.saveRestore(state)
+	} else if state.ManualStaged {
+		// Ready state is durable; this generated ownership inode is no longer
+		// needed and must not become unowned scratch in a later recovery.
+		_ = data.Remove(restoreManualStage)
+		_ = fsutil.SyncDirectory(data, ".")
 	}
 	return state, e
 }

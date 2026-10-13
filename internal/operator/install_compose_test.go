@@ -28,11 +28,12 @@ type installComposeSpec struct {
 }
 
 type installComposeRunner struct {
-	spec       installComposeSpec
-	started    bool
-	pulls      int
-	ups        int
-	pullFailed bool
+	spec              installComposeSpec
+	started           bool
+	pulls             int
+	ups               int
+	pullFailed        bool
+	interruptBeforeUp bool
 }
 
 func (r *installComposeRunner) raw(ctx context.Context, args ...string) ([]byte, error) {
@@ -94,6 +95,10 @@ func (r *installComposeRunner) Run(ctx context.Context, name string, args ...str
 	actual = append(actual, "-f", filepath.Join(r.spec.Directory, "private-runtime.yaml"))
 	if args[action] == "up" {
 		r.ups++
+		if r.interruptBeforeUp {
+			r.interruptBeforeUp = false
+			return nil, errors.New("injected interruption before pinned fresh initialization")
+		}
 		if !r.started {
 			r.started = true
 			// Bootstrap only the private CA trust file before consumer creation,
@@ -147,7 +152,7 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	runner := &installComposeRunner{spec: spec}
+	runner := &installComposeRunner{spec: spec, interruptBeforeUp: spec.Case == "success"}
 	d.Runner = runner
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
@@ -191,6 +196,17 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 		}
 	}()
 	r, e := d.Install(ctx, "", Architecture(string(arch)), fakeEvidence{true}, images)
+	if spec.Case == "success" {
+		if e == nil || r.State != "initializing" {
+			t.Fatal("fresh initialization interruption was not exercised", e)
+		}
+		pulls := runner.pulls
+		r, e = d.ResumeInstall(ctx, r)
+		if e != nil || r.State != "ready" || runner.pulls != pulls {
+			t.Fatal("pinned pre-initialization resume failed", e)
+		}
+		result["native_initialization_intent_resume_verified"] = true
+	}
 	if spec.Case == "guard" {
 		if e == nil || runner.pulls != 0 || runner.ups != 0 || len(images.calls) != 0 {
 			t.Fatal("nonempty target reached initialization", e)

@@ -391,3 +391,15 @@ allows recovery after the owned public marker was removed but before the ready
 receipt was written. The retry reestablishes owned maintenance and verifies
 runtime identity, schema and business facts before finishing. It preserves
 administrator-owned maintenance and independent native fences.
+
+The fresh-install receipt records `initializing` before the first Compose startup.
+`install resume` can replay the recorded idempotent initializers only in this
+fresh-install phase, using the original fixed pins and configuration. It checks
+and preserves an already observable identity. Once initialization reaches
+`prepared`, resume starts only resident consumers and verifies readiness;
+recovered deployments never use fresh initializers.
+
+Restore activation first records `creating_manual` intent. Its generated staged
+marker inode is retained through activation/opening, so a retry can finish marker
+publication and distinguish it from an administrator-created marker with the
+same text. Successful ready publication removes only that generated staging file.

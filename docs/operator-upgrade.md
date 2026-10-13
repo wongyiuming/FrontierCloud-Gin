@@ -166,3 +166,12 @@ validates forward preparation and opening, then captures and restores the upgrad
 state. The [preparation-failure gate](audits/2026-10-12-upgrade-6to7-failure.json)
 verifies the retained recovery point, native closed fence and absence of automatic
 rollback. These gates do not grant schema rollback authority.
+
+An interrupted `backup_pending` upgrade uses the same approved `upgrade resume`
+command and original source receipt. Resume first restores the native fence.
+It independently verifies an existing complete archive against the original
+identity/revision/generation. A missing archive is captured again; a regular
+partial archive is preserved unchanged beside the recorded output with an
+`.interrupted-<timestamp>` suffix before a new capture. Symlinks/nonregular
+outputs, changed source image locks and mismatching verified archives are
+refused. A fresh verified recovery point is durably recorded before switching.

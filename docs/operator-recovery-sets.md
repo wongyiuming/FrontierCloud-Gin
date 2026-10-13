@@ -122,3 +122,12 @@ same set checksum and MasterID. Members already opened are reconciled using
 their retained restore journals; remaining followers open before the Master.
 Failures during resumed set validation refence all prepared members. Review any
 interrupted operation lock separately before retrying; locks are never stolen.
+
+Repeat the same `set-prepare` after `preparing_fenced` interruption with the exact
+source directory, set checksum, MasterID and project prefix. It rechecks all
+original data/key material, allows only the recorded rewritten deployment
+metadata, and reconciles each same-intent member checkpoint. Unknown extras,
+changed resources, projects or receipts remain blocked. `set-activate` also
+admits `activating_fenced`: already verified followers are reconciled and the
+remaining members start behind maintenance, with Master last. Failures retain
+the entire set and attempt to refence every prepared member.

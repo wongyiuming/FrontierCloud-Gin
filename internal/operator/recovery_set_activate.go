@@ -115,10 +115,19 @@ func PrepareRestoreSet(ctx context.Context, source, target, expected, master, pr
 		return state, e
 	}
 	defer done()
+	resuming := false
 	if _, e = os.Lstat(filepath.Join(target, RestoreSetJournal)); !os.IsNotExist(e) {
-		return state, errors.New("restoration set already prepared or interrupted; preserve its journal")
+		state, e = readRestoreSet(target)
+		if e != nil || state.Phase != "preparing_fenced" || state.Source != source || state.ProjectPrefix != prefix || state.Report.SHA256 != expected || !reflect.DeepEqual(state.Report.Manifest, result.Manifest) {
+			return state, errors.New("restoration set has a different or non-resumable intent; preserve its journal")
+		}
+		resuming = true
+		if len(state.Projects) != len(result.Manifest.Members) || len(state.Members) != len(result.Manifest.Members) {
+			return state, errors.New("interrupted set member selection changed")
+		}
+	} else {
+		state = RestoreSetState{Version: 1, Phase: "preparing_fenced", Source: source, Target: target, ProjectPrefix: prefix, Report: result, Projects: map[string]string{}, Members: map[string]string{}}
 	}
-	state = RestoreSetState{Version: 1, Phase: "preparing_fenced", Source: source, Target: target, ProjectPrefix: prefix, Report: result, Projects: map[string]string{}, Members: map[string]string{}}
 	var gates []*maintenance.Gate
 	defer func() {
 		for _, gate := range gates {
@@ -131,7 +140,11 @@ func PrepareRestoreSet(ctx context.Context, source, target, expected, master, pr
 		if e != nil {
 			return state, e
 		}
-		if e = recovery.CheckMaterial(ctx, root, r); e != nil {
+		checkMaterial := recovery.CheckMaterial
+		if resuming {
+			checkMaterial = recovery.CheckPreparingMaterial
+		}
+		if e = checkMaterial(ctx, root, r); e != nil {
 			return state, errors.New("extracted member changed before preparation")
 		}
 		d := &Deployment{Directory: filepath.Join(root, "deployment"), Runner: runners(filepath.Join(root, "deployment"))}
@@ -147,10 +160,19 @@ func PrepareRestoreSet(ctx context.Context, source, target, expected, master, pr
 			return state, e
 		}
 		gates = append(gates, gate)
-		state.Projects[member.NodeID] = prefix + "-" + member.NodeID
-		state.Members[member.NodeID] = "material_verified"
+		project := prefix + "-" + member.NodeID
+		if resuming && (state.Projects[member.NodeID] != project || (state.Members[member.NodeID] != "material_verified" && state.Members[member.NodeID] != "prepared_fenced")) {
+			return state, errors.New("interrupted member project/checkpoint changed")
+		}
+		state.Projects[member.NodeID] = project
+		if !resuming {
+			state.Members[member.NodeID] = "material_verified"
+		}
 	}
-	if e = exclusiveJSON(filepath.Join(target, RestoreSetJournal), state); e != nil {
+	if !resuming {
+		e = exclusiveJSON(filepath.Join(target, RestoreSetJournal), state)
+	}
+	if e != nil {
 		return state, e
 	}
 	var prepare func(int) error
@@ -166,10 +188,24 @@ func PrepareRestoreSet(ctx context.Context, source, target, expected, master, pr
 			}
 			// Recheck under the common target fence. Do not substitute newly
 			// generated identities or secrets for incomplete restored material.
-			if e = recovery.CheckMaterial(ctx, root, r); e != nil {
+			checkMaterial := recovery.CheckMaterial
+			if resuming {
+				checkMaterial = recovery.CheckPreparingMaterial
+			}
+			if e = checkMaterial(ctx, root, r); e != nil {
 				return e
 			}
-			if _, _, e = PrepareRestore(ctx, root, state.Projects[member.NodeID], r, runners(filepath.Join(root, "deployment"))); e != nil {
+			journal, journalErr := (&Deployment{Directory: filepath.Join(root, "deployment")}).restoreState()
+			if resuming && journalErr == nil && journal.Phase == "prepared" {
+				d, _, err := openRestoredMember(ctx, state, member, runners)
+				if err != nil || journal.NodeID != member.NodeID || journal.ArchiveSHA != member.SHA256 || journal.Project != state.Projects[member.NodeID] {
+					return errors.New("prepared member changed during interrupted set preparation")
+				}
+				ids, err := d.Compose(ctx, true, "ps", "--all", "--quiet")
+				if err != nil || strings.TrimSpace(string(ids)) != "" {
+					return errors.New("prepared member unexpectedly has containers")
+				}
+			} else if _, _, e = PrepareRestore(ctx, root, state.Projects[member.NodeID], r, runners(filepath.Join(root, "deployment"))); e != nil {
 				return e
 			}
 			state.Members[member.NodeID] = "prepared_fenced"
@@ -293,7 +329,7 @@ func ActivateRestoreSet(ctx context.Context, target, expected, master string, al
 	if e != nil {
 		return state, e
 	}
-	if state.Phase != "prepared_fenced" || state.Report.SHA256 != expected || state.Report.Manifest.MasterID != master {
+	if (state.Phase != "prepared_fenced" && state.Phase != "activating_fenced") || state.Report.SHA256 != expected || state.Report.Manifest.MasterID != master {
 		return state, errors.New("exact prepared set digest and Master NodeID required")
 	}
 	if e = checkRestoreSetSource(ctx, state); e != nil {

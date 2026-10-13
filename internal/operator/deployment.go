@@ -421,7 +421,7 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	if err != nil || proof["publishable"] != true || proof["sha"] != target {
 		return r, errors.New("release is not backed by reviewed main and successful exact-source CI")
 	}
-	r = Receipt{Version: ConfigurationVersion, Role: d.Role, Project: cfg.Name, Database: cfg.Services["web"].Environment["DB_TYPE"], Revision: target, SourceSHA: fmt.Sprint(proof["ci_sha"]), CreatedAt: time.Now().UTC().Format(time.RFC3339), SelectionHash: selectionHash(cfg), Images: map[string]release.ImageProof{"web": web}, ServiceImages: map[string]string{}, Files: append([]string(nil), d.Files...), State: "prepared"}
+	r = Receipt{Version: ConfigurationVersion, Role: d.Role, Project: cfg.Name, Database: cfg.Services["web"].Environment["DB_TYPE"], Revision: target, SourceSHA: fmt.Sprint(proof["ci_sha"]), CreatedAt: time.Now().UTC().Format(time.RFC3339), SelectionHash: selectionHash(cfg), Images: map[string]release.ImageProof{"web": web}, ServiceImages: map[string]string{}, Files: append([]string(nil), d.Files...), State: "initializing"}
 	override := map[string]map[string]string{}
 	// Fetch every component from the SAME immutable revision before pulling or
 	// initializing anything. Infrastructure images are pinned after pull too.
@@ -505,6 +505,10 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	_, err = d.Compose(readyCtx, true, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "600")
 	if err != nil {
 		return r, errors.New("installation has not passed readiness; preserve its receipt and volumes; inspect status and automatic TLS")
+	}
+	r.State = "prepared"
+	if err = replaceJSON(filepath.Join(d.Directory, ReceiptFile), r); err != nil {
+		return r, err
 	}
 	if err = d.installCertificateReady(readyCtx, cfg); err != nil {
 		return r, err

@@ -100,3 +100,18 @@ skips. The final privacy check finds no private key/retained fixture secret byte
 in 558 remote public evidence files. Prior migration matrix/browser/quiet-queue/
 retirement evidence retains its original source scope: these operator fixes do
 not claim that the older images contain new operator code.
+
+## Third review: additional durable interruption phases
+
+Review of `df49f73` identified five further interruption windows. The subsequent
+fixes admit matching recovery-set `preparing_fenced`/`activating_fenced` retries,
+retain staged-inode proof for restore marker creation, reconcile approved upgrade
+`backup_pending` archives without discarding partial material, and distinguish
+fresh `initializing` installation from initialized `prepared` readiness.
+`pr14-third-review-race-second.txt` passes operator/recovery/CLI packages with
+persistent-file tests for set/member checkpoints, marker intent/partial stage/
+publication/admin replacement and complete/missing/partial backup outputs.
+The first marker-helper error regression is retained separately and corrected.
+Fresh native validation and exact-head CI/review for these changes are pending
+at this checkpoint. Earlier native records remain scoped to `1fe1fbe`; production
+is still untouched.

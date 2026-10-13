@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
+	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
 
 // ResumeUpgrade reconciles only a previously approved, backed-up switch. It
@@ -23,7 +27,8 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 		return state, e
 	}
 	p := state.Plan
-	if (state.Phase != "backed_up_fenced" && state.Phase != "switching_fenced" && state.Phase != "preparing_fenced" && state.Phase != "prepared_fenced") || approval != p.SHA256 || node != p.NodeID || state.BackupSHA == "" || p.digest() != approval {
+	pendingBackup := state.Phase == "backup_pending"
+	if (!pendingBackup && state.Phase != "backed_up_fenced" && state.Phase != "switching_fenced" && state.Phase != "preparing_fenced" && state.Phase != "prepared_fenced") || approval != p.SHA256 || node != p.NodeID || (!pendingBackup && state.BackupSHA == "") || p.digest() != approval {
 		return state, errors.New("resume requires a durable approved switch and its original recovery point")
 	}
 	if state.Previous.Database == "mysql" && !external {
@@ -32,6 +37,9 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 	next := upgradeTargetReceipt(state)
 	if !reflect.DeepEqual(receipt, state.Previous) && !reflect.DeepEqual(receipt, next) {
 		return state, errors.New("receipt is outside the recorded source/target switch")
+	}
+	if pendingBackup && !reflect.DeepEqual(receipt, state.Previous) {
+		return state, errors.New("pending source backup cannot admit a target receipt")
 	}
 	cfg, e := d.Config(ctx, false)
 	if e != nil || cfg.Name != p.Project || selectionHash(cfg) != state.Previous.SelectionHash {
@@ -57,6 +65,9 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 		if !known || len(fields) != 1 || fields["image"] == "" || (fields["image"] != state.Previous.ServiceImages[name] && fields["image"] != p.ServiceImages[name]) {
 			return state, errors.New("image lock contains unapproved switch fields")
 		}
+		if pendingBackup && fields["image"] != state.Previous.ServiceImages[name] {
+			return state, errors.New("pending source backup image lock changed")
+		}
 	}
 	if e = d.localUpgradeEngine(ctx, p.Architecture); e != nil {
 		return state, e
@@ -65,6 +76,49 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 		state.Phase = "failed_fence_unverified"
 		_ = d.saveUpgrade(state)
 		return state, errors.New("interrupted switch could not be independently fenced")
+	}
+	if pendingBackup {
+		backup, err := recovery.Check(ctx, state.BackupFile, "")
+		if err != nil || !backup.Verified {
+			if info, err := os.Lstat(state.BackupFile); err == nil {
+				if !info.Mode().IsRegular() {
+					return state, errors.New("unsafe interrupted backup output; preserve and inspect it")
+				}
+				root, err := os.OpenRoot(filepath.Dir(state.BackupFile))
+				if err != nil {
+					return state, err
+				}
+				name := filepath.Base(state.BackupFile)
+				retained := name + ".interrupted-" + time.Now().UTC().Format("20060102T150405.000000000")
+				if _, err = root.Lstat(retained); !os.IsNotExist(err) {
+					root.Close()
+					return state, errors.New("interrupted backup retention destination exists")
+				}
+				err = root.Rename(name, retained)
+				if err == nil {
+					err = fsutil.SyncDirectory(root, ".")
+				}
+				root.Close()
+				if err != nil {
+					return state, err
+				}
+			} else if !os.IsNotExist(err) {
+				return state, err
+			}
+			backup, err = d.backupLocked(ctx, state.Previous, state.BackupFile, false, external)
+			if err != nil {
+				return state, errors.New("approved source backup remains incomplete; native fence and retained materials preserved")
+			}
+		}
+		if !backup.Verified || backup.Manifest.NodeID != p.NodeID || backup.Manifest.Revision != state.Previous.Revision || backup.Manifest.SchemaGeneration != p.FromGeneration {
+			return state, errors.New("interrupted backup identity/generation mismatch")
+		}
+		state.BackupSHA = backup.SHA256
+		state.BackupCompleteCluster = backup.Manifest.CompleteCluster
+		state.Phase = "backed_up_fenced"
+		if e = d.saveUpgrade(state); e != nil {
+			return state, e
+		}
 	}
 	verified, e := checkUpgradeRecovery(ctx, state)
 	if e != nil || !verified {

@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// ResumeInstall only finalizes already initialized, pinned prepared state.
-// It never reselects latest, pulls replacements or repeats fresh initializers.
+// ResumeInstall uses only the recorded fresh-install pins. An initializing
+// intent may replay idempotent initializers; prepared state never does.
 func (d *Deployment) ResumeInstall(ctx context.Context, receipt Receipt) (Receipt, error) {
 	done, e := d.AcquireOperation()
 	if e != nil {
@@ -20,15 +20,36 @@ func (d *Deployment) ResumeInstall(ctx context.Context, receipt Receipt) (Receip
 	if e != nil {
 		return receipt, e
 	}
-	if receipt.Recovered || (receipt.State != "prepared" && receipt.State != "ready") {
+	if receipt.Recovered || (receipt.State != "initializing" && receipt.State != "prepared" && receipt.State != "ready") {
 		return receipt, errors.New("installation resume requires its original prepared receipt")
 	}
 	if receipt.State == "ready" {
 		return receipt, nil
 	}
 	before, e := d.runtimeFact(ctx)
+	if receipt.State == "initializing" {
+		originalID := before.NodeID
+		if e == nil && (before.NativeMaintenance || !before.Database.LogicalIdle || before.Database.SchemaGeneration != receipt.Images["web"].Generation) {
+			return receipt, errors.New("initialization retry refuses changed or independently fenced state")
+		}
+		readyCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+		if _, e = d.Compose(readyCtx, true, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "600"); e != nil {
+			return receipt, errors.New("pinned fresh initialization remains incomplete; preserve its recorded intent and material")
+		}
+		before, e = d.runtimeFact(readyCtx)
+		if e == nil && originalID != "" && before.NodeID != originalID {
+			return receipt, errors.New("initialization retry changed its existing identity")
+		}
+	}
 	if e != nil || before.NodeID == "" || before.NativeMaintenance || !before.Database.LogicalIdle || before.Database.SchemaGeneration != receipt.Images["web"].Generation {
 		return receipt, errors.New("prepared installation lacks verified existing identity/database; preserve state and repair initialization separately")
+	}
+	if receipt.State == "initializing" {
+		receipt.State = "prepared"
+		if e = replaceJSON(filepath.Join(d.Directory, ReceiptFile), receipt); e != nil {
+			return receipt, e
+		}
 	}
 	var resident []string
 	for _, name := range sortedServices(receipt.ServiceImages) {

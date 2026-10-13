@@ -11,6 +11,16 @@ import (
 // source archive before Compose preparation rewrites deployment metadata.
 // It never initializes keys, repairs permissions, follows links or starts a node.
 func CheckMaterial(ctx context.Context, directory string, expected Report) error {
+	return checkMaterial(ctx, directory, expected, false)
+}
+
+// CheckPreparingMaterial retains full data/key verification while allowing only
+// the operator's rewritten deployment metadata during a same-intent retry.
+func CheckPreparingMaterial(ctx context.Context, directory string, expected Report) error {
+	return checkMaterial(ctx, directory, expected, true)
+}
+
+func checkMaterial(ctx context.Context, directory string, expected Report, preparing bool) error {
 	if !expected.Verified || validateManifest(expected.Manifest) != nil {
 		return ErrUnsafe
 	}
@@ -24,6 +34,13 @@ func CheckMaterial(ctx context.Context, directory string, expected Report) error
 	}
 	defer root.Close()
 	allowed := map[string]bool{".": true, "deployment/.fc-recovery-set.json": true}
+	mutable := map[string]bool{}
+	if preparing {
+		for _, name := range []string{".fc-deployment.json", ".fc-images.json", ".fc-restore.json", "docker-compose.recovered.json"} {
+			mutable["deployment/"+name] = true
+			allowed["deployment/"+name] = true
+		}
+	}
 	for _, entry := range expected.Manifest.Files {
 		allowed[entry.Path] = true
 		for parent := path.Dir(entry.Path); parent != "."; parent = path.Dir(parent) {
@@ -54,6 +71,9 @@ func CheckMaterial(ctx context.Context, directory string, expected Report) error
 		return e
 	}
 	for _, entry := range expected.Manifest.Files {
+		if mutable[entry.Path] {
+			continue
+		}
 		actual, e := hashFile(ctx, root, entry.Path)
 		if e != nil || actual.Bytes != entry.Bytes || actual.SHA256 != entry.SHA256 || actual.Mode != entry.Mode || actual.UID != entry.UID || actual.GID != entry.GID {
 			return ErrUnsafe
