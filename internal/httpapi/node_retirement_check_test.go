@@ -11,18 +11,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type retirementCaller struct {
 	noderetirement.Caller
-	mutate func(string, map[string]any)
-	closes int
+	mutate   func(string, map[string]any)
+	closes   int
+	renewals int
 }
 
 func (c *retirementCaller) Call(ctx context.Context, rel store.Relationship, route string, req any) (map[string]any, error) {
 	action := req.(map[string]any)["action"].(string)
 	if action == "close" {
 		c.closes++
+	}
+	if action == "renew" {
+		c.renewals++
 	}
 	value, e := c.Caller.Call(ctx, rel, route, req)
 	if e == nil && c.mutate != nil {
@@ -87,9 +92,26 @@ func TestNodeRetirementCheckAuthenticatedPagingAndIncompleteResponses(t *testing
 	if concerns["physical_unmanaged_file"].Count < 90 || concerns["expected_missing"].Count != 1 || concerns["backup_retention_required"].Count != 1 || concerns["expected_database_backed_unverified"].Count != 1 {
 		t.Fatal("omitted independent blockers", concerns)
 	}
-	for _, fault := range []string{"sequence", "binding", "digest", "cursor", "volumes", "capacity"} {
+	// Admit a shorter initial lease to exercise real authenticated renew calls
+	// without waiting minutes. Scanner time travel is covered by session tests.
+	caller.mutate = func(action string, value map[string]any) {
+		if action == "open" {
+			value["expires_at"] = float64(time.Now().Unix() + 200)
+		}
+	}
+	renewed, e := service.Check(ctx, rel.PeerID, rid)
+	if e != nil || !renewed.ObservationComplete || renewed.PhysicalEntries != report.PhysicalEntries || caller.renewals != 3 {
+		t.Fatal("authenticated renewal lost scan", renewed, e, caller.renewals)
+	}
+	for _, fault := range []string{"sequence", "binding", "digest", "cursor", "volumes", "capacity", "renewal_binding"} {
 		t.Run(fault, func(t *testing.T) {
 			caller.mutate = func(action string, value map[string]any) {
+				if fault == "renewal_binding" && action == "open" {
+					value["expires_at"] = float64(time.Now().Unix() + 200)
+				}
+				if fault == "renewal_binding" && action == "renew" {
+					value["binding"].(map[string]any)["member_id"] = identity.ID
+				}
 				if action == "page" {
 					page := value["page"].(map[string]any)
 					switch fault {

@@ -23,6 +23,13 @@ const MaxPages = 100000
 const MaxSamples = 8
 const MaxCategories = 64
 
+func acceptSessionRenewal(old, renewed resourceinventory.Session, now time.Time) error {
+	if renewed.ID != old.ID || renewed.Incarnation != old.Incarnation || renewed.Binding != old.Binding || renewed.CreatedAt != old.CreatedAt || renewed.ExpiresAt < old.ExpiresAt || renewed.ExpiresAt <= now.Unix() || renewed.ExpiresAt > now.Add(resourceinventory.SessionTTL).Unix() {
+		return ErrObservation
+	}
+	return nil
+}
+
 type Caller interface {
 	Call(context.Context, store.Relationship, string, any) (map[string]any, error)
 }
@@ -158,6 +165,21 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 		if time.Now().Unix() >= session.ExpiresAt {
 			return nil, ErrObservation
 		}
+		if action != "close" && session.ExpiresAt-time.Now().Unix() < int64((resourceinventory.SessionTTL-30*time.Second)/time.Second) {
+			renewRequest := map[string]any{"action": "renew", "member_id": member, "scope": scope, "session_id": session.ID, "incarnation": session.Incarnation}
+			value, e := s.Client.Call(ctx, rel, route, renewRequest)
+			if e != nil {
+				return nil, e
+			}
+			var renewed resourceinventory.Session
+			if e = decode(value, &renewed); e != nil {
+				return nil, e
+			}
+			if e = acceptSessionRenewal(session, renewed, time.Now()); e != nil {
+				return nil, e
+			}
+			session = renewed
+		}
 		request["action"] = action
 		return s.Client.Call(ctx, rel, route, request)
 	}
@@ -195,7 +217,7 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 		}
 		report.Volumes = append(report.Volumes, VolumeReport{Volume: volume})
 	}
-	if e = scanScope(ctx, &report, &report.Volumes[0], session, scope, request, call); e != nil {
+	if e = scanScope(ctx, &report, &report.Volumes[0], &session, scope, request, call); e != nil {
 		return report, e
 	}
 	complete := false
@@ -296,7 +318,7 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 			return report, ErrObservation
 		}
 		request["incarnation"] = session.Incarnation
-		if e = scanScope(ctx, &report, &report.Volumes[i+1], session, scope, request, call); e != nil {
+		if e = scanScope(ctx, &report, &report.Volumes[i+1], &session, scope, request, call); e != nil {
 			return report, e
 		}
 	}
@@ -334,7 +356,7 @@ func (s *Service) Check(ctx context.Context, member, relationship string) (repor
 	return report, nil
 }
 
-func scanScope(ctx context.Context, report *Report, volume *VolumeReport, session resourceinventory.Session, scope string, request map[string]any, call func(string) (map[string]any, error)) error {
+func scanScope(ctx context.Context, report *Report, volume *VolumeReport, session *resourceinventory.Session, scope string, request map[string]any, call func(string) (map[string]any, error)) error {
 	digest := sha256.New()
 	complete := false
 	for sequence := uint64(0); sequence < MaxPages; sequence++ {
@@ -350,7 +372,7 @@ func scanScope(ctx context.Context, report *Report, volume *VolumeReport, sessio
 		if e = decode(value, &page); e != nil {
 			return e
 		}
-		if page.Session != session || page.Page.Sequence != sequence || len(page.Page.Entries) > resourceinventory.PageEntries || len(page.Facts) != len(page.Page.Entries) {
+		if page.Session != *session || page.Page.Sequence != sequence || len(page.Page.Entries) > resourceinventory.PageEntries || len(page.Facts) != len(page.Page.Entries) {
 			return ErrObservation
 		}
 		for i, entry := range page.Page.Entries {

@@ -164,6 +164,22 @@ func RegisterNodePhysicalInventory(router *gin.Engine, settings config.Config, r
 		binding := resourceinventory.Binding{MemberID: identity.ID, MasterID: rel.PeerID, RelationshipID: rel.ID, Scope: request.Scope}
 		var result any
 		switch request.Action {
+		case "renew":
+			if request.Sequence != 0 {
+				e = resourceinventory.ErrSession
+				break
+			}
+			var renewed resourceinventory.Session
+			renewed, e = sessions.Renew(ctx, request.SessionID, request.Incarnation, binding)
+			if e == nil {
+				if last != nil && last.Session.ID == renewed.ID && last.Session.Incarnation == renewed.Incarnation && last.Session.Binding == renewed.Binding {
+					last.Session = renewed
+				}
+				if lastExpected != nil && lastExpected.Session.ID == renewed.ID && lastExpected.Session.Incarnation == renewed.Incarnation && lastExpected.Session.Binding == renewed.Binding {
+					lastExpected.Session = renewed
+				}
+				result = renewed
+			}
 		case "open":
 			if request.Incarnation != "" || request.Sequence != 0 {
 				e = resourceinventory.ErrSession

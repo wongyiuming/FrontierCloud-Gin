@@ -9,6 +9,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/businesstraffic"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"sync"
 	"time"
@@ -27,6 +28,12 @@ type Runner struct {
 }
 
 const prefix = "/internal/v1/resource-migration/"
+
+// Target completion includes a complete staged-file digest pass. Traffic waits
+// are accounted separately by the scheduler and do not spend this budget.
+func targetCompletionTTL(bytes int64) time.Duration {
+	return max(30*time.Minute, resourceinventory.ContentObservationTTL(bytes))
+}
 
 func decode(value any, out any) error {
 	raw, e := json.Marshal(value)
@@ -315,7 +322,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			if e = r.Repository.MigrationRunState(ctx, lease, "verifying", object, "", store.NodeAudit{}); e != nil {
 				return e
 			}
-			deadline := time.Now().Add(30 * time.Minute)
+			deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 			waitingAtStart := scheduler.waited
 			var verificationPoll time.Duration
 			for phase != "verified" && phase != "published" {
@@ -367,7 +374,7 @@ func (r *Runner) Run(ctx context.Context, id, runner string) (err error) {
 			code = "target_publication"
 			o := c.Object
 			req := migrationdata.Request{Spec: migrationdata.Spec{TaskID: id, MasterID: h.MasterID, SourceID: h.SourceID, TargetID: h.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: c.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
-			deadline := time.Now().Add(30 * time.Minute)
+			deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 			waitingAtStart := scheduler.waited
 			var publicationPoll time.Duration
 			for {

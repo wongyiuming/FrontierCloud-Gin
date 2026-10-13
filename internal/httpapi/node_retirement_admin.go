@@ -9,7 +9,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"strings"
-	"time"
 )
 
 type retirementChecker interface {
@@ -48,8 +47,7 @@ func RegisterAdminRetirement(router *gin.Engine, a *Admin, service retirementChe
 			c.JSON(429, gin.H{"detail": "已有退役检查正在执行，请稍后重试", "code": "retirement_check_busy"})
 			return
 		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Minute)
-		defer cancel()
+		ctx := c.Request.Context()
 		report, err := service.Check(ctx, request.MemberID, c.Param("identifier"))
 		if err != nil {
 			report.ObservationComplete = false
@@ -88,8 +86,7 @@ func RegisterAdminRetirement(router *gin.Engine, a *Admin, service retirementChe
 			detail(c, 429, "退役检查或执行正在进行")
 			return
 		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Minute)
-		defer cancel()
+		ctx := c.Request.Context()
 		info := a.info(c)
 		result, e := service.Apply(ctx, req.MemberID, c.Param("identifier"), store.NodeAudit{Actor: session(c).Hash, RequestID: info.RequestID, TraceID: info.TraceID})
 		if e != nil {

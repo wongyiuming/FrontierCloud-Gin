@@ -214,3 +214,22 @@ func (s *Sessions) Validate(id, incarnation string, b Binding) (Session, error) 
 	}
 	return o.session, nil
 }
+
+// Renew extends only a still-live authenticated observation. It keeps the
+// scanner, acknowledged page, creation time and process incarnation unchanged.
+func (s *Sessions) Renew(ctx context.Context, id, incarnation string, b Binding) (Session, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if e := ctx.Err(); e != nil {
+		return Session{}, e
+	}
+	o, e := s.bound(id, incarnation, b)
+	if e != nil {
+		return Session{}, e
+	}
+	if o.closed {
+		return Session{}, ErrSession
+	}
+	o.session.ExpiresAt = s.now().Add(SessionTTL).Unix()
+	return o.session, nil
+}

@@ -30,6 +30,9 @@ type retirementAdminFixture struct {
 }
 
 func (f *retirementAdminFixture) Apply(ctx context.Context, member, relationship string, audit store.NodeAudit) (store.RetirementFence, error) {
+	if _, bounded := ctx.Deadline(); bounded {
+		return store.RetirementFence{}, errors.New("retirement apply inherited a fixed server deadline")
+	}
 	f.applyCalls.Add(1)
 	if audit.Actor == "" {
 		return store.RetirementFence{}, errors.New("missing actor")
@@ -43,6 +46,9 @@ func (f *retirementAdminFixture) Apply(ctx context.Context, member, relationship
 }
 
 func (f *retirementAdminFixture) Check(ctx context.Context, member, relationship string) (noderetirement.Report, error) {
+	if _, bounded := ctx.Deadline(); bounded {
+		return noderetirement.Report{}, errors.New("retirement check inherited a fixed server deadline")
+	}
 	f.calls.Add(1)
 	report := noderetirement.Report{MemberID: member, PreflightOnly: true, ObservationComplete: true}
 	if f.entered != nil {

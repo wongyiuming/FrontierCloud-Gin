@@ -242,16 +242,14 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	if e != nil || len(raw) > MaxManifest {
 		return report, ErrUnsafe
 	}
-	f, e := os.OpenFile(output, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	f, e := os.CreateTemp(filepath.Dir(output), filepath.Base(output)+".next-")
 	if e != nil {
 		return report, e
 	}
-	success := false
+	temporary := f.Name()
 	defer func() {
 		f.Close()
-		if !success {
-			os.Remove(output)
-		}
+		os.Remove(temporary)
 	}()
 	archiveHash := sha256.New()
 	writer := tar.NewWriter(io.MultiWriter(f, archiveHash))
@@ -286,6 +284,9 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	if e = f.Close(); e != nil {
 		return report, e
 	}
+	if e = os.Link(temporary, output); e != nil {
+		return report, e
+	}
 	parent, e := os.OpenRoot(filepath.Dir(output))
 	if e != nil {
 		return report, e
@@ -295,7 +296,6 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	if e != nil {
 		return report, e
 	}
-	success = true
 	return Report{Manifest: m, SHA256: hex.EncodeToString(archiveHash.Sum(nil)), Verified: true}, nil
 }
 

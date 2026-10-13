@@ -9,6 +9,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserSecurityContractTests(unittest.TestCase):
+    def test_retirement_timeout_is_scoped_to_authenticated_admin_routes(self):
+        config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
+        rule = 'location ~ "^/api/v1/media/admin/nodes/[a-f0-9]{32}/retire/(check|apply)$" {'
+        retirement = config.split(rule, 1)[1].split('\n        }', 1)[0]
+        self.assertIn('proxy_read_timeout 365d;', retirement)
+        self.assertIn('proxy_send_timeout 300s;', retirement)
+        self.assertIn('proxy_set_header X-Forwarded-Proto $scheme;', retirement)
+        ordinary = config.split('        location / {', 2)[-1].split('\n        }', 1)[0]
+        self.assertIn('proxy_read_timeout 300s;', ordinary)
+
     def test_ciphertext_internal_alias_has_explicit_type_cache_and_cors(self):
         config = (ROOT / 'nginx/nginx.conf').read_text(encoding='utf-8')
         cipher = config.split('location ^~ /_protected_cipher/ {', 1)[1].split('\n        }', 1)[0]

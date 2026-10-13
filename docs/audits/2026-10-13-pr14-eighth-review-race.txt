@@ -1,0 +1,6 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourceinventory	1.276s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement	1.015s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	3.063s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	1.905s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	13.641s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi	154.840s

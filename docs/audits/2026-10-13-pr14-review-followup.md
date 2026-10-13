@@ -179,3 +179,19 @@ validate that same deadline without the old five-minute age rejection or blanket
 and verify cancellation; this is not a claim of an actual 10-GiB transfer.
 Affected-package race passes. Latest exact native, source CI and review gates are
 pending. Production remains unchanged until those gates and public publication pass.
+
+## Eighth review checkpoint
+
+`556e40a` passes source CI, actual SQLite/MySQL upgrade/recovery, coordinated
+two-node recovery and full Go race. Its corrected native receipt fixture sorts
+environment keys exactly like Go. A combined direct migration/traffic/many-file
+case passes cutover and actual traffic waiting/manual pause, then fails its
+aggregate Master network budget; that run is retained as failed acceptance.
+Latest review identifies remaining server retirement timeouts,
+non-atomic archive publication and the post-transfer verification cutoff. Fixes
+follow request cancellation end to end, renew live identity-bound inventory leases
+without replacing scanner/creation/incarnation/transcript, publish synced complete
+archives exclusively, and extend target verification/publication by object size.
+The retirement-specific edge response timeout covers the bounded paged scan while
+ordinary requests keep their short timeout. Fresh regression/native/review results
+are pending; no production writes have occurred.

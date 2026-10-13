@@ -37,6 +37,37 @@ func fixture(t *testing.T) (string, string, recovery.Manifest, []recovery.Root) 
 	}
 	return root, filepath.Join(root, "backup.tar"), m, []recovery.Root{{Class: "data", Directory: data}, {Class: "runtime_secrets", Directory: secrets}}
 }
+
+func TestArchivePublicationNeverReplacesExistingOutputAndIgnoresInterruptedTemporary(t *testing.T) {
+	_, archive, m, sources := fixture(t)
+	ctx := context.Background()
+	interrupted := archive + ".next-interrupted"
+	if e := os.WriteFile(interrupted, []byte("partial unpublished tar"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	report, e := recovery.Create(ctx, archive, m, sources)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e := recovery.Check(ctx, archive, report.SHA256); e != nil {
+		t.Fatal(e)
+	}
+	original, e := os.ReadFile(archive)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e := recovery.Create(ctx, archive, m, sources); e == nil {
+		t.Fatal("existing archive overwritten")
+	}
+	current, e := os.ReadFile(archive)
+	if e != nil || string(current) != string(original) {
+		t.Fatal("prior verified archive changed", e)
+	}
+	siblings, e := filepath.Glob(archive + ".next-*")
+	if e != nil || len(siblings) != 1 || siblings[0] != interrupted {
+		t.Fatal("temporary leak", siblings, e)
+	}
+}
 func TestArchiveRoundTripVerifiesRealBytesAndRefusesOccupiedTarget(t *testing.T) {
 	root, archive, m, sources := fixture(t)
 	ctx := context.Background()
