@@ -120,9 +120,9 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return nil, nil, err
 	}
 	closers = append(closers, closeInventory)
-	httpapi.RegisterAdminMigrations(handler, adminHTTP, database.Pool().(store.MigrationAdminRepository))
 	if migrations, ok := database.Pool().(store.MigrationRepository); ok {
 		runner := &resourcemigration.Runner{Repository: migrations, Nodes: database.Nodes(), Client: controlService}
+		httpapi.RegisterAdminMigrations(handler, adminHTTP, database.Pool().(store.MigrationAdminRepository), runner)
 		stop, err := runner.Start(context.Background())
 		if err != nil {
 			return nil, nil, err

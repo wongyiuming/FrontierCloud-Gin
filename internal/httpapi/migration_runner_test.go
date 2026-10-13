@@ -239,7 +239,7 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 	checkpoint := len(modes) > 0 && modes[0] == "checkpoint"
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
-	_, db, _, _, master := clusterFixture(t, "https://master.test", transport, true)
+	masterRouter, db, masterDir, masterPublic, master := clusterFixture(t, "https://master.test", transport, true)
 	_, sourceDB, sourceDir, _, source := clusterFixture(t, "https://source.test", transport, true)
 	_, targetDB, targetDir, _, target := clusterFixture(t, "https://target.test", transport, true)
 	for _, v := range []struct {
@@ -996,9 +996,13 @@ func masterMigrationRunnerFixture(t *testing.T, cancelTask bool, modes ...string
 			t.Fatal(e)
 		}
 	}
-	for range 2 {
-		if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
-			t.Fatal(e)
+	if os.Getenv("FRONTIERCLOUD_TEST_REDIS_URL") != "" {
+		testAdminDrainRelease(t, masterRouter, db, masterDir, masterPublic, engine, plan.ID)
+	} else {
+		for range 2 {
+			if e = engine.ReleaseDrain(ctx, plan.ID, sr.PeerID, store.NodeAudit{}); e != nil {
+				t.Fatal(e)
+			}
 		}
 	}
 	for _, database := range []*sql.DB{db.Database(), sourceDB.Database()} {

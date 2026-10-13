@@ -19,11 +19,12 @@ const task = {task_id: '1'.repeat(32), source_id: '2'.repeat(32), target_id: '3'
 const page = () => ({tasks: [{...task}], complete: false, next_time: 123, next_id: task.task_id});
 const calls = [];
 let confirm = false;
-const context = vm.createContext({document, window: {confirm: () => confirm}, Date, console, setTimeout, setInterval, clearInterval,
+let prompted = "wrong-source";
+const context = vm.createContext({document, window: {confirm: () => confirm, prompt: () => prompted}, Date, console, setTimeout, setInterval, clearInterval,
     requestHeaders: () => ({'X-CSRF-Token': 'fixture'}),
     api: async (path, options = {}) => {
         calls.push({path, options});
-        if (options.method === 'POST') { task.revision++; task.state = 'queued'; task.error_code = ''; return {...task}; }
+        if (options.method === 'POST') { if (!path.endsWith('/release-drain')) { task.revision++; task.state = 'queued'; task.error_code = ''; } return {...task}; }
         if (path === '/api/v1/media/admin/nodes') return {role: 'Master', storage_pool: {members: []}};
         if (path === '/api/v1/media/admin/nodes/observability') return {};
         if (path.includes(`/migrations/${task.task_id}`)) return {task: {...task}, objects: [{physical_path: '<img src=x onerror=alert(1)>', state: 'published', verified_bytes: 10, size_bytes: 10}], object_stages: [{state: 'published', count: 1, verified_bytes: 10, size_bytes: 10}], unit_stages: [{state: 'pending', count: 1, size_bytes: 100}], complete: false, next: 'a'.repeat(64)};
@@ -61,4 +62,15 @@ await button(panel, '下一页对象').onclick();
 assert(calls.some(call => call.path.includes(`?after=${'a'.repeat(64)}`)));
 await button(panel, '下一页任务').onclick();
 assert(calls.some(call => call.path.includes(`after_time=123&after_id=${task.task_id}`)));
+task.state = 'completed';
+panel = context.window.testMigrationPanel(page());
+const count = calls.filter(call => call.options.method === 'POST').length;
+await button(panel, '明确解除本任务排空').onclick();
+assert.equal(calls.filter(call => call.options.method === 'POST').length, count);
+prompted = task.source_id;
+await button(panel, '明确解除本任务排空').onclick();
+const release = calls.filter(call => call.options.method === 'POST').at(-1);
+assert.match(release.path, /\/release-drain$/);
+assert.equal(JSON.parse(release.options.body).confirm_source_id, task.source_id);
+assert.equal(JSON.parse(release.options.body).revision, task.revision);
 console.log('node-migration-ui-smoke-ok (DOM fixture; native browser acceptance remains external)');

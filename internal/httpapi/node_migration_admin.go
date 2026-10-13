@@ -1,17 +1,23 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Only existing durable tasks are exposed here. Planning/start must obtain
 // fresh authenticated physical proofs through the separate migration service.
-func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.MigrationAdminRepository) {
+type migrationDrainReleaser interface {
+	ReleaseDrain(context.Context, string, string, store.NodeAudit) error
+}
+
+func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.MigrationAdminRepository, releasers ...migrationDrainReleaser) {
 	group := router.Group("/api/v1/media/admin/nodes/migrations", a.transport, a.authenticate)
 	failed := func(c *gin.Context) {
 		c.JSON(409, gin.H{"code": "migration_state_conflict", "detail": "迁移任务状态或身份已变化，请刷新后重试"})
@@ -45,6 +51,52 @@ func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.Migr
 			return
 		}
 		c.JSON(200, value)
+	})
+	drainSlot := make(chan struct{}, 1)
+	group.POST("/:task/release-drain", func(c *gin.Context) {
+		if !nodeHTTPS(c, a.settings, a.network) {
+			return
+		}
+		if !retirementID(c.Param("task")) {
+			invalid(c, "path", "task")
+			return
+		}
+		raw, ok := nodeBody(c)
+		if !ok {
+			return
+		}
+		var request struct {
+			Revision int64  `json:"revision"`
+			Source   string `json:"confirm_source_id"`
+			Target   string `json:"confirm_target_id"`
+		}
+		decoder := json.NewDecoder(strings.NewReader(string(raw)))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF || request.Revision < 1 || !retirementID(request.Source) || !retirementID(request.Target) {
+			invalid(c, "body", "confirmation")
+			return
+		}
+		select {
+		case drainSlot <- struct{}{}:
+			defer func() { <-drainSlot }()
+		default:
+			c.JSON(429, gin.H{"detail": "已有排空解除检查正在执行，请稍后重试"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		current, e := repository.MigrationStatus(ctx, c.Param("task"), "")
+		if e != nil || current.Task.Revision != request.Revision || current.Task.SourceID != request.Source || current.Task.TargetID != request.Target || (current.Task.State != "completed" && current.Task.State != "cancelled") || len(releasers) != 1 || releasers[0] == nil {
+			failed(c)
+			return
+		}
+		info := a.info(c)
+		audit := store.NodeAudit{Actor: session(c).Hash, RequestID: info.RequestID, TraceID: info.TraceID}
+		if e = releasers[0].ReleaseDrain(ctx, current.Task.ID, request.Source, audit); e != nil {
+			failed(c)
+			return
+		}
+		c.JSON(200, current.Task)
 	})
 	group.POST("/:task/control", func(c *gin.Context) {
 		if !nodeHTTPS(c, a.settings, a.network) {

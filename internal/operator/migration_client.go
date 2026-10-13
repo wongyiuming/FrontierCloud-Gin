@@ -93,7 +93,7 @@ func (c *NodeClient) ControlMigration(ctx context.Context, id, action string, re
 		return task, ErrNodeAuthority
 	}
 	switch action {
-	case "pause", "resume", "cancel", "retry":
+	case "pause", "resume", "cancel", "retry", "release-drain":
 	default:
 		return task, ErrNodeAuthority
 	}
@@ -105,7 +105,12 @@ func (c *NodeClient) ControlMigration(ctx context.Context, id, action string, re
 		return task, ErrNodeAuthority
 	}
 	body, _ := json.Marshal(map[string]any{"action": action, "revision": revision, "confirm_source_id": source, "confirm_target_id": target})
-	status, e := c.request(ctx, "POST", "/nodes/migrations/"+id+"/control", string(body), "application/json", &task)
+	path := "/nodes/migrations/" + id + "/control"
+	if action == "release-drain" {
+		path = "/nodes/migrations/" + id + "/release-drain"
+		body, _ = json.Marshal(map[string]any{"revision": revision, "confirm_source_id": source, "confirm_target_id": target})
+	}
+	status, e := c.request(ctx, "POST", path, string(body), "application/json", &task)
 	if e != nil {
 		return store.MigrationTask{}, e
 	}
@@ -113,6 +118,9 @@ func (c *NodeClient) ControlMigration(ctx context.Context, id, action string, re
 		return store.MigrationTask{}, ErrMigrationClientConflict
 	}
 	if !validClientTask(task, master, id) || task.SourceID != source || task.TargetID != target || task.Revision < revision {
+		return store.MigrationTask{}, ErrNodeClient
+	}
+	if action == "release-drain" && task.State != "completed" && task.State != "cancelled" {
 		return store.MigrationTask{}, ErrNodeClient
 	}
 	return task, nil

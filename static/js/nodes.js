@@ -340,6 +340,13 @@
             if (task.state === 'paused') actions.append(button('恢复', control('resume')));
             if (task.state === 'failed' || ['cleanup_pending', 'cancelling'].includes(task.state) && task.error_code) actions.append(button('重试', control('retry')));
             if (!['completed', 'cancelled', 'cancelling'].includes(task.state)) actions.append(button('取消任务', control('cancel'), 'danger'));
+            if (['completed', 'cancelled'].includes(task.state)) actions.append(button('明确解除本任务排空', async () => {
+                const source = window.prompt(`请输入源 NodeID ${task.source_id}，确认解除任务 ${task.task_id} 的排空限制。其他维护限制保留；此操作不会退役节点。`);
+                if (source !== task.source_id) return '未发送排空解除请求';
+                await post(`/migrations/${encodeURIComponent(task.task_id)}/release-drain`, {revision: task.revision, confirm_source_id: source, confirm_target_id: task.target_id});
+                await load('');
+                return '本任务排空已解除；其他维护限制保留';
+            }));
             card.append(actions);
             if (detail) {
                 card.append(make('p', 'node-note', `检查点观察：${new Date(detail.at).toLocaleString()}，点击更新获取当前事实。`));

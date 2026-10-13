@@ -303,3 +303,22 @@ paths/error codes; JSON output contains only typed bounded task/status fields.
 Credential stdin, normal TLS verification, optional public CA trust, ephemeral
 cookies and bounded logout follow the retirement client contract. Plan/start
 and final retirement apply remain under implementation.
+
+
+### Explicit task-owned drain release
+
+After a task is completed or cancelled, the Nodes task card offers a separate
+release action requiring typed source NodeID confirmation. The matching CLI is
+`fc node migrate release-drain TASK_ID`, with the normal Master/authentication
+options and `--task-revision`, `--confirm-source-id`, `--confirm-target-id`.
+The dedicated `/nodes/migrations/TASK_ID/release-drain` Admin endpoint uses the
+same HTTPS/session/CSRF boundaries, terminal task/version checks and authenticated
+source receipt as the existing migration runner service. Offline, stale or
+incomplete reconciliation fails; it never substitutes a direct SQL release.
+
+Only this task's migration restriction is removed on source and Master.
+Administrator maintenance and other owners' restrictions remain. Repeated
+requests reconcile the same facts and do not repeat audit mutations. A lost
+reply requires status/reconciliation before an explicit retry. Releasing a drain
+neither moves committed resources back nor revokes the node, stops containers
+or permits volume cleanup. Final retirement remains a separate unfinished flow.

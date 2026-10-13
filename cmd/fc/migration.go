@@ -12,12 +12,12 @@ import (
 
 func migrationCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
 	if len(args) < 4 {
-		fmt.Fprintln(diagnostics, "fc node migrate status|pause|resume|cancel|retry TASK_ID --master https://MASTER --credential-stdin")
+		fmt.Fprintln(diagnostics, "fc node migrate status|pause|resume|cancel|retry|release-drain TASK_ID --master https://MASTER --credential-stdin")
 		return 2
 	}
 	action, id := args[2], args[3]
 	switch action {
-	case "status", "pause", "resume", "cancel", "retry":
+	case "status", "pause", "resume", "cancel", "retry", "release-drain":
 	default:
 		return 2
 	}
@@ -94,7 +94,12 @@ func migrationCommand(ctx context.Context, args []string, structured bool, input
 			return 2
 		}
 	} else {
-		fmt.Fprintf(output, "Task: %s; state: %q; revision: %d\nCommitted units keep target ownership. Draining remains until an explicit release.\n", task.ID, task.State, task.Revision)
+		fmt.Fprintf(output, "Task: %s; state: %q; revision: %d\n", task.ID, task.State, task.Revision)
+		if action == "release-drain" {
+			fmt.Fprintln(output, "This task-owned drain was released; other maintenance restrictions remain. This is not node retirement.")
+		} else {
+			fmt.Fprintln(output, "Committed units keep target ownership. Draining remains until an explicit release.")
+		}
 	}
 	return 0
 }
