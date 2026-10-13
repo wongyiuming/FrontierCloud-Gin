@@ -192,7 +192,7 @@ func (d *Deployment) upgradeState() (UpgradeState, error) {
 
 // ApplyUpgrade leaves the native offline gate CLOSED. Opening requires a
 // separate confirmed command which verifies the running target before traffic.
-func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan, approval, node, output string, external bool, evidence Evidence, images Images) (UpgradeState, error) {
+func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan, approval, node, output string, external bool, evidence Evidence, images Images) (operationResult UpgradeState, operationErr error) {
 	var state UpgradeState
 	if !p.valid(time.Now()) || approval != p.SHA256 || node != p.NodeID || p.ReceiptSHA != upgradeHash(r) || p.From != r.Revision || p.Project != r.Project || p.Role != r.Role || p.Database != r.Database || r.State != "ready" || output == "" {
 		return state, errors.New("current plan digest, exact source NodeID and new backup path required")
@@ -207,7 +207,7 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 	if e != nil {
 		return state, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	if _, e = os.Lstat(filepath.Join(d.Directory, UpgradeJournal)); e == nil {
 		prior, err := d.upgradeState()
 		if err != nil || prior.Phase != "opened" {

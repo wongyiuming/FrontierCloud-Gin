@@ -72,6 +72,20 @@ def fingerprint(configuration):
         query = sorted((key, value) for key, value in query if key not in ('username', 'password', 'token'))
         return urllib.parse.urlunsplit((parsed.scheme, host + ':' + str(parsed.port or 6379), parsed.path or '/0', urllib.parse.urlencode(query), parsed.fragment))
 
+    def listen_location(environment):
+        port = '8000'
+        if environment.get('DEPLOYMENT_MODE') == 'only_stroge':
+            port = environment.get('STORAGE_PORT') or ('8443' if environment.get('STORAGE_TRANSPORT') == 'relay' else '443')
+        value = environment.get('HTTP_ADDR') or ':' + port
+        if value.startswith('[') and ']:' in value:
+            host, port = value[1:].split(']:', 1)
+            host = '[' + host + ']'
+        elif value.count(':') == 1:
+            host, port = value.split(':', 1)
+        else:
+            return 'invalid:' + hashlib.sha256(value.encode()).hexdigest()
+        return host + ':' + port
+
     services = {}
     for name in sorted(configuration['services']):
         service = configuration['services'][name]
@@ -90,6 +104,7 @@ def fingerprint(configuration):
                           'mounts': mounts, 'ports': ports}
     for name in services:
         services[name]['environment']['REDIS_URL'] = redis_location(configuration['services'][name].get('environment', {}).get('REDIS_URL', ''))
+        services[name]['environment']['HTTP_ADDR'] = listen_location(configuration['services'][name].get('environment', {}))
         services[name]['environment'] = dict(sorted(services[name]['environment'].items()))
     volumes = {name: {'name': value['name'], 'external': value.get('external', False)}
                for name in sorted(configuration.get('volumes', {}))

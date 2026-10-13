@@ -75,13 +75,13 @@ func (d *Deployment) volumeRoot(ctx context.Context, name string) (string, error
 // Backup creates one deployment recovery point, with a held native lifecycle
 // lease and all its filesystem writers stopped. It never copies a hot MySQL
 // directory, reopens traffic or claims to include another node's media/state.
-func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
+func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (operationResult recovery.Report, operationErr error) {
 	var empty recovery.Report
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return empty, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	return d.backupLocked(ctx, receipt, output, freeze, externalWritersStopped)
 }
 

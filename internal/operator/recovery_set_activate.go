@@ -87,7 +87,7 @@ func setMaterialMarker(target string, report recovery.SetReport) error {
 // PrepareRestoreSet verifies every extracted byte before rewriting deployment
 // metadata. All target native leases remain held during preparation, and no
 // container starts. Each member receives a distinct new Compose project.
-func PrepareRestoreSet(ctx context.Context, source, target, expected, master, prefix string, runners RecoveryRunnerFactory) (RestoreSetState, error) {
+func PrepareRestoreSet(ctx context.Context, source, target, expected, master, prefix string, runners RecoveryRunnerFactory) (operationResult RestoreSetState, operationErr error) {
 	var state RestoreSetState
 	source, e := filepath.Abs(source)
 	if e != nil {
@@ -114,7 +114,7 @@ func PrepareRestoreSet(ctx context.Context, source, target, expected, master, pr
 	if e != nil {
 		return state, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	resuming := false
 	if _, e = os.Lstat(filepath.Join(target, RestoreSetJournal)); !os.IsNotExist(e) {
 		state, e = readRestoreSet(target)
@@ -311,7 +311,7 @@ func checkRestoredSet(ctx context.Context, state RestoreSetState, runners Recove
 
 // ActivateRestoreSet starts followers before Master, each under public manual
 // maintenance. A failure refences every prepared member. Opening is separate.
-func ActivateRestoreSet(ctx context.Context, target, expected, master string, allSourcesOffline bool, runners RecoveryRunnerFactory) (RestoreSetState, error) {
+func ActivateRestoreSet(ctx context.Context, target, expected, master string, allSourcesOffline bool, runners RecoveryRunnerFactory) (operationResult RestoreSetState, operationErr error) {
 	var empty RestoreSetState
 	target, e := filepath.Abs(target)
 	if e != nil {
@@ -324,7 +324,7 @@ func ActivateRestoreSet(ctx context.Context, target, expected, master string, al
 	if e != nil {
 		return empty, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	state, e := readRestoreSet(target)
 	if e != nil {
 		return state, e
@@ -368,7 +368,7 @@ func ActivateRestoreSet(ctx context.Context, target, expected, master string, al
 
 // OpenRestoreSet rechecks the whole set then opens Master LAST. It never treats
 // one successfully restored member as permission to open a partial cluster.
-func OpenRestoreSet(ctx context.Context, target, expected, master string, runners RecoveryRunnerFactory) (RestoreSetState, error) {
+func OpenRestoreSet(ctx context.Context, target, expected, master string, runners RecoveryRunnerFactory) (operationResult RestoreSetState, operationErr error) {
 	var empty RestoreSetState
 	target, e := filepath.Abs(target)
 	if e != nil {
@@ -381,7 +381,7 @@ func OpenRestoreSet(ctx context.Context, target, expected, master string, runner
 	if e != nil {
 		return empty, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	state, e := readRestoreSet(target)
 	if e != nil {
 		return state, e

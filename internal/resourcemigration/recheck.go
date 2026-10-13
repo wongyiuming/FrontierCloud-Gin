@@ -68,7 +68,7 @@ func (r *Runner) FreshTargetProof(ctx context.Context, l store.MigrationLease, i
 		return proof, e
 	}
 	started := time.Now().Unix()
-	deadline := time.Now().Add(30 * time.Minute)
+	deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 	scheduler := trafficSchedule{runner: r, source: source, target: target, task: l.TaskID, master: w.Task.MasterID}
 	ensure := func() error {
 		if err := r.Repository.ValidateMigrationLease(ctx, l); err != nil {

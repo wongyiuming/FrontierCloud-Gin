@@ -195,3 +195,22 @@ archives exclusively, and extend target verification/publication by object size.
 The retirement-specific edge response timeout covers the bounded paged scan while
 ordinary requests keep their short timeout. Fresh regression/native/review results
 are pending; no production writes have occurred.
+
+## Ninth review checkpoint
+
+`c529a99` passes source CI, actual SQLite/MySQL upgrade/restore, coordinated
+two-node recovery, and full Go race with an actual isolated Redis. Its new Web
+and Nginx images are immutable source builds. Separate native migration cases
+pass: direct migration with 1,024 small files and actual Chromium decryption,
+Range/decoded continuous playback/lyrics, plus a separate actual traffic/manual
+pause case. Subsequent review identifies listen-address selection drift, the
+cleanup recheck digest deadline and silent host-operation release failures.
+Fixes bind the effective HTTP listener (including role-specific defaults), reuse
+the object-size completion budget during cleanup rechecks, deletion/anchor
+retirement and cancellation cleanup, and propagate owned
+operation-lock removal/directory-sync failures through every mutating caller.
+Completed archives and receipts remain available while errors require explicit
+inspection; replacement locks are preserved. `pr14-ninth-review-race` passes
+operator/CLI/recovery/migration regressions, including verified-archive retention
+on failed lock release and replacement-lock preservation. Latest exact native,
+CI and review gates are pending. Production remains unchanged.

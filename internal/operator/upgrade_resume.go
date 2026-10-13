@@ -16,12 +16,12 @@ import (
 
 // ResumeUpgrade reconciles only a previously approved, backed-up switch. It
 // restores the native fence before network proof checks or repairing metadata.
-func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approval, node string, external bool, evidence Evidence, images Images) (UpgradeState, error) {
+func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approval, node string, external bool, evidence Evidence, images Images) (operationResult UpgradeState, operationErr error) {
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return UpgradeState{}, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	state, e := d.upgradeState()
 	if e != nil {
 		return state, e

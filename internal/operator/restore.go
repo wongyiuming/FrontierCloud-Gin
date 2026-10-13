@@ -283,7 +283,7 @@ func (d *Deployment) ActivateRestore(ctx context.Context, r Receipt, confirmatio
 	return d.activateRestore(ctx, r, confirmation, sourceOffline, false)
 }
 
-func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmation string, sourceOffline, coordinated bool) (RestoreState, error) {
+func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmation string, sourceOffline, coordinated bool) (operationResult RestoreState, operationErr error) {
 	var state RestoreState
 	if _, e := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); !os.IsNotExist(e) && !coordinated {
 		return state, errors.New("cluster recovery member requires coordinated set activation; individual activation is refused")
@@ -292,7 +292,7 @@ func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmatio
 	if e != nil {
 		return state, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	cfg, e := d.ValidateReceipt(ctx, r)
 	if e != nil {
 		return state, e
@@ -413,7 +413,7 @@ func (d *Deployment) OpenRestore(ctx context.Context, r Receipt, confirmation st
 	return d.openRestore(ctx, r, confirmation, false)
 }
 
-func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation string, coordinated bool) (RestoreState, error) {
+func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation string, coordinated bool) (operationResult RestoreState, operationErr error) {
 	var state RestoreState
 	if _, e := os.Lstat(filepath.Join(d.Directory, ".fc-recovery-set.json")); !os.IsNotExist(e) && !coordinated {
 		return state, errors.New("cluster recovery member requires coordinated set opening; individual opening is refused")
@@ -422,7 +422,7 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 	if e != nil {
 		return state, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	if _, e = d.ValidateReceipt(ctx, r); e != nil {
 		return state, e
 	}

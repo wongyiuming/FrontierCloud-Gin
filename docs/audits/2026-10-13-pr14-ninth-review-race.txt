@@ -1,0 +1,4 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.131s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	18.446s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration	(cached)
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	(cached)

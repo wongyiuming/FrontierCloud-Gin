@@ -149,7 +149,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		}
 		o := cp.Object
 		req := migrationdata.Request{Lease: l, CleanupGrant: &grant, Spec: migrationdata.Spec{TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
-		deadline := time.Now().Add(30 * time.Minute)
+		deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 		waitingAtStart := scheduler.waited
 		for {
 			waitBefore := scheduler.waited
@@ -240,7 +240,7 @@ func (r *Runner) cleanup(ctx context.Context, id, runner string) (err error) {
 		o := cp.Object
 		object = o.ID
 		req := migrationdata.Request{Lease: l, CleanupGrant: &grant, Spec: migrationdata.Spec{TaskID: id, MasterID: w.Task.MasterID, SourceID: w.Task.SourceID, TargetID: w.Task.TargetID, LogicalID: o.ID, ObjectID: o.ObjectID, Resource: o.Resource, TargetPath: o.TargetPath, SourceVersion: o.Version, Bytes: o.Bytes, SHA256: cp.SourceSHA, Encryption: o.Encryption, Recording: o.Recording}}
-		deadline := time.Now().Add(30 * time.Minute)
+		deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 		waitingAtStart := scheduler.waited
 		submitted := false
 		for {

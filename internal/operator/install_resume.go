@@ -11,12 +11,12 @@ import (
 
 // ResumeInstall uses only the recorded fresh-install pins. An initializing
 // intent may replay idempotent initializers; prepared state never does.
-func (d *Deployment) ResumeInstall(ctx context.Context, receipt Receipt) (Receipt, error) {
+func (d *Deployment) ResumeInstall(ctx context.Context, receipt Receipt) (operationResult Receipt, operationErr error) {
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return receipt, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	if receipt.State == "initializing" {
 		if _, err := os.Lstat(filepath.Join(d.Directory, ImagesFile)); os.IsNotExist(err) {
 			bare, err := d.Config(ctx, false)

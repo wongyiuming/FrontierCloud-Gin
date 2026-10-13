@@ -83,13 +83,13 @@ func serviceImageMap(cfg Config) map[string]string {
 // OpenUpgrade is a second explicit approval. An interrupted owned opening can
 // be rechecked under public maintenance. Failed work, DDL rollback and unrelated
 // administrator maintenance are never admitted by that recovery path.
-func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node string) (UpgradeState, error) {
+func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node string) (operationResult UpgradeState, operationErr error) {
 	var state UpgradeState
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return state, e
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	cfg, e := d.ValidateReceipt(ctx, r)
 	if e != nil {
 		return state, e

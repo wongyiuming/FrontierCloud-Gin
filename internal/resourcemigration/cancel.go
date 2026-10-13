@@ -192,7 +192,7 @@ func (r *Runner) cancelTask(ctx context.Context, id, runner string) (err error) 
 				}
 				req := migrationdata.Request{Lease: l, Spec: spec, ShadowGrant: &grant}
 				operation := "unpublish"
-				deadline := time.Now().Add(30 * time.Minute)
+				deadline := time.Now().Add(targetCompletionTTL(o.Bytes))
 				waitingAtStart := scheduler.waited
 				for {
 					if err = ensure(); err != nil {

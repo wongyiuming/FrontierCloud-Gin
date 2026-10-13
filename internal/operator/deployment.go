@@ -302,6 +302,7 @@ func selectionHash(cfg Config) string {
 			}
 		}
 		env["REDIS_URL"] = redisLocation(s.Environment["REDIS_URL"])
+		env["HTTP_ADDR"] = listenLocation(s.Environment)
 		execution := map[string]any{}
 		for name, raw := range s.Execution {
 			var value any
@@ -340,6 +341,29 @@ func redisLocation(value string) string {
 	}
 	u.RawQuery = query.Encode()
 	return u.String()
+}
+
+func listenLocation(environment map[string]string) string {
+	value := environment["HTTP_ADDR"]
+	if value == "" {
+		port := "8000"
+		if environment["DEPLOYMENT_MODE"] == "only_stroge" {
+			port = "443"
+			if environment["STORAGE_TRANSPORT"] == "relay" {
+				port = "8443"
+			}
+			if configured := environment["STORAGE_PORT"]; configured != "" {
+				port = configured
+			}
+		}
+		value = ":" + port
+	}
+	host, port, e := net.SplitHostPort(value)
+	if e != nil {
+		h := sha256.Sum256([]byte(value))
+		return "invalid:" + hex.EncodeToString(h[:])
+	}
+	return net.JoinHostPort(host, port)
 }
 func readRegular(path string, limit int64) ([]byte, error) {
 	info, err := os.Lstat(path)
@@ -509,7 +533,7 @@ type Images interface {
 	Prove(context.Context, string, string, string) (release.ImageProof, error)
 }
 
-func (d *Deployment) Install(ctx context.Context, target, architecture string, evidence Evidence, images Images) (Receipt, error) {
+func (d *Deployment) Install(ctx context.Context, target, architecture string, evidence Evidence, images Images) (operationResult Receipt, operationErr error) {
 	var r Receipt
 	// Explicit installation is a write operation. This lock never appears in
 	// doctor. A crash leaves it for operator review, never automatic takeover.
@@ -517,7 +541,7 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	if err != nil {
 		return r, err
 	}
-	defer done()
+	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	cfg, err := d.Config(ctx, false)
 	if err != nil {
 		return r, err

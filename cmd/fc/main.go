@@ -21,7 +21,7 @@ import (
 var Revision string
 
 func main() { os.Exit(run(os.Args[1:])) }
-func run(args []string) int {
+func run(args []string) (exitCode int) {
 	flags := flag.NewFlagSet("fc", flag.ContinueOnError)
 	directory := flags.String("directory", ".", "deployment bundle directory")
 	role := flags.String("role", "master", "doctor role: master or storage")
@@ -191,7 +191,12 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, e)
 			return 2
 		}
-		defer done()
+		defer func() {
+			if releaseErr := done(); releaseErr != nil {
+				fmt.Fprintln(os.Stderr, releaseErr)
+				exitCode = 2
+			}
+		}()
 		if _, err = d.ValidateReceipt(ctx, receipt); err == nil {
 			_, err = d.Compose(ctx, true, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "600")
 		}

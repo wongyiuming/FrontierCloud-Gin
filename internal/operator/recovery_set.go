@@ -22,7 +22,7 @@ type RecoveryDeployment struct {
 // BackupSet coordinates explicit local-engine deployments. All host-operation
 // and native lifecycle leases remain held for the entire multi-node capture.
 // No matching interval is inferred from separately captured backup timestamps.
-func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, master string, freeze, external bool) (recovery.SetReport, error) {
+func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, master string, freeze, external bool) (operationResult recovery.SetReport, operationErr error) {
 	var empty recovery.SetReport
 	if !freeze || len(deployments) < 2 || len(deployments) > recovery.MaxSetMembers || output == "" {
 		return empty, errors.New("cluster backup requires explicit --freeze-all, complete member directories and a new output directory")
@@ -37,10 +37,10 @@ func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, ma
 		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Deployment.Directory < items[j].Deployment.Directory })
-	var releases []func()
+	var releases []func() error
 	defer func() {
 		for i := len(releases) - 1; i >= 0; i-- {
-			releases[i]()
+			operationErr = errors.Join(operationErr, releases[i]())
 		}
 	}()
 	seen := map[string]bool{}
