@@ -2,7 +2,8 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             Install the buildx component to build images with BuildKit:
             https://docs.docker.com/go/buildx/
 
-Sending build context to Docker daemon  324.1MB
+Sending build context to Docker daemon  324.1MB
+
 Step 1/39 : FROM golang:1.26.8-bookworm AS tls-edge-builder
  ---> dc9ad6c05acc
 Step 2/39 : WORKDIR /src

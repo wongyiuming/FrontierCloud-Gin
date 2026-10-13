@@ -4,7 +4,8 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             Install the buildx component to build images with BuildKit:
             https://docs.docker.com/go/buildx/
 
-Sending build context to Docker daemon  109.5MB
+Sending build context to Docker daemon  109.5MB
+
 Step 1/7 : FROM frontiercloud-ops-test:01a13082-web-recovery
  ---> 2159b3607d1a
 Step 2/7 : USER root
@@ -31,7 +32,8 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             Install the buildx component to build images with BuildKit:
             https://docs.docker.com/go/buildx/
 
-Sending build context to Docker daemon  109.5MB
+Sending build context to Docker daemon  109.5MB
+
 Step 1/2 : FROM frontiercloud-ops-test:01a13082-upgrade-source
  ---> 090cf41ac0c9
 Step 2/2 : LABEL frontiercloud.test.run="fc-upgrade-01a13082" frontiercloud.test.upgrade="target"

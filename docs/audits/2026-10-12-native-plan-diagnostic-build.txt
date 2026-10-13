@@ -3,7 +3,8 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             BuildKit is currently disabled; enable it by removing the DOCKER_BUILDKIT=0
             environment-variable.
 
-Sending build context to Docker daemon  322.6MB
+Sending build context to Docker daemon  322.6MB
+
 Step 1/11 : FROM frontiercloud-ops-test:01a13082-web-recovery
  ---> 2159b3607d1a
 Step 2/11 : USER root

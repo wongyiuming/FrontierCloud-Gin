@@ -34,4 +34,3 @@ Traceback (most recent call last):
 playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
 Call log:
   - waiting for get_by_role("button", name="执行只读退役检查", exact=True).first
-

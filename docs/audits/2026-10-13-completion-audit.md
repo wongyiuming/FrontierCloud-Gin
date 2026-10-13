@@ -122,3 +122,14 @@ host setting or existing deployment is changed to obtain a green result.
 Remaining delivery gates are latest-image native integration, real grace cleanup
 and independent retirement, final privacy/source audit and successful exact-source
 development CI. This goal is not complete.
+
+## Source checkpoint
+
+Implementation and retained evidence were committed on `dev` as
+`9dca64fa1a0b2a3642fbde1ddb6bd08b4066a280`. A follow-up keeps terminal output
+readable by normalizing carriage-return progress lines, trailing spaces and
+mixed indentation in thirteen repository audit copies. The original captures
+remain on the isolated development host; assertions, failures and outcome text
+are preserved. No history is rewritten. Hosted dev CI for the resulting source
+checkpoint must still be observed; the older remote branch's green CI is not
+evidence for these changes.

@@ -5,15 +5,15 @@ ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.020s
 flag provided but not defined: -restore
 Usage of verify-backup:
   -file string
-    	local v2 JSONL artifact (mutually exclusive with master-id)
+	local v2 JSONL artifact (mutually exclusive with master-id)
   -generation int
-    	exact positive backup generation
+	exact positive backup generation
   -master-id string
-    	historical Master ID in the configured cold backup store
+	historical Master ID in the configured cold backup store
   -scratch-dir string
-    	private scratch directory, never an authoritative database directory
+	private scratch directory, never an authoritative database directory
   -sha256 string
-    	expected SHA-256, required for a local file
+	expected SHA-256, required for a local file
 2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release status=404 duration_ms=19.802 client_ip=192.0.2.1 request_id=c176aa9a53b84a9a9d95dbc2d26c6017 trace_id=c176aa9a53b84a9a9d95dbc2d26c6017
 2026/10/13 03:28:06 INFO request_completed method=POST path=/api/v1/media/admin/nodes/release status=404 duration_ms=2.873 client_ip=192.0.2.2 request_id=60566c590bb24888a6a29b6fbf201925 trace_id=60566c590bb24888a6a29b6fbf201925
 2026/10/13 03:28:06 INFO request_completed method=GET path=/api/v1/media/admin/nodes/release/history status=404 duration_ms=2.922 client_ip=192.0.2.3 request_id=454b2726c07240389267e1508708d774 trace_id=454b2726c07240389267e1508708d774
