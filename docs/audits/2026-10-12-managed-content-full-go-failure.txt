@@ -135,4 +135,3 @@ ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/vault	(cached)
 ?   	github.com/wongyiuming/FrontierCloud-Gin/migrations	[no test files]
 ?   	github.com/wongyiuming/FrontierCloud-Gin/protocol	[no test files]
 FAIL
-
