@@ -1,0 +1,19 @@
+{
+  "scope": "actual native upgrade preparation failure and retained recovery point",
+  "public_installation_proof": false,
+  "synthetic_revision": "0000000000000000000000000000000000000000",
+  "fixture_directory": "/home/wyium/fc-operations-20261012-01a13082/pr14-667-native-ops/fc-ops-recovery-ccc93c3367d841e5-0ov3ay_r",
+  "database": "sqlite",
+  "upgrade": {
+    "actual_compose": true,
+    "backup_sha256": "9f0df8fd3dff82a3fba1a3a1d9019beac34c18f8c36f7fec1a5807f338833081",
+    "no_automatic_rollback": true,
+    "phase": "failed_fenced",
+    "publication_proof_injected": true,
+    "source_schema_generation": 6,
+    "target_failure_injected": true,
+    "target_schema_generation": 7
+  },
+  "status": "passed",
+  "no_production_operation": true
+}

@@ -1,0 +1,2 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/release	1.265s
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc	1.127s

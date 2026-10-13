@@ -79,6 +79,26 @@ The receipt also binds effective Compose execution/isolation fields, including
 commands, entrypoint, user, capabilities, privileged/read-only state and network
 mode. Those edits require their own reviewed configuration procedure.
 
+## Resume an interrupted approved switch
+
+If `.fc-upgrade.json` records `backed_up_fenced`, `switching_fenced`,
+`preparing_fenced` or `prepared_fenced`, use the existing plan and original
+NodeID to reconcile an interrupted image-lock/receipt switch:
+
+```sh
+./fc --directory /srv/frontiercloud upgrade resume \
+  --approve-plan-sha256 REVIEWED_PLAN_SHA256 \
+  --confirm-node-id SOURCE_NODE_ID
+```
+
+MySQL also requires `--external-writers-stopped`. Resume admits only the recorded
+old/target receipt and approved image pins. It restores the native fence, verifies
+the original recovery archive and public target proof, then prepares the target.
+An already completed additive migration is inspected rather than replayed as an
+old generation. Success remains `prepared_fenced`; opening is still explicit.
+A failed phase, changed configuration or unknown image-lock field is rejected.
+Review interrupted operation locks separately; resume does not steal them.
+
 ## Failure and recovery boundary
 
 `.fc-upgrade.json` records phases, the previous receipt, the approved plan,
@@ -98,6 +118,17 @@ recovery evidence, not permission to delete the current database.
 
 The admitted paths are same-generation preparation and the explicit generation
 6 → 7 forward migration. Unknown generations and other transitions are refused.
+Existing generation-4/5 deployments without operator receipts use the separately
+approved maintainer path: preserve their original Compose/project/mount selection,
+close the native gate and stop all writers, verify a complete cold recovery point,
+then invoke the published generation-7 runtime's `prepare-release` with the exact
+`--from-generation 4` (or `5`), original `--confirm-node-id`,
+`--confirm-generation 7` and verified `--backup-sha256`. That command checks the
+exact source generation's complete transaction roster before the retained
+additive DDL, then checks generation-7 idleness and identity. It keeps the gate
+closed. This does not grant `fc backup/restore/upgrade` generation-4/5 receipt
+compatibility or authorize initialization of an existing deployment. Generation
+3, absent/malformed tables, unknown journals and unfinished writes are refused.
 For 6 → 7, the source generation-6 image supplies the quiescent runtime facts;
 the archive retains `schema_generation: 6`. The generation-7 target independently
 checks the original identity and generation-6 transaction roster before applying

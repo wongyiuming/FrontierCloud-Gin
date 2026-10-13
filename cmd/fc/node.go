@@ -84,7 +84,7 @@ func retirementExitCode(report noderetirement.Report, err error) int {
 	if err != nil || !report.ObservationComplete || !report.PreflightOnly {
 		return 2
 	}
-	if len(report.Concerns) > 0 || len(report.Master.Blockers) > 0 || len(report.Peer.Blockers) > 0 {
+	if report.ExpectedItems != 0 || len(report.Concerns) > 0 || len(report.Master.Blockers) > 0 || len(report.Peer.Blockers) > 0 {
 		return 1
 	}
 	return 0

@@ -28,7 +28,7 @@ type RegistryClient struct{ Client *http.Client }
 
 func NewRegistryClient() *RegistryClient {
 	return &RegistryClient{Client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: 15 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("registry redirects forbidden") },
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
 }
 

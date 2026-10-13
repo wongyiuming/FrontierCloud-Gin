@@ -517,11 +517,23 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 }
 
 func replaceJSON(path string, value any) error {
-	temporary := path + ".next"
-	if err := exclusiveJSON(temporary, value); err != nil {
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
 		return err
 	}
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".next-")
+	if err != nil {
+		return err
+	}
+	temporary := f.Name()
 	defer os.Remove(temporary)
+	_, err = f.Write(append(raw, '\n'))
+	if err == nil {
+		err = f.Sync()
+	}
+	if err = errors.Join(err, f.Close()); err != nil {
+		return err
+	}
 	if err := os.Rename(temporary, path); err != nil {
 		return err
 	}

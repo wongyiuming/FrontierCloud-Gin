@@ -14,15 +14,14 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
-// Admission is exact: same-generation preparation or the explicitly defined
-// generation-6 to generation-7 forward migration. This never performs reverse DDL.
+// Admission is exact: same-generation preparation or the retained generation
+// 4/5/6 to generation-7 additive migrations. This never performs reverse DDL.
 func prepareReleaseCommand(arguments []string) error {
 	flags := flag.NewFlagSet("prepare-release", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -36,7 +35,7 @@ func prepareReleaseCommand(arguments []string) error {
 	if *from == 0 {
 		*from = *generation
 	}
-	if !recovery.SupportedSchemaGeneration(*from) {
+	if !supportedReleaseSource(*from) {
 		return errors.New("source generation has no defined upgrade/recovery path")
 	}
 	if *from != *generation {
@@ -97,8 +96,12 @@ func prepareReleaseCommand(arguments []string) error {
 	})
 }
 
-// The prior generation has no knowledge of the new tables. Read only its
-// explicitly supported schema-6 transaction roster before running forward DDL;
+func supportedReleaseSource(generation int) bool {
+	return generation == migrations.Generation || migrations.Generation == 7 && (generation == 4 || generation == 5 || generation == 6)
+}
+
+// Prior generations have no knowledge of future tables. Read the exact source
+// generation's transaction roster before running the retained additive DDL;
 // never ask a current-schema inspector to silently skip absent future tables.
 func inspectReleaseSource(ctx context.Context, db store.Store, expected int) error {
 	if expected == migrations.Generation {
@@ -111,7 +114,7 @@ func inspectReleaseSource(ctx context.Context, db store.Store, expected int) err
 		}
 		return nil
 	}
-	if migrations.Generation != 7 || expected != 6 {
+	if migrations.Generation != 7 || !supportedReleaseSource(expected) {
 		return errors.New("unsupported schema transition")
 	}
 	provider, ok := db.(interface{ Database() *sql.DB })
@@ -127,7 +130,7 @@ func inspectReleaseSource(ctx context.Context, db store.Store, expected int) err
 	if err = tx.QueryRowContext(ctx, "SELECT generation FROM frontiercloud_schema WHERE singleton=1").Scan(&generation); err != nil || generation != expected {
 		return errors.New("source schema changed before migration")
 	}
-	for _, query := range []string{
+	queries := []string{
 		"SELECT COUNT(*) FROM media_delete_operations WHERE state<>'rename_done'",
 		"SELECT COUNT(*) FROM cluster_upload_sessions WHERE state NOT IN ('complete','cancelled')",
 		"SELECT COUNT(*) FROM global_media_objects WHERE state<>'active'",
@@ -136,12 +139,21 @@ func inspectReleaseSource(ctx context.Context, db store.Store, expected int) err
 		"SELECT COUNT(*) FROM cluster_storage_members WHERE reserved_bytes<>0",
 		"SELECT COUNT(*) FROM cluster_business_backups WHERE state NOT IN ('ready','failed')",
 		"SELECT COUNT(*) FROM cluster_worker_jobs WHERE state NOT IN ('queued','complete')",
-		"SELECT COUNT(*) FROM migration_tasks WHERE state NOT IN ('completed','cancelled')",
-		"SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0",
-		"SELECT COUNT(*) FROM migration_scopes",
-		"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')",
-		"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
-	} {
+	}
+	// Generation 5 introduces resource journals; generation 6 introduces their
+	// peer bindings. Missing tables in a roster that requires them remain errors.
+	if expected >= 5 {
+		queries = append(queries,
+			"SELECT COUNT(*) FROM migration_tasks WHERE state NOT IN ('completed','cancelled')",
+			"SELECT COUNT(*) FROM migration_capacity WHERE reserved_bytes<>0",
+			"SELECT COUNT(*) FROM migration_scopes",
+			"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')",
+		)
+	}
+	if expected >= 6 {
+		queries = append(queries, "SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL")
+	}
+	for _, query := range queries {
 		var count int64
 		if err = tx.QueryRowContext(ctx, query).Scan(&count); err != nil {
 			return err

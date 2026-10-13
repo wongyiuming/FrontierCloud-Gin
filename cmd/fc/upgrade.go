@@ -34,7 +34,7 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 	d.Runner = dockerRunner{d.Directory}
 	var value any
 	switch args[1] {
-	case "plan", "apply":
+	case "plan", "apply", "resume":
 		registry := release.NewRegistryClient()
 		defer registry.Close()
 		verifier, err := release.NewVerifier(release.DefaultPolicy(), "")
@@ -42,7 +42,13 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 			e = err
 			break
 		}
-		if args[1] == "plan" {
+		if args[1] == "resume" {
+			if *planFile != "" || *backup != "" || revision != "" {
+				e = errors.New("upgrade resume requires only the recorded plan digest, NodeID and any MySQL external-writer confirmation")
+				break
+			}
+			value, e = d.ResumeUpgrade(ctx, r, *approval, *node, *external, verifier, registry)
+		} else if args[1] == "plan" {
 			if !release.ValidSHA(revision) || *planFile != "" || *approval != "" || *node != "" || *backup != "" || *external {
 				e = errors.New("upgrade plan requires only an explicit --revision; redirect its JSON output to a new plan file")
 				break
@@ -72,7 +78,7 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 		}
 		value, e = d.OpenUpgrade(ctx, r, *approval, *node)
 	default:
-		e = errors.New("upgrade requires plan, apply or open")
+		e = errors.New("upgrade requires plan, apply, resume or open")
 	}
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)

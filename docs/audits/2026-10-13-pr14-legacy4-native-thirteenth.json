@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "workspace": "/home/wyium/fc-operations-20261012-01a13082/pr14-legacy4-acceptance/fc-legacy4-71wpk0a0",
+  "isolated": true,
+  "source_image": "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:93786a469994d08f45f2a43ec6ae27b2923883a46009ad8a1ee88c028521903e",
+  "target_image": "frontiercloud-ops-test:01a13082-exact-667db01",
+  "target_binary_sha256": "18e63adb5f2e1cc1bacac1ab38fc664f6dc99376ae296126c6c0931a23a22f5b",
+  "target_binary_override": true,
+  "public_target_release_proof": false,
+  "source_freeze_exit_code": 0,
+  "from_generation": 4,
+  "target_generation": 7,
+  "node_identity_preserved": true,
+  "stable_table_digests_preserved": true,
+  "source_secrets_preserved": true,
+  "cold_recovery_sha256": "a302f1a2481f31030e16c103f46334e139127daba41b3341841450f407ebd964",
+  "offline_gate_kept_through_preparation": true,
+  "media_id_and_actual_http_range_preserved": true,
+  "idle_cpu_samples": [
+    0.21,
+    0.15,
+    0.27,
+    0.18,
+    0.16
+  ],
+  "owned_container_removed": true
+}

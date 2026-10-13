@@ -1,0 +1,22 @@
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-success
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-unconfirmed
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-busy-source
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-success
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-unconfirmed
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-busy-source
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-success
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-unconfirmed
+=== RUN   TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-busy-source
+--- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity (2.22s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-success (0.32s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-unconfirmed (0.18s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/4-busy-source (0.18s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-success (0.33s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-unconfirmed (0.22s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/5-busy-source (0.22s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-success (0.32s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-unconfirmed (0.22s)
+    --- PASS: TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity/6-busy-source (0.22s)
+PASS
+ok  	github.com/wongyiuming/FrontierCloud-Gin/cmd/frontiercloud	3.253s

@@ -85,8 +85,12 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 		return nil, empty, e
 	}
 	directory := filepath.Join(root, "deployment")
+	var intent RestoreState
 	if _, e := os.Lstat(filepath.Join(directory, RestoreJournal)); !os.IsNotExist(e) {
-		return nil, empty, errors.New("restoration already prepared or interrupted; preserve its journal")
+		intent, e = (&Deployment{Directory: directory}).restoreState()
+		if e != nil || intent.Phase != "preparing" || intent.NodeID != report.Manifest.NodeID || intent.ArchiveSHA != report.SHA256 || intent.Project != project || !composeProject.MatchString(intent.SourceProject) {
+			return nil, empty, errors.New("restoration already prepared or incompatible interrupted intent; preserve its journal")
+		}
 	}
 	source, old, e := Open(directory)
 	if e != nil {
@@ -106,6 +110,15 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 	var full map[string]any
 	if json.Unmarshal(raw, &full) != nil {
 		return nil, empty, errors.New("archived Compose cannot be resolved")
+	}
+	if intent.Phase == "" {
+		intent = RestoreState{Version: 1, NodeID: report.Manifest.NodeID, ArchiveSHA: report.SHA256, SourceProject: sourceProject(raw), Project: project, Phase: "preparing", Report: report}
+		if !composeProject.MatchString(intent.SourceProject) {
+			return nil, empty, errors.New("original source project unavailable")
+		}
+		if e = exclusiveJSON(filepath.Join(directory, RestoreJournal), intent); e != nil {
+			return nil, empty, e
+		}
 	}
 	services, ok := full["services"].(map[string]any)
 	if !ok {
@@ -184,11 +197,7 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 			n["name"] = project + "_" + name
 		}
 	}
-	if old.Recovered {
-		e = replaceJSON(filepath.Join(directory, RecoveredCompose), full)
-	} else {
-		e = exclusiveJSON(filepath.Join(directory, RecoveredCompose), full)
-	}
+	e = replaceJSON(filepath.Join(directory, RecoveredCompose), full)
 	if e != nil {
 		return nil, empty, e
 	}
@@ -233,8 +242,8 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 	if e = replaceJSON(filepath.Join(directory, ReceiptFile), old); e != nil {
 		return nil, empty, e
 	}
-	state := RestoreState{Version: 1, NodeID: report.Manifest.NodeID, ArchiveSHA: report.SHA256, SourceProject: sourceProject(raw), Project: project, Phase: "prepared", Report: report}
-	if e = exclusiveJSON(filepath.Join(directory, RestoreJournal), state); e != nil {
+	intent.Phase = "prepared"
+	if e = d.saveRestore(intent); e != nil {
 		return nil, empty, e
 	}
 	return d, old, nil
@@ -283,6 +292,9 @@ func (d *Deployment) activateRestore(ctx context.Context, r Receipt, confirmatio
 	}
 	if !r.Recovered || confirmation != state.NodeID || !sourceOffline {
 		return state, errors.New("restored NodeID confirmation and explicit source-offline confirmation required")
+	}
+	if state.Phase == "preparing" {
+		return state, errors.New("finish the matching restore preparation before activation")
 	}
 	if state.Phase == "verified" || state.Phase == "opened" {
 		return state, nil
@@ -430,36 +442,67 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 	if e != nil {
 		return state, e
 	}
-	if !r.Recovered || state.NodeID != confirmation || state.Phase != "verified" || !state.OwnManual {
+	ready := state.Phase == "opened" && r.State == "ready"
+	recovering := state.Phase == "opening" || state.Phase == "opened"
+	if !r.Recovered || state.NodeID != confirmation || (!ready && state.Phase != "verified" && !recovering) || (!state.OwnManual && state.Phase != "opened") || !state.Report.BusinessVerified {
 		return state, errors.New("opening requires a verified restored identity and maintenance owned by this restore; prior administrator maintenance is preserved")
 	}
-	if _, e = d.Compose(ctx, true, "exec", "-T", "web", "/app/frontiercloud", "recovery-verify"); e != nil {
-		return state, e
+	if ready {
+		return state, nil
 	}
 	data, e := os.OpenRoot(filepath.Join(filepath.Dir(d.Directory), "data"))
 	if e != nil {
 		return state, e
 	}
 	defer data.Close()
+	lease, e := sitecontrol.Lease(ctx, data, true)
+	if e != nil {
+		return state, e
+	}
+	defer lease()
 	content, e := data.ReadFile(sitecontrol.Manual)
-	if e != nil || string(content) != "manual\n" {
+	missing := os.IsNotExist(e)
+	if (!missing && (e != nil || string(content) != "manual\n")) || (!missing && !state.OwnManual) {
 		return state, errors.New("maintenance state changed; refused to reopen")
 	}
-	refence := func() {
+	refence := func() error {
 		f, err := data.OpenFile(sitecontrol.Manual, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err == nil {
-			_ = fsutil.InheritOwner(f, data)
-			_, _ = f.WriteString("manual\n")
-			_ = f.Sync()
-			_ = f.Close()
+			err = fsutil.InheritOwner(f, data)
+			if err == nil {
+				_, err = f.WriteString("manual\n")
+			}
+			if err == nil {
+				err = f.Sync()
+			}
+			err = errors.Join(err, f.Close())
+		} else if os.IsExist(err) {
+			err = nil
 		}
-		_ = fsutil.SyncDirectory(data, ".")
+		return errors.Join(err, fsutil.SyncDirectory(data, "."))
+	}
+	state.Phase = "opening"
+	state.OwnManual = true
+	if e = d.saveRestore(state); e != nil {
+		return state, e
+	}
+	if missing {
+		if e = refence(); e != nil {
+			return state, e
+		}
+	}
+	if _, e = d.Compose(ctx, true, "exec", "-T", "web", "/app/frontiercloud", "recovery-verify"); e != nil {
+		return state, e
+	}
+	fact, e := d.runtimeFact(ctx)
+	if e != nil || fact.NodeID != state.NodeID || fact.NativeMaintenance || !fact.Database.LogicalIdle || fact.Database.SchemaGeneration != state.Report.Manifest.SchemaGeneration {
+		return state, errors.New("restored identity/schema changed before public opening")
 	}
 	if e = data.Remove(sitecontrol.Manual); e != nil {
 		return state, e
 	}
 	if e = fsutil.SyncDirectory(data, "."); e != nil {
-		refence()
+		_ = refence()
 		return state, e
 	}
 	state.OwnManual = false
@@ -470,7 +513,7 @@ func (d *Deployment) openRestore(ctx context.Context, r Receipt, confirmation st
 		e = replaceJSON(filepath.Join(d.Directory, ReceiptFile), r)
 	}
 	if e != nil {
-		refence()
+		_ = refence()
 		state.OwnManual = true
 		state.Phase = "verified"
 		_ = d.saveRestore(state)

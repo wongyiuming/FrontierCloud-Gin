@@ -51,6 +51,15 @@ def compose(directory, *args):
 
 
 def fingerprint(configuration):
+    def canonical(value):
+        if isinstance(value, dict):
+            return {key: canonical(value[key]) for key in sorted(value)}
+        if isinstance(value, list):
+            return [canonical(item) for item in value]
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        return value
+
     services = {}
     for name in sorted(configuration['services']):
         service = configuration['services'][name]
@@ -64,6 +73,8 @@ def fingerprint(configuration):
                       for key in ('target', 'published', 'host_ip', 'protocol')} for item in service['ports']]
         services[name] = {'environment': {key: service['environment'][key]
                                           for key in sorted(service.get('environment', {})) if key in ENV_KEYS},
+                          'execution': canonical({key: value for key, value in service.items()
+                                                  if key not in ('image', 'environment', 'volumes', 'ports', 'build')}),
                           'mounts': mounts, 'ports': ports}
     volumes = {name: {'name': value['name'], 'external': value.get('external', False)}
                for name in sorted(configuration.get('volumes', {}))
@@ -71,13 +82,18 @@ def fingerprint(configuration):
     # Go sorts map keys, but retains declared struct-field order for mounts,
     # ports and volumes. This fixture reproduces those bytes exactly.
     value = {'project': configuration['name'], 'services': services, 'volumes': volumes}
-    return hashlib.sha256(json.dumps(value, separators=(',', ':')).encode()).hexdigest()
+    encoded = json.dumps(value, separators=(',', ':'), ensure_ascii=False)
+    # encoding/json escapes HTML characters and the two JavaScript separators.
+    for character, escaped in [('&', r'\u0026'), ('<', r'\u003c'), ('>', r'\u003e'),
+                               ('\u2028', r'\u2028'), ('\u2029', r'\u2029')]:
+        encoded = encoded.replace(character, escaped)
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
-def wait_ready(base):
+def wait_ready(base, host=None):
     for _ in range(150):
         try:
-            with urllib.request.urlopen(base + '/health/ready', timeout=2) as response:
+            with urllib.request.urlopen(urllib.request.Request(base + '/health/ready', headers={'Host': host} if host else {}), timeout=2) as response:
                 if response.status == 200:
                     return
         except OSError:
@@ -100,11 +116,13 @@ def idle_cpu(container):
     raise AssertionError('fixture Web failed the existing post-business CPU recovery gate')
 
 
-def api(base):
+def api(base, host=None):
     jar = http.cookiejar.CookieJar()
     client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     def request(method, route, body=None, fields=None):
         headers = dict(fields or {})
+        if host:
+            headers['Host'] = host
         if isinstance(body, dict):
             body = json.dumps(body).encode()
             headers['Content-Type'] = 'application/json'
@@ -307,6 +325,14 @@ def run(args):
         assert activated['phase'] == 'verified'
         assert activated['recovery']['restored_business_verified']
         assert (target / 'data/.frontiercloud-maintenance').exists()
+        # Model process loss after durable opening intent and public removal;
+        # actual CLI must restore maintenance, recheck native facts and finish.
+        restore_journal = restore_dir / '.fc-restore.json'
+        opening = json.loads(restore_journal.read_text())
+        opening['phase'] = 'opening'
+        restore_journal.write_text(json.dumps(opening))
+        restore_journal.chmod(0o600)
+        (target / 'data/.frontiercloud-maintenance').unlink()
         command([str(args.binary), '--directory', str(restore_dir), 'restore', 'open',
                  '--confirm-node-id', before_fact['node_id']])
         restored_started = True
@@ -321,7 +347,7 @@ def run(args):
         result.update(status='passed', archive_sha256=report['sha256'], node_identity_preserved=True,
                       media_id_preserved=True, priority_preserved=True, actual_http_range_verified=True,
                       restore_check_read_only=True, offline_fence_preserved_on_apply=True,
-                      operator_activation_verified=True, no_production_operation=True,
+                      operator_activation_verified=True, interrupted_restore_open_reconciled=True, no_production_operation=True,
                       web_cpu_limit=host['NanoCpus'], web_memory=host['Memory'], web_memory_swap=host['MemorySwap'],
                       post_business_cpu_samples=cpu, web_image_id=web_image, edge_image_id=edge_image,
                       test_http_client_image_id=client_image)

@@ -356,16 +356,26 @@ func OpenRestoreSet(ctx context.Context, target, expected, master string, runner
 	if state.Phase == "opened" || state.Phase == "opened_cleanup_pending" {
 		return finishRestoreSetMarkers(state)
 	}
-	if state.Phase != "verified_fenced" {
+	if state.Phase != "verified_fenced" && state.Phase != "opening" {
 		return state, errors.New("set is not verified for public opening")
 	}
+	resuming := state.Phase == "opening"
 	if e = setMaterialMarker(target, state.Report); e != nil {
+		if resuming {
+			return refenceRestoreSet(ctx, &state, runners, "interrupted set opening marker could not be restored")
+		}
 		return state, e
 	}
 	if e = checkRestoreSetSource(ctx, state); e != nil {
+		if resuming {
+			return refenceRestoreSet(ctx, &state, runners, "source changed during interrupted set opening")
+		}
 		return state, e
 	}
 	if e = checkRestoredSet(ctx, state, runners); e != nil {
+		if resuming {
+			return refenceRestoreSet(ctx, &state, runners, "member changed during interrupted set opening")
+		}
 		return state, e
 	}
 	state.Phase = "opening"

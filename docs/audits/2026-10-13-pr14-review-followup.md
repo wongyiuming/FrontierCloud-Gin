@@ -26,5 +26,44 @@ access protection also pass in the same actual Nginx run.
 
 `2026-10-13-pr14-operator-review-race.txt` passes `cmd/fc`, `internal/operator`
 and `internal/recovery` under Go race; the added early-activation recovery cases
-have their subsequent selected race run. Fresh native SQLite/MySQL upgrade,
-restoration and final exact-source CI remain pending at this checkpoint.
+have their subsequent selected race run. Native SQLite/MySQL generation-6 to 7 upgrade, backup/restore/business and
+failure closure pass on `667db01`; see the `pr14-667-native-*-second` records.
+They do not cover the subsequent second-review changes.
+
+## Second review and retained production generation
+
+Second reviewed source: `667db01a5c77d88fe8e56761af5b81c2e9630c20`.
+
+- Restore opening now records durable intent and reconciles missing owned public
+  maintenance before rechecking identity/schema/business and finishing receipts.
+- Recovery-set opening resumes member journals and opens Master last; resumed
+  validation failures refence the whole set.
+- `fc install resume` finalizes an original prepared installation without latest,
+  replacement pulls, initializers or identity regeneration.
+- The production registry client returns a 307 response without automatically
+  following it. The existing bounded artifact-host validation performs the
+  follow-up without the registry bearer; foreign redirect hosts stay blocked.
+- Restore preparation records the original source project before rewriting its
+  recovered receipt, and same-intent preparation retries preserve that project.
+- `fc upgrade resume` reconciles only approved old/target image locks and receipts,
+  restores the native fence, verifies the recovery point and target publication,
+  and remains closed after preparation.
+- CLI retirement readiness includes nonzero expected-resource counts.
+- Atomic JSON publication uses unique scratch files, preserving older crash
+  evidence without letting its fixed name permanently block future writes.
+
+`pr14-interruption-race`, `pr14-install-resume-race` and
+`pr14-redirect-retirement-race` pass. These tests use actual persistent journal,
+receipt, archive and marker files with injected Docker runners; they simulate
+interruption windows and do not claim real host SIGKILL coverage.
+
+The retained native command additionally admits explicitly confirmed generation
+4/5 to 7 behind maintenance. It inspects the actual source generation's required
+transaction tables before additive DDL; operator recovery compatibility remains
+6/7. Actual prior SQLite DDL 4, 5 and 6 success/refusal cases pass in
+`pr14-legacy-generation-race`. The isolated actual public generation-4 runtime
+upgrade passes in `pr14-legacy4-native-thirteenth.json`: cold recovery retained,
+identity/secret/stable-table digests preserved, generation 7 reached while fenced,
+and original media ID/actual HTTP Range verified after opening. Its target binary
+is a private working-source override, so this is not public release proof.
+Production has only been inventoried read-only; no production upgrade is claimed.

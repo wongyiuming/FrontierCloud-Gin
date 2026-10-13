@@ -283,6 +283,17 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 		if json.Unmarshal(cert, &certificate) != nil {
 			t.Fatal("invalid native certificate observation")
 		}
+		prepared := r
+		prepared.State = "prepared"
+		if e := replaceJSON(filepath.Join(spec.Directory, ReceiptFile), prepared); e != nil {
+			t.Fatal(e)
+		}
+		resumePulls := runner.pulls
+		r, e = d.ResumeInstall(ctx, prepared)
+		if e != nil || r.State != "ready" || runner.pulls != resumePulls || fact().NodeID != first.NodeID {
+			t.Fatal("native prepared installation resume changed identity/pins or failed", e)
+		}
+		result["native_prepared_install_resume_verified"] = true
 		beforeReceipt, e := os.ReadFile(filepath.Join(spec.Directory, ReceiptFile))
 		if e != nil {
 			t.Fatal(e)

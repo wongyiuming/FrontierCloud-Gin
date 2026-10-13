@@ -233,6 +233,10 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	state, e = d.ResumeUpgrade(ctx, next, p.SHA256, p.NodeID, true, fakeEvidence{true}, upgradeImages{})
+	if e != nil || state.Phase != "prepared_fenced" {
+		t.Fatal("native interrupted preparation resume failed", e)
+	}
 	state, e = d.OpenUpgrade(ctx, next, p.SHA256, p.NodeID)
 	if e != nil || state.Phase != "opened" || !state.BusinessVerified {
 		t.Fatal("native activation failed", e)
@@ -241,8 +245,10 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	// Restore concrete private-image receipts for the following unmodified CLI
-	// backup/restore acceptance. Only this test maps publication proof to IDs.
+	// Restore concrete private-image receipts and the fixture-owned resource
+	// overrides for the following unmodified CLI backup/restore acceptance.
+	// Only this test maps publication proof to IDs; bind the effective private
+	// configuration again rather than exempting its limits from production hashing.
 	for name, image := range next.ServiceImages {
 		if actual, ok := runner.images[image]; ok {
 			image = actual
@@ -253,10 +259,18 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if e = replaceJSON(filepath.Join(spec.Directory, ImagesFile), override); e != nil {
 		t.Fatal(e)
 	}
+	actualConfig, e := d.Config(ctx, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	next.SelectionHash = selectionHash(actualConfig)
 	if e = replaceJSON(filepath.Join(spec.Directory, ReceiptFile), next); e != nil {
 		t.Fatal(e)
 	}
-	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "native_managed_business_reads": state.BusinessVerified}); e != nil {
+	if _, e = d.ValidateReceipt(ctx, next); e != nil {
+		t.Fatal("concrete private-fixture handover did not retain binding", e)
+	}
+	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "native_managed_business_reads": state.BusinessVerified, "native_prepared_upgrade_resume_verified": true}); e != nil {
 		t.Fatal(e)
 	}
 }

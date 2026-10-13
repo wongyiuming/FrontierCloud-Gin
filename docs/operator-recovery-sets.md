@@ -116,3 +116,9 @@ entrypoint. Operators must coordinate stopped writers across all involved hosts
 and validate their recovery procedure independently. Distinct hosts cannot be
 passed as local paths or replaced by manually assembled timestamps; separate
 single-node archives cannot be claimed as a complete consistent recovery set.
+
+An interrupted `set-open` with a durable `opening` journal is retryable with the
+same set checksum and MasterID. Members already opened are reconciled using
+their retained restore journals; remaining followers open before the Master.
+Failures during resumed set validation refence all prepared members. Review any
+interrupted operation lock separately before retrying; locks are never stolen.

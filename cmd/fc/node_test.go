@@ -37,6 +37,11 @@ func TestNodeCLIExitCodesDoNotGrantRetirement(t *testing.T) {
 	if retirementExitCode(report, nil) != 0 {
 		t.Fatal("completed observation")
 	}
+	report.ExpectedItems = 1
+	if retirementExitCode(report, nil) != 1 {
+		t.Fatal("expected resources incorrectly reported retirement-ready")
+	}
+	report.ExpectedItems = 0
 	report.Concerns = []noderetirement.Concern{{Code: "backup_retention_required", Count: 1}}
 	if retirementExitCode(report, nil) != 1 {
 		t.Fatal("blocked observation")

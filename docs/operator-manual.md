@@ -374,3 +374,20 @@ Retirement reports distinguish verified retained native state from unmanaged lef
 
 
 Completed or cancelled migration task labels alone do not satisfy retire check. The server reconciles each peer's task/unit/object roster, role-specific journal outcome and expired grace, and reports live runner leases. A cancelled source can retain receiving history while its files remain authoritative and block retirement. A target's earlier published history can become deleted after a later managed deletion or reverse migration. These are historical facts, not permission to erase disks; mismatched or incomplete receipts require task reconciliation first.
+
+## Retry prepared installation and interrupted restore opening
+
+After a fresh installation has retained a `prepared` receipt (for example,
+certificate readiness failed), run `fc --directory DIR install resume` after
+repairing the reported readiness problem. This uses the recorded pins and
+existing identity; it does not select latest, pull replacement images or repeat
+initialization. Configuration drift and recovered deployments are rejected.
+
+Restore preparation records the original source project before replacing its
+receipt. Repeat the same preparation after an interrupted `preparing` phase;
+the archived source identity/project remain authoritative. For an interrupted
+`restore open`, repeat the original confirmed NodeID. Durable `opening` intent
+allows recovery after the owned public marker was removed but before the ready
+receipt was written. The retry reestablishes owned maintenance and verifies
+runtime identity, schema and business facts before finishing. It preserves
+administrator-owned maintenance and independent native fences.

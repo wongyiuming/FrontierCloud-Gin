@@ -37,7 +37,7 @@ func run(args []string) int {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage | status | logs | restart | diagnose | backup create|verify|set-create|set-verify | restore check|apply|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage|resume | status | logs | restart | diagnose | backup create|verify|set-create|set-verify | restore check|apply|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -65,6 +65,21 @@ func run(args []string) int {
 			}
 		}
 		_ = json.NewEncoder(os.Stdout).Encode(v)
+	}
+	if len(args) == 2 && args[0] == "install" && args[1] == "resume" {
+		d, receipt, e := operator.Open(*directory)
+		if e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			return 2
+		}
+		d.Runner = dockerRunner{d.Directory}
+		receipt, e = d.ResumeInstall(ctx, receipt)
+		if e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			return 2
+		}
+		emit(receipt)
+		return 0
 	}
 	if args[0] == "doctor" || args[0] == "install" {
 		if args[0] == "install" {
