@@ -23,6 +23,7 @@ type Runner struct {
 	Nodes          store.NodeRepository
 	Client         Caller
 	Traffic        *businesstraffic.Monitor
+	inventoryNow   func() time.Time
 	executionMutex sync.RWMutex
 	execution      *store.MigrationExecution
 }

@@ -260,6 +260,10 @@ func (r *Runner) ObservePlan(ctx context.Context, id, source, target string, pro
 }
 
 func (r *Runner) observePlanScope(ctx context.Context, rel store.Relationship, master, scope string, out *PlanObservation, expected map[string]store.ExpectedPhysicalItem) (err error) {
+	nowTime := r.inventoryNow
+	if nowTime == nil {
+		nowTime = time.Now
+	}
 	id, e := planToken()
 	if e != nil {
 		return e
@@ -283,7 +287,7 @@ func (r *Runner) observePlanScope(ctx context.Context, rel store.Relationship, m
 		err = errors.Join(err, e)
 	}()
 	binding := resourceinventory.Binding{MemberID: rel.PeerID, MasterID: master, RelationshipID: rel.ID, Scope: scope}
-	now := time.Now().Unix()
+	now := nowTime().Unix()
 	if session.ID != id || !planHex(session.Incarnation, 16) || session.Binding != binding || session.CreatedAt < now-30 || session.CreatedAt > now+30 || session.ExpiresAt <= now || session.ExpiresAt != session.CreatedAt+300 {
 		return ErrPlanObservation
 	}
@@ -292,8 +296,22 @@ func (r *Runner) observePlanScope(ctx context.Context, rel store.Relationship, m
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if time.Now().Unix() >= session.ExpiresAt {
+		if nowTime().Unix() >= session.ExpiresAt {
 			return nil, ErrPlanObservation
+		}
+		if action != "close" && session.ExpiresAt-nowTime().Unix() < int64((resourceinventory.SessionTTL-30*time.Second)/time.Second) {
+			value, e := r.request(ctx, rel, "/internal/v1/resource-inventory", map[string]any{"action": "renew", "member_id": rel.PeerID, "scope": scope, "session_id": session.ID, "incarnation": session.Incarnation})
+			if e != nil {
+				return nil, e
+			}
+			var renewed resourceinventory.Session
+			if e = decode(value, &renewed); e != nil {
+				return nil, e
+			}
+			if !resourceinventory.ValidSessionRenewal(session, renewed, nowTime()) {
+				return nil, ErrPlanObservation
+			}
+			session = renewed
 		}
 		request["action"] = action
 		return r.request(ctx, rel, "/internal/v1/resource-inventory", request)

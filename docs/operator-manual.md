@@ -368,6 +368,8 @@ The internal managed-content observation endpoint uses each native media or reco
 
 Host operations report a nonzero result if releasing or syncing their owned operation lock fails. Completed archive/receipt state remains available for inspection; the error does not mean that data or a completed operation was rolled back. Inspect the recorded state and retained lock before another mutation. A replacement lock is never removed by an older operation's release callback.
 
+Migration planning renews live inventory cursors without replacing their scanner or transcript. Final peer retirement scans use a separate, one-connection transport owned by caller cancellation, while ordinary control requests retain their short timeout. Deployment receipts bind both security-exempt and trusted-proxy CIDR sets after masking, sorting and deduplication; expanding trust requires explicit deployment review.
+
 
 Retirement preflight now observes the data directory and the actual native media/recording mounts. Default subdirectories matching those mounts are scanned once; obsolete copies left in default directories after an external mount change are reported as unmanaged leftovers. The report shows per-scope logical bytes and filesystem total/free observations. Different scopes may share one filesystem: never add their free values to estimate target capacity. Writability is unverified until the approved migration admission performs its required checks. An older node without the three-scope observation protocol returns an incomplete check rather than retirement approval. The checks do not delete files or revoke the node.
 

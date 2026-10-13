@@ -21,9 +21,10 @@ func TestPlanScopeCountsAllConflictsAndValidatesFinalPage(t *testing.T) {
 			rel := store.Relationship{ID: strings.Repeat("b", 32), PeerID: strings.Repeat("c", 32)}
 			out := PlanObservation{Plan: store.MigrationPlan{Catalog: store.MigrationCatalog{Source: store.StorageMember{ID: strings.Repeat("d", 32)}, Objects: []store.MigrationObject{{Resource: "media", TargetPath: "music/unit/selected.mp3"}}}}}
 			var session resourceinventory.Session
+			clock := time.Now()
 			digest := sha256.New()
-			pages, closed := 0, 0
-			r := &Runner{Client: planCall(func(ctx context.Context, rel store.Relationship, route string, value any) (map[string]any, error) {
+			pages, closed, renewed := 0, 0, 0
+			r := &Runner{inventoryNow: func() time.Time { return clock }, Client: planCall(func(ctx context.Context, rel store.Relationship, route string, value any) (map[string]any, error) {
 				raw, _ := json.Marshal(value)
 				var req struct {
 					Action   string `json:"action"`
@@ -36,8 +37,12 @@ func TestPlanScopeCountsAllConflictsAndValidatesFinalPage(t *testing.T) {
 				var result any
 				switch req.Action {
 				case "open":
-					now := time.Now().Unix()
+					now := clock.Unix()
 					session = resourceinventory.Session{ID: req.ID, Incarnation: strings.Repeat("e", 32), Binding: resourceinventory.Binding{MemberID: rel.PeerID, MasterID: master, RelationshipID: rel.ID, Scope: "media"}, CreatedAt: now, ExpiresAt: now + 300}
+					result = session
+				case "renew":
+					renewed++
+					session.ExpiresAt = clock.Add(resourceinventory.SessionTTL).Unix()
 					result = session
 				case "close":
 					closed++
@@ -56,6 +61,9 @@ func TestPlanScopeCountsAllConflictsAndValidatesFinalPage(t *testing.T) {
 					page.Complete = end == 70
 					page.EntryCount, page.LogicalBytes = uint64(end), int64(end)
 					page.ObservationSHA256 = hex.EncodeToString(digest.Sum(nil))
+					if req.Sequence == 0 {
+						clock = clock.Add(31 * time.Second)
+					}
 					if corrupt && page.Complete {
 						page.ObservationSHA256 = strings.Repeat("f", 64)
 					}
@@ -74,7 +82,7 @@ func TestPlanScopeCountsAllConflictsAndValidatesFinalPage(t *testing.T) {
 				return reply, nil
 			})}
 			e := r.observePlanScope(context.Background(), rel, master, "media", &out, nil)
-			if (e != nil) != corrupt || pages != 2 || closed != 1 || out.Plan.Catalog.TotalBlockers() != 70 || len(out.Plan.Catalog.Blockers) != 64 {
+			if (e != nil) != corrupt || pages != 2 || closed != 1 || renewed != 1 || out.Plan.Catalog.TotalBlockers() != 70 || len(out.Plan.Catalog.Blockers) != 64 {
 				t.Fatal("scan stopped at sample limit or skipped final validation", e, pages, closed, out.Plan.Catalog.TotalBlockers(), len(out.Plan.Catalog.Blockers))
 			}
 		})

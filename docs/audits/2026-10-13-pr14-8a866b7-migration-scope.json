@@ -1,0 +1,22 @@
+{
+  "native_accepted_source": "c529a99e80f8d2d4ab3f115145d14e8e81137218",
+  "current_source": "8a866b71bab57febc2bcae13154c292dbce8b923",
+  "changed_code_paths": [
+    "cmd/fc/main.go",
+    "internal/operator/backup.go",
+    "internal/operator/deployment.go",
+    "internal/operator/install_resume.go",
+    "internal/operator/ninth_review_test.go",
+    "internal/operator/operation.go",
+    "internal/operator/recovery_set.go",
+    "internal/operator/recovery_set_activate.go",
+    "internal/operator/restore.go",
+    "internal/operator/upgrade.go",
+    "internal/operator/upgrade_open.go",
+    "internal/operator/upgrade_resume.go",
+    "internal/resourcemigration/cancel.go",
+    "internal/resourcemigration/cleanup.go",
+    "internal/resourcemigration/recheck.go"
+  ],
+  "scope": "Native migration evidence stays explicitly scoped to c529a99; current cleanup/cancellation deadline changes have separate race coverage and operator changes have fresh native coverage. No whole-tree equivalence claim."
+}

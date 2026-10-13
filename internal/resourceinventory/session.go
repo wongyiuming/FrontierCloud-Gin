@@ -30,6 +30,11 @@ type Session struct {
 	CreatedAt   int64   `json:"created_at"`
 	ExpiresAt   int64   `json:"expires_at"`
 }
+
+func ValidSessionRenewal(old, renewed Session, now time.Time) bool {
+	return renewed.ID == old.ID && renewed.Incarnation == old.Incarnation && renewed.Binding == old.Binding && renewed.CreatedAt == old.CreatedAt && renewed.ExpiresAt >= old.ExpiresAt && renewed.ExpiresAt > now.Unix() && renewed.ExpiresAt <= now.Add(SessionTTL).Unix()
+}
+
 type SessionPage struct {
 	Session Session `json:"session"`
 	Page    Page    `json:"page"`

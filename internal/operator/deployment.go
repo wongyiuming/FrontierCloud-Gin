@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -303,6 +304,8 @@ func selectionHash(cfg Config) string {
 		}
 		env["REDIS_URL"] = redisLocation(s.Environment["REDIS_URL"])
 		env["HTTP_ADDR"] = listenLocation(s.Environment)
+		env["SECURITY_EXEMPT_NETWORKS"] = trustNetworks(s.Environment["SECURITY_EXEMPT_NETWORKS"], "127.0.0.0/8,::1/128", false)
+		env["TRUSTED_PROXY_NETWORKS"] = trustNetworks(s.Environment["TRUSTED_PROXY_NETWORKS"], "172.16.0.0/12", true)
 		execution := map[string]any{}
 		for name, raw := range s.Execution {
 			var value any
@@ -364,6 +367,31 @@ func listenLocation(environment map[string]string) string {
 		return "invalid:" + hex.EncodeToString(h[:])
 	}
 	return net.JoinHostPort(host, port)
+}
+
+func trustNetworks(value, defaults string, skipEmpty bool) string {
+	if value == "" {
+		value = defaults
+	}
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(value, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" && skipEmpty {
+			continue
+		}
+		prefix, e := netip.ParsePrefix(raw)
+		if e != nil {
+			h := sha256.Sum256([]byte(value))
+			return "invalid:" + hex.EncodeToString(h[:])
+		}
+		seen[prefix.Masked().String()] = true
+	}
+	values := make([]string, 0, len(seen))
+	for name := range seen {
+		values = append(values, name)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
 }
 func readRegular(path string, limit int64) ([]byte, error) {
 	info, err := os.Lstat(path)

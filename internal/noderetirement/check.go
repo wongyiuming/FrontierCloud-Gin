@@ -24,7 +24,7 @@ const MaxSamples = 8
 const MaxCategories = 64
 
 func acceptSessionRenewal(old, renewed resourceinventory.Session, now time.Time) error {
-	if renewed.ID != old.ID || renewed.Incarnation != old.Incarnation || renewed.Binding != old.Binding || renewed.CreatedAt != old.CreatedAt || renewed.ExpiresAt < old.ExpiresAt || renewed.ExpiresAt <= now.Unix() || renewed.ExpiresAt > now.Add(resourceinventory.SessionTTL).Unix() {
+	if !resourceinventory.ValidSessionRenewal(old, renewed, now) {
 		return ErrObservation
 	}
 	return nil

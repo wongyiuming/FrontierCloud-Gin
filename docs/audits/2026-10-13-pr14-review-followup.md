@@ -214,3 +214,17 @@ inspection; replacement locks are preserved. `pr14-ninth-review-race` passes
 operator/CLI/recovery/migration regressions, including verified-archive retention
 on failed lock release and replacement-lock preservation. Latest exact native,
 CI and review gates are pending. Production remains unchanged.
+
+## Tenth review checkpoint
+
+`8a866b7` passes actual SQLite/MySQL upgrade/restore, two-node recovery,
+Master/Direct initializing-install resume and full Go race with actual isolated
+Redis. Three subsequent review findings are corrected: final peer retirement
+uses a separate caller-owned response transport and peer cancellation context;
+security-exempt/trusted-proxy CIDRs are receipt-bound after canonicalization;
+and migration plan inventory renews the same live bound session. Shared renewal
+validation preserves identity, incarnation, creation and bounded idle expiry.
+`pr14-tenth-review-race` passes node/inventory/retirement/planner/operator/HTTP API/
+CLI packages, including delayed private-CA responses/cancellation, CIDR trust
+expansion and a clock-advanced multi-page plan with renewal. Fresh exact native,
+CI and review remain pending; production has not been modified.

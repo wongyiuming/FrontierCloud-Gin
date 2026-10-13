@@ -7,6 +7,7 @@ private and stopped after capture. Failed fixtures retain their recovery materia
 import argparse
 import hashlib
 import http.cookiejar
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -86,6 +87,25 @@ def fingerprint(configuration):
             return 'invalid:' + hashlib.sha256(value.encode()).hexdigest()
         return host + ':' + port
 
+    def trust_networks(value, defaults, skip_empty):
+        value = value or defaults
+        try:
+            prefixes = []
+            for raw in value.split(','):
+                raw = raw.strip()
+                if not raw and skip_empty:
+                    continue
+                if '/' not in raw or '%' in raw:
+                    raise ValueError('invalid prefix')
+                prefix = ipaddress.ip_network(raw, strict=False)
+                if prefix.version == 6 and prefix.network_address.ipv4_mapped:
+                    prefixes.append('::ffff:' + str(prefix.network_address.ipv4_mapped) + '/' + str(prefix.prefixlen))
+                else:
+                    prefixes.append(str(prefix))
+        except ValueError:
+            return 'invalid:' + hashlib.sha256(value.encode()).hexdigest()
+        return ','.join(sorted(set(prefixes)))
+
     services = {}
     for name in sorted(configuration['services']):
         service = configuration['services'][name]
@@ -105,6 +125,8 @@ def fingerprint(configuration):
     for name in services:
         services[name]['environment']['REDIS_URL'] = redis_location(configuration['services'][name].get('environment', {}).get('REDIS_URL', ''))
         services[name]['environment']['HTTP_ADDR'] = listen_location(configuration['services'][name].get('environment', {}))
+        services[name]['environment']['SECURITY_EXEMPT_NETWORKS'] = trust_networks(configuration['services'][name].get('environment', {}).get('SECURITY_EXEMPT_NETWORKS', ''), '127.0.0.0/8,::1/128', False)
+        services[name]['environment']['TRUSTED_PROXY_NETWORKS'] = trust_networks(configuration['services'][name].get('environment', {}).get('TRUSTED_PROXY_NETWORKS', ''), '172.16.0.0/12', True)
         services[name]['environment'] = dict(sorted(services[name]['environment'].items()))
     volumes = {name: {'name': value['name'], 'external': value.get('external', False)}
                for name in sorted(configuration.get('volumes', {}))

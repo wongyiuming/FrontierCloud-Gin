@@ -15,7 +15,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 // The peer performs its own final native scan while holding media and recording
@@ -87,7 +86,7 @@ func RegisterNodeRetirementPeer(router *gin.Engine, settings config.Config, reso
 			detail(c, 429, "Retirement reconciliation is running")
 			return
 		}
-		ctx, stop := context.WithTimeout(c.Request.Context(), 4*time.Minute)
+		ctx, stop := context.WithCancel(c.Request.Context())
 		defer stop()
 		unhook := context.AfterFunc(shutdown, stop)
 		defer unhook()
