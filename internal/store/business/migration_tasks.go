@@ -187,7 +187,16 @@ func (r *Repository) StartMigration(ctx context.Context, p store.MigrationPlan, 
 
 var _ store.MigrationRepository = (*Repository)(nil)
 
-func (r *Repository) ControlMigration(ctx context.Context, id, action string, a store.NodeAudit) (task store.MigrationTask, e error) {
+func (r *Repository) ControlMigration(ctx context.Context, id, action string, a store.NodeAudit) (store.MigrationTask, error) {
+	return r.controlMigration(ctx, id, action, nil, a)
+}
+func (r *Repository) ControlMigrationRevision(ctx context.Context, id, action string, revision int64, a store.NodeAudit) (store.MigrationTask, error) {
+	if revision < 1 {
+		return store.MigrationTask{}, store.ErrMigrationState
+	}
+	return r.controlMigration(ctx, id, action, &revision, a)
+}
+func (r *Repository) controlMigration(ctx context.Context, id, action string, revision *int64, a store.NodeAudit) (task store.MigrationTask, e error) {
 	if !nodeIDPattern.MatchString(id) {
 		return task, store.ErrMigrationState
 	}
@@ -203,7 +212,7 @@ func (r *Repository) ControlMigration(ctx context.Context, id, action string, a 
 		if e != nil {
 			return e
 		}
-		if task.MasterID != n.ID {
+		if task.MasterID != n.ID || revision != nil && task.Revision != *revision {
 			return store.ErrMigrationState
 		}
 		state := task.State

@@ -3,12 +3,14 @@ package httpapi
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -74,6 +76,7 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	RegisterAdminMigrations(router, a, db.Pool().(store.MigrationAdminRepository))
 	checker := &retirementAdminFixture{}
 	RegisterAdminRetirement(router, a, checker)
 	cookies := map[string]*http.Cookie{}
@@ -96,6 +99,9 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	}
 	path := "/nodes/" + strings.Repeat("1", 32) + "/retire/check"
 	body := `{"member_id":"` + strings.Repeat("2", 32) + `"}`
+	if w := perform("GET", "/nodes/migrations", "", false); w.Code != 401 {
+		t.Fatal("anonymous migration listing", w.Code)
+	}
 	if w := perform("POST", path, body, false); w.Code != 401 {
 		t.Fatal("anonymous check", w.Code)
 	}
@@ -119,6 +125,40 @@ func TestAdminRetirementRedisAuthenticationCSRFBoundsAndBusy(t *testing.T) {
 	}
 	if w := perform("POST", path, body, true); w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || !strings.Contains(w.Body.String(), `"preflight_only":true`) {
 		t.Fatal("check report", w.Code, w.Body.String())
+	}
+	if _, e = db.Nodes().PromoteIdentity(context.Background(), store.NodePromotion{Role: "Master", Endpoint: "https://retirement.test", Allocation: store.GiB, PhysicalFree: 10 * store.GiB}, store.NodeAudit{}); e != nil {
+		t.Fatal(e)
+	}
+	taskID := strings.Repeat("f", 32)
+	source := strings.Repeat("3", 32)
+	target := strings.Repeat("4", 32)
+	if _, e = db.Database().Exec("INSERT INTO migration_tasks(task_id,master_id,source_id,target_id,source_relationship,target_relationship,plan_sha256,plan,state,revision,object_count,total_bytes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'{}','queued',1,0,0,1,1)", taskID, identity.ID, source, target, strings.Repeat("5", 32), strings.Repeat("6", 32), strings.Repeat("7", 64)); e != nil {
+		t.Fatal(e)
+	}
+	migrationPath := "/nodes/migrations/" + taskID
+	if w := perform("GET", "/nodes/migrations", "", false); w.Code != 200 {
+		t.Fatal("migration task listing", w.Code, w.Body.String())
+	}
+	if w := perform("GET", migrationPath, "", false); w.Code != 200 || !strings.Contains(w.Body.String(), `"retirement_ready":false`) {
+		t.Fatal("migration status", w.Code, w.Body.String())
+	}
+	payload, _ := json.Marshal(map[string]any{"action": "pause", "revision": 1, "confirm_source_id": source, "confirm_target_id": target})
+	if w := perform("POST", migrationPath+"/control", string(payload), false); w.Code != 403 {
+		t.Fatal("migration control missing CSRF", w.Code)
+	}
+	if w := perform("POST", migrationPath+"/control", string(payload), true); w.Code != 200 || !strings.Contains(w.Body.String(), `"state":"paused"`) {
+		t.Fatal("migration pause", w.Code, w.Body.String())
+	}
+	if w := perform("POST", migrationPath+"/control", string(payload), true); w.Code != 409 {
+		t.Fatal("stale migration revision", w.Code)
+	}
+	wrong, _ := json.Marshal(map[string]any{"action": "cancel", "revision": 2, "confirm_source_id": target, "confirm_target_id": source})
+	if w := perform("POST", migrationPath+"/control", string(wrong), true); w.Code != 409 {
+		t.Fatal("wrong node confirmation", w.Code)
+	}
+	bad := strings.TrimSuffix(string(payload), "}") + `,"force":true}`
+	if w := perform("POST", migrationPath+"/control", bad, true); w.Code != 422 {
+		t.Fatal("unknown migration field", w.Code)
 	}
 	checker.failure = true
 	if w := perform("POST", path, body, true); w.Code != 409 || strings.Contains(w.Body.String(), "credential") || !strings.Contains(w.Body.String(), `"observation_complete":false`) {

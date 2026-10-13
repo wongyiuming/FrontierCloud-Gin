@@ -16,6 +16,8 @@
     let refreshQueue = Promise.resolve();
     const certificateViews = new Map();
     const retirementViews = new Map();
+    const migrationViews = new Map();
+    let migrationCursor = {time: 0, id: ""};
     const setStatus = text => { $('nodeOperationStatus').textContent = text || ''; };
     const visible = (id, show) => $(id).classList.toggle('hidden', !show);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -119,7 +121,12 @@
         let observability = {members: [], relationships: []};
         try { observability = await api('/api/v1/media/admin/nodes/observability'); }
         catch (error) { console.warn('node observability unavailable', error); }
-        return {node, observability};
+        let migrations = null;
+        if (node.role === 'Master') {
+            const query = migrationCursor.id ? `?after_time=${migrationCursor.time}&after_id=${encodeURIComponent(migrationCursor.id)}` : '';
+            migrations = await api(`/api/v1/media/admin/nodes/migrations${query}`);
+        }
+        return {node, observability, migrations};
     }
 
     function ensureOverview() {
@@ -306,6 +313,51 @@
         return row;
     }
 
+    function migrationPanel(page) {
+        const section = make('section', 'node-resource-panel');
+        section.append(make('strong', '', '资源迁移任务'));
+        section.append(make('p', 'node-note', '任务保存在 Master。目标暂存或发布不代表归属已提交；取消保留已提交资源，排空状态需另行明确解除。迁移完成后仍需独立退役检查。'));
+        const labels = {queued: '等待执行', copying: '复制中', verifying: '校验中', committing: '归属提交中', cleanup_pending: '清理待办', paused: '已暂停', cancelling: '取消清理中', cancelled: '已取消', failed: '失败', completed: '已完成'};
+        for (const task of (page.tasks || []).slice(0, 16)) {
+            const card = make('article', 'node-config-box');
+            card.append(make('strong', '', `${task.task_id} · ${labels[task.state] || task.state}`));
+            card.append(kv([['源节点', task.source_id], ['目标节点', task.target_id], ['对象数', task.object_count], ['已提交 / 全部', `${dataSize(task.committed_bytes)} / ${dataSize(task.total_bytes)}`]]));
+            if (task.error_code) card.append(make('p', 'node-note', `失败原因：${task.error_code}。核对节点连接、容量与任务检查点后重试。`));
+            const detail = migrationViews.get(task.task_id);
+            const load = async after => {
+                const value = await api(`/api/v1/media/admin/nodes/migrations/${encodeURIComponent(task.task_id)}${after ? `?after=${encodeURIComponent(after)}` : ''}`);
+                migrationViews.set(task.task_id, {at: Date.now(), value});
+                if (migrationViews.size > 64) migrationViews.delete(migrationViews.keys().next().value);
+            };
+            const actions = make('div', 'node-card-actions');
+            actions.append(button('更新检查点', () => load('')));
+            const control = action => async () => {
+                if (action === 'cancel' && !window.confirm(`取消任务 ${task.task_id}？\n源：${task.source_id}\n目标：${task.target_id}\n已提交资源保留在目标，未提交副本通过任务事务清理；不会自动解除排空。`)) return '未发送取消请求';
+                await post(`/migrations/${encodeURIComponent(task.task_id)}/control`, {action, revision: task.revision, confirm_source_id: task.source_id, confirm_target_id: task.target_id});
+                await load('');
+            };
+            if (['queued', 'copying', 'verifying', 'committing', 'cleanup_pending'].includes(task.state)) actions.append(button('暂停', control('pause')));
+            if (task.state === 'paused') actions.append(button('恢复', control('resume')));
+            if (task.state === 'failed' || ['cleanup_pending', 'cancelling'].includes(task.state) && task.error_code) actions.append(button('重试', control('retry')));
+            if (!['completed', 'cancelled', 'cancelling'].includes(task.state)) actions.append(button('取消任务', control('cancel'), 'danger'));
+            card.append(actions);
+            if (detail) {
+                card.append(make('p', 'node-note', `检查点观察：${new Date(detail.at).toLocaleString()}，点击更新获取当前事实。`));
+                for (const stage of (detail.value.object_stages || []).slice(0, 16)) card.append(make('p', '', `对象 ${stage.state}: ${stage.count} · 已验证 ${dataSize(stage.verified_bytes)} / ${dataSize(stage.size_bytes)}`));
+                for (const stage of (detail.value.unit_stages || []).slice(0, 16)) card.append(make('p', '', `归属单元 ${stage.state}: ${stage.count} · ${dataSize(stage.size_bytes)}`));
+                for (const object of (detail.value.objects || []).slice(0, 16)) card.append(make('p', '', `${object.physical_path} · ${object.state} · 已验证 ${dataSize(object.verified_bytes)} / ${dataSize(object.size_bytes)}`));
+                if (!detail.value.complete) card.append(button('下一页对象', () => load(detail.value.next)));
+            }
+            section.append(card);
+        }
+        if (!page.tasks?.length) section.append(make('p', '', '本页没有持久化迁移任务。'));
+        const pages = make('div', 'node-card-actions');
+        if (!page.complete) pages.append(button('下一页任务', async () => { migrationCursor = {time: page.next_time, id: page.next_id}; }));
+        if (migrationCursor.id) pages.append(button('返回最新任务', async () => { migrationCursor = {time: 0, id: ''}; }));
+        section.append(pages);
+        return section;
+    }
+
     function retirementPanel(member, relation) {
         const section = make('section', 'node-resource-panel');
         section.append(make('strong', '', '退役检查'));
@@ -446,7 +498,7 @@
         return '已下载此节点的证书及私钥 PEM 文件';
     }
 
-    function renderRows(node, observed) {
+    function renderRows(node, observed, migrations) {
         const body = $('nodeRelationships'); body.replaceChildren();
         if (node.certificate) {
             const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 4;
@@ -458,11 +510,15 @@
             for (const member of node.storage_pool.members || []) body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id)));
 
         }
+        if (node.role === 'Master' && migrations) {
+            const row = make('tr'); const cell = make('td'); cell.colSpan = 4;
+            cell.append(migrationPanel(migrations)); row.append(cell); body.append(row);
+        }
     }
 
     async function refresh() {
         const current = refreshQueue.then(async () => {
-            const {node, observability} = await loadData();
+            const {node, observability, migrations} = await loadData();
             $('nodeIdentity').textContent = `${node.role} · ${node.node_id} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
             visible('nodePromotion', node.role === 'Standalone'); visible('nodePairing', node.role !== 'Standalone');
             visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
@@ -471,7 +527,7 @@
             renderOverview(node, observability);
             const pool = node.storage_pool;
             $('storagePoolSummary').textContent = pool ? `Storage Pool · ${storageText(pool)}` : `${node.role} · 资源策略由 Master 管理`;
-            renderRows(node, observability);
+            renderRows(node, observability, migrations);
         });
         refreshQueue = current.catch(() => {}); return current;
     }

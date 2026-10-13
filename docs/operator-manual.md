@@ -251,3 +251,28 @@ never grants permission to revoke a node or erase its disk. Human output quotes
 sample paths to avoid terminal control sequences; `--json` emits the bounded typed
 report, including available partial observations on failure. `retire apply` is
 not yet implemented.
+
+
+### Existing migration task controls
+
+The dev Master Nodes module lists persisted migration tasks in pages of 16,
+including failures and historical terminal tasks. Checkpoint details separately
+page through up to 16 objects (48 KiB encoded object-data budget), with aggregate
+object/unit states, verified bytes and authoritative committed bytes. Target
+publication is not counted as authoritative ownership commit. Historical
+checkpoint views show their observation time and require explicit refresh.
+
+Task controls call the same authenticated Admin service: pause, resume, retry
+and cancel. Each mutation confirms source/target NodeIDs and the displayed task
+revision; a stale revision returns a conflict and requires refresh. The SQL
+transaction fences current runners and retains reservations until managed
+cleanup. Cancelling keeps committed units at the target and does not release
+source draining. Releasing a task-owned drain and retiring a node remain distinct
+actions; neither is performed by these controls.
+
+The API is under `/api/v1/media/admin/nodes/migrations`: collection GET uses
+`after_time`/`after_id`, task GET uses an object `after` cursor, and task
+`/control` POST requires `action`, `revision`, `confirm_source_id` and
+`confirm_target_id`, with the existing session/CSRF and HTTPS boundaries.
+New task planning/start and the matching migration CLI are still under
+implementation; callers cannot submit fabricated disk proofs through this API.
