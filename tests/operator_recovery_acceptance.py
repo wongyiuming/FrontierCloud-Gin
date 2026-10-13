@@ -90,6 +90,7 @@ def fingerprint(configuration):
                           'mounts': mounts, 'ports': ports}
     for name in services:
         services[name]['environment']['REDIS_URL'] = redis_location(configuration['services'][name].get('environment', {}).get('REDIS_URL', ''))
+        services[name]['environment'] = dict(sorted(services[name]['environment'].items()))
     volumes = {name: {'name': value['name'], 'external': value.get('external', False)}
                for name in sorted(configuration.get('volumes', {}))
                for value in [configuration['volumes'][name]]}
