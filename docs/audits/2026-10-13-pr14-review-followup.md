@@ -135,3 +135,18 @@ residue and actual verified archive survival through cleanup failure. The prior
 opening fixture is updated to model its real retained ownership inode. Fresh
 native validation and exact-head CI/review remain pending for these changes;
 production is still untouched.
+
+## Fifth review checkpoint
+
+`817790e` actual native SQLite/MySQL 6→7 upgrade/resume, CLI restore/Range,
+two-node recovery and Master/Direct pre-initialization install resume all pass;
+full Go race passes. Subsequent review finds six remaining retry/publication
+boundaries. New fixes expose single-deployment `restore prepare`, atomically
+publish exclusive JSON, aggregate member cleanup warnings, accept identical
+prior upgrade history, block administrator maintenance before activation, and
+record/retry plan-specific generated stage cleanup. The affected-package race
+passes in `pr14-fifth-review-race-second`; the first compile failure is retained.
+The actual native driver now exercises separate CLI preparation on existing
+restored material. Fresh native validation and exact-head CI/review for the
+latest fixes remain pending. No production changes or public target release
+proof are claimed.

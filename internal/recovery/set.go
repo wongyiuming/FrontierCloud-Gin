@@ -48,11 +48,17 @@ type SetManifest struct {
 	Members     []SetMember `json:"members"`
 }
 type SetReport struct {
-	Manifest         SetManifest `json:"manifest"`
-	SHA256           string      `json:"sha256"`
-	Verified         bool        `json:"integrity_verified"`
-	CompleteCluster  bool        `json:"complete_cluster"`
-	BusinessVerified bool        `json:"restored_business_verified"`
+	Manifest         SetManifest               `json:"manifest"`
+	SHA256           string                    `json:"sha256"`
+	Verified         bool                      `json:"integrity_verified"`
+	CompleteCluster  bool                      `json:"complete_cluster"`
+	BusinessVerified bool                      `json:"restored_business_verified"`
+	CleanupWarnings  map[string]ScratchWarning `json:"cleanup_warnings,omitempty"`
+}
+
+type ScratchWarning struct {
+	Warning         string `json:"warning"`
+	RetainedScratch string `json:"retained_scratch"`
 }
 
 // ValidateSetGraph admits exactly one Master and its complete reciprocal set

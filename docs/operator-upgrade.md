@@ -182,3 +182,10 @@ intent persistence has a different inode and is never adopted or removed. The
 staged ownership file is removed only after durable successful ready publication.
 A verified backup with a scratch-cleanup warning remains a valid recovery point;
 its warning and retained scratch location are recorded in the upgrade journal.
+
+Prior completed upgrade journals can be archived again only when the existing
+history file is byte-identical. Conflicting history remains blocked. Generated
+upgrade marker staging uses the approved plan's digest in its filename, so
+retained prior staging does not obstruct another plan. Cleanup failure is
+persisted as `stage_cleanup_warning`; repeating the same completed `upgrade open`
+retries only that recorded generated stage, preserving administrator maintenance.

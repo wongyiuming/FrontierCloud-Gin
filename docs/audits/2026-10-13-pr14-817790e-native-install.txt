@@ -1,0 +1,1 @@
+PASS: compiled fc guards and private native installation protocol; public release installation remains unclaimed

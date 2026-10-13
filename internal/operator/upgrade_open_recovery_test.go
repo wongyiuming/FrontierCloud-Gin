@@ -37,7 +37,7 @@ func TestUpgradeOpenRecoversDurableInterruptedOpeningAndReceiptWindows(t *testin
 				state.Phase = phase
 				state.ManualOwned = phase != "opened"
 				state.ManualStaged = true
-				if e = os.WriteFile(filepath.Join(runner.data, upgradeManualStage), []byte("manual\n"), 0600); e != nil {
+				if e = os.WriteFile(filepath.Join(runner.data, upgradeManualStage+"-"+plan.SHA256), []byte("manual\n"), 0600); e != nil {
 					t.Fatal(e)
 				}
 				if e = d.saveUpgrade(state); e != nil {
@@ -47,7 +47,7 @@ func TestUpgradeOpenRecoversDurableInterruptedOpeningAndReceiptWindows(t *testin
 					t.Fatal(e)
 				}
 				if markerPresent {
-					if e = os.Link(filepath.Join(runner.data, upgradeManualStage), filepath.Join(runner.data, sitecontrol.Manual)); e != nil {
+					if e = os.Link(filepath.Join(runner.data, upgradeManualStage+"-"+plan.SHA256), filepath.Join(runner.data, sitecontrol.Manual)); e != nil {
 						t.Fatal(e)
 					}
 				}

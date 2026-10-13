@@ -63,8 +63,8 @@ func checkMaterial(ctx context.Context, directory string, expected Report, prepa
 		}
 		if !allowed[name] {
 			knownScratch := false
-			if preparing && item.Type().IsRegular() {
-				for final := range mutable {
+			if item.Type().IsRegular() {
+				for _, final := range []string{"deployment/.fc-deployment.json", "deployment/.fc-images.json", "deployment/.fc-restore.json", "deployment/docker-compose.recovered.json", "deployment/.fc-recovery-set.json"} {
 					if name == final+".next" || strings.HasPrefix(name, final+".next-") {
 						knownScratch = true
 					}

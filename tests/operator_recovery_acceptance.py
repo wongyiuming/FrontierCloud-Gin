@@ -317,7 +317,9 @@ def run(args):
         assert not target.exists(), 'restore check created a target'
         command([str(args.binary), 'restore', 'apply', '--file', str(archive), '--target', str(target),
                  '--sha256', report['sha256'], '--confirm-node-id', before_fact['node_id'],
-                 '--deployment', '--project', restored_project])
+                 ])
+        command([str(args.binary), 'restore', 'prepare', '--file', str(archive), '--target', str(target),
+                 '--sha256', report['sha256'], '--confirm-node-id', before_fact['node_id'], '--project', restored_project])
         assert (target / 'data/.frontiercloud-native-maintenance').exists()
         assert (target / 'runtime_secrets/admin_key').read_text().strip() == key
         restore_dir = target / 'deployment'

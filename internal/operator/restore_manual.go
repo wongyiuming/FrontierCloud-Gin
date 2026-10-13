@@ -25,7 +25,7 @@ func (d *Deployment) prepareRestoreManual(ctx context.Context, data string, stat
 	defer done()
 	if !state.ManualStaged {
 		if _, e = root.Lstat(sitecontrol.Manual); e == nil {
-			return nil
+			return errors.New("administrator maintenance must be cleared separately before restore activation")
 		} else if !os.IsNotExist(e) {
 			return e
 		}

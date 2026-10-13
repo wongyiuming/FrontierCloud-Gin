@@ -412,3 +412,19 @@ volume driver options cannot silently redirect restored or initializing state.
 Verified backups report `cleanup_warning` and `retained_scratch` when removing
 only generated scratch fails. This does not invalidate the durable archive;
 upgrade journals retain its checksum and cleanup warning while staying resumable.
+
+If `restore apply --deployment` stops after publishing material but before
+preparation completes, use the separate non-extracting preparation command:
+
+```sh
+./fc restore prepare --file /private/deployment.tar --sha256 ARCHIVE_SHA256 \
+  --target /existing/verified-material --confirm-node-id SOURCE_NODE_ID \
+  --project new-empty-project
+```
+
+It verifies original archive and material, then resumes only matching preparation
+intent. It never runs initializers or overwrites a nonempty extraction target.
+Administrator maintenance blocks activation before consumers start; after separate
+administrator clearance, repeat the same activation rather than claiming that
+marker's ownership. Exclusive JSON intent publication is synced and atomic,
+with no-overwrite final-name semantics.

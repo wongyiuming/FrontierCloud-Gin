@@ -336,15 +336,20 @@ func exclusiveJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".next-")
 	if err != nil {
 		return err
 	}
+	temporary := f.Name()
+	defer os.Remove(temporary)
 	_, err = f.Write(append(raw, '\n'))
 	if err == nil {
 		err = f.Sync()
 	}
 	if err = errors.Join(err, f.Close()); err != nil {
+		return err
+	}
+	if err = os.Link(temporary, path); err != nil {
 		return err
 	}
 	root, err := os.OpenRoot(filepath.Dir(path))
@@ -353,6 +358,19 @@ func exclusiveJSON(path string, value any) error {
 	}
 	defer root.Close()
 	return fsutil.SyncDirectory(root, ".")
+}
+
+func exclusiveJSONOrSame(path string, value any) error {
+	e := exclusiveJSON(path, value)
+	if !os.IsExist(e) {
+		return e
+	}
+	existing, err := readRegular(path, 2<<20)
+	expected, marshalErr := json.MarshalIndent(value, "", "  ")
+	if err != nil || marshalErr != nil || !bytes.Equal(existing, append(expected, '\n')) {
+		return errors.New("existing archived journal differs; preserve both histories")
+	}
+	return nil
 }
 func (d *Deployment) ValidateReceipt(ctx context.Context, r Receipt) (Config, error) {
 	cfg, err := d.Config(ctx, true)

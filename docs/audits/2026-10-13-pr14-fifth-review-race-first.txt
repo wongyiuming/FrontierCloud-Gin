@@ -1,0 +1,7 @@
+# github.com/wongyiuming/FrontierCloud-Gin/internal/operator
+internal/operator/upgrade_open.go:49:2: declared and not used: stageName
+internal/operator/upgrade_open.go:49:42: undefined: state
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/internal/operator [build failed]
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/recovery	1.871s
+FAIL	github.com/wongyiuming/FrontierCloud-Gin/cmd/fc [build failed]
+FAIL

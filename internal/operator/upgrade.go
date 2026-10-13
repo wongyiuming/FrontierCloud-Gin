@@ -57,6 +57,7 @@ type UpgradeState struct {
 	BackupScratch         string      `json:"backup_retained_scratch,omitempty"`
 	ManualOwned           bool        `json:"owns_manual_maintenance"`
 	ManualStaged          bool        `json:"manual_creation_staged,omitempty"`
+	StageCleanupWarning   string      `json:"stage_cleanup_warning,omitempty"`
 	Failure               string      `json:"failure,omitempty"`
 	BusinessVerified      bool        `json:"business_verified"`
 }
@@ -213,7 +214,7 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 			return state, errors.New("prior upgrade is unfinished; preserve its journal and recovery archive")
 		}
 		// Keep every previous receipt and recovery reference; never erase history.
-		if e = exclusiveJSON(filepath.Join(d.Directory, ".fc-upgrade-"+prior.Plan.SHA256+".json"), prior); e != nil {
+		if e = exclusiveJSONOrSame(filepath.Join(d.Directory, ".fc-upgrade-"+prior.Plan.SHA256+".json"), prior); e != nil {
 			return state, e
 		}
 	} else if !os.IsNotExist(e) {

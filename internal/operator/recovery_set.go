@@ -175,6 +175,7 @@ func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, ma
 		if e := os.Mkdir(output, 0700); e != nil {
 			return e
 		}
+		warnings := map[string]recovery.ScratchWarning{}
 		for index, item := range items {
 			member := &m.Members[index]
 			member.Archive = member.NodeID + ".tar"
@@ -184,9 +185,13 @@ func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, ma
 			}
 			member.SHA256 = r.SHA256
 			member.Bytes = r.Manifest.Bytes
+			if r.CleanupWarning != "" {
+				warnings[member.NodeID] = recovery.ScratchWarning{Warning: r.CleanupWarning, RetainedScratch: r.RetainedScratch}
+			}
 		}
 		var e error
 		result, e = recovery.PublishSet(ctx, output, m)
+		result.CleanupWarnings = warnings
 		return e
 	}
 	if e := capture(0); e != nil {

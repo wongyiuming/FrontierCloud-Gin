@@ -89,7 +89,7 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 	var intent RestoreState
 	if _, e := os.Lstat(filepath.Join(directory, RestoreJournal)); !os.IsNotExist(e) {
 		intent, e = (&Deployment{Directory: directory}).restoreState()
-		if e != nil || intent.Phase != "preparing" || intent.NodeID != report.Manifest.NodeID || intent.ArchiveSHA != report.SHA256 || intent.Project != project || !composeProject.MatchString(intent.SourceProject) {
+		if e != nil || (intent.Phase != "preparing" && intent.Phase != "prepared") || intent.NodeID != report.Manifest.NodeID || intent.ArchiveSHA != report.SHA256 || intent.Project != project || !composeProject.MatchString(intent.SourceProject) {
 			return nil, empty, errors.New("restoration already prepared or incompatible interrupted intent; preserve its journal")
 		}
 	}
@@ -98,6 +98,15 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 		return nil, empty, e
 	}
 	source.Runner = runner
+	if intent.Phase == "prepared" {
+		if !old.Recovered || old.Project != project || old.State != "restored_fenced" {
+			return nil, empty, errors.New("prepared restore receipt changed")
+		}
+		if _, e = source.ValidateReceipt(ctx, old); e != nil {
+			return nil, empty, e
+		}
+		return source, old, nil
+	}
 	if old.Revision != report.Manifest.Revision || old.Database != report.Manifest.Database || old.Role == "storage" && report.Manifest.Role != "Follower" {
 		return nil, empty, errors.New("archived deployment and source identity are incompatible")
 	}

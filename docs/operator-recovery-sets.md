@@ -136,3 +136,8 @@ Same-intent preparation recovery also admits retained regular atomic-write
 siblings of the known mutable metadata files (`.next`/`.next-*`). It preserves
 those files unchanged for inspection; links, unknown files and extra resource
 material remain blocked.
+
+Successful set capture reports member-specific `cleanup_warnings`, including
+retained generated scratch locations. These operational warnings are separate
+from archive integrity and complete-cluster proof; they must not hide private
+plaintext scratch requiring cleanup.

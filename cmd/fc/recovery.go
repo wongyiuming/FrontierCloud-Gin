@@ -50,6 +50,31 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 		report, err = recovery.Check(ctx, *input, *checksum)
 	case "restore check":
 		report, err = operator.RestoreCheck(ctx, *input, *target, *checksum)
+	case "restore prepare":
+		if *target == "" || *project == "" || *checksum == "" || *confirmation == "" {
+			err = errors.New("restore prepare requires existing material, source archive/checksum, original NodeID and target project")
+			break
+		}
+		report, err = recovery.Check(ctx, *input, *checksum)
+		if err != nil {
+			break
+		}
+		if report.Manifest.NodeID != *confirmation {
+			err = errors.New("restore preparation NodeID mismatch")
+			break
+		}
+		deployment := filepath.Join(*target, "deployment")
+		check := recovery.CheckMaterial
+		if _, e := os.Lstat(filepath.Join(deployment, operator.RestoreJournal)); e == nil {
+			check = recovery.CheckPreparingMaterial
+		} else if !os.IsNotExist(e) {
+			err = e
+			break
+		}
+		if err = check(ctx, *target, report); err != nil {
+			break
+		}
+		_, _, err = operator.PrepareRestore(ctx, *target, *project, report, dockerRunner{Directory: deployment})
 	case "restore apply":
 		if *target == "" {
 			err = errors.New("restore target required")
