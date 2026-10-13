@@ -246,6 +246,19 @@ actors/proofs and corrupt sibling rejection at terminal reconciliation.
 through signed inventory and content-worker calls; it is separate from the
 five-node transfer and browser gates.
 
+The development-only `tests/native_migration_acceptance.py` driver also accepts
+`--many-small-files`. It uploads 1,024 additional real files into one immediate
+parent through normal site-type upload reservations, then migrates the complete
+node. That unit spans sixteen object pages. The driver samples its logical owner
+during copying, rejects a mixed source/target directory, and verifies every
+published target and retained source file against its actual original SHA-256.
+The existing large-file, memory, control responsiveness, restart, logical metadata
+and browser gates remain enabled. This option is an executable acceptance gate;
+its presence or successful compilation is not an executed result. Run SQLite and
+MySQL cases separately on the isolated development host. `TMPDIR` may select a
+disk-backed private parent for retained fleet data; browser disposable shared
+memory is kept separate from that root-only parent.
+
 Planning and cancellation tests cover real native source bytes, target unmanaged
 collisions, zero side effects on tasks/drains/reservations during observation,
 same-length byte changes before start, lost cancellation receipts and targets
@@ -256,3 +269,8 @@ Nodes integration and safe text rendering; they are not browser or five-node
 acceptance evidence. All original SQLite/MySQL, Direct/Relay, browser playback,
 fault-window and one-CPU/512-MiB acceptance gates remain necessary before the
 capability is advertised.
+The multi-page ownership observer uses SELECT-only queries on the exact private
+fixture database during copying. Repeated full-directory HTTP observations are
+real business traffic and can correctly keep the quiet gate closed; acceptance
+does not exempt them or relax traffic thresholds. Final directory and byte reads
+still exercise the authenticated business APIs.

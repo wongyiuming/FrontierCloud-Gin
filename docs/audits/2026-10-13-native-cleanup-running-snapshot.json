@@ -1,0 +1,27 @@
+{
+  "status": "running",
+  "driver_pid": "475092",
+  "observed_at_epoch": 1791898770,
+  "task_state": "cleanup_pending",
+  "error_code": "",
+  "grace_remaining_seconds": 2010,
+  "chromium_phases": {
+    "during": {
+      "passed": true,
+      "decoded_playback_verified": true,
+      "encrypted_playback_verified": true,
+      "continuous_playback_verified": true,
+      "lyric_relation_verified": true,
+      "cross_chunk_range": true
+    },
+    "after": {
+      "passed": true,
+      "decoded_playback_verified": true,
+      "encrypted_playback_verified": true,
+      "continuous_playback_verified": true,
+      "lyric_relation_verified": true,
+      "cross_chunk_range": true
+    }
+  },
+  "cleanup_and_retirement_passed": false
+}

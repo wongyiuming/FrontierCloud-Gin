@@ -1,0 +1,26 @@
+{
+  "source_commit": "3a174c29665c2ee46e566b7549e236763d0e07b6",
+  "tracked_source_clean": true,
+  "binaries": {
+    "frontiercloud": {
+      "sha256": "c58150ea82b4b5c69f2ca84f2b25db6ba22c7d0b92b01d7f82f7325d293744ee",
+      "bytes": 45183138
+    },
+    "fc": {
+      "sha256": "c142f4ed310c05376d81a81005f48bba582ea5420125374ae2d5773c9b972523",
+      "bytes": 11727010
+    },
+    "updater.test": {
+      "sha256": "9d94fa9ef9194f06c5037cf24be9d42644fea271ec0df84d7b5fc700ff3ab200",
+      "bytes": 23100348
+    }
+  },
+  "web_image_id": "sha256:7d3b5337223531fd5b3ef5efc101ad11a306562435bf132b010b70cddbe5d245",
+  "web_revision_label": "3a174c29665c2ee46e566b7549e236763d0e07b6",
+  "private_fixture_image": true,
+  "public_release_proof": false,
+  "compiler_memory_limit_bytes": 1073741824,
+  "compiler_cpus": 1,
+  "nginx_image_id": "sha256:75db0f6d9071d8a60f097897e757fec0204aae743a115911f6a1f57b182fd58d",
+  "nginx_revision_label": "3a174c29665c2ee46e566b7549e236763d0e07b6"
+}

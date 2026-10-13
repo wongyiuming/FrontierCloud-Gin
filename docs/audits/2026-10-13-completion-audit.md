@@ -60,11 +60,11 @@ was operated. Private fixture image proofs do not establish public availability.
 | Actual target integrity and failed-copy cleanup | Native Source/Target SHA-256; corrupted prefix, lost receipts, publication/checkpoint tests | Source authority remains until whole-unit commit; temporary copies never count as owners. |
 | Atomic metadata/quota commit and distributed reconciliation | SQLite/MySQL transaction tests plus real-file HTTP runner fault tests | Target publication has its own durable journal; there is no claimed cross-host SQL atomicity. |
 | New reads resolve target, old reads retain safety | Native post-cutover/restart catalog, Range, browser decryption; read-lease cleanup tests | Physical source copy remains through the real one-hour grace. |
-| Exact-version managed source deletion and cleanup failure | Source/target bound cleanup grants, managed delete/quota journals, authenticated file tests | Successful real wall-clock cleanup plus independent migrated-source retirement is still pending. |
+| Exact-version managed source deletion and cleanup failure | Source/target bound cleanup grants, managed delete/quota journals, authenticated file tests; real one-hour native cleanup and independent retirement passed | Source copies were actually absent after completion; no grace clock or SQL edits shortened the wait. |
 | Queued/copying/verify/commit/pause/failed/partial/cancel/cleanup/completed | Durable task/unit/object states; AdminGUI/CLI state and revision tests | Transfer 100% alone is not completion. Failed tasks/history remain visible. |
 | Pause/resume/cancel/retry and explicit drain release | Same server APIs called by GUI/CLI; mixed-owner cancellation and reverse tests | Manual pause never automatically resumes; committed units are not rolled back by cancellation. |
 | Independent retirement check/apply and confirmation | SQL ledger plus native physical/key/journal inventory; actual empty-node retirement/re-pair | Final check repeats under durable barrier. Unique backups, live reads/transactions and offline unknowns block. |
-| Old credentials revoked, identity/history retained, containers/volumes untouched | Lost peer receipt/fence/reset tests and native empty-node retirement | Native post-migration retirement with terminal history remains pending. Host disk cleanup is a separate operator action. |
+| Old credentials revoked, identity/history retained, containers/volumes untouched | Lost peer receipt/fence/reset tests, native empty-node retirement and native post-migration retirement with terminal history | NodeID/history and containers/data remain; host disk cleanup is a separate operator action. |
 | Nodes module, safe target reasons, plan review and detail | Existing `static/js/nodes.js`, DOM smoke and actual Chromium task/retirement evidence | Top-level module order and normal site-type upload semantics remain protected. |
 | GUI/CLI shared authentication/CSRF/audit and no SQL bypass | Compiled CLI/TLS/Redis and Admin boundary tests | Credentials use protected files/stdin, not command-line secrets. |
 | Traffic-based heavy-work queue and detailed GUI | Actual Go request-body/write byte accounting plus Nginx HTTP/HTTP2/sendfile shared counter; real burst/manual-pause SQLite/MySQL cases | Master remains control-only for migration. Stale/missing edge counter conservatively waits. |
@@ -112,16 +112,21 @@ reads to the exact fresh disk-backed workspace. The retained credential/data
 permissions are unchanged. The corrected case has passed the actual during-copy
 browser gate: copying state, blocked retirement, service-worker decryption and
 cross-chunk Range, real MP3 decoding/continuation and original lyric relations.
-Cutover/restart, the after browser gate and actual grace cleanup remain pending
+Cutover/restart and the after browser gate have also passed. Actual grace cleanup
+and independent migrated-source retirement passed after 3,807.651 seconds
 in `2026-10-13-preflight-native-during-cleanup-retire-disk-fourth/`.
 The [evidence privacy scan](2026-10-13-evidence-privacy-scan.json) checked 770
 private files, 463 distinct secret values and 406 public evidence files without
 a matching secret or private-key PEM block. No grace period, product security check, cgroup limit,
 host setting or existing deployment is changed to obtain a green result.
 
-Remaining delivery gates are latest-image native integration, real grace cleanup
-and independent retirement, final privacy/source audit and successful exact-source
-development CI. This goal is not complete.
+That case actually removed every exact source object through managed cleanup,
+revoked the old relationship through the separate retirement API, retained
+NodeID/history and running containers/data, and passed five consecutive idle
+CPU samples below 20% on all five one-CPU Web containers. The earlier failed
+long run remains a failure. Remaining delivery gates are the fixed-commit
+native matrix, final privacy/source audit and final documentation CI. This goal
+is not complete.
 
 ## Source checkpoint
 
@@ -131,5 +136,30 @@ readable by normalizing carriage-return progress lines, trailing spaces and
 mixed indentation in thirteen repository audit copies. The original captures
 remain on the isolated development host; assertions, failures and outcome text
 are preserved. No history is rewritten. Hosted dev CI for the resulting source
-checkpoint must still be observed; the older remote branch's green CI is not
-evidence for these changes.
+checkpoint was observed. `c0416cd` source CI passed after correcting the English
+operator instructions. `3a174c29665c2ee46e566b7549e236763d0e07b6` additionally
+has successful source CI (run 38405225052) and protocol/schema asset CI (run
+38405224905). A clean clone of that exact commit produced the Web and Nginx
+private acceptance images with matching revision labels; their binary/image
+hashes are recorded in `2026-10-13-exact-source-build-provenance.json` and build
+logs. One-CPU/one-GiB compiler budgets are separate from product Web budgets.
+
+The new `--many-small-files` native gate uploads and copies 1,024 additional
+actual files in one immediate-parent unit across sixteen pages. During-copy
+ownership samples reject split directories, and final checks retain logical
+metadata and verify every Source/Target byte hash. It is compiled but not yet
+an executed pass. The real grace cleanup/retirement prerequisite has passed;
+the exact-source matrix now runs SQLite and MySQL cases serially: Direct→Direct
+with the many-file gate and the other three combinations with during/after
+browser gates. It stops on the first failure. Evidence is
+`2026-10-13-exact-source-serial-matrix.json`; no parallel fleet is started.
+
+The first 1,024-file case stopped safely in `queued / waiting_business_traffic`:
+its added directory HTTP observer returned 1,024 records every five seconds,
+which correctly kept the real business-flow quiet gate closed. This is a failed
+fixture run, not a bypassable product capacity/traffic error. The observer now
+uses SELECT-only queries against the exact fresh private SQLite/MySQL fixture;
+it still asserts one complete 1,024-object source or target owner. Actual upload,
+migration execution, final tree/read/Range, encryption and browser operations
+remain on real authenticated APIs. No product traffic exclusions or timeouts
+are relaxed. A corrected fresh run is required.

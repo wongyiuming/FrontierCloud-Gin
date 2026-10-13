@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,11 +19,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	_ "modernc.org/sqlite"
 )
 
 func fleetDecode(t *testing.T, value any, out any) {
@@ -337,25 +340,15 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 	peak := map[string]uint64{}
 	manyOwnershipSamples := 0
 	lastOwnershipSample := time.Time{}
+	var ownershipDB *sql.DB
+	if manySmall {
+		ownershipDB = fleetMigrationOwnershipDatabase(t, master)
+		defer ownershipDB.Close()
+	}
 	for {
 		fleetDecode(t, perform(master, "GET", "/nodes/migrations/"+plan.ID, nil), &status)
 		if manySmall && time.Since(lastOwnershipSample) >= 5*time.Second {
-			var tree media.Tree
-			fleetDecode(t, perform(master, "GET", "/tree?"+url.Values{"path": {"music/migrate/many-small"}}.Encode(), nil), &tree)
-			owner, count := "", 0
-			for _, item := range tree.Items {
-				if !item.Media {
-					continue
-				}
-				if item.MemberID != sourceID && item.MemberID != targetID || owner != "" && owner != item.MemberID {
-					t.Fatal("native multi-page ownership unit split during copying")
-				}
-				owner = item.MemberID
-				count++
-			}
-			if count != 1024 {
-				t.Fatal("native many-file observation omitted logical objects", count)
-			}
+			fleetMigrationCheckWholeOwnership(t, ctx, ownershipDB, sourceID, targetID)
 			manyOwnershipSamples++
 			lastOwnershipSample = time.Now()
 		}
@@ -562,6 +555,54 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		}
 	}
 	t.Log("independent post-migration native retirement revoked the old relationship, retained NodeID/history and left containers/data intact")
+}
+
+// An HTTP directory poll is genuine business traffic and must keep migration
+// waiting when it is large. Only the private fixture's observer uses read-only
+// SQL; uploads, migration and final business reads use the real services.
+func fleetMigrationOwnershipDatabase(t *testing.T, master *fleetSite) *sql.DB {
+	t.Helper()
+	driver, dsn := "sqlite", "file:"+filepath.Join(master.root, "data", "frontiercloud.db")+"?mode=ro"
+	if master.database == "mysql" {
+		password, err := os.ReadFile(filepath.Join(master.root, "secrets", "mysql_password"))
+		if err != nil {
+			t.Fatal("private ownership observer credential unavailable")
+		}
+		config := mysql.NewConfig()
+		config.User, config.Passwd, config.Net, config.Addr, config.DBName = "media_admin", strings.TrimSpace(string(password)), "tcp", "mysql:3306", "fc_fleet_0"
+		config.Timeout, config.ReadTimeout = 5*time.Second, 5*time.Second
+		driver, dsn = "mysql", config.FormatDSN()
+	}
+	db, err := sql.Open(driver, dsn)
+	if err != nil {
+		t.Fatal("private ownership observer unavailable")
+	}
+	db.SetMaxOpenConns(1)
+	return db
+}
+
+func fleetMigrationCheckWholeOwnership(t *testing.T, ctx context.Context, db *sql.DB, source, target string) {
+	t.Helper()
+	read, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(read, "SELECT storage_member_id,COUNT(*) FROM global_media_objects WHERE media_path LIKE ? GROUP BY storage_member_id", "music/migrate/many-small/%")
+	if err != nil {
+		t.Fatal("private read-only ownership observation failed")
+	}
+	defer rows.Close()
+	groups, count := 0, 0
+	for rows.Next() {
+		var owner string
+		var objects int
+		if rows.Scan(&owner, &objects) != nil || owner != source && owner != target {
+			t.Fatal("native multi-page ownership unit has unknown owner")
+		}
+		groups++
+		count += objects
+	}
+	if rows.Err() != nil || groups != 1 || count != 1024 {
+		t.Fatal("native multi-page ownership unit split or omitted logical objects", groups, count)
+	}
 }
 
 func fleetMigrationNetworkBytes(t *testing.T, ctx context.Context, e *Engine, id string) [2]uint64 {
