@@ -1,0 +1,24 @@
+{
+  "branch": "dev",
+  "commit": "c0416cd1ff00c9d8bbdb4148a7f61cb577a1b3fb",
+  "source_ci": {
+    "run_id": 38403482144,
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/wongyiuming/FrontierCloud-Gin/actions/runs/38403482144"
+  },
+  "earlier_failure": {
+    "commit": "095cc849dd09df9782d6fcdaaf3e0dc5ae51ea5b",
+    "run_id": 38403332154,
+    "reason": "English-only documentation check rejected an untranslated UI label; operator wording corrected."
+  },
+  "runtime_asset_ci": {
+    "commit": "095cc849dd09df9782d6fcdaaf3e0dc5ae51ea5b",
+    "run_id": 38403331973,
+    "conclusion": "success",
+    "scope": "Protocol/schema source assets; the later change is retirement documentation only."
+  },
+  "merged": false,
+  "public_release_published": false,
+  "staging_acceptance_claimed": false
+}

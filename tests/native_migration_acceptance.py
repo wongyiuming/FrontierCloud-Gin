@@ -115,6 +115,7 @@ def run(options):
         'FRONTIERCLOUD_TEST_NATIVE_MIGRATION_TRAFFIC': '1' if options.traffic else '',
         'FRONTIERCLOUD_TEST_NATIVE_MIGRATION_AUDIO': '1' if options.audio else '',
         'FRONTIERCLOUD_TEST_NATIVE_MIGRATION_DURING': '1' if options.during else '',
+        'FRONTIERCLOUD_TEST_NATIVE_MIGRATION_MANY_SMALL': '1' if options.many_small_files else '',
         'FRONTIERCLOUD_TEST_MIGRATION_NO_DIRECT': '1' if options.no_direct else '',
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE': images['native'],
         'FRONTIERCLOUD_TEST_NATIVE_MATRIX_AGENT_IMAGE': images['agent'],
@@ -130,7 +131,8 @@ def run(options):
               'test_binary_sha256': binary_sha,
               'private_test_images': True, 'public_release_proof': False, 'real_cleanup_wait_selected': options.wait_cleanup,
               'real_business_traffic_selected': options.traffic, 'unreachable_peer_selected': options.no_direct,
-              'generated_mp3_selected': options.audio, 'during_copy_browser_selected': options.during}
+              'generated_mp3_selected': options.audio, 'during_copy_browser_selected': options.during,
+              'additional_actual_small_files': 1024 if options.many_small_files else 0}
     browser_result = None
     browser_phases = {}
     browser_seen = set()
@@ -210,6 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--traffic', action='store_true', help='exercise actual public traffic, quiet resume and durable manual pause')
     parser.add_argument('--audio', action='store_true', help='generate test-only MP3 tones and verify real player decoding/continuation and lyrics')
     parser.add_argument('--during', action='store_true', help='run the real browser both during copying and after cutover')
+    parser.add_argument('--many-small-files', action='store_true', help='copy 1024 additional real files in one ownership unit across sixteen pages')
     parser.add_argument('--no-direct', action='store_true', help='isolate peers and prove refusal without a Master data fallback')
     parser.add_argument('--output', type=Path, required=True)
     run(parser.parse_args())

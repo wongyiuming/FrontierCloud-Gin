@@ -238,6 +238,20 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		t.Fatal(err)
 	}
 	upload("music/migrate/large/bounded.mp3", large, 128<<20, nil, block, hex.EncodeToString(hash.Sum(nil)))
+	manySmall := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MIGRATION_MANY_SMALL") == "1"
+	if manySmall {
+		// One immediate-parent unit crosses sixteen immutable object pages.
+		// Admission and publication must still switch the complete unit once.
+		for i := 0; i < 1024; i++ {
+			payload := []byte(fmt.Sprintf("ID3native paged small migration %04d exact bytes", i))
+			if actualAudio {
+				payload = shortAudio
+			}
+			digest := sha256.Sum256(payload)
+			upload(fmt.Sprintf("music/migrate/many-small/track-%04d.mp3", i), bytes.NewReader(payload), int64(len(payload)), nil, payload, hex.EncodeToString(digest[:]))
+		}
+		t.Log("uploaded 1024 additional actual small files into one native ownership unit")
+	}
 	if actualAudio {
 		fleetMigrationLyricFixture(t, ctx, master, perform, []string{fixtures[16].path, cryptoPath})
 	}
@@ -321,8 +335,30 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 	var status store.MigrationStatus
 	deadline := time.Now().Add(6 * time.Minute)
 	peak := map[string]uint64{}
+	manyOwnershipSamples := 0
+	lastOwnershipSample := time.Time{}
 	for {
 		fleetDecode(t, perform(master, "GET", "/nodes/migrations/"+plan.ID, nil), &status)
+		if manySmall && time.Since(lastOwnershipSample) >= 5*time.Second {
+			var tree media.Tree
+			fleetDecode(t, perform(master, "GET", "/tree?"+url.Values{"path": {"music/migrate/many-small"}}.Encode(), nil), &tree)
+			owner, count := "", 0
+			for _, item := range tree.Items {
+				if !item.Media {
+					continue
+				}
+				if item.MemberID != sourceID && item.MemberID != targetID || owner != "" && owner != item.MemberID {
+					t.Fatal("native multi-page ownership unit split during copying")
+				}
+				owner = item.MemberID
+				count++
+			}
+			if count != 1024 {
+				t.Fatal("native many-file observation omitted logical objects", count)
+			}
+			manyOwnershipSamples++
+			lastOwnershipSample = time.Now()
+		}
 		for _, site := range []*fleetSite{master, sites[sourceIndex], sites[targetIndex]} {
 			var stats struct {
 				Memory struct{ Usage, Limit uint64 } `json:"memory_stats"`
@@ -352,6 +388,12 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 	}
 	if status.Task.CommittedBytes != status.Task.TotalBytes || status.RetirementReady {
 		t.Fatal("cutover accounting or grace status invalid")
+	}
+	if manySmall {
+		if manyOwnershipSamples == 0 {
+			t.Fatal("native multi-page ownership unit was not observed")
+		}
+		t.Log("native multi-page whole ownership observations passed", manyOwnershipSamples)
 	}
 	networkAfter := map[string][2]uint64{}
 	for _, site := range []*fleetSite{master, sites[sourceIndex], sites[targetIndex]} {
