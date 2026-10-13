@@ -14,6 +14,9 @@ import (
 )
 
 func nodeCommand(ctx context.Context, args []string, structured bool, input io.Reader, output, diagnostics io.Writer) int {
+	if len(args) > 1 && args[1] == "migrate" {
+		return migrationCommand(ctx, args, structured, input, output, diagnostics)
+	}
 	if len(args) < 4 || args[1] != "retire" || args[2] != "check" {
 		fmt.Fprintln(diagnostics, "supported: fc node retire check NODE_ID --master https://MASTER --credential-stdin")
 		return 2
@@ -32,38 +35,12 @@ func nodeCommand(ctx context.Context, args []string, structured bool, input io.R
 	if flags.Parse(args[4:]) != nil || flags.NArg() != 0 || !*credentialStdin {
 		return 2
 	}
-	client, e := operator.NewNodeClient(*master)
+	client, e := loginNodeClient(ctx, *master, *caFile, input)
 	if e != nil {
 		fmt.Fprintln(diagnostics, e)
 		return 2
 	}
 	defer client.Close()
-	if *caFile != "" {
-		file, err := os.Open(*caFile)
-		if err != nil {
-			fmt.Fprintln(diagnostics, "cannot read trusted CA file")
-			return 2
-		}
-		raw, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
-		file.Close()
-		if err != nil || client.UseCA(raw) != nil {
-			fmt.Fprintln(diagnostics, "invalid trusted CA file")
-			return 2
-		}
-	}
-	credential, e := io.ReadAll(io.LimitReader(input, 4098))
-	if e != nil || len(credential) > 4097 {
-		fmt.Fprintln(diagnostics, "invalid credential input")
-		return 2
-	}
-	token := strings.TrimSuffix(strings.TrimSuffix(string(credential), "\n"), "\r")
-	for i := range credential {
-		credential[i] = 0
-	}
-	if e = client.Login(ctx, token); e != nil {
-		fmt.Fprintln(diagnostics, e)
-		return 2
-	}
 	report, e := client.RetirementCheck(ctx, member)
 	if report.MemberID == member {
 		if structured {
@@ -101,4 +78,41 @@ func retirementExitCode(report noderetirement.Report, err error) int {
 		return 1
 	}
 	return 0
+}
+
+func loginNodeClient(ctx context.Context, master, caFile string, input io.Reader) (*operator.NodeClient, error) {
+	client, e := operator.NewNodeClient(master)
+	if e != nil {
+		return nil, e
+	}
+	failed := true
+	defer func() {
+		if failed {
+			client.Close()
+		}
+	}()
+	if caFile != "" {
+		file, e := os.Open(caFile)
+		if e != nil {
+			return nil, fmt.Errorf("cannot read trusted CA file")
+		}
+		raw, e := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+		file.Close()
+		if e != nil || client.UseCA(raw) != nil {
+			return nil, fmt.Errorf("invalid trusted CA file")
+		}
+	}
+	credential, e := io.ReadAll(io.LimitReader(input, 4099))
+	if e != nil || len(credential) > 4098 {
+		return nil, fmt.Errorf("invalid credential input")
+	}
+	token := strings.TrimSuffix(strings.TrimSuffix(string(credential), "\n"), "\r")
+	for i := range credential {
+		credential[i] = 0
+	}
+	if e = client.Login(ctx, token); e != nil {
+		return nil, e
+	}
+	failed = false
+	return client, nil
 }

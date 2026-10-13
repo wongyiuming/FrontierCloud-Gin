@@ -18,6 +18,9 @@ func (r unreadCredential) Read([]byte) (int, error) {
 func TestNodeCLIRejectsUnsafeAuthorityBeforeCredentialInput(t *testing.T) {
 	for _, args := range [][]string{
 		{"node", "retire", "apply", strings.Repeat("1", 32)},
+		{"node", "migrate", "plan", strings.Repeat("1", 32)},
+		{"node", "migrate", "pause", strings.Repeat("1", 32), "--credential-stdin"},
+		{"node", "migrate", "status", strings.Repeat("1", 32), "--credential-stdin", "--after", "private"},
 		{"node", "retire", "check", "../private"},
 		{"node", "retire", "check", strings.Repeat("1", 32), "--master", "https://user:private@master.test", "--credential-stdin"},
 		{"node", "retire", "check", strings.Repeat("1", 32), "--master", "http://master.test", "--credential-stdin"},

@@ -48,8 +48,12 @@ func nodeClientID(value string) bool {
 	return e == nil && len(decoded) == 16 && value == strings.ToLower(value)
 }
 func (c *NodeClient) request(ctx context.Context, method, path, body, contentType string, target any) (int, error) {
+	return c.requestQuery(ctx, method, path, "", body, contentType, target)
+}
+func (c *NodeClient) requestQuery(ctx context.Context, method, path, query, body, contentType string, target any) (int, error) {
 	endpoint := *c.origin
 	endpoint.Path = "/api/v1/media/admin" + path
+	endpoint.RawQuery = query
 	req, e := http.NewRequestWithContext(ctx, method, endpoint.String(), strings.NewReader(body))
 	if e != nil {
 		return 0, ErrNodeClient

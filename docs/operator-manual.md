@@ -276,3 +276,30 @@ The API is under `/api/v1/media/admin/nodes/migrations`: collection GET uses
 `confirm_target_id`, with the existing session/CSRF and HTTPS boundaries.
 New task planning/start and the matching migration CLI are still under
 implementation; callers cannot submit fabricated disk proofs through this API.
+
+
+### CLI migration task queries and controls
+
+Use `fc node migrate status TASK_ID --master https://master.example
+--credential-stdin --json` to retrieve the task revision, source/target NodeIDs,
+committed bytes, stage summaries and one bounded object page. Supply
+`--after LOGICAL_OBJECT_CURSOR` to retrieve the next object page. A successful
+query does not mean the task completed or that the source can be retired.
+
+Controls use `fc node migrate pause|resume|cancel|retry TASK_ID` with the same
+Master/authentication options plus `--task-revision N`,
+`--confirm-source-id SOURCE_NODE_ID` and `--confirm-target-id TARGET_NODE_ID`.
+`--task-revision` refers to the task observation; the existing global `--revision`
+continues to refer to a published software release. Refresh status after a
+conflict or an uncertain reply before sending another control. The CLI never
+automatically retries a mutation or substitutes current confirmations.
+
+Exit 0 means the query or control was acknowledged; exit 2 means invalid input,
+authentication/transport failure, conflicting state or an invalid response.
+Control acknowledgment is not proof that cancellation cleanup finished.
+Committed units keep target ownership; reservations remain until managed cleanup,
+and draining remains until a separate explicit release. Human output quotes
+paths/error codes; JSON output contains only typed bounded task/status fields.
+Credential stdin, normal TLS verification, optional public CA trust, ephemeral
+cookies and bounded logout follow the retirement client contract. Plan/start
+and final retirement apply remain under implementation.

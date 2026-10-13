@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
@@ -78,6 +79,7 @@ func TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation(t *testing
 		t.Fatal(e)
 	}
 	RegisterAdminNodes(router, a, master)
+	RegisterAdminMigrations(router, a, mdb.Pool().(store.MigrationAdminRepository))
 	RegisterAdminRetirement(router, a, &noderetirement.Service{Repository: mdb.Pool().(store.RetirementRepository), Nodes: mdb.Nodes(), Client: master})
 	server := httptest.NewTLSServer(router)
 	defer server.Close()
@@ -114,6 +116,64 @@ func TestNodeRetirementCLIRealTLSRedisAndAuthenticatedPeerObservation(t *testing
 		caPath := filepath.Join(t.TempDir(), "trusted-ca.pem")
 		if e = os.WriteFile(caPath, ca, 0600); e != nil {
 			t.Fatal(e)
+		}
+		taskID := strings.Repeat("f", 32)
+		target := strings.Repeat("c", 32)
+		if _, e = mdb.Database().Exec("INSERT INTO migration_tasks(task_id,master_id,source_id,target_id,source_relationship,target_relationship,plan_sha256,plan,state,revision,object_count,total_bytes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'{}','queued',1,0,0,1,1)", taskID, identity.ID, rel.PeerID, target, rid, strings.Repeat("d", 32), strings.Repeat("e", 64)); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = mdb.Database().Exec("INSERT INTO migration_capacity(task_id,member_id,reserved_bytes,updated_at) VALUES (?,?,7,1)", taskID, target); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = mdb.Database().Exec("INSERT INTO migration_drains(member_id,owner_id,reason,created_at) VALUES (?,?,'migration',1)", rel.PeerID, taskID); e != nil {
+			t.Fatal(e)
+		}
+		invoke := func(action string, revision int64, want int) []byte {
+			args := []string{"node", "migrate", action, taskID, "--master", server.URL, "--ca-file", caPath, "--credential-stdin", "--json"}
+			if action != "status" {
+				args = append(args, "--task-revision", fmt.Sprint(revision), "--confirm-source-id", rel.PeerID, "--confirm-target-id", target)
+			}
+			commandCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			command := exec.CommandContext(commandCtx, binary, args...)
+			command.Stdin = strings.NewReader(key + "\n")
+			var output, diagnostics bytes.Buffer
+			command.Stdout = &output
+			command.Stderr = &diagnostics
+			err := command.Run()
+			code := 0
+			if err != nil {
+				var exited *exec.ExitError
+				if !errors.As(err, &exited) {
+					t.Fatal(err)
+				}
+				code = exited.ExitCode()
+			}
+			if code != want || strings.Contains(output.String()+diagnostics.String(), key) {
+				t.Fatal("migration CLI execution or credential handling", action, code)
+			}
+			return output.Bytes()
+		}
+		rawStatus := invoke("status", 0, 0)
+		var migrationStatus store.MigrationStatus
+		if json.Unmarshal(rawStatus, &migrationStatus) != nil || migrationStatus.Task.ID != taskID || migrationStatus.RetirementReady {
+			t.Fatal("migration CLI status")
+		}
+		invoke("pause", 1, 0)
+		invoke("resume", 1, 2)
+		invoke("resume", 2, 0)
+		invoke("pause", 3, 0)
+		invoke("cancel", 4, 0)
+		if _, e = mdb.Database().Exec("UPDATE migration_tasks SET error_code='cancel_cleanup' WHERE task_id=?", taskID); e != nil {
+			t.Fatal(e)
+		}
+		invoke("retry", 5, 0)
+		var reserved, drains int64
+		if e = mdb.Database().QueryRow("SELECT reserved_bytes FROM migration_capacity WHERE task_id=?", taskID).Scan(&reserved); e != nil || reserved != 7 {
+			t.Fatal("CLI released cleanup reservation", reserved, e)
+		}
+		if e = mdb.Database().QueryRow("SELECT COUNT(*) FROM migration_drains WHERE member_id=? AND owner_id=?", rel.PeerID, taskID).Scan(&drains); e != nil || drains != 1 {
+			t.Fatal("CLI released draining", drains, e)
 		}
 		for _, structured := range []bool{true, false} {
 			args := []string{"node", "retire", "check", rel.PeerID, "--master", server.URL, "--ca-file", caPath, "--credential-stdin"}
