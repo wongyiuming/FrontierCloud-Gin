@@ -72,6 +72,8 @@ class CIBudgetTests(unittest.TestCase):
         self.assertTrue(inspect_workflow(source, 'docker.yml'))
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/publish-images.yml').read_text()
         self.assertEqual(inspect_workflow(workflow, 'publish-images.yml'), [])
+        self.assertTrue(inspect_workflow(workflow.replace('branches: [main]', 'branches: [dev, main]'), 'publish-images.yml'))
+        self.assertTrue(inspect_workflow(workflow.replace("github.event.workflow_run.head_branch == 'main'", 'true'), 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow.replace('github.workflow_sha', 'github.event.workflow_run.head_sha'), 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow.replace('  publish:\n', '  publish:\n    environment: staging\n'), 'publish-images.yml'))
         self.assertTrue(inspect_workflow(workflow, 'staging-cd.yml'))

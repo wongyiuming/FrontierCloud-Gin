@@ -49,6 +49,8 @@ def inspect_workflow(text: str, name: str) -> list[str]:
         if re.search(r'\bsecrets\.|(?m:^    environment:)', text):
             findings.append(f"{name}: bootstrap must not access deployment secrets or Environments")
     if artifact:
+        if 'branches: [main]' not in text or "github.event.workflow_run.head_branch == 'main'" not in text:
+            findings.append(f"{name}: production images require reviewed main source CI")
         for contract in ('workflow_run:', 'workflows: ["Build and Test Docker Compose"]',
                          "github.ref == 'refs/heads/main'", 'github.workflow_sha',
                          'persist-credentials: false', 'scripts/trusted_native_publish.py'):
