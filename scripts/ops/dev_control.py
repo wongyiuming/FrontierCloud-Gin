@@ -1,7 +1,7 @@
 """Root-only operator client for the persistent development environment.
 
-Deployments always use the public Admin upgrade-and-distribute transaction.
-Credentials are read from the running Master and kept only in memory.
+Legacy imports remain fenced. Direct invocation is retired; use the explicit
+host-side fc workflow for reviewed upgrades.
 """
 from __future__ import annotations
 
@@ -82,3 +82,7 @@ def bootstrap():
             "storage_enabled": True, "storage_capacity_gib": 50, "backup_enabled": True,
         })
         print(json.dumps({"paired": node["name"], "mode": node["mode"]}), flush=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit("Legacy development CD is retired; use fc upgrade plan/apply/open")

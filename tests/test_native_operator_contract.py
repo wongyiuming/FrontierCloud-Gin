@@ -54,6 +54,15 @@ class NativeOperatorTests(unittest.TestCase):
         self.assertIn('hashlib.sha256(target_dir.encode())', source)
         self.assertNotIn('site_type = ("primary", "direct", "relay")[index % 3]', source)
 
+    def test_retired_cd_units_and_dispatcher_are_not_distributed(self):
+        self.assertFalse((ROOT / "ops/frontiercloud-dev-cd.timer").exists())
+        self.assertFalse((ROOT / "ops/frontiercloud-dev-cd.service").exists())
+        source = (ROOT / "scripts/ops/dev_control.py").read_text(encoding="utf-8")
+        guard = next(n for n in ast.parse(source).body if isinstance(n, ast.If)
+                     and ast.unparse(n.test) == "__name__ == '__main__'")
+        self.assertIsInstance(guard.body[0], ast.Raise)
+        self.assertIn("Legacy development CD is retired", ast.unparse(guard))
+
 
 if __name__ == "__main__":
     unittest.main()
