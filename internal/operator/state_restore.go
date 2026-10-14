@@ -42,9 +42,20 @@ func (d *Deployment) RestoreState(ctx context.Context, r Receipt, input, expecte
 		return result, errors.New("state restore requires archive checksum, exact NodeID, retained mounts, source-offline and state-loss confirmations")
 	}
 	if recorded, e := d.upgradeState(); e == nil && recorded.Plan.StateRestore && recorded.BackupSHA == expected && recorded.Plan.NodeID == node && (recorded.Phase == "restoring_state" || recorded.Phase == "failed_fenced") {
+		if freeze {
+			cfg, err := d.Config(ctx, true)
+			if err != nil {
+				return result, err
+			}
+			if !d.fenceUpgradeFailure(ctx, cfg) {
+				return result, errors.New("state restore retry could not establish native fencing")
+			}
+		}
 		return d.recoverState(ctx, r, recorded.Plan.SHA256, node, expected, directory, external, true)
 	}
-	if _,e:=safeRecoveryDirectory(directory,false);e!=nil{return result,e}
+	if _, e := safeRecoveryDirectory(directory, false); e != nil {
+		return result, e
+	}
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return result, e
@@ -63,7 +74,7 @@ func (d *Deployment) RestoreState(ctx context.Context, r Receipt, input, expecte
 			_ = done()
 			return result, errors.New("an existing incomplete upgrade must be reconciled before ordinary state restoration")
 		}
-		if e = exclusiveJSON(filepath.Join(d.Directory, ".fc-prior-upgrade-"+old.Plan.SHA256+".json"), old); e != nil {
+		if e = exclusiveJSONOrSame(filepath.Join(d.Directory, ".fc-prior-upgrade-"+old.Plan.SHA256+".json"), old); e != nil {
 			_ = done()
 			return result, e
 		}

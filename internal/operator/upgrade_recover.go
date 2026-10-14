@@ -297,6 +297,9 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 				return err
 			}
 		}
+		if err = restoreStateDirectories(roots, verified.Manifest.Directories); err != nil {
+			return err
+		}
 		for _, entry := range entries {
 			class, relative, _ := strings.Cut(entry.Path, "/")
 			if err = replaceStateFile(ctx, filepath.Join(directory, "material", class), relative, roots[class], relative, entry); err != nil {
@@ -376,6 +379,52 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 	state.Phase = "prepared_fenced"
 	state.Failure = ""
 	return state, d.saveUpgrade(state)
+}
+
+func restoreStateDirectories(roots map[string]string, directories []recovery.Directory) error {
+	for _, directory := range directories {
+		class, relative, ok := strings.Cut(directory.Path, "/")
+		if class == "deployment" || class == "mysql_dump" {
+			continue
+		}
+		if !ok {
+			relative = "."
+		}
+		if roots[class] == "" {
+			return recovery.ErrUnsafe
+		}
+		root, e := os.OpenRoot(roots[class])
+		if e != nil {
+			return e
+		}
+		if relative != "." {
+			parts := strings.Split(relative, "/")
+			for i := range parts {
+				name := strings.Join(parts[:i+1], "/")
+				info, err := root.Lstat(name)
+				if os.IsNotExist(err) {
+					err = root.Mkdir(name, 0700)
+				} else if err == nil && (!info.IsDir() || info.Mode()&os.ModeSymlink != 0) {
+					err = recovery.ErrUnsafe
+				}
+				if err != nil {
+					root.Close()
+					return err
+				}
+			}
+		}
+		if e = root.Chown(relative, directory.UID, directory.GID); e == nil {
+			e = root.Chmod(relative, os.FileMode(directory.Mode))
+		}
+		if e == nil {
+			e = fsutil.SyncDirectory(root, relative)
+		}
+		root.Close()
+		if e != nil {
+			return e
+		}
+	}
+	return nil
 }
 
 func (d *Deployment) stateDumpArgs() []string {

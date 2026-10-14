@@ -366,6 +366,15 @@ def run(args):
                               no_production_operation=True, database=args.database)
                 success = True
                 return result
+        if args.state_restore:
+            secrets_volume = configuration['volumes']['runtime_secrets']['name']
+            secrets_root = Path(json.loads(command(['docker', 'volume', 'inspect', secrets_volume]))[0]['Mountpoint'])
+            directory_probe = secrets_root / 'state-directory-proof'
+            directory_probe.mkdir(mode=0o750)
+            os.chown(directory_probe, 10001, 10001)
+            (directory_probe / 'probe').write_text('captured-directory-state')
+            os.chown(directory_probe / 'probe', 10001, 10001)
+            os.chmod(directory_probe / 'probe', 0o600)
         state_archive = directory / 'default-state.tar'
         state_report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
                                            '--freeze', '--output', str(state_archive),
@@ -376,6 +385,9 @@ def run(args):
         assert all(not item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
                    for item in state_report['manifest']['files'])
         if args.state_restore:
+            shutil.rmtree(directory_probe)
+            for receipt_name in ('.native-store', '.native-runtime'):
+                (data / receipt_name).unlink()
             if args.database == 'sqlite':
                 sqlite_path = configuration['services']['web']['environment']['SQLITE_PATH']
                 (data / Path(sqlite_path).relative_to('/app/data')).unlink()
@@ -394,6 +406,11 @@ def run(args):
                                          '--approve-plan-sha256', state['plan']['plan_sha256'],
                                          '--confirm-node-id', before_fact['node_id']], timeout=800))
             assert opened['phase'] == 'opened' and opened['business_verified']
+            assert directory_probe.stat().st_uid == 10001
+            assert directory_probe.stat().st_gid == 10001
+            assert directory_probe.stat().st_mode & 0o777 == 0o750
+            assert (directory_probe / 'probe').read_text() == 'captured-directory-state'
+            assert all((data / name).is_file() for name in ('.native-store', '.native-runtime'))
             wait_ready(base)
             assert probe(request, payload) == media_id
             assert admin_probe(directory, 'verify')['priority'] == 77

@@ -1,11 +1,119 @@
 package operator
 
 import (
+	"archive/tar"
 	"context"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestStateRestoreCanRetryHistoryAndEstablishMissingFence(t *testing.T) {
+	d, r, runner, p := upgradeFixture(t)
+	state, e := d.ApplyUpgrade(context.Background(), r, p, p.SHA256, p.NodeID, filepath.Join(t.TempDir(), "upgrade.tar"), false, fakeEvidence{true}, upgradeImages{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, next, e := Open(d.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	state, e = d.OpenUpgrade(context.Background(), next, state.Plan.SHA256, runner.node)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, next, e = Open(d.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	archive := filepath.Join(t.TempDir(), "state.tar")
+	backup, e := d.BackupState(context.Background(), next, archive, true, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	material := filepath.Join(t.TempDir(), "material")
+	runner.fail = "info --format {{.Architecture}}"
+	if _, e = d.RestoreState(context.Background(), next, archive, backup.SHA256, runner.node, material, true, true, false, false); e == nil {
+		t.Fatal("injected pre-restoration failure missing")
+	}
+	runner.fail = ""
+	if e = os.Remove(filepath.Join(runner.data, maintenance.Marker)); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = d.RestoreState(context.Background(), next, archive, backup.SHA256, runner.node, material, true, true, false, false); e == nil {
+		t.Fatal("missing native fence accepted")
+	}
+	_, next, e = Open(d.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	state, e = d.RestoreState(context.Background(), next, archive, backup.SHA256, runner.node, material, true, true, true, false)
+	if e != nil || state.Phase != "prepared_fenced" {
+		t.Fatal("retry could not retain history and fence", state, e)
+	}
+}
+
+func TestStateBackupRestoresNativeReceiptsAndMissingDirectoryMetadata(t *testing.T) {
+	d, r, runner, _ := upgradeFixture(t)
+	for _, name := range []string{".native-store", ".native-runtime"} {
+		if e := os.WriteFile(filepath.Join(runner.data, name), []byte("captured-"+name), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	nested := filepath.Join(runner.secrets, "nested")
+	if e := os.Mkdir(nested, 0750); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(nested, "identity"), []byte("directory-state"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if os.Geteuid() == 0 {
+		if e := os.Chown(nested, 65534, 65534); e != nil {
+			t.Fatal(e)
+		}
+	}
+	before, e := os.Stat(nested)
+	if e != nil {
+		t.Fatal(e)
+	}
+	want, e := tar.FileInfoHeader(before, "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	archive := filepath.Join(t.TempDir(), "state.tar")
+	backup, e := d.BackupState(context.Background(), r, archive, true, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, name := range []string{".native-store", ".native-runtime"} {
+		if e = os.Remove(filepath.Join(runner.data, name)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e = os.RemoveAll(nested); e != nil {
+		t.Fatal(e)
+	}
+	state, e := d.RestoreState(context.Background(), r, archive, backup.SHA256, runner.node, filepath.Join(t.TempDir(), "material"), true, true, false, false)
+	_ = state
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, name := range []string{".native-store", ".native-runtime"} {
+		raw, e := os.ReadFile(filepath.Join(runner.data, name))
+		if e != nil || string(raw) != "captured-"+name {
+			t.Fatal("native receipt missing", e)
+		}
+	}
+	info, e := os.Stat(nested)
+	if e != nil {
+		t.Fatal(e)
+	}
+	actual, e := tar.FileInfoHeader(info, "")
+	if e != nil || actual.Uid != want.Uid || actual.Gid != want.Gid || actual.Mode != want.Mode {
+		t.Fatal("directory metadata not restored", e)
+	}
+}
 
 func TestOrdinaryStateBackupRestoresWithoutUpgradeJournal(t *testing.T) {
 	d, r, runner, _ := upgradeFixture(t)

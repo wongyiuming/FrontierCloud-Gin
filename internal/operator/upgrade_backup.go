@@ -15,7 +15,7 @@ func upgradeDataSelection(cfg Config, r Receipt) ([]string, error) {
 	return upgradeStateSelection(cfg, r, true)
 }
 func upgradeStateSelection(cfg Config, r Receipt, requireDatabase bool) ([]string, error) {
-	selected := []string{maintenance.Marker, sitecontrol.Manual, sitecontrol.ForceOpen, ".native-runtime.lock", ".native-maintenance-control.lock", sitecontrol.Lock, "media-keys/media-premaster.key"}
+	selected := []string{maintenance.Marker, sitecontrol.Manual, sitecontrol.ForceOpen, ".native-runtime.lock", ".native-maintenance-control.lock", sitecontrol.Lock, ".native-store", ".native-runtime", "media-keys/media-premaster.key"}
 	data, err := upgradeDataRoot(cfg)
 	if err != nil {
 		return nil, err

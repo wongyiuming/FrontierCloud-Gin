@@ -67,6 +67,7 @@ lyrics and recordings remain in their original mounts and are excluded without
 an extra flag. The capacity report sets `business_files_included` to false.
 The media premaster at `data/media-keys/media-premaster.key` is identity/encryption
 state, not media content; it is included with its actual archive key reference.
+Native admission receipts `.native-store` and `.native-runtime` are also captured.
 These upgrade recovery points cannot replace the retained media or claim a full
 fresh-machine restore. Only explicitly requested full disaster recovery uses
 `backup plan/create --include-business-files`; coordinated `backup set-create`
