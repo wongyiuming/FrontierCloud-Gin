@@ -1,0 +1,1 @@
+ok  	github.com/wongyiuming/FrontierCloud-Gin/internal/operator	15.930s
