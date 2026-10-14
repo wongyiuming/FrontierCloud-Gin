@@ -4,10 +4,63 @@ import (
 	"archive/tar"
 	"context"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestOrdinaryStateBackupRejectsIncompleteUpgrade(t *testing.T) {
+	d, r, runner, p := upgradeFixture(t)
+	state, e := d.ApplyUpgrade(context.Background(), r, p, p.SHA256, p.NodeID, filepath.Join(t.TempDir(), "upgrade.tar"), false, fakeEvidence{true}, upgradeImages{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	_ = state
+	_, next, e := Open(d.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = d.BackupState(context.Background(), next, filepath.Join(t.TempDir(), "blocked.tar"), true, false); e == nil {
+		t.Fatal("fenced receipt admitted ordinary state backup")
+	}
+	if _, e = d.BackupState(context.Background(), r, filepath.Join(t.TempDir(), "blocked-source.tar"), true, false); e == nil {
+		t.Fatal("pending journal admitted ordinary backup")
+	}
+	if !runner.stopped {
+		t.Fatal("backup refusal opened writers")
+	}
+}
+
+func TestStateRestoreChecksEveryDestinationCapacity(t *testing.T) {
+	roots := map[string]string{"data": "/different-data-fs", "runtime_secrets": "/different-volume-fs"}
+	entries := []recovery.Entry{{Path: "data/db", Bytes: 100}, {Path: "runtime_secrets/key", Bytes: 32}}
+	seen := map[string]bool{}
+	err := checkRestoreDestinationCapacity(roots, entries, func(root string) (uint64, error) {
+		seen[root] = true
+		if root == roots["runtime_secrets"] {
+			return 0, nil
+		}
+		return 1 << 30, nil
+	})
+	if err == nil || !seen[roots["runtime_secrets"]] {
+		t.Fatal("full live destination filesystem passed", err, seen)
+	}
+}
+
+func TestOrdinaryStateRestoreRejectsMissingActiveRelations(t *testing.T) {
+	d, r, runner, _ := upgradeFixture(t)
+	runner.role = "Master"
+	runner.relations = []NodeFact{{NodeID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: "active", Direction: "downstream", Protocol: 2}}
+	archive := filepath.Join(t.TempDir(), "cluster.tar")
+	backup, e := d.BackupState(context.Background(), r, archive, true, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, _, e = d.StateRestoreCheck(context.Background(), r, archive, backup.SHA256); e == nil {
+		t.Fatal("uncoordinated active relations passed")
+	}
+}
 
 func TestStateRestoreCanRetryHistoryAndEstablishMissingFence(t *testing.T) {
 	d, r, runner, p := upgradeFixture(t)

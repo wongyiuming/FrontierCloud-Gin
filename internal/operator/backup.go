@@ -81,6 +81,9 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 
 // BackupState excludes business files and requires the original data mounts.
 func (d *Deployment) BackupState(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
+	if receipt.State != "ready" {
+		return recovery.Report{}, errors.New("ordinary state backup requires a ready deployment; use the recorded upgrade recovery point for incomplete upgrades")
+	}
 	return d.backupWithScope(ctx, receipt, output, freeze, externalWritersStopped, recovery.UpgradeStateScope)
 }
 
@@ -94,6 +97,13 @@ func (d *Deployment) backupWithScope(ctx context.Context, receipt Receipt, outpu
 		return empty, e
 	}
 	defer func() { operationErr = errors.Join(operationErr, done()) }()
+	if scope == recovery.UpgradeStateScope {
+		if state, err := d.upgradeState(); err == nil && state.Phase != "opened" {
+			return empty, errors.New("incomplete upgrade blocks ordinary state backup")
+		} else if err != nil && !os.IsNotExist(err) {
+			return empty, err
+		}
+	}
 	if freeze {
 		capacity, capacityErr := d.backupCapacityScope(ctx, receipt, output, "", scope)
 		if capacityErr != nil {

@@ -272,6 +272,9 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 		if err = recovery.CheckMaterial(ctx, filepath.Join(directory, "material"), verified); err != nil {
 			return err
 		}
+		if err = checkRestoreDestinationCapacity(roots, entries, diskFree); err != nil {
+			return err
+		}
 		for _, name := range state.CreatedStatePaths {
 			class, relative, ok := strings.Cut(name, "/")
 			if !ok || roots[class] == "" {
@@ -379,6 +382,29 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 	state.Phase = "prepared_fenced"
 	state.Failure = ""
 	return state, d.saveUpgrade(state)
+}
+
+func checkRestoreDestinationCapacity(roots map[string]string, entries []recovery.Entry, free func(string) (uint64, error)) error {
+	peaks := map[string]uint64{}
+	for _, entry := range entries {
+		class, _, ok := strings.Cut(entry.Path, "/")
+		if !ok || roots[class] == "" {
+			return recovery.ErrUnsafe
+		}
+		if uint64(entry.Bytes) > peaks[roots[class]] {
+			peaks[roots[class]] = uint64(entry.Bytes)
+		}
+	}
+	for root, peak := range peaks {
+		available, e := free(root)
+		if e != nil {
+			return e
+		}
+		if available < peak+(512<<20) {
+			return errors.New("in-place state destination lacks temporary-copy capacity and reserve; no restoration performed")
+		}
+	}
+	return nil
 }
 
 func restoreStateDirectories(roots map[string]string, directories []recovery.Directory) error {

@@ -18,6 +18,9 @@ func (d *Deployment) StateRestoreCheck(ctx context.Context, r Receipt, input, ex
 	if e != nil || expected == "" || report.Manifest.Scope != recovery.UpgradeStateScope {
 		return report, source, errors.New("verified state archive with trusted checksum required")
 	}
+	if len(report.Manifest.Missing) != 1 || len(report.Manifest.Relations) != 0 {
+		return report, source, errors.New("ordinary state restore refuses missing related-node state; coordinated recovery or explicit peer-fencing evidence is required")
+	}
 	raw, e := recovery.ReadStateFile(ctx, input, expected, "deployment/"+ReceiptFile)
 	if e != nil {
 		return report, source, e
