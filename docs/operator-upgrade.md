@@ -25,6 +25,26 @@ data restore for a new machine. Original media mounts must be retained. The
 upgrade verifies managed reads against these retained files before opening.
 Database rollback still requires controlled recovery; no DDL rollback is implied.
 
+For a `failed_fenced` preparation which has never begun public activation,
+`foc upgrade recover-state` restores the verified pre-upgrade database and state
+into the same retained mounts. It requires the original plan digest, exact NodeID,
+original archive SHA and a new private recovery directory. Current failed state
+is retained there before any restoration; no media bytes are captured. SQLite
+restores the archived database/WAL/SHM, and MySQL requires external-writer
+confirmation, retains a logical dump of the failed database, then explicitly
+recreates only the recorded database from the verified dump. Identity keys,
+including `data/media-keys/media-premaster.key`, configuration and certificate
+state are restored without replacing native lifecycle/control lease files.
+
+Recovery validates the source generation, identity and original managed files
+and remains `prepared_fenced`. Its returned plan records `recovery_of` and a new
+approval digest. Use that returned digest with `foc upgrade open` to separately
+confirm opening the restored source. Recovery refuses any upgrade which began
+activation or accepted new writes; it never silently discards post-opening data.
+An interrupted `restoring_state` operation can be retried with the same original
+approval, archive SHA and recorded recovery directory. Failed capture materials
+are retained and a capture error makes no database restoration.
+
 Use an explicit published main commit for an existing installation. `latest`
 is accepted by initial installation only. A plan performs read-only Docker
 inspection and public registry/reviewed-source verification; it does not pull

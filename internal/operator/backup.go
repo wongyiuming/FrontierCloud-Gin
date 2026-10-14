@@ -239,6 +239,11 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		sources := []recovery.Root{{Class: "data", Directory: data, IncludePaths: selection}, {Class: "deployment", Directory: deployment}}
 		m := recovery.Manifest{NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, Consistency: "native-offline-and-deployment-writers-stopped", Missing: []string{}, KeyReferences: []string{"runtime_secrets/node-vault.key"}}
 		m.Scope = scope
+		if _, keyErr := os.Lstat(filepath.Join(data, "media-keys", "media-premaster.key")); keyErr == nil {
+			m.KeyReferences = append(m.KeyReferences, "data/media-keys/media-premaster.key")
+		} else if !os.IsNotExist(keyErr) {
+			return keyErr
+		}
 		m.RecoverySet = set
 		m.SchemaGeneration = fact.Database.SchemaGeneration
 		boundClasses := map[string]string{}

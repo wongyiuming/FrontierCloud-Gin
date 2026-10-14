@@ -65,11 +65,18 @@ Upgrade plans and archives always use `upgrade-state`: database/WAL/SHM or logic
 MySQL dump, configuration, keys, certificates, Redis and lifecycle state. Media,
 lyrics and recordings remain in their original mounts and are excluded without
 an extra flag. The capacity report sets `business_files_included` to false.
+The media premaster at `data/media-keys/media-premaster.key` is identity/encryption
+state, not media content; it is included with its actual archive key reference.
 These upgrade recovery points cannot replace the retained media or claim a full
 fresh-machine restore. Only explicitly requested full disaster recovery uses
 `backup plan/create --include-business-files`; coordinated `backup set-create`
 retains its explicit complete recovery-set contract. Application upgrades never
 select these complete workflows.
+Failed pre-opening upgrades have an explicit `upgrade recover-state` path which
+retains failed database state and restores the verified original database,
+configuration and keys into the same media mounts. It remains fenced until a
+separate `upgrade open` confirms the returned recovery plan digest. See
+[controlled upgrade state recovery](operator-upgrade.md).
 The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
 configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
 It rejects metadata above the archive's 16 MiB manifest limit. It does not hash

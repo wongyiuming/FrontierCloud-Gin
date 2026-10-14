@@ -44,6 +44,7 @@ type UpgradePlan struct {
 	ExpiresAt      int64                         `json:"expires_at"`
 	SHA256         string                        `json:"plan_sha256"`
 	RecoveryScope  string                        `json:"recovery_scope,omitempty"`
+	RecoveryOf     string                        `json:"recovery_of,omitempty"`
 }
 
 type UpgradeState struct {
@@ -61,6 +62,7 @@ type UpgradeState struct {
 	StageCleanupWarning   string      `json:"stage_cleanup_warning,omitempty"`
 	Failure               string      `json:"failure,omitempty"`
 	BusinessVerified      bool        `json:"business_verified"`
+	RecoveryDirectory     string      `json:"recovery_directory,omitempty"`
 }
 
 func upgradeHash(value any) string {
@@ -87,7 +89,7 @@ func ReadUpgradePlan(path string) (UpgradePlan, error) {
 	return p, nil
 }
 func (p UpgradePlan) valid(now time.Time) bool {
-	return (p.RecoveryScope == "" || p.RecoveryScope == recovery.UpgradeStateScope) && p.Version == 1 && p.NodeID != "" && release.ValidSHA(p.From) && release.ValidSHA(p.Target) && p.Target != p.From && p.Generation == migrations.Generation && recovery.SupportedSchemaGeneration(p.FromGeneration) && p.CreatedAt <= now.Unix() && p.ExpiresAt > now.Unix() && p.ExpiresAt-p.CreatedAt == 3600 && p.SHA256 == p.digest()
+	return p.RecoveryOf == "" && (p.RecoveryScope == "" || p.RecoveryScope == recovery.UpgradeStateScope) && p.Version == 1 && p.NodeID != "" && release.ValidSHA(p.From) && release.ValidSHA(p.Target) && p.Target != p.From && p.Generation == migrations.Generation && recovery.SupportedSchemaGeneration(p.FromGeneration) && p.CreatedAt <= now.Unix() && p.ExpiresAt > now.Unix() && p.ExpiresAt-p.CreatedAt == 3600 && p.SHA256 == p.digest()
 }
 
 func (d *Deployment) upgradeFact(ctx context.Context, r Receipt) (RuntimeFact, error) {

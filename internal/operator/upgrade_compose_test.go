@@ -23,6 +23,7 @@ type composeUpgradeSpec struct {
 	TargetWeb                string `json:"target_web_image_id"`
 	Edge                     string `json:"edge_image_id"`
 	FailPrepare              bool   `json:"fail_prepare"`
+	RecoverFailure           bool   `json:"recover_failure"`
 	ExpectedSourceGeneration int    `json:"expected_source_generation,omitempty"`
 }
 type nativeUpgradeRunner struct {
@@ -135,6 +136,25 @@ func (r *nativeUpgradeRunner) RunTo(ctx context.Context, out io.Writer, name str
 	return nil
 }
 
+func (r *nativeUpgradeRunner) RunFrom(ctx context.Context, in io.Reader, name string, args ...string) error {
+	if name != "docker" {
+		return errors.New("fixture only accepts Docker input")
+	}
+	args, e := r.arguments(args)
+	if e != nil {
+		return e
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = r.directory
+	cmd.Stdin = in
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if cmd.Run() != nil {
+		return errors.New("isolated MySQL restoration failed; output suppressed")
+	}
+	return nil
+}
+
 func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	input := os.Getenv("FRONTIERCLOUD_TEST_OPERATOR_UPGRADE")
 	if input == "" {
@@ -235,6 +255,69 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if spec.FailPrepare {
 		if e == nil || state.Phase != "failed_fenced" || state.BackupSHA == "" {
 			t.Fatal("target failure did not retain a verified fenced recovery point", e)
+		}
+		if spec.RecoverFailure {
+			cfg, err := d.Config(ctx, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.Database == "sqlite" {
+				data, err := upgradeDataRoot(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				database := strings.TrimPrefix(cfg.Services["web"].Environment["SQLITE_PATH"], cfg.Services["web"].Environment["DATA_ROOT"]+"/")
+				cmd := exec.CommandContext(ctx, "python3", "-c", `import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('CREATE TABLE foc_failed_schema_probe(value TEXT)'); c.execute("INSERT INTO foc_failed_schema_probe VALUES ('failed-state')"); c.commit(); c.close()`, filepath.Join(data, database))
+				if err = cmd.Run(); err != nil {
+					t.Fatal("isolated failed SQLite DDL injection", err)
+				}
+			} else {
+				if _, err := runner.Run(ctx, "docker", append(d.composeArgs(true), "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root "$MYSQL_DATABASE" -e "CREATE TABLE foc_failed_schema_probe(value TEXT); INSERT INTO foc_failed_schema_probe VALUES ('failed-state');"`)...); err != nil {
+					t.Fatal("isolated failed MySQL DDL injection", err)
+				}
+			}
+			_, current, err := Open(spec.Directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			material := filepath.Join(filepath.Dir(spec.Directory), "state-recovery-"+filepath.Base(spec.Directory))
+			state, err = d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
+			if err != nil || state.Phase != "prepared_fenced" || state.Plan.RecoveryOf != p.SHA256 {
+				t.Fatal("native retained-mount state restoration", err)
+			}
+			if r.Database == "sqlite" {
+				data, err := upgradeDataRoot(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				database := strings.TrimPrefix(cfg.Services["web"].Environment["SQLITE_PATH"], cfg.Services["web"].Environment["DATA_ROOT"]+"/")
+				cmd := exec.CommandContext(ctx, "python3", "-c", `import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); assert not c.execute("SELECT name FROM sqlite_master WHERE name='foc_failed_schema_probe'").fetchall(); c.close(); c=sqlite3.connect(sys.argv[2]); assert c.execute('SELECT value FROM foc_failed_schema_probe').fetchone()[0]=='failed-state'; c.close()`, filepath.Join(data, database), filepath.Join(material, "failed", "data", database))
+				if err = cmd.Run(); err != nil {
+					t.Fatal("restored SQLite DDL or retained failed state differs", err)
+				}
+			} else {
+				raw, err := runner.Run(ctx, "docker", append(d.composeArgs(true), "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -N -u root "$MYSQL_DATABASE" -e "SHOW TABLES LIKE 'foc_failed_schema_probe'"`)...)
+				if err != nil || strings.TrimSpace(string(raw)) != "" {
+					t.Fatal("failed MySQL DDL survived", err)
+				}
+				failed, err := os.ReadFile(filepath.Join(material, "failed-database.sql"))
+				if err != nil || !strings.Contains(string(failed), "foc_failed_schema_probe") {
+					t.Fatal("failed MySQL state discarded", err)
+				}
+			}
+			_, current, err = Open(spec.Directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = d.OpenUpgrade(ctx, current, state.Plan.SHA256, p.NodeID)
+			if err != nil || state.Phase != "opened" || !state.BusinessVerified {
+				t.Fatal("native recovered source opening", err)
+			}
+			evidence := map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.FromGeneration, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "native_managed_business_reads": true, "failed_ddl_restored": true, "failed_state_retained": true, "original_business_mounts_retained": true}
+			if err = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), evidence); err != nil {
+				t.Fatal(err)
+			}
+			return
 		}
 		if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "target_failure_injected": true, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "no_automatic_rollback": true}); e != nil {
 			t.Fatal(e)

@@ -496,9 +496,18 @@ func Apply(ctx context.Context, input, target, expected, confirmation string) (R
 	return applySetMember(ctx, input, target, expected, confirmation, "")
 }
 
+// ExtractState publishes private state material only. It grants no fresh-node
+// restoration authority; the caller must retain and fence the original mounts.
+func ExtractState(ctx context.Context, input, target, expected, confirmation string) (Report, error) {
+	return extractMaterial(ctx, input, target, expected, confirmation, "", true)
+}
+
 // The nonempty set permission is available only after CheckSet verified every
 // member and mutual relationship. Public single-archive Apply cannot grant it.
 func applySetMember(ctx context.Context, input, target, expected, confirmation, set string) (Report, error) {
+	return extractMaterial(ctx, input, target, expected, confirmation, set, false)
+}
+func extractMaterial(ctx context.Context, input, target, expected, confirmation, set string, stateOnly bool) (Report, error) {
 	var report Report
 	if !hashPattern.MatchString(expected) || !nodePattern.MatchString(confirmation) {
 		return report, ErrUnsafe
@@ -510,7 +519,7 @@ func applySetMember(ctx context.Context, input, target, expected, confirmation, 
 	if e != nil {
 		return checked, e
 	}
-	if checked.Manifest.NodeID != confirmation || len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
+	if checked.Manifest.NodeID != confirmation || stateOnly && checked.Manifest.Scope != UpgradeStateScope || !stateOnly && len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
 		return checked, ErrUnsafe
 	}
 	stage, e := os.MkdirTemp(filepath.Dir(target), ".fc-restore-")
