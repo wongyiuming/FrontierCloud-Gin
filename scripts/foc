@@ -33,7 +33,7 @@ fi
 # These commands select remote nodes, archives or explicit recovery targets.
 # They do not use the implicitly selected local deployment.
 case "$command:$action" in
-  version:*|node:*|backup:verify|backup:set-*|restore:*) exec "$backend" "$@" ;;
+  version:*|node:*|backup:verify|backup:set-*|restore:check|restore:apply|restore:prepare|restore:set-*) exec "$backend" "$@" ;;
 esac
 work=$(mktemp -d)
 cleanup() { rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"; }

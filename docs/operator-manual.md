@@ -21,9 +21,11 @@ Direct host invocation of the installer is refused. This is the explicitly
 authorized host operator entry; business Web remains deployed through Compose.
 Docker and deployment-file permissions are still required; no privilege is granted.
 
-The installer also mounts `/` read-only at `/host` to inspect the actual host
-parents before writing: Docker bind mounts can otherwise hide symlinks. It reads
-those path attributes, and writes only the three installation roots above. It
+The installer mounts only `/usr` and `/etc` as read-only parent views at
+`/host/usr` and `/host/etc` to inspect installation-path symlinks before writing.
+It never mounts the host root, `/run`, `/var` or the Docker socket. The top-level
+`/usr` and `/etc` directories are the view boundaries; child installation paths
+are checked through these unmasked parents. It writes only the three installation roots above. It
 refuses unrelated or altered global launchers even when an ownership marker is
 present. An interrupted install retains its candidate launcher identity so a
 retry can safely finish; a stale lock from an uncatchable kill requires inspection.
@@ -35,7 +37,9 @@ working-directory labels, including stopped containers, deduplicating canonical
 paths with native receipts. Multiple deployments require explicit selection:
 `foc --directory /absolute/deployment status`. Missing registered receipts or
 failed Docker discovery fail closed. Archive verification, explicit-target restore/set workflows and remote `node`
-commands bypass local discovery, including during a Docker outage. Global options
+commands bypass local discovery, including during a Docker outage.
+`restore activate` and `restore open` use deployment discovery unless an explicit
+`--directory` is supplied. Global options
 without a command (for example `foc --json`) still select `status`.
 `foc version` reports the host tool version;
 `foc status` reports the deployment version. These versions are independent.

@@ -20,10 +20,16 @@ services:
           memory: 128M
           pids: 32
     volumes:
-      # Unmasked, read-only host paths for symlink checks before installation.
+      # Parent views expose install-path symlinks without exposing /run or /var.
       - type: bind
-        source: /
-        target: /host
+        source: /usr
+        target: /host/usr
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /etc
+        target: /host/etc
         read_only: true
         bind:
           create_host_path: false

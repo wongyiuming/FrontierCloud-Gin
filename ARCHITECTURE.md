@@ -339,8 +339,9 @@ The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
 Business and certificate processes remain Compose services. The installer has
-three writable install binds plus read-only deployment and host-path views;
-no Docker socket or network is attached. See `docs/operator-manual.md`.
+three writable install binds plus read-only deployment and `/usr`/`/etc` parent views;
+no host-root/runtime-directory bind, Docker socket or network is attached.
+See `docs/operator-manual.md`.
 
 Enabling TLS requires automatic certificate control in a Compose container using the same Go image,
 a five-percent CPU/128 MiB/no-swap limit, read-only rootfs and dropped capabilities.

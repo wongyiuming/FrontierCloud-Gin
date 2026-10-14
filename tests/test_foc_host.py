@@ -192,6 +192,34 @@ class HostEntryTests(unittest.TestCase):
                 self.assertEqual(self.invoke(*args).returncode, 0)
                 self.assertEqual(self.calls.read_text().splitlines(), args)
 
+    def test_restore_activation_and_open_discover_local_deployment(self):
+        native = self.deployment('recovered')
+        self.registry.write_text(str(native) + '\n')
+        for action in ('activate', 'open'):
+            args = ['restore', action, '--confirm-node-id', 'identity']
+            with self.subTest(action=action):
+                self.assertEqual(self.invoke(*args).returncode, 0)
+                self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), *args])
+                self.calls.unlink()
+                self.env['DOCKER_EXIT'] = '1'
+                self.assertEqual(self.invoke(*args).returncode, 2)
+                self.assertFalse(self.calls.exists())
+                explicit = ['--directory', str(native), *args]
+                self.assertEqual(self.invoke(*explicit).returncode, 0)
+                self.assertEqual(self.calls.read_text().splitlines(), explicit)
+                self.env.pop('DOCKER_EXIT')
+
+    def test_compose_parent_views_exclude_runtime_socket_roots(self):
+        import yaml
+        service = yaml.safe_load((ROOT / 'compose.foc.yaml').read_text())['services']['install']
+        volumes = service['volumes']
+        views = [v for v in volumes if v['target'].startswith('/host')]
+        self.assertEqual({v['source'] for v in views}, {'/usr', '/etc'})
+        self.assertTrue(all(v['read_only'] for v in views))
+        self.assertFalse(any(v['source'] in ('/', '/run', '/var', '/var/run') or
+                             'docker.sock' in v['source'] for v in volumes))
+        self.assertEqual(len([v for v in volumes if not v.get('read_only')]), 3)
+
     def test_direct_host_installer_is_refused(self):
         env = dict(os.environ)
         env.pop('FOC_COMPOSE_INSTALL', None)

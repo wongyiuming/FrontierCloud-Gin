@@ -22,8 +22,8 @@ case "$revision" in *[!a-f0-9]*|'') echo 'Invalid operator bundle revision' >&2;
 [ "$revision" = "${FOC_OPERATOR_REVISION:-}" ] || { echo 'Selected operator revision mismatch' >&2; exit 2; }
 # Inspect the unmasked host hierarchy: writable binds may resolve host symlinks.
 host_root=/host
-[ -d "$host_root/usr" ] && [ -d "$host_root/etc" ] || { echo 'Read-only host root view required' >&2; exit 2; }
-for directory in /usr /usr/local /usr/local/bin /usr/local/lib /usr/local/lib/frontiercloud /usr/local/lib/frontiercloud/foc /etc /etc/frontiercloud; do
+[ -d "$host_root/usr" ] && [ -d "$host_root/etc" ] || { echo 'Read-only host parent views required' >&2; exit 2; }
+for directory in /usr/local /usr/local/bin /usr/local/lib /usr/local/lib/frontiercloud /usr/local/lib/frontiercloud/foc /etc/frontiercloud; do
   [ ! -L "$host_root$directory" ] || { echo 'Refusing symlinked host installation path' >&2; exit 2; }
 done
 home=/usr/local/lib/frontiercloud/foc
