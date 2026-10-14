@@ -60,9 +60,12 @@ the refreshed tool's supported migration assets and an approved upgrade plan.
 Tool refresh refuses images from an older database generation.
 
 Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
-The read-only report counts actual capture roots, tar/manifest overhead, temporary
+The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
 configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
-It does not hash files, create an archive or freeze writers. MySQL sizing streams a
+It rejects metadata above the archive's 16 MiB manifest limit. It does not hash
+files, create an archive or freeze writers. Runtime facts come from the existing
+Web process or a one-shot read-only offline command with image pulls disabled.
+MySQL sizing streams a
 read-only logical snapshot to a counter. A live estimate is not a reservation; apply
 repeats it after image pulls, before maintenance and under the offline boundary.
 Pre-freeze capacity refusal leaves the source running. A later offline recheck

@@ -2,9 +2,11 @@ package operator
 
 import (
 	"context"
+	"fmt"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -29,11 +31,75 @@ func TestBackupCapacityIsReadOnlyAndIncludesActualManagedRoots(t *testing.T) {
 		t.Fatal("output created", err)
 	}
 	for _, call := range runner.calls {
+		if strings.Contains(call, " run ") && strings.Contains(call, "--pull never -T web operator-status") {
+			continue
+		}
 		for _, bad := range []string{" pull ", " run ", " up ", " stop ", "maintenance enter"} {
 			if strings.Contains(call, bad) {
 				t.Fatal("capacity froze or started a writer", call)
 			}
 		}
+	}
+}
+
+func TestInvalidMySQLBackupDoesNotInspectOrDumpBeforeConfirmation(t *testing.T) {
+	d, r, runner, _ := upgradeFixture(t)
+	r.Database = "mysql"
+	runner.calls = nil
+	if _, err := d.Backup(context.Background(), r, filepath.Join(t.TempDir(), "new.tar"), true, false); err == nil || !strings.Contains(err.Error(), "explicit confirmation") {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatal("invalid backup performed I/O", runner.calls)
+	}
+	if _, err := os.Lstat(filepath.Join(d.Directory, OperationLock)); !os.IsNotExist(err) {
+		t.Fatal("invalid backup took operation lock", err)
+	}
+}
+
+func TestManifestBudgetRejectsLongEscapedMetadataWithinEntryCountLimit(t *testing.T) {
+	p := BackupCapacity{}
+	entry := recovery.Entry{Path: "data/" + strings.Repeat("<", 3000), SHA256: strings.Repeat("0", 64), Mode: 0600}
+	for i := 0; i < 2000; i++ {
+		if err := p.addManifestMetadata(entry); err != nil {
+			if p.ManifestBytes <= recovery.MaxManifest || i >= recovery.MaxFiles {
+				t.Fatal(p, err)
+			}
+			return
+		}
+	}
+	t.Fatal("oversized escaped manifest accepted")
+}
+
+func TestOversizedSourceManifestRefusesBackupBeforeFreeze(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux host operator path boundary")
+	}
+	d, r, runner, _ := upgradeFixture(t)
+	directory := runner.data
+	for i := 0; i < 16; i++ {
+		directory = filepath.Join(directory, strings.Repeat("<", 190))
+		if err := os.Mkdir(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 1100; i++ {
+		if err := os.WriteFile(filepath.Join(directory, fmt.Sprintf("entry-%04d", i)), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner.calls = nil
+	output := filepath.Join(t.TempDir(), "new.tar")
+	if _, err := d.Backup(context.Background(), r, output, true, false); err == nil || !strings.Contains(err.Error(), "manifest metadata exceeds") {
+		t.Fatal(err)
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+			t.Fatal("oversized manifest stopped source", call)
+		}
+	}
+	if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("archive created", err)
 	}
 }
 

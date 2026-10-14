@@ -77,6 +77,9 @@ func (d *Deployment) volumeRoot(ctx context.Context, name string) (string, error
 // directory, reopens traffic or claims to include another node's media/state.
 func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (operationResult recovery.Report, operationErr error) {
 	var empty recovery.Report
+	if receipt.Database == "mysql" && !externalWritersStopped {
+		return empty, errors.New("MySQL backup requires explicit confirmation that external database writers are stopped")
+	}
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return empty, e

@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,7 @@ type BackupCapacity struct {
 	FreeBytes     uint64 `json:"free_bytes"`
 	Fits          bool   `json:"fits"`
 	Snapshot      string `json:"snapshot"`
+	ManifestBytes uint64 `json:"manifest_upper_bound_bytes"`
 }
 
 type byteCounter struct{ bytes uint64 }
@@ -56,6 +58,30 @@ func (p *BackupCapacity) addSourceDirectory() error {
 		return recovery.ErrUnsafe
 	}
 	return nil
+}
+func (p *BackupCapacity) addManifestMetadata(value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	p.ManifestBytes += uint64(len(raw) + 1)
+	if p.ManifestBytes > recovery.MaxManifest {
+		return errors.New("recovery manifest metadata exceeds archive format limit")
+	}
+	return nil
+}
+
+func (d *Deployment) capacityFact(ctx context.Context) (RuntimeFact, error) {
+	raw, err := d.Compose(ctx, true, "exec", "-T", "web", "/app/frontiercloud", "operator-status")
+	var fact RuntimeFact
+	if err == nil && json.Unmarshal(raw, &fact) == nil && fact.NodeID != "" {
+		return fact, nil
+	}
+	raw, err = d.Compose(ctx, true, "run", "--rm", "--no-deps", "--pull", "never", "-T", "web", "operator-status")
+	if err != nil || json.Unmarshal(raw, &fact) != nil || fact.NodeID == "" {
+		return fact, errors.New("read-only runtime metadata inspection failed")
+	}
+	return fact, nil
 }
 
 // setParent is used only for a new recovery-set directory on an existing parent.
@@ -135,6 +161,37 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 		}
 		roots[class] = root
 	}
+	fact, err := d.capacityFact(ctx)
+	if err != nil {
+		return p, err
+	}
+	header := recovery.Manifest{Format: recovery.Format, Version: 1, Scope: "deployment", NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, SchemaGeneration: fact.Database.SchemaGeneration, ConfigurationVersion: receipt.Version, CreatedAt: "9999-12-31T23:59:59.999999999Z", Consistency: "native-offline-and-deployment-writers-stopped", Bytes: 10 * 1024 * 1024 * 1024 * 1024, RecoverySet: strings.Repeat("f", 32), KeyReferences: []string{"runtime_secrets/node-vault.key", "runtime_secrets/media-premaster.key"}, Classes: []string{"deployment"}}
+	for class := range roots {
+		header.Classes = append(header.Classes, class)
+	}
+	if receipt.Database == "mysql" {
+		header.Classes = append(header.Classes, "mysql_dump")
+	}
+	for _, n := range fact.Nodes {
+		if n.State != "revoked" {
+			header.Missing = append(header.Missing, "matching recovery state for related node "+n.NodeID+" is not included")
+			header.Relations = append(header.Relations, recovery.Relation{NodeID: n.NodeID, Direction: n.Direction, State: n.State, Protocol: n.Protocol})
+		}
+	}
+	// Reserve fixed/header growth and use longest numeric ownership values for
+	// generated scratch. Existing entries use their actual escaped JSON metadata.
+	p.ManifestBytes = 1024
+	if err = p.addManifestMetadata(header); err != nil {
+		return p, err
+	}
+	for _, class := range []string{"deployment", "mysql_dump"} {
+		if class == "mysql_dump" && receipt.Database != "mysql" {
+			continue
+		}
+		if err = p.addManifestMetadata(recovery.Directory{Path: class, Mode: 0700, UID: 1<<31 - 1, GID: 1<<31 - 1}); err != nil {
+			return p, err
+		}
+	}
 	for class, directory := range roots {
 		relative, e := filepath.Rel(directory, output)
 		if e != nil || relative == "." || relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
@@ -163,12 +220,30 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 				return e
 			}
 			if info.IsDir() {
-				return p.addSourceDirectory()
+				if e = p.addSourceDirectory(); e != nil {
+					return e
+				}
+				h, e := tar.FileInfoHeader(info, "")
+				if e != nil {
+					return e
+				}
+				path := class
+				if name != "." {
+					path += "/" + name
+				}
+				return p.addManifestMetadata(recovery.Directory{Path: path, Mode: h.Mode & 0777, UID: h.Uid, GID: h.Gid})
 			}
 			if !info.Mode().IsRegular() || info.Size() < 0 || p.Files >= recovery.MaxFiles {
 				return recovery.ErrUnsafe
 			}
 			p.Files++
+			h, e := tar.FileInfoHeader(info, "")
+			if e != nil {
+				return e
+			}
+			if e = p.addManifestMetadata(recovery.Entry{Path: class + "/" + name, Bytes: info.Size(), SHA256: strings.Repeat("0", 64), Mode: h.Mode & 0777, UID: h.Uid, GID: h.Gid}); e != nil {
+				return e
+			}
 			p.DataBytes += uint64(info.Size())
 			if p.DataBytes > 10*1024*1024*1024*1024 {
 				return recovery.ErrUnsafe
@@ -191,6 +266,9 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 		p.DataBytes += uint64(len(raw))
 		p.ScratchBytes += uint64(len(raw))
 		p.Files++
+		if err = p.addManifestMetadata(recovery.Entry{Path: "deployment/" + name, Bytes: int64(len(raw)), SHA256: strings.Repeat("0", 64), Mode: 0600, UID: 1<<31 - 1, GID: 1<<31 - 1}); err != nil {
+			return p, err
+		}
 	}
 	if receipt.Database == "mysql" {
 		if !validSQLName(cfg.Services["mysql"].Environment["MYSQL_DATABASE"]) {
@@ -211,6 +289,9 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 		p.DataBytes += count.bytes
 		p.ScratchBytes += count.bytes
 		p.Files++
+		if err = p.addManifestMetadata(recovery.Entry{Path: "mysql_dump/database.sql", Bytes: int64(count.bytes), SHA256: strings.Repeat("0", 64), Mode: 0600, UID: 1<<31 - 1, GID: 1<<31 - 1}); err != nil {
+			return p, err
+		}
 	}
 	if p.Files > recovery.MaxFiles || p.DataBytes > 10*1024*1024*1024*1024 {
 		return p, recovery.ErrUnsafe
