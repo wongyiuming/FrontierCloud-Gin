@@ -20,13 +20,8 @@ import (
 var fullSHA = regexp.MustCompile(`^[a-f0-9]{40}$`)
 
 func ValidSHA(value string) bool { return fullSHA.MatchString(value) }
-func Busy(value any) bool {
-	switch value {
-	case "queued", "running", "distributing", "restarting":
-		return true
-	}
-	return false
-}
+
+var ErrManifest = errors.New("invalid release evidence")
 
 type Policy struct{ Branch, Source string }
 
@@ -49,6 +44,10 @@ type Verifier struct {
 }
 
 func NewVerifier(policy Policy, token string) (*Verifier, error) {
+	token = strings.TrimSpace(token)
+	if len(token) > 4096 || strings.ContainsAny(token, "\r\n") {
+		return nil, errors.New("invalid release API token")
+	}
 	if !policy.Valid() {
 		return nil, errors.New("invalid release branch policy")
 	}

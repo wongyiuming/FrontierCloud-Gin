@@ -30,9 +30,8 @@ Required scopes are:
 | scripts/test-go-business.sh | Actual MySQL/Redis business, auth/API, observation, native drain, Nginx and Go race checks |
 | scripts/test-go-deployment.sh | Actual Compose selection, commands, permissions and immutable image identity |
 | scripts/test-native-default.sh | Fresh default bootstrap/restart, native processes, persistent identities and upstream address changes |
-| scripts/test-go-updater.sh | Actual native upgrade/self-handoff/rollback, both stores |
+| tests/operator_recovery_acceptance.py | Actual operator backup/restore/upgrade, both stores |
 | scripts/test-native-matrix.sh | Five Go nodes: one Master, two Direct, two Relay; both store combinations |
-| scripts/test-native-release.sh | Master-only release/handoff/rollback; storage unchanged |
 | tests/browser_ui_regression.py and tests/*browser.mjs | Real Chromium UI, cache, continuous playback and disconnect recovery |
 
 An unconfigured `go test ./...` can skip Redis/Engine/fleet acceptance. Its green
@@ -93,7 +92,7 @@ Navigation for reviewing remaining historical assertions (not equivalence proof)
 | IP/security and transactions | internal/security/service_test.go; internal/store/business/security_test.go; internal/httpapi/security_test.go |
 | Nodes, Direct/Relay transport and relationship control | internal/httpapi/node_cluster_test.go, nodes_admin_test.go; internal/node/*_test.go |
 | Backup recovery and schema/data integrity | internal/backup/*_test.go; internal/store/business/*_test.go |
-| Master release provenance and rollback | internal/release/verification_test.go, coordinator_test.go, history_test.go; internal/updater/stack_real_test.go |
+| Master release provenance and rollback | internal/release/verification_test.go, history_test.go; internal/operator/upgrade_test.go |
 
 The new catalog rollback fault test runs on both stores. Disposable MySQL
 business fixtures disable binary logging so a database-scoped test user can
@@ -106,37 +105,23 @@ configuration only; production users/configuration are never weakened for tests.
    fast-forward it to the actual `main` merge commit. Never force-push.
 2. Validate the fixed source/tree on the development host. Commit coherent fixes
    separately and preserve complete gate evidence, including skips and limits.
-3. When authorized, push `dev`. Hosted source CI is lightweight and capped at
-   three minutes; use the newest successful push for that exact source SHA.
-   A separate compilation workflow starts compilation only after that exact
-   success, publishes three public images (ten-minute parallel component jobs),
-   then allows CD notification; it runs no heavyweight acceptance.
-4. Await event-driven preproduction CD for that tested dev SHA. Verify complete
-   updater state, matching live web/updater revisions and the relevant public
-   behavior; a delivered wakeup or green CI is not deployment acceptance.
-   Only then open the same-repository dev -> main PR, use the configured
-   GitHub automatic review within existing quota, and
-   merge. The resulting production tree must equal the reviewed source tree;
-   exact PR/CI provenance is rechecked after merge. A local commit is not a
-   published release, and CI success alone is not full business acceptance.
-5. Production deployment requires its own authorization. The native Admin
-   Master self-upgrade flow verifies published provenance, current identity,
-   maintenance and persistent release journals. It pulls verified public images
-   by digest, with bounded immutable allowlisted Git-archive compilation only
-   for confirmed absent versions/platforms; it never upgrades storage appliances. Storage rebuilds
-   are operator-controlled exact-revision deployments. Rebuild binaries to apply
-   Go security fixes.
-6. Confirm readiness, business transport and actual component runtime SHAs,
-   retain recovery evidence, then synchronize `dev` to the release merge.
-
-The new repository has only `main` and `dev`; the old repository's `gin_*`
-branches are bootstrap history, not active release profiles. Initial imported
-commits are not PR-certified releases. Production rollout is performed by the
-operator and is separate from the authorized implementation/PR/merge workflow.
+3. When authorized, push `dev` and require successful exact-source hosted CI.
+   Hosted tests remain lightweight with three-minute parallel jobs. Main-only
+   trusted publication builds Web and Nginx after successful reviewed source CI,
+   with bounded compilation and separate credential-isolated publishing.
+4. Preproduction is decommissioned. Record that missing gate explicitly; do not
+   claim live CD or staging acceptance. When authorized, open only dev -> main,
+   require exact-source review and tree equality, and obtain merge authorization.
+5. Production requires separate authorization. Use `fc upgrade plan`, `apply`
+   and `open` from the retained deployment configuration. The operator verifies
+   public digests, identity, backup and schema preparation before explicit opening.
+   Production never builds an absent image or performs implicit DDL rollback.
+6. Verify HTTPS, relationships and representative managed reads, retain recovery
+   evidence, then fast-forward `dev` to the release merge without rewriting history.
 
 ## Security and runtime bounds
 
-Web and Updater builders use Go 1.26.8, including the HTTP/2 and os.Root security
+Web builders use Go 1.26.8, including the HTTP/2 and os.Root security
 fixes missing from 1.26.0. Dependency upgrades require a new binary build; changing
 only an image label or OS package does not replace the embedded standard library.
 

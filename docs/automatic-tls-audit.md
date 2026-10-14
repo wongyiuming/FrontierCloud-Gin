@@ -30,7 +30,7 @@ Storage startup currently rejects a missing certificate and creates pairing
 information immediately after starting its TLS server. These behaviors cannot
 meet the new no-certificate startup contract.
 
-The updater pins three published images and snapshots a fixed service list.
+The host-side operator pins Web/Nginx images and preserves recorded service selections.
 New controller/init services must use the Web image and participate in that
 same release proof and recovery operation. Existing source/build workflows,
 startup fixtures, real native matrix and browser fixtures also contain old

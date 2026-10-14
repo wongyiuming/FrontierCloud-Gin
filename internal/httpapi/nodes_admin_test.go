@@ -67,7 +67,7 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		RegisterOperational(router, a)
 		diagnosticResolver, _ := network.New(cfg.TrustedProxyNetworks)
 		RegisterPlaybackDiagnostics(router, cfg, diagnosticResolver, control, a, diagnostics.New())
-		siteService, err := sitecontrol.Open(dir, nil)
+		siteService, err := sitecontrol.Open(dir)
 		if err != nil {
 			t.Fatal(err)
 		}

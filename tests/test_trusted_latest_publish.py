@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock
 
 from scripts import trusted_latest_publish as latest
-from tests.test_trusted_staging_notify import Fixture, REJECTIONS, REVISION
+from tests.publication_fixture import Fixture, REJECTIONS, REVISION
 
 
 class LatestFixture(Fixture):
@@ -44,11 +44,11 @@ class LatestFixture(Fixture):
 
 
 class TrustedLatestTests(unittest.TestCase):
-    def test_current_main_all_three_verified_components_and_retry(self):
+    def test_current_main_both_verified_components_and_retry(self):
         fixture = LatestFixture()
         for _ in range(2):
             self.assertEqual(fixture.promote()['revision'], REVISION)
-        self.assertEqual(len(fixture.writes), 6)
+        self.assertEqual(len(fixture.writes), 4)
         for component, path, method, body in fixture.writes:
             self.assertEqual(path, '/v2/wongyiuming/frontiercloud-gin-' + component + '/manifests/latest')
             self.assertEqual((method, body), ('PUT', fixture.body))

@@ -32,7 +32,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 RUN addgroup -g 10001 frontiercloud-media
 
 # Keep runtime environment substitution in Nginx templates. Avoid BuildKit-only
-# COPY --chmod so the in-cluster updater can build with the legacy Docker builder.
+# COPY --chmod for compatibility with the bounded development build driver.
 COPY nginx/nginx.conf /etc/nginx/templates/nginx.conf.template
 COPY --from=traffic-module-builder /build/nginx-1.30.4/objs/ngx_http_fc_traffic_module.so /usr/lib/nginx/modules/
 COPY nginx/15-select-tls.sh /docker-entrypoint.d/15-select-tls.sh

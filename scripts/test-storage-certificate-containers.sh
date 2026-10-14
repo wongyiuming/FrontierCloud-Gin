@@ -26,7 +26,7 @@ cleanup() {
   *) return 1;; esac
 }
 trap cleanup EXIT
-paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx updater/Dockerfile updater/Dockerfile.gin docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md)
+paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md)
 git archive --format=tar "$revision" -- "${paths[@]}" | DOCKER_BUILDKIT=0 docker build --memory=1g --memory-swap=1g --cpu-period=100000 --cpu-quota=100000 -f Dockerfile.gin --target build -t "$driver" -
 docker run --rm --name "$identity-compiler" --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e GOMEMLIMIT=600MiB -e CGO_ENABLED=0 -v "$work:/out" "$driver" /usr/local/go/bin/go test -c -p=1 -o /out/certificate.test ./internal/certmanager
 chmod 755 "$work/certificate.test"

@@ -21,11 +21,8 @@ x-app-environment: &app-environment
   SERVER_NAME: ${SERVER_NAME:-localhost}
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
   SECURITY_CONTACT: ${SECURITY_CONTACT:-}
-  RELEASE_BRANCH: ${RELEASE_BRANCH:-main}
-  RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}
   RELEASE_MANIFEST_PATH: ${RELEASE_MANIFEST_PATH:-}
   TLS_ENABLED: ${TLS_ENABLED:-false}
-  STAGING_CD: ${STAGING_CD:-false}
 
 x-logging: &service-logging
   driver: json-file

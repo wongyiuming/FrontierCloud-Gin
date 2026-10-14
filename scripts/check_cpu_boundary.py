@@ -68,7 +68,7 @@ def main() -> int:
     violations = []
     for path in (ROOT / "internal").rglob("*.go"):
         relative = path.relative_to(ROOT).as_posix()
-        if path.name.endswith("_test.go") or relative.startswith("internal/updater/"):
+        if path.name.endswith("_test.go"):
             continue
         source = path.read_text(encoding="utf-8")
         for forbidden in ('"os/exec"', '"compress/zlib"', '"compress/bzip2"', 'zip.Deflate'):

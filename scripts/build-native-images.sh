@@ -14,10 +14,9 @@ if [[ $# -gt 2 || ! "$revision" =~ ^[0-9a-f]{40}$ || ( "$selection" != all && "$
 fi
 test "$(git rev-parse --verify "$revision^{commit}")" = "$revision"
 git cat-file -e "$revision:Dockerfile.gin"
-git cat-file -e "$revision:updater/Dockerfile.gin"
 # Never send .env, data, keys, untracked files, .git or mutable source changes.
-paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx updater/Dockerfile updater/Dockerfile.gin docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md docs/operator-upgrade.md docs/operator-recovery-sets.md)
-components=(web updater nginx)
+paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md docs/operator-upgrade.md docs/operator-recovery-sets.md)
+components=(web nginx)
 if [[ "$selection" == web-only ]]; then components=(web); fi
 for component in "${components[@]}"; do
   if [[ "${FRONTIERCLOUD_IMAGE_SOURCE:-auto}" != local ]]; then
@@ -28,7 +27,6 @@ for component in "${components[@]}"; do
   fi
   case "$component" in
     web) dockerfile=Dockerfile.gin ;;
-    updater) dockerfile=updater/Dockerfile.gin ;;
     nginx) dockerfile=nginx/Dockerfile ;;
   esac
   args=(--build-arg "REVISION=$revision")

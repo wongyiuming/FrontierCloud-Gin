@@ -227,3 +227,11 @@ func TestVerificationRejectsRedirectAndOversizedJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatorTokenValidationBeforeNetworkAccess(t *testing.T) {
+	for _, token := range []string{"bad\r\nheader", strings.Repeat("x", 4097)} {
+		if _, err := NewVerifier(DefaultPolicy(), token); err == nil {
+			t.Fatal("unsafe operator token accepted")
+		}
+	}
+}

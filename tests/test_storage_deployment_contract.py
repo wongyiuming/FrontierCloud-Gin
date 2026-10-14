@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class StorageDeploymentContract(unittest.TestCase):
     def test_built_and_published_web_images_declare_the_same_tls_topology(self):
-        # The updater uses this capability to fence incompatible Compose stacks.
+        # Operator image proof binds this capability to the release contract.
         for name in ("Dockerfile.gin", "ci/Dockerfile.web", "nginx/Dockerfile"):
             with self.subTest(dockerfile=name):
                 source = (ROOT / name).read_text(encoding="utf-8")

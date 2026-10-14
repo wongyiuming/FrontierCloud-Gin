@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// History is discovery, never rollback authorization. StartVersion verifies
-// the selected exact tree/CI; the updater independently checks Git ancestry.
+// History is discovery, never upgrade or recovery authorization.
+// The operator verifies exact reviewed tree and CI evidence separately.
 type Version struct {
 	SHA         string `json:"sha"`
 	SourceSHA   string `json:"source_sha"`

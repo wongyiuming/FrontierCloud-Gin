@@ -1,0 +1,94 @@
+{
+  "checked_at": "2026-10-14T00:45:30.404652+00:00",
+  "host": "192.168.6.201",
+  "production_mutated": false,
+  "native_source_revision": "a8dbcd2674a0e8f34298de590b5ac79a3b82c9a8",
+  "race_source_revision": "a8dbcd2674a0e8f34298de590b5ac79a3b82c9a8",
+  "operator_test_source_revision": "0c034e7ea260a01802f7be35c5ff2a3f254b22e7",
+  "source_checks_revision": "0c034e7ea260a01802f7be35c5ff2a3f254b22e7",
+  "private_publication_adapters": true,
+  "public_release_proof": false,
+  "browser_playback_selected": false,
+  "real_hour_cleanup_selected": false,
+  "results": {
+    "install-a8-partial.json": {
+      "sha256": "247d84962d86a55612d141d71203f3e7e31493ec4ead21ae6b03076bad3236d7",
+      "passed": null,
+      "private_case_count": 5,
+      "guards_requested": true,
+      "scope": "Five cases completed; certificate-failure case exposed a fixture phase assumption and was separately revalidated."
+    },
+    "install-certificate-failure.json": {
+      "sha256": "f53fe5308f354788e2ab1f920db268380318efd04b724a19cb1f9a5847e9d2fe",
+      "passed": true,
+      "private_case_count": 1,
+      "guards_requested": false,
+      "failure_contract": {
+        "actual_ca_rejection_verified": true,
+        "failed_incomplete_receipt_retained": true,
+        "failed_native_vault_key_preserved": true,
+        "failed_receipt_phase": "prepared"
+      }
+    },
+    "upgrade-sqlite.json": {
+      "sha256": "4b67f2f39791c7108345fa9c80347ba94869d15adc809cdf5181705d783f9ec5",
+      "database": "sqlite",
+      "status": "passed",
+      "node_identity_preserved": true,
+      "media_id_preserved": true,
+      "priority_preserved": true,
+      "actual_http_range_verified": true
+    },
+    "upgrade-mysql.json": {
+      "sha256": "1952f1cfa3b2b74d71dfd316727423de0ce7a3dc641952f10484f937e9313238",
+      "database": "mysql",
+      "status": "passed",
+      "node_identity_preserved": true,
+      "media_id_preserved": true,
+      "priority_preserved": true,
+      "actual_http_range_verified": true
+    },
+    "upgrade-failure.json": {
+      "sha256": "bae3d80d9edb6990821c7e98926a54a71c5abfa6bbaa9c06f7861d919ecb0009",
+      "database": "sqlite",
+      "status": "passed"
+    },
+    "migration-go-sqlite-dr/evidence.json": {
+      "sha256": "d194e890cfe3a8c8d2a687c5bc1e557239d7a961adc3d2e66eb190954beff3f6",
+      "status": "passed",
+      "database": "go-sqlite",
+      "combination": "dr",
+      "public_release_proof": false
+    },
+    "migration-go-mysql-rd/evidence.json": {
+      "sha256": "be9ad9b6b98eb569e08950a0901c526e8b6b9e29ba0505b24d2da5819cd3ed77",
+      "status": "passed",
+      "database": "go-mysql",
+      "combination": "rd",
+      "public_release_proof": false
+    },
+    "go-race.txt": {
+      "sha256": "b17b2f2caeb4c33b92bbdaa36e3367bc99fdfee448a805b8a81b7b82ae71e0b4",
+      "failures": 0,
+      "race_warnings": 0,
+      "passed_packages": 42
+    },
+    "source-checks.txt": {
+      "sha256": "914a6dfb2b07b0c5f6f6a6bce3ff925ac7e09e245e41a31438c38025a5522756",
+      "failures": 0,
+      "race_warnings": 0
+    },
+    "operator-race.txt": {
+      "sha256": "9531cce7f8a5108b2996684ef3ce08ddfc822fc98af6c13417508529166bbf4a",
+      "failures": 0,
+      "race_warnings": 0
+    }
+  },
+  "final_vs_native_changes": [
+    "internal/operator/install_compose_test.go"
+  ],
+  "runtime_input_comparison": {
+    "files": 485,
+    "differences": []
+  }
+}

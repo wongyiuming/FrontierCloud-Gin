@@ -132,7 +132,7 @@ func run(args []string) (exitCode int) {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		v, err := release.NewVerifier(release.DefaultPolicy(), "")
+		v, err := hostReleaseVerifier()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2

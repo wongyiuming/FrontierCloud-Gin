@@ -20,8 +20,6 @@ x-storage-env: &storage-env
   STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:?Set a certificate-verified HTTPS root URL matching the storage network profile}
   STORAGE_PORT: ${STORAGE_PORT:-443}
   SERVER_NAME: ${SERVER_NAME:?Set the storage certificate hostname}
-  RELEASE_BRANCH: main
-  RELEASE_SOURCE_BRANCH: dev
   WEBRTC_STUN_PORT: ${WEBRTC_STUN_PORT:-3478}
 
 services:

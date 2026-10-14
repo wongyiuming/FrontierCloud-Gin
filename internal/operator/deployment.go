@@ -601,7 +601,7 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	for _, name := range names {
 		s := cfg.Services[name]
 		component := ""
-		for _, c := range []string{"web", "nginx", "updater"} {
+		for _, c := range []string{"web", "nginx"} {
 			repo, _ := release.ImageRepository(c)
 			if strings.HasPrefix(s.Image, repo+":") {
 				component = c

@@ -1,0 +1,75 @@
+{
+  "checked_at": "2026-10-14T00:15:47.972001+00:00",
+  "host": "192.168.6.201",
+  "production_mutated": false,
+  "native_source_revision": "f5442a44ce6c6f1ee6d6654057059527308a21c5",
+  "race_source_revision": "86d07a9359237e6cff6a5dc6e3402e528e4b2a89",
+  "private_publication_adapters": true,
+  "public_release_proof": false,
+  "results": {
+    "install.json": {
+      "sha256": "3f5186855f2d61d20d40e744c1f9e1756d2b696ebdc9f04b9938cfec268833ac",
+      "passed": true,
+      "private_case_count": 6,
+      "guards_requested": true
+    },
+    "upgrade-sqlite.json": {
+      "sha256": "317bda833f559403a3ccf6291e739708d94c058feee5892db288ccbebfc9e88d",
+      "database": "sqlite",
+      "status": "passed",
+      "node_identity_preserved": true,
+      "media_id_preserved": true,
+      "priority_preserved": true,
+      "actual_http_range_verified": true
+    },
+    "upgrade-mysql.json": {
+      "sha256": "efd4ffa7b4d081bb286b714947df36d624ba9b54aaae6d18cfe5d6711bd73067",
+      "database": "mysql",
+      "status": "passed",
+      "node_identity_preserved": true,
+      "media_id_preserved": true,
+      "priority_preserved": true,
+      "actual_http_range_verified": true
+    },
+    "upgrade-failure.json": {
+      "sha256": "9e5759b91269e7344e2f054fd130709ace48e7079249ed4802b4086826be776e",
+      "database": "sqlite",
+      "status": "passed"
+    },
+    "migration-go-sqlite-dr/evidence.json": {
+      "sha256": "c8be27708fba04abedda57e4216fe5d505c74ce9987fa9875a416fd1a144f910",
+      "status": "passed",
+      "database": "go-sqlite",
+      "combination": "dr",
+      "public_release_proof": false
+    },
+    "migration-go-mysql-rd/evidence.json": {
+      "sha256": "b38012661d11526d90406aa8a3a18dc3d2d6095630cd58244f86b4ce7630056b",
+      "status": "passed",
+      "database": "go-mysql",
+      "combination": "rd",
+      "public_release_proof": false
+    },
+    "go-race.txt": {
+      "sha256": "d54754f1240c834eb2b84c06f95b25628a9683a7377b90f03ef2f4046745c596",
+      "failures": 0,
+      "race_warnings": 0,
+      "passed_packages": 42
+    },
+    "source-checks.txt": {
+      "sha256": "e7f6eedc06360898426f6c60c2b0fd8525b719c95487e854b1fd77b26db4d3f8",
+      "failures": 0,
+      "race_warnings": 0
+    }
+  },
+  "final_vs_native_changes": [
+    "ARCHITECTURE.md",
+    "docs/public-security-baseline.md",
+    "internal/deployment/bootstrap_test.go",
+    "scripts/trusted_latest_publish.py"
+  ],
+  "runtime_input_comparison": {
+    "files": 485,
+    "differences": []
+  }
+}

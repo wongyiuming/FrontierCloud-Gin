@@ -6,4 +6,3 @@ bash scripts/test-native-api.sh
 bash scripts/test-go-deployment.sh
 bash scripts/test-go-business.sh
 bash scripts/test-native-matrix.sh
-bash scripts/test-native-release.sh

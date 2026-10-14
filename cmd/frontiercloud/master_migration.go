@@ -25,7 +25,7 @@ import (
 )
 
 // This is deliberately NOT a general restore or an automatic release path.
-// Stop legacy Web/Updater and filesystem writers first; restore a backup on an
+// Stop Web and all filesystem writers first; restore a backup on an
 // egress-isolated fixture, capture it, and compare it with the stopped source.
 // MySQL's global read lock additionally fences unknown database writers until
 // durable admission. Existing data, keys, relationships and intents are not

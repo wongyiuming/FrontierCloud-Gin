@@ -145,8 +145,8 @@ implementation branch after merge. Database selection never changes release prof
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before changing cross-cutting behavior.
 
 Maintainers use the separate [image delivery](docs/public-image-delivery.md)
-and [staging CD](docs/staging-cd.md) procedures for publication permissions,
-exact-source CI and signed deployment gates. RN preproduction and its external
+and [staging status](docs/staging-cd.md) for publication permissions,
+exact-source CI and the retired staging boundary. RN preproduction and its external
 CD receiver were retired on 2026-10-11; no live preproduction deployment is
 currently available. Production upgrades remain separate operator actions.
 

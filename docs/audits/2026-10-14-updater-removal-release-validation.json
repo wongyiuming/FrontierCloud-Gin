@@ -1,0 +1,30 @@
+{
+  "host": "192.168.6.201",
+  "race_source_revision": "84dceac1ceb615e048bfaaa97e3e2293348b6979",
+  "race_command": "go test -race -count=1 -p=1 ./...",
+  "race_exit_code": 0,
+  "race_passed_packages": 42,
+  "race_output": "2026-10-14-updater-removal-84dceac-final-race.txt",
+  "source_checks_revision": "d551c33a4e0681345922daa7b454496840d6df99",
+  "source_checks_command": "bash scripts/test-ci-source.sh",
+  "source_checks_exit_code": 0,
+  "python_cases": 187,
+  "python_skipped": 2,
+  "changes_after_race_source": ["ARCHITECTURE.md", "README.md"],
+  "runtime_changes_since_native_acceptance": [
+    "cmd/fc/main.go",
+    "cmd/fc/upgrade.go",
+    "cmd/fc/release_credentials.go"
+  ],
+  "host_credentials_actual_https_assertions": "Anonymous and authenticated host verification requests reached an isolated trusted TLS server; invalid environment credentials failed without echoing values.",
+  "native_acceptance_record": "2026-10-14-updater-removal-final-verification.json",
+  "native_acceptance_source_revision": "a8dbcd2674a0e8f34298de590b5ac79a3b82c9a8",
+  "native_acceptance_is_private_publication_adapter": true,
+  "earlier_ab8430a_full_race": "Failed only the new TLS test fixture hostname binding; original failed log retained privately. This record refers to the separate corrected complete run.",
+  "production_operations_at_recording": "Only fc doctor and status; no apply/open or production mutation.",
+  "database_generation": 7,
+  "database_ddl_changed": false,
+  "live_staging_available": false,
+  "browser_matrix_repeated": false,
+  "real_hour_cleanup_repeated": false
+}

@@ -18,7 +18,7 @@ except ModuleNotFoundError:
 
 
 def publish(revision, component, plan, probe=publication_probe, build=None):
-    if plan.get('revision') != revision or component not in ('web', 'updater', 'nginx'):
+    if plan.get('revision') != revision or component not in ('web', 'nginx'):
         raise ValueError('Publication plan identity mismatch')
     state = plan.get('components', {}).get(component, {})
     if type(state.get('missing')) is not bool:
@@ -69,7 +69,7 @@ def build_image(revision, component):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('revision')
-    parser.add_argument('component', choices=('web', 'updater', 'nginx'))
+    parser.add_argument('component', choices=('web', 'nginx'))
     parser.add_argument('--plan', type=Path, default=Path('.ci-publication-plan.json'))
     args = parser.parse_args()
     try:

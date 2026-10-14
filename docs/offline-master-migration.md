@@ -20,7 +20,7 @@ or rewritten by this workflow.
    restored Master must never contact production Followers. Retain untouched
    backups independently of the writable rehearsal.
 3. Test recovery and the native runtime on a separate rehearsal copy. Before
-   production cutover, stop legacy Web/Updater and every filesystem writer,
+   production cutover, stop legacy Web and every filesystem writer,
    close public traffic with a maintenance page, and take final SQL/RDB/config
    backups. Refresh the restored inventory from this final snapshot. Read-only
    hashing may be expensive; do not run it in normal request handling.
@@ -82,7 +82,7 @@ Automatic upgrading must not promote an unreviewed runtime profile.
 ## Rollback
 
 Before reopening public traffic, stop candidate writers and restore the old
-Web/Updater/Nginx image/configuration against the retained original volumes.
+Web/Nginx image/configuration against the retained original volumes.
 Only restore the final frozen database if rehearsal/startup changed business
 state and no new public writes were accepted. After traffic is reopened, an old
 snapshot is **not** a lossless rollback: preserve all newly accepted writes and

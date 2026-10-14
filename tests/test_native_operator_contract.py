@@ -11,14 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class NativeOperatorTests(unittest.TestCase):
     def test_inventory_has_exact_native_five_nodes(self):
-        source = (ROOT / "scripts/ops/dev_cluster.py").read_text(encoding="utf-8")
-        module = ast.parse(source)
-        assignment = next(node for node in module.body if isinstance(node, ast.Assign)
-                          and any(isinstance(t, ast.Name) and t.id == "NAMES" for t in node.targets))
-        names = eval(compile(ast.Expression(assignment.value), "inventory", "eval"), {"range": range})
-        self.assertEqual(names, ["master", "direct-1", "direct-2", "relay-1", "relay-2"])
-        self.assertIn('choices=("sqlite", "mysql")', source)
-        self.assertIn('re.fullmatch(r"[0-9a-f]{40}", args.initial_sha)', source)
+        source = (ROOT / "internal/nativeacceptance/native_matrix_real_test.go").read_text()
+        self.assertIn("const fleetNodeCount = 5", source)
+        self.assertIn('"go-sqlite"', source)
+        self.assertIn('"go-mysql"', source)
+        self.assertNotIn("UPDATER_PROJECT", source)
+        self.assertNotIn("updater-control", source)
 
     def test_chaos_resource_driver_uses_native_tree_contract(self):
         source = (ROOT / "scripts/ops/dev_chaos.py").read_text(encoding="utf-8")
@@ -55,6 +53,15 @@ class NativeOperatorTests(unittest.TestCase):
         source = (ROOT / "scripts/ops/dev_import_media.py").read_text(encoding="utf-8")
         self.assertIn('hashlib.sha256(target_dir.encode())', source)
         self.assertNotIn('site_type = ("primary", "direct", "relay")[index % 3]', source)
+
+    def test_retired_cd_units_and_dispatcher_are_not_distributed(self):
+        self.assertFalse((ROOT / "ops/frontiercloud-dev-cd.timer").exists())
+        self.assertFalse((ROOT / "ops/frontiercloud-dev-cd.service").exists())
+        source = (ROOT / "scripts/ops/dev_control.py").read_text(encoding="utf-8")
+        guard = next(n for n in ast.parse(source).body if isinstance(n, ast.If)
+                     and ast.unparse(n.test) == "__name__ == '__main__'")
+        self.assertIsInstance(guard.body[0], ast.Raise)
+        self.assertIn("Legacy development CD is retired", ast.unparse(guard))
 
 
 if __name__ == "__main__":

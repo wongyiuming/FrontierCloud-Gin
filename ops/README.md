@@ -13,3 +13,10 @@ not the native Web image.
 
 Install host-only operator dependencies with `pip install '.[operator]'`.
 The Gin HTTP test driver uses only the Python standard library.
+
+The former `frontiercloud-dev-cd.service` and timer are retired and are no
+longer distributed. `dev_control.py` direct invocation fails explicitly. On a
+host that still has these units installed, disable/remove those units during
+its separately reviewed development-host retirement; deleting repository files
+does not uninstall existing systemd units. Upgrade current deployments with
+the explicit `fc upgrade plan/apply/open` workflow.

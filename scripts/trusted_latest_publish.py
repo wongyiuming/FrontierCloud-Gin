@@ -7,11 +7,11 @@ import urllib.parse
 
 if __package__:
     from . import registry_images as registry, trusted_native_publish as publication
-    from .trusted_staging_notify import publication_jobs
+    from .publication_proof import publication_jobs
 else:
     import registry_images as registry
     import trusted_native_publish as publication
-    from trusted_staging_notify import publication_jobs
+    from publication_proof import publication_jobs
 
 require = publication.require
 
@@ -43,7 +43,7 @@ def promote(plan, event, environ, read, probe=registry.publication_probe,
     publication.verify_plan(plan, event, environ, read)
     require(plan['branch'] == 'main', 'Only published main may become latest')
     publication_jobs(read, plan)
-    # Complete all three anonymous provenance and byte checks before any write.
+    # Complete both anonymous provenance and byte checks before any write.
     ready = {}
     for component in publication.COMPONENTS:
         proof = probe(plan['revision'], component)

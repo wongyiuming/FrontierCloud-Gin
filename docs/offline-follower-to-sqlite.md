@@ -6,7 +6,7 @@ active/revoked relationships, business rows, media IDs and all physical data.
 It never promotes to Standalone/Master or pairs a replacement node.
 
 Keep original MySQL, data, secrets, images and exact Compose configuration.
-Precopy media off-host while online, then fence all legacy Web/Updater and
+Precopy media off-host while online, then fence all legacy Web and
 filesystem writers. Take final SQL/config/secret/Redis backups and synchronize
 the stopped data delta. Restore the final backup independently in an isolated
 fixture; a live precopy or a hardlink tree is NOT recovery proof.
