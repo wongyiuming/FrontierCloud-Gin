@@ -55,7 +55,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 ## Non-negotiable architecture boundaries
 
 - A cluster has one business Master. storage nodes are resource nodes, not independent business authorities.
-- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode.
+- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception permits the one-shot `compose.foc.yaml` installer to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
 - Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to storage nodes.
 - One managed media object is complete and belongs to exactly one storage member. Do not split one logical object across storage members.
 - Compute Worker is retired. Do not add worker slots, compute scheduling, worker UI, or worker product configuration back without an explicit architecture decision.
