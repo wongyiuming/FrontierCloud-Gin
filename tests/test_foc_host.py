@@ -34,7 +34,8 @@ class HostEntryTests(unittest.TestCase):
         self.entry = self.root / 'foc'
         self.entry.write_text(source)
         self.env = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'],
-                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch))
+                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch),
+                        XDG_STATE_HOME=str(self.root / 'user-state'))
 
     def deployment(self, name):
         path = self.root / name
@@ -83,6 +84,15 @@ class HostEntryTests(unittest.TestCase):
         self.env['DOCKER_EXIT'] = '1'
         self.assertEqual(self.invoke('restart').returncode, 2)
         self.assertFalse(self.calls.exists())
+
+    def test_user_registration_survives_container_removal(self):
+        native=self.deployment('remembered')
+        registry=self.root/'user-state/frontiercloud/foc-deployments'
+        registry.parent.mkdir(parents=True)
+        registry.write_text(str(native)+'\n')
+        self.labels.write_text('')
+        self.assertEqual(self.invoke('restart').returncode,0)
+        self.assertEqual(self.calls.read_text().splitlines(),['--directory',str(native),'restart'])
 
     def test_version_works_without_docker(self):
         self.env['DOCKER_EXIT'] = '1'

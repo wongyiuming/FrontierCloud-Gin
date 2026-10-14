@@ -91,8 +91,9 @@ func checkRestoreFilesystemCapacity(roots map[string]string, entries []recovery.
 }
 
 func checkMySQLRecoveryCredential(roots map[string]string, entries []recovery.Entry) error {
+	found := map[string]bool{}
 	for _, entry := range entries {
-		if entry.Path != "runtime_secrets/mysql_root_password" {
+		if entry.Path != "runtime_secrets/mysql_root_password" && entry.Path != "runtime_secrets/mysql_password" {
 			continue
 		}
 		root, e := os.OpenRoot(roots["runtime_secrets"])
@@ -100,11 +101,12 @@ func checkMySQLRecoveryCredential(roots map[string]string, entries []recovery.En
 			return e
 		}
 		defer root.Close()
-		info, e := root.Lstat("mysql_root_password")
+		_, name, _ := strings.Cut(entry.Path, "/")
+		info, e := root.Lstat(name)
 		if e != nil || !info.Mode().IsRegular() || info.Size() > 4096 {
 			return errors.New("current MySQL credential unavailable; no state replaced")
 		}
-		f, e := root.Open("mysql_root_password")
+		f, e := root.Open(name)
 		if e != nil {
 			return e
 		}
@@ -117,6 +119,9 @@ func checkMySQLRecoveryCredential(roots map[string]string, entries []recovery.En
 		if hex.EncodeToString(h.Sum(nil)) != entry.SHA256 {
 			return errors.New("MySQL credential drift requires separately coordinated credential recovery; no state replaced")
 		}
+		found[name] = true
+	}
+	if found["mysql_root_password"] && found["mysql_password"] {
 		return nil
 	}
 	return errors.New("archive lacks MySQL credential evidence; no state replaced")

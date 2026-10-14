@@ -11,7 +11,32 @@ keep the installed deployment's Compose files and configuration. This entry
 updates component images only. Configuration changes require their own reviewed
 procedure; an environment edit is not a database or disk migration.
 
-## Review, back up, prepare, then open
+## One-command upgrade
+
+Run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA` from any host directory.
+The tool verifies the selected public release and deployment, displays version,
+database generation and state-backup capacity, and asks for one confirmation.
+It manages the private plan and recovery archive in the registered deployment
+directory, invokes the existing apply checks, and opens only after preparation
+and managed read verification succeed. No plan filename, hash or NodeID needs
+to be copied by the operator. Existing Compose selection and media mounts remain
+bound to the receipt; tool refresh remains `foc self-update`.
+
+For MySQL, the interactive confirmation explicitly attests that external writers
+are stopped. Noninteractive use requires `--yes` and, for MySQL, the separate
+`--confirm-external-writers-stopped` attestation. The tool cannot infer external
+writer ownership. Declining confirmation leaves the upgrade unstarted.
+
+Repeating the command with the same target detects a recorded resumable stage
+and requests consent to finish it using its existing plan and recovery point.
+A different target, failed phase, controlled recovery, changed receipt, or
+interrupted operation lock is refused. An already current ready deployment is
+reported without another upgrade. The command never silently restores a database
+or opens a failed upgrade. Keep managed plan, backup and journal evidence.
+
+## Detailed preparation and opening
+
+The following subcommands remain available for deliberate staged operations.
 
 Upgrade recovery always uses `upgrade-state`: SQLite database/WAL/SHM or a
 consistent MySQL dump, deployment configuration, identity keys, certificates,
@@ -44,7 +69,8 @@ estimate is independent of the compressed dump size and archive destination.
 On a continuing recovery, allocated private `.ibd` files in the recorded database
 directory can count as space reclaimed by the explicit database drop. Shared
 tablespaces and hard-linked files never count as reclaimed space.
-Recovery refuses MySQL credential drift before replacing any live state. Password
+Recovery checks both root and application MySQL credentials against the archive
+and refuses drift before replacing any live state. Password
 rotation or loss of the server credential requires separately coordinated MySQL
 credential recovery; an application dump cannot restore server account state.
 

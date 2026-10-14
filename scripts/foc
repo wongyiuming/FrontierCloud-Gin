@@ -3,6 +3,7 @@
 set -eu
 backend=/usr/local/lib/frontiercloud/foc/fc
 registry=/etc/frontiercloud/foc-deployments
+user_registry=${XDG_STATE_HOME:-${HOME}/.local/state}/frontiercloud/foc-deployments
 case "${1:-}" in
   version) exec "$backend" "$@" ;;
   --help|-h) printf '%s\n' 'foc [--directory DIR] [--json] COMMAND' 'With no command, inspect the single discovered deployment.' 'Commands: status, logs, diagnose, restart, doctor, install, upgrade, backup, restore, node, self-update, version.'; exit 0 ;;
@@ -53,6 +54,14 @@ if [ -e "$registry" ]; then
     (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
   done < "$registry"
 fi
+if [ -e "$user_registry" ]; then
+  [ -f "$user_registry" ] && [ ! -L "$user_registry" ] || { echo 'foc: unsafe user deployment registry' >&2; exit 2; }
+  while IFS= read -r candidate || [ -n "$candidate" ]; do
+    [ -n "$candidate" ] || continue
+    [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ] || { echo 'foc: user registered deployment receipt is missing or unsafe' >&2; exit 2; }
+    (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
+  done < "$user_registry"
+fi
 if [ -f "$registry" ] && grep -qxF @compose "$registry"; then
   docker ps --all --filter label=frontiercloud.foc-bootstrap=1 --format '{{.Label "com.docker.compose.project.working_dir"}}' > "$work/automatic" || exit 2
 fi
@@ -61,7 +70,7 @@ docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' >
 }
 while IFS= read -r candidate || [ -n "$candidate" ]; do
   case "$candidate" in /*) ;; *) continue ;; esac
-  if [ ! -e "$candidate/.fc-deployment.json" ] && grep -qxF "$candidate" "$work/automatic"; then
+  if grep -qxF "$candidate" "$work/automatic" && ! grep -qxF "$candidate" "$registry" && { [ ! -f "$user_registry" ] || ! grep -qxF "$candidate" "$user_registry"; }; then
     "$backend" --directory "$candidate" compose-register >&2 || exit 2
   fi
   if [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ]; then
