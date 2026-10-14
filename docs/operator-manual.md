@@ -77,6 +77,15 @@ retains failed database state and restores the verified original database,
 configuration and keys into the same media mounts. It remains fenced until a
 separate `upgrade open` confirms the returned recovery plan digest. See
 [controlled upgrade state recovery](operator-upgrade.md).
+Ordinary state backups are restorable with `restore state-check` and `restore
+state` without an upgrade journal. They require the original deployment receipt
+and mount selection, trusted archive SHA, exact NodeID, source-offline and
+state-loss confirmations. `--freeze` can stop and fence the selected deployment.
+The tool retains current database/key/state material, restores into the original
+business mounts, then remains fenced. `restore state-open` separately confirms
+the returned plan digest and NodeID after managed business reads pass. MySQL
+database absence is recorded before restoring the logical dump. Business files
+deleted or changed since capture cannot be supplied by a state-only archive.
 The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
 configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
 It rejects metadata above the archive's 16 MiB manifest limit. It does not hash

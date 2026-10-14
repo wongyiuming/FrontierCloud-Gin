@@ -31,7 +31,8 @@ const Format = "frontiercloud-deployment-recovery"
 const MaxManifest = 16 << 20
 const MaxFiles = 100000
 const UpgradeStateScope = "upgrade-state"
-const ExcludedBusinessFiles = "media and lyric files are excluded; original business file mounts must be retained"
+const ExcludedBusinessFiles = "media, lyric and recording files are excluded; original business file mounts must be retained"
+const legacyExcludedBusinessFiles = "media and lyric files are excluded; original business file mounts must be retained"
 
 var hashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var nodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -338,7 +339,7 @@ func validateManifest(m Manifest) error {
 	if m.Scope == UpgradeStateScope {
 		found := false
 		for _, item := range m.Missing {
-			if item == ExcludedBusinessFiles {
+			if item == ExcludedBusinessFiles || item == legacyExcludedBusinessFiles {
 				found = true
 			}
 		}
@@ -500,6 +501,32 @@ func Apply(ctx context.Context, input, target, expected, confirmation string) (R
 // restoration authority; the caller must retain and fence the original mounts.
 func ExtractState(ctx context.Context, input, target, expected, confirmation string) (Report, error) {
 	return extractMaterial(ctx, input, target, expected, confirmation, "", true)
+}
+
+// ReadStateFile returns bounded verified metadata without extracting an archive.
+func ReadStateFile(ctx context.Context, input, expected, name string) ([]byte, error) {
+	f, e := openArchive(input)
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	var raw []byte
+	r, e := walkArchive(ctx, f, func(entry Entry, content io.Reader) error {
+		if entry.Path == name {
+			if entry.Bytes > 1<<20 {
+				return ErrUnsafe
+			}
+			var err error
+			raw, err = io.ReadAll(io.LimitReader(content, (1<<20)+1))
+			return err
+		}
+		_, err := io.Copy(io.Discard, content)
+		return err
+	})
+	if e != nil || r.SHA256 != expected || r.Manifest.Scope != UpgradeStateScope || raw == nil {
+		return nil, ErrUnsafe
+	}
+	return raw, nil
 }
 
 // The nonempty set permission is available only after CheckSet verified every

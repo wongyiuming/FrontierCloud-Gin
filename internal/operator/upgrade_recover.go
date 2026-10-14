@@ -25,6 +25,9 @@ import (
 // DDL rollback or permission to overwrite writes made after public activation.
 // Original business mounts are unchanged. Failed state is retained separately.
 func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approval, node, backupSHA, directory string, external bool) (result UpgradeState, operationErr error) {
+	return d.recoverState(ctx, r, approval, node, backupSHA, directory, external, false)
+}
+func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node, backupSHA, directory string, external, ordinary bool) (result UpgradeState, operationErr error) {
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return result, e
@@ -36,7 +39,7 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 	}
 	p := state.Plan
 	continuing := state.Phase == "restoring_state"
-	if (state.Phase != "failed_fenced" && !continuing) || state.ManualOwned || state.ManualStaged || state.BusinessVerified || p.RecoveryScope != recovery.UpgradeStateScope || p.RecoveryOf != "" || approval != p.SHA256 || node != p.NodeID || backupSHA == "" || backupSHA != state.BackupSHA {
+	if (state.Phase != "failed_fenced" && !continuing) || p.StateRestore != ordinary || state.ManualOwned || state.ManualStaged || state.BusinessVerified || p.RecoveryScope != recovery.UpgradeStateScope || p.RecoveryOf != "" || approval != p.SHA256 || node != p.NodeID || backupSHA == "" || backupSHA != state.BackupSHA {
 		return state, errors.New("state recovery requires a verified failed preparation before opening, approved plan, NodeID and original backup SHA")
 	}
 	if r.Database == "mysql" && !external {
@@ -44,28 +47,34 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 	}
 	recoveredReceipt := state.Previous
 	recoveredReceipt.State = "upgrade_fenced"
-	if !reflect.DeepEqual(r, upgradeTargetReceipt(state)) && !reflect.DeepEqual(r, state.Previous) && !(continuing && reflect.DeepEqual(r, recoveredReceipt)) {
+	if !ordinary && !reflect.DeepEqual(r, upgradeTargetReceipt(state)) && !reflect.DeepEqual(r, state.Previous) && !(continuing && reflect.DeepEqual(r, recoveredReceipt)) {
 		return state, errors.New("receipt is outside the failed source/target upgrade")
 	}
-	cfg, e := d.Config(ctx, false)
+	cfg, e := d.Config(ctx, ordinary)
 	if e != nil || cfg.Name != p.Project || selectionHash(cfg) != state.Previous.SelectionHash {
 		return state, errors.New("retained deployment mounts or configuration changed")
 	}
-	lockRaw, e := readRegular(filepath.Join(d.Directory, ImagesFile), 1<<20)
-	if e != nil {
-		return state, e
-	}
-	var lock struct {
-		Services map[string]map[string]string `json:"services"`
-	}
-	lockValue, lockErr := protocol.ParseStrictJSON(lockRaw, 1<<20)
-	lockObject, lockObjectOK := lockValue.(map[string]any)
-	if lockErr != nil || !lockObjectOK || len(lockObject) != 1 || json.Unmarshal(lockRaw, &lock) != nil || len(lock.Services) != len(p.ServiceImages) {
-		return state, errors.New("failed upgrade image lock changed")
-	}
-	for name, fields := range lock.Services {
-		if len(fields) != 1 || fields["image"] == "" || fields["image"] != p.ServiceImages[name] && fields["image"] != state.Previous.ServiceImages[name] {
-			return state, errors.New("unapproved image lock prevents retained-state recovery")
+	if !ordinary {
+		lockRaw, e := readRegular(filepath.Join(d.Directory, ImagesFile), 1<<20)
+		if e != nil {
+			return state, e
+		}
+		var lock struct {
+			Services map[string]map[string]string `json:"services"`
+		}
+		lockValue, lockErr := protocol.ParseStrictJSON(lockRaw, 1<<20)
+		lockObject, lockObjectOK := lockValue.(map[string]any)
+		if lockErr != nil || !lockObjectOK || len(lockObject) != 1 || json.Unmarshal(lockRaw, &lock) != nil || len(lock.Services) != len(p.ServiceImages) {
+			return state, errors.New("failed upgrade image lock changed")
+		}
+		for name, fields := range lock.Services {
+			if len(fields) != 1 || fields["image"] == "" || fields["image"] != p.ServiceImages[name] && fields["image"] != state.Previous.ServiceImages[name] {
+				return state, errors.New("unapproved image lock prevents retained-state recovery")
+			}
+		}
+	} else if !continuing {
+		if _, e = d.ValidateReceipt(ctx, r); e != nil {
+			return state, e
 		}
 	}
 	if r.Database == "mysql" {
@@ -88,12 +97,16 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 		return state, e
 	}
 	data := roots["data"]
-	directory, e = filepath.Abs(directory)
+	directory, e = safeRecoveryDirectory(directory, continuing)
 	if e != nil || directory == "" {
 		return state, errors.New("new private recovery directory required")
 	}
 	for _, root := range roots {
-		if directory == root || strings.HasPrefix(directory, root+string(os.PathSeparator)) {
+		realRoot, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return state, err
+		}
+		if directory == realRoot || strings.HasPrefix(directory, realRoot+string(os.PathSeparator)) {
 			return state, errors.New("recovery material cannot be inside a retained deployment root")
 		}
 	}
@@ -118,6 +131,14 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 		defer lease()
 		if err = d.stoppedWriters(ctx); err != nil {
 			return err
+		}
+		mysqlPresent := true
+		if r.Database == "mysql" {
+			raw, err := d.Compose(ctx, true, "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -N -u root -e "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '$MYSQL_DATABASE'"`)
+			if err != nil || strings.TrimSpace(string(raw)) != "0" && strings.TrimSpace(string(raw)) != "1" {
+				return errors.New("recorded MySQL database presence cannot be verified")
+			}
+			mysqlPresent = strings.TrimSpace(string(raw)) == "1"
 		}
 		selection, err := upgradeStateSelection(cfg, state.Previous, false)
 		if err != nil {
@@ -149,6 +170,24 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 			entries = append(entries, entry)
 		}
 		if !continuing {
+			currentEntries, inventoryErr := inventoryState(ctx, roots, selection)
+			if inventoryErr != nil {
+				return inventoryErr
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Path, "deployment/") {
+					currentEntries = append(currentEntries, entry)
+				}
+			}
+			archived := map[string]bool{}
+			for _, entry := range verified.Manifest.Files {
+				archived[entry.Path] = true
+			}
+			for _, entry := range currentEntries {
+				if !archived[entry.Path] {
+					state.CreatedStatePaths = append(state.CreatedStatePaths, entry.Path)
+				}
+			}
 			if _, err = os.Lstat(directory); !os.IsNotExist(err) {
 				return errors.New("new recovery directory must not exist")
 			}
@@ -158,7 +197,7 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 				return err
 			}
 			required := uint64(verified.Manifest.Bytes)*3 + (512 << 20)
-			for _, entry := range entries {
+			for _, entry := range currentEntries {
 				class, relative, _ := strings.Cut(entry.Path, "/")
 				info, err := os.Lstat(filepath.Join(roots[class], relative))
 				if err == nil {
@@ -170,7 +209,7 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 					return err
 				}
 			}
-			if r.Database == "mysql" {
+			if r.Database == "mysql" && mysqlPresent {
 				stream, ok := d.Runner.(StreamRunner)
 				if !ok {
 					return errors.New("MySQL failed-state retention unavailable")
@@ -193,7 +232,7 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 			if _, err = recovery.ExtractState(ctx, state.BackupFile, filepath.Join(directory, "material"), backupSHA, node); err != nil {
 				return err
 			}
-			for _, entry := range entries {
+			for _, entry := range currentEntries {
 				class, relative, _ := strings.Cut(entry.Path, "/")
 				if err = retainStateFile(ctx, roots[class], relative, filepath.Join(directory, "failed", class), relative); err != nil {
 					return err
@@ -206,7 +245,7 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 						return err
 					}
 				}
-			} else {
+			} else if mysqlPresent {
 				f, err := os.OpenFile(filepath.Join(directory, "failed-database.sql"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 				if err != nil {
 					return err
@@ -219,6 +258,10 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 				if err != nil {
 					return errors.New("failed MySQL dump retention incomplete; no restoration performed")
 				}
+			} else {
+				if err = exclusiveJSON(filepath.Join(directory, "failed-database-absent.json"), map[string]any{"database": cfg.Services["mysql"].Environment["MYSQL_DATABASE"], "absent_before_restore": true}); err != nil {
+					return err
+				}
 			}
 			state.RecoveryDirectory = directory
 			state.Phase = "restoring_state"
@@ -228,6 +271,31 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 		}
 		if err = recovery.CheckMaterial(ctx, filepath.Join(directory, "material"), verified); err != nil {
 			return err
+		}
+		for _, name := range state.CreatedStatePaths {
+			class, relative, ok := strings.Cut(name, "/")
+			if !ok || roots[class] == "" {
+				return recovery.ErrUnsafe
+			}
+			live, err := os.OpenRoot(roots[class])
+			if err != nil {
+				return err
+			}
+			info, err := live.Lstat(relative)
+			if err == nil && !info.Mode().IsRegular() {
+				live.Close()
+				return recovery.ErrUnsafe
+			}
+			if err == nil {
+				err = live.Remove(relative)
+				if err == nil {
+					err = fsutil.SyncDirectory(live, path.Dir(relative))
+				}
+			}
+			live.Close()
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 		for _, entry := range entries {
 			class, relative, _ := strings.Cut(entry.Path, "/")
@@ -274,12 +342,12 @@ func (d *Deployment) RecoverUpgradeState(ctx context.Context, r Receipt, approva
 		}
 		previous := state.Previous
 		previous.State = "upgrade_fenced"
-		locked := map[string]map[string]string{}
-		for name, image := range previous.ServiceImages {
-			locked[name] = map[string]string{"image": image}
-		}
-		if err = replaceJSON(filepath.Join(d.Directory, ImagesFile), map[string]any{"services": locked}); err != nil {
-			return err
+		for _, entry := range verified.Manifest.Files {
+			if entry.Path == "deployment/"+ImagesFile {
+				if err = replaceStateFile(ctx, filepath.Join(directory, "material", "deployment"), ImagesFile, d.Directory, ImagesFile, entry); err != nil {
+					return err
+				}
+			}
 		}
 		if err = replaceJSON(filepath.Join(d.Directory, ReceiptFile), previous); err != nil {
 			return err

@@ -261,6 +261,14 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			stateRoots, err := d.upgradeRecoveryRoots(ctx, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			createdState := filepath.Join(stateRoots["runtime_secrets"], "target-created-state.marker")
+			if err = os.WriteFile(createdState, []byte("retained-target-state"), 0600); err != nil {
+				t.Fatal(err)
+			}
 			if r.Database == "sqlite" {
 				data, err := upgradeDataRoot(cfg)
 				if err != nil {
@@ -284,6 +292,13 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 			state, err = d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
 			if err != nil || state.Phase != "prepared_fenced" || state.Plan.RecoveryOf != p.SHA256 {
 				t.Fatal("native retained-mount state restoration", err)
+			}
+			if _, err = os.Stat(createdState); !os.IsNotExist(err) {
+				t.Fatal("target-created state survived restoration", err)
+			}
+			createdRetained, err := os.ReadFile(filepath.Join(material, "failed", "runtime_secrets", "target-created-state.marker"))
+			if err != nil || string(createdRetained) != "retained-target-state" {
+				t.Fatal("target-created state was not retained", err)
 			}
 			if r.Database == "sqlite" {
 				data, err := upgradeDataRoot(cfg)

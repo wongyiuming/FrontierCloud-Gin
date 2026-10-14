@@ -44,6 +44,10 @@ activation or accepted new writes; it never silently discards post-opening data.
 An interrupted `restoring_state` operation can be retried with the same original
 approval, archive SHA and recorded recovery directory. Failed capture materials
 are retained and a capture error makes no database restoration.
+Recovery inventories all captured state classes, retains target-created files,
+and removes target-only state before restoring archived files. The original
+native/runtime/site lease files remain pinned. Recovery destinations require a
+real parent with no symlink ancestors and cannot lie inside any retained root.
 
 Use an explicit published main commit for an existing installation. `latest`
 is accepted by initial installation only. A plan performs read-only Docker

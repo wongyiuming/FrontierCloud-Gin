@@ -38,6 +38,9 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 	freeze := flags.Bool("freeze", false, "enter native maintenance and stop this deployment's writers; remains stopped after backup")
 	external := flags.Bool("confirm-external-writers-stopped", false, "confirm all external MySQL writers are stopped")
 	full := flags.Bool("include-business-files", false, "explicit full disaster-recovery archive including media, lyrics and recordings")
+	stateLoss := flags.Bool("confirm-state-loss", false, "accept loss of database/configuration changes since the selected state backup")
+	recoveryDirectory := flags.String("recovery-directory", "", "new private failed-state retention and restoration directory")
+	approval := flags.String("approve-plan-sha256", "", "exact digest returned by state restoration for separate opening")
 	if flags.Parse(args[2:]) != nil || flags.NArg() != 0 {
 		return 2
 	}
@@ -71,6 +74,28 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 	var report recovery.Report
 	var err error
 	switch action {
+	case "restore state-check", "restore state", "restore state-open":
+		d, r, e := operator.Open(directory)
+		if e != nil {
+			err = e
+			break
+		}
+		d.Runner = dockerRunner{d.Directory}
+		if action == "restore state-check" {
+			report, _, err = d.StateRestoreCheck(ctx, r, *input, *checksum)
+		} else {
+			var state operator.UpgradeState
+			if action == "restore state-open" {
+				state, err = d.OpenUpgrade(ctx, r, *approval, *confirmation)
+			} else {
+				state, err = d.RestoreState(ctx, r, *input, *checksum, *confirmation, *recoveryDirectory, *sourceOffline, *stateLoss, *freeze, *external)
+			}
+			if err != nil {
+				fmt.Fprintln(errorWriter, err)
+				return 2
+			}
+			return encodeRecoveryOutput(outputWriter, errorWriter, state)
+		}
 	case "backup create":
 		var d *operator.Deployment
 		var receipt operator.Receipt

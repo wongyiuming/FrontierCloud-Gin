@@ -283,6 +283,10 @@ def run(args):
                'images': {}, 'service_images': {name: value['image'] for name, value in overrides.items()},
                'compose_files': ['docker-compose.yaml'] + (['docker-compose.gin-mysql.yaml'] if args.database == 'mysql' else []), 'state': 'ready'}
     (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
+    if args.state_restore:
+        effective = json.loads(compose(directory, 'config', '--format', 'json'))
+        receipt['selection_sha256'] = fingerprint(effective)
+        (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
     os.chmod(directory / '.fc-deployment.json', 0o600)
     restored_project = project + '-restore'
     restored_started = False
@@ -371,6 +375,33 @@ def run(args):
         assert not state_report['manifest']['complete_cluster']
         assert all(not item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
                    for item in state_report['manifest']['files'])
+        if args.state_restore:
+            if args.database == 'sqlite':
+                sqlite_path = configuration['services']['web']['environment']['SQLITE_PATH']
+                (data / Path(sqlite_path).relative_to('/app/data')).unlink()
+            else:
+                compose(directory, 'exec', '-T', 'mysql', 'sh', '-c',
+                        'MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root -e "DROP DATABASE $MYSQL_DATABASE"')
+            recovery_directory = directory.parent / ('ordinary-state-' + directory.name)
+            state = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state',
+                                        '--file', str(state_archive), '--sha256', state_report['sha256'],
+                                        '--confirm-node-id', before_fact['node_id'],
+                                        '--recovery-directory', str(recovery_directory),
+                                        '--confirm-source-offline', '--confirm-state-loss',
+                                        *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=800))
+            assert state['phase'] == 'prepared_fenced'
+            opened = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state-open',
+                                         '--approve-plan-sha256', state['plan']['plan_sha256'],
+                                         '--confirm-node-id', before_fact['node_id']], timeout=800))
+            assert opened['phase'] == 'opened' and opened['business_verified']
+            wait_ready(base)
+            assert probe(request, payload) == media_id
+            assert admin_probe(directory, 'verify')['priority'] == 77
+            result.update(status='passed', scope='ordinary default state backup restored lost database in retained mounts without an upgrade journal',
+                          original_business_mounts_retained=True, actual_http_range_verified=True,
+                          no_production_operation=True)
+            success = True
+            return result
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
                                      '--freeze', '--include-business-files', '--output', str(archive),
@@ -464,6 +495,7 @@ if __name__ == '__main__':
     parser.add_argument('--expected-source-generation', type=int, default=0, help='require this actual source runtime schema for explicit cross-generation acceptance')
     parser.add_argument('--upgrade-failure', action='store_true', help='inject failure at target preparation after real native backup')
     parser.add_argument('--upgrade-recover', action='store_true', help='restore failed database state in original business mounts and reopen source')
+    parser.add_argument('--state-restore', action='store_true', help='restore an ordinary default state backup after database loss')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     options = parser.parse_args()
