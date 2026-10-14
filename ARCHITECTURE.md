@@ -222,6 +222,23 @@ GitHub-side ref creation cannot be fully prevented by a unit test. The repositor
 
 ## 12. Supported runtime and validation
 
+### Frontend baseline — HTML, CSS and native JavaScript
+
+All frontend development MUST use HTML, CSS and native JavaScript. This applies
+to public pages, players, Admin GUI, new views and subsequent UI changes.
+
+Use browser-native DOM, CSS, Canvas, SVG and Web APIs for rendering, interaction
+and animation. Do not introduce frontend frameworks or framework runtimes,
+including React, Vue, Angular, Svelte, Solid, Next.js or Nuxt. Do not add JSX/TSX,
+framework-specific component files, virtual-DOM rendering, or framework-based UI
+component systems. Do not replace native browser rendering with an engine such
+as Three.js.
+
+Build-only tooling, such as the existing JavaScript obfuscator, and test-only
+browser automation do not change this baseline. They must not introduce a
+frontend framework into shipped browser code. A new UI feature, dependency or
+visual redesign is not authorization to change this architecture boundary.
+
 ### Operator installation boundary
 
 The short-lived `fc` host client is distributed inside the public Web image's

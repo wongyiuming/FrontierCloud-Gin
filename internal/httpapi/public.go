@@ -50,7 +50,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		return nil, err
 	}
 	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}}
-	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
+	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/directory-globe.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
 		content, err := root.ReadFile(name)
 		if err != nil {
 			root.Close()
@@ -90,6 +90,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 	})
 	group.GET("/catalog/categories", p.categories)
 	group.GET("/catalog/media", p.catalog)
+	group.GET("/cover", p.musicCover)
 	group.GET("/music", func(c *gin.Context) { p.categoryPage(c, "music") })
 	group.GET("/video", func(c *gin.Context) { p.categoryPage(c, "video") })
 	group.GET("/music/category", func(c *gin.Context) { p.playerPage(c, "music") })
@@ -177,7 +178,7 @@ func (p *Public) categories(c *gin.Context) {
 		return
 	}
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
-	c.JSON(200, gin.H{"entries": entries})
+	c.JSON(200, gin.H{"entries": p.media.CategoryArtwork(c.Request.Context(), kind, entries, include)})
 }
 func (p *Public) catalog(c *gin.Context) {
 	kind, ok := kindQuery(c)
@@ -217,6 +218,7 @@ func (p *Public) catalog(c *gin.Context) {
 	for i := range entries {
 		entries[i].Encryption = metadata[entries[i].MediaID]
 	}
+	p.media.DecorateMusicTracks(c.Request.Context(), entries)
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": entries})
 }
@@ -424,6 +426,8 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 		"PLAYER_JS_URL":              html.EscapeString(p.assets["js/player.js"]), "PLAYER_CSS_URL": html.EscapeString(p.assets["css/player.css"]),
 		"LYRICS_JS_URL": html.EscapeString(p.assets["js/lyrics.js"]), "LYRICS_CSS_URL": html.EscapeString(p.assets["css/lyrics.css"]),
 		"MEDIA_BROWSER_JS_URL":       html.EscapeString(p.assets["js/media-browser.js"]),
+		"DIRECTORY_GLOBE_JS_URL":     html.EscapeString(p.assets["js/directory-globe.js"]),
+		"DIRECTORY_GLOBE_CSS_URL":    html.EscapeString(p.assets["css/directory-globe.css"]),
 		"MEDIA_PREFETCH_ASSETS_JSON": jsonString([]string{p.assets["js/player.js"], p.assets["css/player.css"], p.assets["js/lyrics.js"], p.assets["css/lyrics.css"]}),
 		"ENCRYPTED_LYRICS_JSON":      "null",
 	}
@@ -495,7 +499,8 @@ func (p *Public) playerPage(c *gin.Context, kind string) {
 			return
 		}
 		if len(entries) > 0 {
-			p.page(c, "category.html", map[string]string{"PAGE_TITLE": html.EscapeString(title), "BACK_URL": html.EscapeString(back), "CATALOG_CONFIG_JSON": jsonString(gin.H{"bootstrap": entries, "cacheKey": "", "url": "", "emptyText": "暂无分类目录"})})
+			artwork := p.media.CategoryArtwork(c.Request.Context(), kind, entries, include)
+			p.page(c, "category.html", map[string]string{"PAGE_TITLE": html.EscapeString(title), "BACK_URL": html.EscapeString(back), "CATALOG_CONFIG_JSON": jsonString(gin.H{"bootstrap": artwork, "cacheKey": "", "url": "", "emptyText": "暂无分类目录"})})
 			return
 		}
 	}
