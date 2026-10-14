@@ -60,6 +60,7 @@ type Manifest struct {
 	Role                 string      `json:"role"`
 	Revision             string      `json:"revision"`
 	Database             string      `json:"database"`
+	MySQLRestoreBytes    uint64      `json:"mysql_restore_storage_budget_bytes,omitempty"`
 	SchemaGeneration     int         `json:"schema_generation"`
 	ConfigurationVersion int         `json:"configuration_version"`
 	CreatedAt            string      `json:"created_at"`

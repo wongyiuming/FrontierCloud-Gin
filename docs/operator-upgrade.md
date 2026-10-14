@@ -36,6 +36,12 @@ recreates only the recorded database from the verified dump. Identity keys,
 including `data/media-keys/media-premaster.key`, configuration and certificate
 state are restored without replacing native lifecycle/control lease files.
 
+Before a MySQL database is dropped, recovery checks its server data volume's
+free space against the source table/index storage estimate recorded in the
+archive, an expansion allowance and remaining reserve. Historical state archives
+without that estimate cannot authorize destructive MySQL restoration. This
+estimate is independent of the compressed dump size and archive destination.
+
 Recovery validates the source generation, identity and original managed files
 and remains `prepared_fenced`. Its returned plan records `recovery_of` and a new
 approval digest. Use that returned digest with `foc upgrade open` to separately

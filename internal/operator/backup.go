@@ -343,6 +343,13 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 			if !ok {
 				return errors.New("bounded MySQL dump streaming unavailable")
 			}
+			if scope == recovery.UpgradeStateScope {
+				budget, err := d.mysqlRestoreStorageBudget(ctx, cfg)
+				if err != nil {
+					return err
+				}
+				m.MySQLRestoreBytes = budget
+			}
 			dumpRoot := filepath.Join(workspace, "mysql_dump")
 			if e = os.Mkdir(dumpRoot, 0700); e != nil {
 				return e

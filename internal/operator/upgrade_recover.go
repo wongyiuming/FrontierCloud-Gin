@@ -238,29 +238,24 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 					return err
 				}
 			}
-			if r.Database == "sqlite" {
-				db := strings.TrimPrefix(cfg.Services["web"].Environment["SQLITE_PATH"], path.Clean(cfg.Services["web"].Environment["DATA_ROOT"])+"/")
-				for _, suffix := range []string{"-wal", "-shm"} {
-					if err = retainStateFile(ctx, data, db+suffix, filepath.Join(directory, "failed", "data"), db+suffix); err != nil {
+			if r.Database == "mysql" {
+				if mysqlPresent {
+					f, err := os.OpenFile(filepath.Join(directory, "failed-database.sql"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+					if err != nil {
 						return err
 					}
-				}
-			} else if mysqlPresent {
-				f, err := os.OpenFile(filepath.Join(directory, "failed-database.sql"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-				if err != nil {
-					return err
-				}
-				err = d.Runner.(StreamRunner).RunTo(ctx, f, "docker", d.stateDumpArgs()...)
-				if err == nil {
-					err = f.Sync()
-				}
-				err = errors.Join(err, f.Close())
-				if err != nil {
-					return errors.New("failed MySQL dump retention incomplete; no restoration performed")
-				}
-			} else {
-				if err = exclusiveJSON(filepath.Join(directory, "failed-database-absent.json"), map[string]any{"database": cfg.Services["mysql"].Environment["MYSQL_DATABASE"], "absent_before_restore": true}); err != nil {
-					return err
+					err = d.Runner.(StreamRunner).RunTo(ctx, f, "docker", d.stateDumpArgs()...)
+					if err == nil {
+						err = f.Sync()
+					}
+					err = errors.Join(err, f.Close())
+					if err != nil {
+						return errors.New("failed MySQL dump retention incomplete; no restoration performed")
+					}
+				} else {
+					if err = exclusiveJSON(filepath.Join(directory, "failed-database-absent.json"), map[string]any{"database": cfg.Services["mysql"].Environment["MYSQL_DATABASE"], "absent_before_restore": true}); err != nil {
+						return err
+					}
 				}
 			}
 			state.RecoveryDirectory = directory
@@ -274,6 +269,11 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 		}
 		if err = checkRestoreDestinationCapacity(roots, entries, diskFree); err != nil {
 			return err
+		}
+		if r.Database == "mysql" {
+			if err = d.checkMySQLRestoreCapacity(ctx, cfg, verified.Manifest.MySQLRestoreBytes); err != nil {
+				return err
+			}
 		}
 		for _, name := range state.CreatedStatePaths {
 			class, relative, ok := strings.Cut(name, "/")
