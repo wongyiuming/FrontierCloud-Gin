@@ -1,0 +1,42 @@
+{
+  "host": "192.168.6.201",
+  "tested_source": "91669521110ea24a534e80c45d536d93012deba1",
+  "source_checks": {
+    "command": "bash scripts/test-ci-source.sh",
+    "exit_code": 0,
+    "python_cases": 205,
+    "python_skipped": 2
+  },
+  "foc_regression_cases": 18,
+  "review_fixes": {
+    "4266419946": "restore activate/open use discovery; explicit-directory selection remains available; Docker failures refuse implicit activation",
+    "4266419951": "Remove host-root bind; expose only read-only /usr and /etc parent views"
+  },
+  "native_results": {
+    "compose_runtime_socket_check": 0,
+    "host_docker_socket_present": true,
+    "host_runtime_dirs_absent_in_installer": true,
+    "tool_refresh": 0,
+    "repeat_install": 0,
+    "global_status_equals_explicit_backend": true,
+    "actual_archive_integrity_verified": true,
+    "symlink_refusal": 2,
+    "entry_bytes_preserved_after_refusal": true
+  },
+  "mount_scope": {
+    "read_only_parent_views": [
+      "/usr -> /host/usr",
+      "/etc -> /host/etc"
+    ],
+    "writable_install_binds": 3,
+    "host_root_bound": false,
+    "host_run_or_var_bound": false,
+    "docker_socket_bound": false
+  },
+  "fixture_image": "foc-install-test:9166952",
+  "fixture_backend_revision": "fc6adc75c7cdb9064163f938a31f176add843e0a",
+  "scope": "Scripts over an unchanged published backend; historical stopped native fixture. No healthy-site upgrade or production change claimed.",
+  "supersedes": "Prior host-root-view acceptance in 2026-10-14-foc-review-fixes-verification.json is historical; the root view is removed by this fix.",
+  "production_changed": false,
+  "command_audit": "C:/Users/wyium/.codex/tmp/foc-host-20261014/command-audit.json"
+}

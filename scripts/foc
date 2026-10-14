@@ -1,0 +1,73 @@
+#!/bin/sh
+# Global host entry; never replaces Bash's fc builtin.
+set -eu
+backend=/usr/local/lib/frontiercloud/foc/fc
+registry=/etc/frontiercloud/foc-deployments
+case "${1:-}" in
+  version) exec "$backend" "$@" ;;
+  --help|-h) printf '%s\n' 'foc [--directory DIR] [--json] COMMAND' 'With no command, inspect the single discovered deployment.' 'Commands: status, logs, diagnose, restart, doctor, install, upgrade, backup, restore, node, version.'; exit 0 ;;
+esac
+directory=''
+pending=false
+explicit=false
+value=false
+command=''
+action=''
+for argument in "$@"; do
+  if [ "$pending" = true ]; then directory=$argument; pending=false; continue; fi
+  if [ "$value" = true ]; then value=false; continue; fi
+  case "$argument" in
+    --directory|-directory) pending=true; explicit=true ;;
+    --directory=*|-directory=*) directory=${argument#*=}; explicit=true ;;
+    --role|-role|--database|-database|--revision|-revision) value=true ;;
+    -*) ;;
+    *) if [ -z "$command" ]; then command=$argument; elif [ -z "$action" ]; then action=$argument; fi ;;
+  esac
+done
+[ "$pending" = false ] || { echo 'foc: --directory requires a value' >&2; exit 2; }
+[ -n "$command" ] || set -- "$@" status
+if [ "$explicit" = true ]; then
+  [ -n "$directory" ] || { echo 'foc: --directory must not be empty' >&2; exit 2; }
+  exec "$backend" "$@"
+fi
+# These commands select remote nodes, archives or explicit recovery targets.
+# They do not use the implicitly selected local deployment.
+case "$command:$action" in
+  version:*|node:*|backup:verify|backup:set-*|restore:check|restore:apply|restore:prepare|restore:set-*) exec "$backend" "$@" ;;
+esac
+work=$(mktemp -d)
+cleanup() { rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"; }
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+: > "$work/candidates"
+if [ -e "$registry" ]; then
+  [ -f "$registry" ] && [ ! -L "$registry" ] || { echo 'foc: unsafe deployment registry' >&2; exit 2; }
+  while IFS= read -r candidate || [ -n "$candidate" ]; do
+    [ -n "$candidate" ] || continue
+    [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ] || {
+      echo 'foc: registered deployment receipt missing or unsafe; use --directory explicitly' >&2; exit 2;
+    }
+    (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
+  done < "$registry"
+fi
+docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' > "$work/labels" || {
+  echo 'foc: Docker discovery failed; check host permissions or use --directory explicitly' >&2; exit 2;
+}
+while IFS= read -r candidate || [ -n "$candidate" ]; do
+  case "$candidate" in /*) ;; *) continue ;; esac
+  if [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ]; then
+    (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
+  fi
+done < "$work/labels"
+LC_ALL=C sort -u "$work/candidates" > "$work/unique"
+count=$(wc -l < "$work/unique" | tr -d ' ')
+case "$count" in
+  0) echo 'foc: no recorded deployment found; use --directory for first installation' >&2; exit 2 ;;
+  1) IFS= read -r directory < "$work/unique" ;;
+  *) echo 'foc: multiple deployments found; select with --directory:' >&2
+     cat "$work/unique" >&2; exit 2 ;;
+esac
+cleanup
+trap - EXIT
+exec "$backend" --directory "$directory" "$@"

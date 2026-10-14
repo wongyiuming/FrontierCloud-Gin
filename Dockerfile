@@ -35,6 +35,8 @@ RUN apt-get update && \
 WORKDIR /app
 COPY --from=build /out/frontiercloud /app/frontiercloud
 COPY --from=build /out/fc /app/operator/fc
+COPY scripts/foc scripts/install-foc.sh /app/operator/
+COPY compose.foc.yaml /app/operator/
 COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
 COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
 COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md

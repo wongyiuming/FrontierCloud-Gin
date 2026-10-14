@@ -332,6 +332,17 @@ workers. Reports retain the existing maximum eight observed addresses.
 
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
+The owner explicitly authorized a limited global-operator exception: the one-shot
+`compose.foc.yaml` installer may write `/usr/local/bin/foc`, a private backend
+under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
+The operator process may run briefly on the host; it is not a resident service
+and does not grant Docker access, create users/systemd units or invoke systemctl.
+It discovers recorded deployments and invokes existing manual operator workflows.
+Business and certificate processes remain Compose services. The installer has
+three writable install binds plus read-only deployment and `/usr`/`/etc` parent views;
+no host-root/runtime-directory bind, Docker socket or network is attached.
+See `docs/operator-manual.md`.
+
 Enabling TLS requires automatic certificate control in a Compose container using the same Go image,
 a five-percent CPU/128 MiB/no-swap limit, read-only rootfs and dropped capabilities.
 Its exiting initializer touches only explicit volume mount roots. No host PID,

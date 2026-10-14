@@ -38,6 +38,10 @@ main.py
 pyproject.toml
 tests/
 scripts/
+!scripts/
+scripts/*
+!scripts/foc
+!scripts/install-foc.sh
 docs/
 !docs/operator-manual.md
 !docs/operator-upgrade.md
