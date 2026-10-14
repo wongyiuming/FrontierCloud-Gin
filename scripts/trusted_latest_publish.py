@@ -43,7 +43,7 @@ def promote(plan, event, environ, read, probe=registry.publication_probe,
     publication.verify_plan(plan, event, environ, read)
     require(plan['branch'] == 'main', 'Only published main may become latest')
     publication_jobs(read, plan)
-    # Complete all three anonymous provenance and byte checks before any write.
+    # Complete both anonymous provenance and byte checks before any write.
     ready = {}
     for component in publication.COMPONENTS:
         proof = probe(plan['revision'], component)

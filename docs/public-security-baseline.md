@@ -94,12 +94,11 @@ Nginx with a deliberately untrusted synthetic upstream, no published ports or
 external network, and a 64 MiB / 0.5 CPU bound. It checks canonical single
 headers, hidden audit IDs/cookies, and ignored storage internal redirects.
 
-Then push the exact tested commit to `dev`, await its lightweight CI, await the
-event-driven staging CD's complete state and matching live web/updater SHA,
-and verify public staging behavior. **Only then open the dev-to-main PR** and
+Then push the exact tested commit to `dev`, await its lightweight CI, record the retired staging gate explicitly,
+and verify the relevant behavior in isolated development fixtures. **Only then open the dev-to-main PR** and
 merge after its required checks. Production is a separate maintainer-run
-upgrade, not part of staging CD. Do not fast-forward dev to a new merge SHA
-before recording which staging SHA was actually accepted.
+operator upgrade. Fast-forward dev only after recording the exact reviewed
+source and accepted development evidence.
 
 GitHub test CI remains bounded to three minutes; the new browser/TLS and multi-node
 acceptance are not CI jobs. Local source contracts are not substitutes for

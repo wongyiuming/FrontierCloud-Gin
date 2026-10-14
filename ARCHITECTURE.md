@@ -285,8 +285,8 @@ Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
 The owner retired RN preproduction and its external CD on 2026-10-11.
-There is no staging notification or update receiver. A separately provisioned
-preproduction environment exists. No live preproduction proof can be claimed.
+There is no staging notification or update receiver, and no replacement
+preproduction environment has been provisioned. No live staging proof can be claimed.
 Production storage retains its own state, identity, secrets and media.
 Native immutable image builds are bounded to one CPU and 1 GiB with no extra
 swap allowance. Production migration artifacts are built on the development
