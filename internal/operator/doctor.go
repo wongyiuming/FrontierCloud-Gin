@@ -128,7 +128,10 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 	} else {
 		r.Add("fresh_target", "pass", "no declared existing containers, data or volumes", "installation rechecks before initialization")
 	}
+	var boundReceipt *Receipt
+	receiptPresent := false
 	if _, e := os.Lstat(filepath.Join(d.Directory, ReceiptFile)); e == nil {
+		receiptPresent = true
 		dep, receipt, e := Open(d.Directory)
 		if e == nil {
 			dep.Runner = d.Runner
@@ -137,6 +140,7 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 		if e != nil {
 			r.Add("deployment_binding", "blocked", "deployment selection differs from its durable receipt", "restore the recorded project, role, mounts, database and image lock")
 		} else {
+			boundReceipt = &receipt
 			r.Add("deployment_binding", "pass", "recorded deployment selection and image digests match", "none")
 		}
 	}
@@ -202,15 +206,27 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 	}
 	if d.ImageInspector == nil {
 		r.Add("registry", "unverified", "registry image inspection unavailable", "install verifies provenance/digests and refuses failed pulls")
+	} else if receiptPresent && boundReceipt == nil {
+		r.Add("registry", "blocked", "deployment receipt cannot bind image verification", "restore the recorded deployment before verifying its images")
 	} else if arch != "" {
 		repo, _ := release.ImageRepository("web")
 		target := strings.TrimPrefix(web.Image, repo+":")
+		if boundReceipt != nil {
+			target = boundReceipt.Revision
+		}
 		proof, e := d.ImageInspector.Prove(ctx, target, "web", arch)
+		if e == nil && boundReceipt != nil && (proof.Revision != target || proof.Image != boundReceipt.ServiceImages["web"]) {
+			e = release.ErrImageIntegrity
+		}
 		if e != nil {
 			r.Add("registry", "blocked", e.Error(), "correct package access/network/platform; do not fall back to compilation")
 		} else {
 			if d.Role == "master" {
-				_, e = d.ImageInspector.Prove(ctx, proof.Revision, "nginx", arch)
+				var nginx release.ImageProof
+				nginx, e = d.ImageInspector.Prove(ctx, proof.Revision, "nginx", arch)
+				if e == nil && boundReceipt != nil && (nginx.Revision != target || nginx.Image != boundReceipt.ServiceImages["nginx"]) {
+					e = release.ErrImageIntegrity
+				}
 			}
 			if e != nil {
 				r.Add("registry", "blocked", e.Error(), "wait for the complete matching release; never mix aliases")
