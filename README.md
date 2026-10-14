@@ -45,11 +45,6 @@ SERVER_NAME=4399.com
 docker compose up -d --wait
 ```
 
-This also installs the global `foc` command on the Linux Docker host. After
-startup, `foc status` works from any directory and automatically completes
-verified deployment registration on first use. No separate operator installation,
-agent shell or manual registration is required; Bash's `fc` remains unchanged.
-
 All other settings have defaults: public GHCR `latest` images from the newest
 successfully published **main** release, SQLite, `./data`, generated persistent
 secrets, the `frontiercloud-gin` project and ports 80/443/3478. No source SHA,

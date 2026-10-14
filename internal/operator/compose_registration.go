@@ -187,6 +187,24 @@ func (d *Deployment) RegisterCompose(ctx context.Context, arch string, evidence 
 		return result, errors.New("unsupported Compose database selection")
 	}
 	for name, service := range cfg.Services {
+		if name == "foc-host-init" {
+			labelRaw, err := d.Runner.Run(ctx, "docker", "image", "inspect", "--format", "{{json .Config.Labels}}", imageIDs[name])
+			var installerLabels map[string]string
+			if err != nil || json.Unmarshal(labelRaw, &installerLabels) != nil || !release.ValidSHA(installerLabels["frontiercloud.revision"]) {
+				return result, release.ErrImageIntegrity
+			}
+			installerRevision := installerLabels["frontiercloud.revision"]
+			installerEvidence, err := evidence.Artifact(ctx, installerRevision)
+			if err != nil || installerEvidence["publishable"] != true || installerEvidence["sha"] != installerRevision {
+				return result, release.ErrImageIntegrity
+			}
+			installer, err := images.Prove(ctx, installerRevision, "web", arch)
+			if err != nil || installer.ConfigDigest != imageIDs[name] || installer.Platform != "linux/"+arch || !strings.HasPrefix(service.Image, "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:") {
+				return result, release.ErrImageIntegrity
+			}
+			r.ServiceImages[name] = installer.Image
+			continue
+		}
 		component := ""
 		for _, candidate := range []string{"web", "nginx"} {
 			repository, _ := release.ImageRepository(candidate)

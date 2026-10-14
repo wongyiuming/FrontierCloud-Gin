@@ -151,6 +151,19 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.invoke('status').returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), 'status'])
 
+    def test_automatic_startup_retains_different_backend_at_same_generation(self):
+        self.installer_fixture()
+        self.assertEqual(self.install().returncode, 0)
+        before = (self.home / 'fc').read_bytes()
+        source = self.installer.parent / 'fc'
+        source.write_text('#!/bin/sh\nif [ "${1:-}" = operator-generation ]; then echo 7; else echo ' + 'b' * 40 + '; fi\n')
+        self.install_env['FOC_AUTOMATIC_PROJECT'] = '1'
+        self.install_env.pop('FOC_OPERATOR_REVISION')
+        result = subprocess.run(['sh', str(self.installer), 'auto'], env=self.install_env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / 'fc').read_bytes(), before)
+
     def test_installer_refuses_unmanaged_command_and_preserves_bytes(self):
         self.installer_fixture()
         self.global_entry.parent.mkdir(parents=True)

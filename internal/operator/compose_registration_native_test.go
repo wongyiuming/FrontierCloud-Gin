@@ -36,6 +36,16 @@ func (r rawComposeRegistrationRunner) Run(ctx context.Context, name string, args
 	if e != nil {
 		return nil, errors.New("isolated Docker registration command failed; output suppressed")
 	}
+	if strings.Contains(strings.Join(args, " "), "config --format json") && !strings.Contains(strings.Join(args, " "), ImagesFile) {
+		var cfg Config
+		if e = json.Unmarshal(raw, &cfg); e != nil {
+			return nil, e
+		}
+		service := cfg.Services["foc-host-init"]
+		service.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("a", 64)
+		cfg.Services["foc-host-init"] = service
+		return json.Marshal(cfg)
+	}
 	return raw, nil
 }
 

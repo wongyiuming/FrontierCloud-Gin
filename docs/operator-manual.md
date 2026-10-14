@@ -2,11 +2,11 @@
 
 ## Global host command
 
-The global entry is `foc`, preserving Bash's existing `fc` builtin. Normal
-Master/Storage Compose startup installs it automatically through the exiting
-`foc-host-init` service before application initialization. There is no separate
-operator installation or manual deployment registration step for a new node.
-After startup, run `foc status` from any host directory.
+The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
+provides the bounded automatic installation and verified registration protocol.
+Normal Compose hookup follows as a separate release so its installer image can
+be pinned to an already published, externally verified immutable digest. Until
+that hookup is published, use the existing verified bootstrap below.
 
 The first invocation completes metadata-only registration of a marked standard
 Compose project: it verifies the actual running public image configuration

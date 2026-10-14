@@ -73,6 +73,7 @@ func registrationFixture(t *testing.T) (*Deployment, *registrationRunner) {
 	if e := json.Unmarshal([]byte(raw), &service); e != nil {
 		t.Fatal(e)
 	}
+	service.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("c", 64)
 	base.config.Services["foc-host-init"] = service
 	base.config.Services["web"].Environment["DATA_ROOT"] = "/app/data"
 	if e := os.Mkdir(filepath.Join(d.Directory, "data"), 0700); e != nil {

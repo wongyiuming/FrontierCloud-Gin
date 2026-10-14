@@ -81,12 +81,11 @@ umask 022
   LC_ALL=C sort -u > "$registry.new.$$"
 chmod 644 "$registry.new.$$"
 if [ "$automatic" = true ] && [ -f "$home/fc" ]; then
-  current_generation=$("$home/fc" operator-generation 2>/dev/null || printf '7')
-  selected_generation=$("$source/fc" operator-generation)
-  case "$current_generation:$selected_generation" in *[!0-9:]*|:*) echo 'Invalid operator generation' >&2; exit 2 ;; esac
-  if [ "$current_generation" -gt "$selected_generation" ]; then
+  current_revision=$("$home/fc" version)
+  if [ "$current_revision" != "$revision" ]; then
+    "$home/fc" operator-generation >/dev/null 2>&1 || { echo 'Existing legacy foc must be refreshed through the verified operator workflow before automatic registration' >&2; exit 2; }
     mv -f "$registry.new.$$" "$registry"
-    printf 'Registered Compose deployment; retained the newer-generation foc backend.\n'
+    printf 'Registered Compose deployment; retained the existing different foc backend. Use verified self-update to replace it.\n'
     exit 0
   fi
 fi

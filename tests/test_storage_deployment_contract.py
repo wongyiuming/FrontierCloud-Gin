@@ -47,8 +47,8 @@ class StorageDeploymentContract(unittest.TestCase):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         services = text.split("\nservices:\n", 1)[1].split("\nvolumes:\n", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z-]+):$", services, re.M),
-                         ["foc-host-init", "secrets-init", "media-init", "certificate-init", "certificate-agent", "web"])
-        self.assertEqual(services.count('restart: "no"'), 4)
+                         ["secrets-init", "media-init", "certificate-init", "certificate-agent", "web"])
+        self.assertEqual(services.count('restart: "no"'), 3)
         self.assertEqual(services.count("restart: unless-stopped"), 2)
         for forbidden in ("docker.sock", "updater_control", "mysql:", "redis:", "nginx:", "coturn"):
             self.assertNotIn(forbidden, services)
