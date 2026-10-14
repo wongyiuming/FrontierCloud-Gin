@@ -264,29 +264,32 @@ free of package-write credentials; a separate immutable-main publisher validates
 and writes only the verified source SHA tag. It must not run candidate scripts,
 Dockerfiles, containers or archive-extracted executables with write credentials.
 Only exact publishers and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
-compile and notify jobs do not. The public packages must grant
+compile jobs do not. The public packages must grant
 `FrontierCloud-Gin` Actions Write; public pulls remain anonymous. Repository
 workflow writers are explicitly trusted to request package writes in other
 workflows, so this is not an ACL preventing dev writers from replacing tags.
 No personal package PAT or publisher Environment is required; previously
 created unreferenced credentials/settings are not consumed or deployment triggers.
-The separate staging signing key still belongs only to `staging-cd-main` with
-an exact main Branch rule, never a dev-accessible repository/organization secret.
-These external settings are not properties proved by source tests. The owner
-authorized one image-only bootstrap exception for same-repository PR #5: an
+No current publication workflow uses a staging signing key or notification
+Environment. External package permissions are not proved by source tests. The
+owner historically authorized one image-only bootstrap exception for PR #5: an
 owner-applied full-SHA label, fixed PR workflow snapshot, exact successful source
 CI and current refs gate bounded compilation and verified OCI publication.
 This explicitly authorized candidate snapshot is not immutable-main code. Its
 publisher is the only package writer; it reads no signing secret or Environment
 and cannot deploy. Only the first matching run/latest owner retry may claim
-that label. No future PR inherits this exception. Actual staging acceptance
-still precedes merging; the normal main-only signing boundary is unchanged.
+that label. No future PR inherits this exception. PR #5 required actual staging
+acceptance before merge. Current promotions follow the retired-staging exception
+below; that historical requirement is not an unavailable live merge gate.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
 The owner retired RN preproduction and its external CD on 2026-10-11.
 There is no staging notification or update receiver, and no replacement
 preproduction environment has been provisioned. No live staging proof can be claimed.
+Exact-source development-host acceptance, successful source CI, automatic review
+and owner authorization remain required; document the missing staging gate.
+The exception does not by itself authorize a merge or production upgrade.
 Production storage retains its own state, identity, secrets and media.
 Native immutable image builds are bounded to one CPU and 1 GiB with no extra
 swap allowance. Production migration artifacts are built on the development
