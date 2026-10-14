@@ -60,7 +60,6 @@
             empty.className = 'empty';
             empty.textContent = window.frontierCloudCatalogConfig?.emptyText || '暂无分类目录';
             grid.append(empty);
-            initDirectoryGlobe();
             return;
         }
         const fragment = document.createDocumentFragment();
@@ -69,38 +68,16 @@
             card.className = 'card';
             card.href = String(entry.url || '#');
             card.title = String(entry.name || '');
-            const artwork = document.createElement('div');
-            artwork.className = 'card-artwork';
-            artwork.ariaHidden = 'true';
-            const placeholder = document.createElement('div');
-            placeholder.className = 'card-placeholder';
-            placeholder.textContent = Array.from(String(entry.name || '音'))[0];
-            artwork.append(placeholder);
-            if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
-                const image = document.createElement('img');
-                image.src = entry.cover;
-                image.alt = '';
-                image.decoding = 'async';
-                image.draggable = false;
-                placeholder.hidden = true;
-                image.addEventListener('error', () => { image.hidden = true; placeholder.hidden = false; }, {once: true});
-                artwork.append(image);
-            }
             const title = document.createElement('div');
             title.className = 'card-title';
-            title.textContent = middleEllipsis(entry.name || '');
+            title.textContent = `📁 ${middleEllipsis(entry.name || '')}`;
             const arrow = document.createElement('div');
             arrow.className = 'card-arrow';
             arrow.textContent = '→';
-            card.append(artwork, title, arrow);
+            card.append(title, arrow);
             fragment.append(card);
         }
         grid.append(fragment);
-        initDirectoryGlobe();
-    }
-
-    function initDirectoryGlobe() {
-        window.FrontierDirectoryGlobe?.refresh();
     }
 
     function idle(callback) {
@@ -202,7 +179,7 @@
         const config = window.frontierCloudCatalogConfig;
         if (!config) return;
         const heading = document.querySelector('h1');
-        if (heading && !document.getElementById('globeStage')) {
+        if (heading) {
             heading.title = heading.textContent;
             heading.textContent = middleEllipsis(heading.textContent, 52);
         }

@@ -64,7 +64,7 @@ func catalogSize(e catalogEntry) int {
 		n += 128 + len(v.Name) + len(v.URL)
 	}
 	for _, v := range e.tracks {
-		n += 512 + len(v.MediaPath) + len(v.Title) + len(v.Artist) + len(v.Album) + len(v.Type) + len(v.URL) + len(v.Cover) + len(v.MediaID) + len(v.ResourceID) + len(v.KaraokeID)
+		n += 512 + len(v.MediaPath) + len(v.Title) + len(v.Artist) + len(v.Type) + len(v.URL) + len(v.Cover) + len(v.MediaID) + len(v.ResourceID) + len(v.KaraokeID)
 	}
 	return n
 }

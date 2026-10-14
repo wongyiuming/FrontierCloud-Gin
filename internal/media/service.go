@@ -41,11 +41,6 @@ type Service struct {
 	catalog          *catalogCache
 	controlLeaseMu   sync.Mutex
 	controlLeaseFile *os.File
-	tagsMu           sync.Mutex
-	tagsCache        map[string]MusicTags
-	tagsBytes        int
-	categoryCovers   map[string]string
-	coverGeneration  uint64
 }
 
 type Category struct {
@@ -56,7 +51,6 @@ type Track struct {
 	MediaPath  string                `json:"media_path"`
 	Title      string                `json:"title"`
 	Artist     string                `json:"artist"`
-	Album      string                `json:"album,omitempty"`
 	Type       string                `json:"type"`
 	URL        string                `json:"url"`
 	Cover      string                `json:"cover"`

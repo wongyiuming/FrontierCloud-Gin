@@ -59,8 +59,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(page.listeners.length, 0, 'complete category DOM must initialize without DOMContentLoaded');
     assert.equal(page.grid.children.length, 1, 'bootstrap directory must appear while later resources remain pending');
     assert.equal(page.grid.children[0].href, '/album');
-    assert.equal(page.grid.children[0].children[0].className, 'card-artwork');
-    assert.equal(page.grid.children[0].children[1].textContent, 'Album');
+    assert.equal(page.grid.children[0].children[0].textContent, '📁 Album');
     assert.equal(page.requests.length, 0, 'bootstrap-only subcategories must not need another catalog request');
 }
 

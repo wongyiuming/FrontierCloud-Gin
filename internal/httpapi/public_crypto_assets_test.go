@@ -90,7 +90,7 @@ func TestPublicCryptoRoutesShipCompiledAssets(t *testing.T) {
 }
 
 func TestPublicStartupRequiresEachCompiledCryptoModule(t *testing.T) {
-	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js", "js/directory-globe.js", "css/directory-globe.css"}
+	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"}
 	for _, missing := range required[10:] {
 		t.Run(filepath.Base(missing), func(t *testing.T) {
 			staticRoot := t.TempDir()
