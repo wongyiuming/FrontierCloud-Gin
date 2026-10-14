@@ -8,12 +8,15 @@ import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const source = fs.readFileSync(new URL('../static/js/media-browser.js', import.meta.url), 'utf8');
+const globeSource = fs.readFileSync(new URL('../static/js/directory-globe.js', import.meta.url), 'utf8');
+const globeCSS = fs.readFileSync(new URL('../static/css/directory-globe.css', import.meta.url), 'utf8');
 let html = fs.readFileSync(new URL('../static/media/category.html', import.meta.url), 'utf8');
 const values = {
     PAGE_TITLE: '前沿音乐 - 達明一派', BACK_URL: '/api/v1/media/music',
     STUN_URLS_JSON: '[]', WEBRTC_INTERVAL_MS: '30000',
     CATALOG_CONFIG_JSON: JSON.stringify({bootstrap: [{name: 'Album', url: '/album'}], cacheKey: '', url: ''}),
     MEDIA_BROWSER_JS_URL: '/media-browser.js', NETWORK_OBSERVATION_JS_URL: '/observation.js',
+    DIRECTORY_GLOBE_JS_URL: '/directory-globe.js', DIRECTORY_GLOBE_CSS_URL: '/directory-globe.css',
 };
 for (const [name, value] of Object.entries(values)) html = html.replaceAll(`{{${name}}}`, value);
 
@@ -25,7 +28,13 @@ const server = http.createServer((request, response) => {
         observationRequested();
         return;
     }
-    if (request.url === '/media-browser.js') {
+    if (request.url === '/directory-globe.js') {
+        response.setHeader('Content-Type', 'application/javascript');
+        response.end(globeSource);
+    } else if (request.url === '/directory-globe.css') {
+        response.setHeader('Content-Type', 'text/css');
+        response.end(globeCSS);
+    } else if (request.url === '/media-browser.js') {
         response.setHeader('Content-Type', 'application/javascript');
         response.end(source);
     } else if (request.url.startsWith('/api/v1/media/brand/logo/')) {

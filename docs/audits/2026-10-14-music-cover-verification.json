@@ -1,0 +1,120 @@
+{
+  "files": 688,
+  "albums": 39,
+  "albums_without_embedded_artwork": 18,
+  "albums_with_problems": 0,
+  "unique_cover_routes_verified": 257,
+  "method": "Independent Mutagen ID3 parsing, Pillow image verification, per-track source-image SHA-256 comparison against catalog/cover HTTP responses, and category artwork verification.",
+  "product_dependencies_added": [],
+  "albums_without_embedded_artwork_details": [
+    {
+      "album": "music/容祖兒 & 黃耀明/祖戀明歌音樂會",
+      "files": 21,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/謝霆鋒 & 達明一派/新城唱好 謝霆鋒x達明一派 同場異夢音樂會 Live",
+      "files": 28,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/Multiverse of PolyGram 55th Anniversary_ 達明一派",
+      "files": 62,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/Project 30",
+      "files": 34,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/The Party",
+      "files": 11,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/意難平",
+      "files": 22,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/為人民服務",
+      "files": 95,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/特殊關係37首",
+      "files": 16,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/神經",
+      "files": 11,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/達明一派",
+      "files": 4,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/達明一派/達明卅一派對",
+      "files": 32,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/Anthony Wong Collection 1995-2000",
+      "files": 16,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/人山人海",
+      "files": 13,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/我愛明哥 黃耀明作品精選集",
+      "files": 16,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/我的廿一世紀",
+      "files": 22,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/拂了一身還滿",
+      "files": 6,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/明日之歌",
+      "files": 10,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    },
+    {
+      "album": "music/黃耀明/明明不是天使",
+      "files": 12,
+      "picture_frames": 0,
+      "external_picture_links": 0
+    }
+  ],
+  "conclusion": "All 18 placeholder albums have no embedded picture frames in any imported source MP3. All 257 embedded covers were independently decoded and matched served bytes. No parser, catalog or cover-path failure was detected in this dataset."
+}
