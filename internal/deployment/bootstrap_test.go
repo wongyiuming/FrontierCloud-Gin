@@ -36,6 +36,7 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		}
 	}
 	fixture := map[string]string{
+		"Dockerfile.gin": "FROM committed-native\n",
 		"Dockerfile":       "FROM committed-native\n",
 		"nginx/Dockerfile": "FROM committed-edge\n", "go.mod": "module fixture\n", "go.sum": "committed-sum\n",
 		"cmd/entry.txt": "committed\n", "internal/core.txt": "committed\n", "migrations/schema.txt": "committed\n",
