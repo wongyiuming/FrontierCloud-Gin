@@ -20,6 +20,7 @@ func TestHostReleaseCredentialsReachAuthenticatedRequest(t *testing.T) {
 			}))
 			defer server.Close()
 			transport := server.Client().Transport.(*http.Transport).Clone()
+			transport.TLSClientConfig.ServerName = server.Listener.Addr().(*net.TCPAddr).IP.String()
 			transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
 				return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
 			}
