@@ -37,7 +37,7 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 	case "plan", "apply", "resume":
 		registry := release.NewRegistryClient()
 		defer registry.Close()
-		verifier, err := release.NewVerifier(release.DefaultPolicy(), "")
+		verifier, err := hostReleaseVerifier()
 		if err != nil {
 			e = err
 			break

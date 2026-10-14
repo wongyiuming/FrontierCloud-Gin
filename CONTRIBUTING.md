@@ -74,7 +74,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 Hosted **test CI** is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial test-job chains. Do not raise this budget or use background jobs to evade it. The normal delivery exception is the separate default-main `publish-images.yml`: a completed successful exact-source CI event gates its trusted plan, parallel compilation without package-write credentials (ten minutes per component job) and isolated trusted publication (three minutes per component job), followed by a three-minute verified main alias promotion. Only these explicit delivery dependencies are allowed, not serial test chains. No tests/fleet/databases/browser acceptance belong in compilation workflows. Normal credential-bearing jobs never execute candidate code. See [image delivery](docs/public-image-delivery.md).
 
-The owner separately authorized one first-activation exception:
+The following first-activation exception is historical and applies only to PR #5:
 `bootstrap-images.yml` for **PR #5 only**, triggered by an owner-applied
 `bootstrap:<full dev SHA>` label after development acceptance/source CI success.
 Its fixed PR workflow code is an explicitly authorized snapshot, not main code.
@@ -82,8 +82,11 @@ The plan verifies current refs, source run/attempt and first authorization claim
 read-only compilation exports OCI data to an isolated automatic-token publisher.
 There is no signing secret, Environment or deployment job. Plan/publication
 remain three minutes, compilation ten minutes per component. Relabel-triggered
-duplicate runs and future PRs cannot use it. Staging acceptance remains a merge
-gate even though PR #5 must exist before this first label-triggered publication.
+duplicate runs and future PRs cannot use it. PR #5 required staging acceptance
+before merge even though it had to exist before that first publication. Current
+promotions follow the explicit retired-staging exception above: development-host
+acceptance and exact-source CI remain required, and the unavailable staging gate
+must be reported.
 
 Only exact publish jobs and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
 compile jobs do not. Public packages must grant `FrontierCloud-Gin`
@@ -95,8 +98,8 @@ this model as preventing every dev-authored workflow from replacing old tags.
 No publication job accesses deployment signing secrets or an external CD receiver.
 External permissions must be verified separately from source tests. Record
 actual bootstrap CI completion and public image proofs before claiming initial
-activation; do not direct-write main or merge before staging acceptance to
-sidestep that bootstrap boundary.
+activation. Do not direct-write main or reuse the historical bootstrap exception
+to bypass current exact-source validation, review or owner authorization.
 
 Run native unit/race, actual SQLite/MySQL business/API, deployment and operator upgrade tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
 
