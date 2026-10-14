@@ -1,0 +1,42 @@
+{
+  "tested_source": "3cde37e0ba7a7e2735a6607eaf6eeaef72d1bf22",
+  "host": "192.168.6.201",
+  "source_checks": {
+    "exit_code": 0,
+    "python_cases": 205,
+    "python_skipped": 2
+  },
+  "race_packages": [
+    "./internal/operator",
+    "./internal/release",
+    "./cmd/fc"
+  ],
+  "race_exit_code": 0,
+  "public_registry_revisions": [
+    "bb1b1430b4a7066b9c706e53757331e78cb5595d",
+    "2aa7bc71782f4f1fa58113882ffeab1c9a47e19a"
+  ],
+  "public_registry_exit_codes": [
+    0,
+    0
+  ],
+  "regressions": [
+    "Storage without Nginx verifies only its Web image",
+    "CLI existing doctor infers Storage/SQLite and Master/MySQL",
+    "matching explicit selection accepted",
+    "conflicting explicit role/database refused",
+    "invalid receipt never falls back to fresh defaults",
+    "selection leaves receipt bytes and directory unchanged"
+  ],
+  "go_input_sha256": {
+    "internal/operator/doctor.go": "2ad05a37dfdcb09ec9f117af4401747f6229eaf798fd7c92725d569cdf706d2a",
+    "internal/operator/doctor_pinned_test.go": "d63f95f8d331599fe819fa080b224cc0747f21283624e5843404bcadc979b339",
+    "cmd/fc/main.go": "f997aab3461646a840e578e1a83e7715fc45404494327b10d5d31625c9beb1c3",
+    "cmd/fc/doctor_selection.go": "a5f4cf68e1d99949b755896ac0dbe8638760e0ba90e9cfda524f645849820c1e",
+    "cmd/fc/doctor_selection_test.go": "43e410507d240d873efe37470d5741fc8adc8839f2822dbcb6a0b11689b95956"
+  },
+  "scope": "Race and actual GHCR network proofs use isolated Docker response fixtures; no live-site upgrade acceptance claimed. Go inputs match the committed formatted sources.",
+  "production_changed": false,
+  "prior_failed_test": "A test referenced a nonexistent Deployment.Database field; corrected to assert exact database Compose file selection. Original failed log retained.",
+  "command_audit": "C:/Users/wyium/.codex/tmp/foc-host-20261014/command-audit.json"
+}
