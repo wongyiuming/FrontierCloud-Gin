@@ -15,19 +15,21 @@ import (
 )
 
 type BackupCapacity struct {
-	ReadOnly      bool   `json:"read_only"`
-	Output        string `json:"output"`
-	DataBytes     uint64 `json:"source_bytes"`
-	Files         int    `json:"files"`
-	Directories   int    `json:"directories"`
-	ArchiveBytes  uint64 `json:"archive_upper_bound_bytes"`
-	ScratchBytes  uint64 `json:"scratch_bytes"`
-	SafetyBytes   uint64 `json:"safety_bytes"`
-	RequiredBytes uint64 `json:"required_free_bytes"`
-	FreeBytes     uint64 `json:"free_bytes"`
-	Fits          bool   `json:"fits"`
-	Snapshot      string `json:"snapshot"`
-	ManifestBytes uint64 `json:"manifest_upper_bound_bytes"`
+	ReadOnly              bool   `json:"read_only"`
+	Output                string `json:"output"`
+	DataBytes             uint64 `json:"source_bytes"`
+	Files                 int    `json:"files"`
+	Directories           int    `json:"directories"`
+	ArchiveBytes          uint64 `json:"archive_upper_bound_bytes"`
+	ScratchBytes          uint64 `json:"scratch_bytes"`
+	SafetyBytes           uint64 `json:"safety_bytes"`
+	RequiredBytes         uint64 `json:"required_free_bytes"`
+	FreeBytes             uint64 `json:"free_bytes"`
+	Fits                  bool   `json:"fits"`
+	Snapshot              string `json:"snapshot"`
+	ManifestBytes         uint64 `json:"manifest_upper_bound_bytes"`
+	Scope                 string `json:"scope"`
+	BusinessFilesIncluded bool   `json:"business_files_included"`
 }
 
 type byteCounter struct{ bytes uint64 }
@@ -86,7 +88,12 @@ func (d *Deployment) capacityFact(ctx context.Context) (RuntimeFact, error) {
 
 // setParent is used only for a new recovery-set directory on an existing parent.
 func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output, setParent string) (BackupCapacity, error) {
+	return d.backupCapacityScope(ctx, receipt, output, setParent, "deployment")
+}
+func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, output, setParent, scope string) (BackupCapacity, error) {
 	p := BackupCapacity{ReadOnly: true, Snapshot: "live estimate; repeated before freeze and under the offline lease"}
+	p.Scope = scope
+	p.BusinessFilesIncluded = scope != "upgrade-state"
 	p.Directories = generatedBackupDirectories(receipt.Database)
 	if output == "" {
 		return p, errors.New("new backup output required")
@@ -120,9 +127,19 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 	if err != nil {
 		return p, err
 	}
+	var selection []string
+	if scope == recovery.UpgradeStateScope {
+		selection, err = upgradeDataSelection(cfg, receipt)
+		if err != nil {
+			return p, err
+		}
+	}
 	roots := map[string]string{"data": data}
 	mounted := map[string]bool{}
 	for name, service := range cfg.Services {
+		if focHostInstaller(name, service) {
+			continue
+		}
 		for _, mount := range service.Volumes {
 			if mount.Type == "volume" {
 				mounted[mount.Source] = true
@@ -165,7 +182,10 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 	if err != nil {
 		return p, err
 	}
-	header := recovery.Manifest{Format: recovery.Format, Version: 1, Scope: "deployment", NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, SchemaGeneration: fact.Database.SchemaGeneration, ConfigurationVersion: receipt.Version, CreatedAt: "9999-12-31T23:59:59.999999999Z", Consistency: "native-offline-and-deployment-writers-stopped", Bytes: 10 * 1024 * 1024 * 1024 * 1024, RecoverySet: strings.Repeat("f", 32), KeyReferences: []string{"runtime_secrets/node-vault.key", "runtime_secrets/media-premaster.key"}, Classes: []string{"deployment"}}
+	header := recovery.Manifest{Format: recovery.Format, Version: 1, Scope: scope, NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, SchemaGeneration: fact.Database.SchemaGeneration, ConfigurationVersion: receipt.Version, CreatedAt: "9999-12-31T23:59:59.999999999Z", Consistency: "native-offline-and-deployment-writers-stopped", Bytes: 10 * 1024 * 1024 * 1024 * 1024, RecoverySet: strings.Repeat("f", 32), KeyReferences: []string{"runtime_secrets/node-vault.key", "runtime_secrets/media-premaster.key"}, Classes: []string{"deployment"}}
+	if scope == recovery.UpgradeStateScope {
+		header.Missing = []string{recovery.ExcludedBusinessFiles}
+	}
 	for class := range roots {
 		header.Classes = append(header.Classes, class)
 	}
@@ -211,6 +231,12 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 			}
 			if e := ctx.Err(); e != nil {
 				return e
+			}
+			if class == "data" && !recovery.SelectedPath(selection, name, item.IsDir()) {
+				if item.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
 			}
 			if name != "." && (len(class)+1+len(name) > 4096 || strings.ContainsAny(name, "\\\x00\r\n")) {
 				return recovery.ErrUnsafe

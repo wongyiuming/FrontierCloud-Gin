@@ -2,9 +2,25 @@
 
 ## Global host command
 
-The global entry is `foc`, preserving Bash's existing `fc` builtin. From an
-extracted operator bundle, use its separate `compose.foc.yaml` installer with
-an explicitly verified public Web digest, full revision and existing deployment:
+The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
+provides the bounded automatic installation and verified registration protocol.
+Normal Compose hookup follows as a separate release so its installer image can
+be pinned to an already published, externally verified immutable digest. Until
+that hookup is published, use the existing verified bootstrap below.
+
+The first invocation completes metadata-only registration of a marked standard
+Compose project: it verifies the actual running public image configuration
+digests, reviewed main/source CI, native identity and database generation, then
+records the deployment receipt and immutable image lock. It does not initialize
+or migrate databases, pull images, restart services or copy business files.
+This first-use registration writes operator metadata; subsequent status checks
+are read-only. Unrelated Docker projects are never adopted automatically.
+Ambiguous deployments still require explicit selection. Host installation
+refuses an unrelated `foc` command; the existing Bash `fc` command is untouched.
+
+An existing deployment using older Compose files can bootstrap the same entry
+with its separate `compose.foc.yaml` installer and an explicitly verified public
+Web digest, full revision and existing deployment:
 
 ```sh
 export FOC_OPERATOR_IMAGE=ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:VERIFIED_DIGEST
@@ -60,6 +76,37 @@ the refreshed tool's supported migration assets and an approved upgrade plan.
 Tool refresh refuses images from an older database generation.
 
 Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
+Ordinary `backup plan` and `backup create` also default to this state-only scope.
+Upgrade plans and archives always use `upgrade-state`: database/WAL/SHM or logical
+MySQL dump, configuration, keys, certificates, Redis and lifecycle state. Media,
+lyrics and recordings remain in their original mounts and are excluded without
+an extra flag. The capacity report sets `business_files_included` to false.
+The media premaster at `data/media-keys/media-premaster.key` is identity/encryption
+state, not media content; it is included with its actual archive key reference.
+Native admission receipts `.native-store` and `.native-runtime` are also captured.
+These upgrade recovery points cannot replace the retained media or claim a full
+fresh-machine restore. Only explicitly requested full disaster recovery uses
+`backup plan/create --include-business-files`; coordinated `backup set-create`
+retains its explicit complete recovery-set contract. Application upgrades never
+select these complete workflows.
+Failed pre-opening upgrades have an explicit `upgrade recover-state` path which
+retains failed database state and restores the verified original database,
+configuration and keys into the same media mounts. It remains fenced until a
+separate `upgrade open` confirms the returned recovery plan digest. See
+[controlled upgrade state recovery](operator-upgrade.md).
+Ordinary state backups are restorable with `restore state-check` and `restore
+state` without an upgrade journal. They require the original deployment receipt
+and no non-revoked related nodes. Ordinary state capture refuses uncoordinated
+node relations before freezing writers and rechecks under the capture lease.
+This restriction does not replace the separate approved upgrade recovery flow.
+State restoration requires the original deployment receipt
+and mount selection, trusted archive SHA, exact NodeID, source-offline and
+state-loss confirmations. `--freeze` can stop and fence the selected deployment.
+The tool retains current database/key/state material, restores into the original
+business mounts, then remains fenced. `restore state-open` separately confirms
+the returned plan digest and NodeID after managed business reads pass. MySQL
+database absence is recorded before restoring the logical dump. Business files
+deleted or changed since capture cannot be supplied by a state-only archive.
 The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
 configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
 It rejects metadata above the archive's 16 MiB manifest limit. It does not hash
@@ -203,7 +250,8 @@ recovery material. A local deployment archive does not silently include other
 nodes' media and identity; missing node state blocks applying it as a recovery set.
 
 ```sh
-./fc backup create --freeze --output /protected-backups/deployment.tar
+./fc backup plan --include-business-files --output /protected-backups/deployment.tar
+./fc backup create --include-business-files --freeze --output /protected-backups/deployment.tar
 ./fc backup verify --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256>
 ./fc restore check --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256> --target /new/recovery-material
 ./fc restore apply --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256> --target /new/recovery-material --confirm-node-id <exact-source-node-id>

@@ -224,6 +224,14 @@ func Open(directory string) (*Deployment, Receipt, error) {
 	if err != nil {
 		return nil, receipt, err
 	}
+	dep.Project = receipt.Project
+	alias := append([]string(nil), dep.Files...)
+	if receipt.Role == "master" {
+		alias[0] = "docker-compose.gin.yaml"
+		if equalStrings(receipt.Files, alias) {
+			dep.Files = alias
+		}
+	}
 	if receipt.Recovered && equalStrings(receipt.Files, []string{RecoveredCompose}) {
 		dep.Files = append([]string(nil), receipt.Files...)
 		dep.Project = receipt.Project

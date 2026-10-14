@@ -235,6 +235,16 @@ def run(args):
     for path in (data / 'media', data / 'media/music', folder, folder / 'song.mp3'):
         os.chown(path, 10001, 10001)
     shutil.copyfile(source / 'docker-compose.yaml', directory / 'docker-compose.yaml')
+    # These scenarios recover an existing deployment whose public source image
+    # predates automatic foc installation. Fresh-node bootstrap has its own
+    # actual Compose acceptance; retain the historical service graph here.
+    compose_file = directory / 'docker-compose.yaml'
+    legacy = compose_file.read_text()
+    if '\n  foc-host-init:\n' in legacy:
+        before, after = legacy.split('\n  foc-host-init:\n', 1)
+        legacy = before + '\n  secrets-init:\n' + after.split('\n  secrets-init:\n', 1)[1]
+        legacy = legacy.replace('    depends_on:\n      foc-host-init: {condition: service_completed_successfully}\n', '', 1)
+        compose_file.write_text(legacy)
     if args.database == 'mysql':
         shutil.copyfile(source / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')
     # Use an isolated loopback address and the canonical stack. No global host
@@ -283,6 +293,10 @@ def run(args):
                'images': {}, 'service_images': {name: value['image'] for name, value in overrides.items()},
                'compose_files': ['docker-compose.yaml'] + (['docker-compose.gin-mysql.yaml'] if args.database == 'mysql' else []), 'state': 'ready'}
     (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
+    if args.state_restore:
+        effective = json.loads(compose(directory, 'config', '--format', 'json'))
+        receipt['selection_sha256'] = fingerprint(effective)
+        (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
     os.chmod(directory / '.fc-deployment.json', 0o600)
     restored_project = project + '-restore'
     restored_started = False
@@ -309,6 +323,7 @@ def run(args):
             spec.write_text(json.dumps({'directory': str(directory), 'web_image_id': web_image,
                                         'target_web_image_id': target_image, 'edge_image_id': edge_image,
                                         'fail_prepare': args.upgrade_failure,
+                                        'recover_failure': args.upgrade_recover,
                                         'expected_source_generation': args.expected_source_generation}))
             completed = subprocess.run([str(args.upgrade_test_binary), '-test.run',
                                         '^TestOperatorUpgradeComposeAcceptance$', '-test.v'],
@@ -321,7 +336,7 @@ def run(args):
                 raise AssertionError('native upgrade failed; private transcript retained at ' + str(transcript))
             upgrade = json.loads((directory / 'upgrade-evidence.json').read_text())
             result['upgrade'] = upgrade
-            if args.upgrade_failure:
+            if args.upgrade_failure and not args.upgrade_recover:
                 assert upgrade['phase'] == 'failed_fenced'
                 assert (data / '.frontiercloud-native-maintenance').exists()
                 checked = json.loads(command([str(args.binary), 'backup', 'verify', '--file',
@@ -349,16 +364,74 @@ def run(args):
             assert admin_probe(directory, 'verify')['priority'] == 77
             upgraded_web = compose(directory, 'ps', '--quiet', 'web').decode().strip()
             actual = json.loads(command(['docker', 'inspect', upgraded_web]))[0]
-            assert actual['Image'] == target_image
+            assert actual['Image'] == (web_image if args.upgrade_recover else target_image)
             assert actual['HostConfig']['NanoCpus'] == 1000000000
             assert actual['HostConfig']['Memory'] == 512 * 1024 * 1024
             assert actual['HostConfig']['MemorySwap'] == 512 * 1024 * 1024
             upgrade['actual_image_switch'] = True
             upgrade['http_range_and_identity_preserved'] = True
             upgrade['post_business_cpu_samples'] = idle_cpu(upgraded_web)
+            if args.upgrade_recover:
+                result.update(status='passed', scope='actual failed-DDL recovery with original business mounts and managed Range reads',
+                              no_production_operation=True, database=args.database)
+                success = True
+                return result
+        if args.state_restore:
+            secrets_volume = configuration['volumes']['runtime_secrets']['name']
+            secrets_root = Path(json.loads(command(['docker', 'volume', 'inspect', secrets_volume]))[0]['Mountpoint'])
+            directory_probe = secrets_root / 'state-directory-proof'
+            directory_probe.mkdir(mode=0o750)
+            os.chown(directory_probe, 10001, 10001)
+            (directory_probe / 'probe').write_text('captured-directory-state')
+            os.chown(directory_probe / 'probe', 10001, 10001)
+            os.chmod(directory_probe / 'probe', 0o600)
+        state_archive = directory / 'default-state.tar'
+        state_report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
+                                           '--freeze', '--output', str(state_archive),
+                                           *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
+        assert state_report['integrity_verified']
+        assert state_report['manifest']['scope'] == 'upgrade-state'
+        assert not state_report['manifest']['complete_cluster']
+        assert all(not item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
+                   for item in state_report['manifest']['files'])
+        if args.state_restore:
+            shutil.rmtree(directory_probe)
+            for receipt_name in ('.native-store', '.native-runtime'):
+                (data / receipt_name).unlink()
+            if args.database == 'sqlite':
+                sqlite_path = configuration['services']['web']['environment']['SQLITE_PATH']
+                (data / Path(sqlite_path).relative_to('/app/data')).unlink()
+            else:
+                compose(directory, 'exec', '-T', 'mysql', 'sh', '-c',
+                        'MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root -e "DROP DATABASE $MYSQL_DATABASE"')
+            recovery_directory = directory.parent / ('ordinary-state-' + directory.name)
+            state = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state',
+                                        '--file', str(state_archive), '--sha256', state_report['sha256'],
+                                        '--confirm-node-id', before_fact['node_id'],
+                                        '--recovery-directory', str(recovery_directory),
+                                        '--confirm-source-offline', '--confirm-state-loss',
+                                        *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=800))
+            assert state['phase'] == 'prepared_fenced'
+            opened = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state-open',
+                                         '--approve-plan-sha256', state['plan']['plan_sha256'],
+                                         '--confirm-node-id', before_fact['node_id']], timeout=800))
+            assert opened['phase'] == 'opened' and opened['business_verified']
+            assert directory_probe.stat().st_uid == 10001
+            assert directory_probe.stat().st_gid == 10001
+            assert directory_probe.stat().st_mode & 0o777 == 0o750
+            assert (directory_probe / 'probe').read_text() == 'captured-directory-state'
+            assert all((data / name).is_file() for name in ('.native-store', '.native-runtime'))
+            wait_ready(base)
+            assert probe(request, payload) == media_id
+            assert admin_probe(directory, 'verify')['priority'] == 77
+            result.update(status='passed', scope='ordinary default state backup restored lost database in retained mounts without an upgrade journal',
+                          original_business_mounts_retained=True, actual_http_range_verified=True,
+                          no_production_operation=True)
+            success = True
+            return result
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
-                                     '--freeze', '--output', str(archive),
+                                     '--freeze', '--include-business-files', '--output', str(archive),
                                      *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
         assert report['integrity_verified'] and not report['restored_business_verified']
         assert report['manifest']['node_id'] == before_fact['node_id']
@@ -448,6 +521,8 @@ if __name__ == '__main__':
     parser.add_argument('--upgrade-image', help='distinct private target image for optional native upgrade acceptance')
     parser.add_argument('--expected-source-generation', type=int, default=0, help='require this actual source runtime schema for explicit cross-generation acceptance')
     parser.add_argument('--upgrade-failure', action='store_true', help='inject failure at target preparation after real native backup')
+    parser.add_argument('--upgrade-recover', action='store_true', help='restore failed database state in original business mounts and reopen source')
+    parser.add_argument('--state-restore', action='store_true', help='restore an ordinary default state backup after database loss')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     options = parser.parse_args()
@@ -455,6 +530,8 @@ if __name__ == '__main__':
         parser.error('--upgrade-test-binary and --upgrade-image must be supplied together')
     if options.upgrade_failure and options.upgrade_test_binary is None:
         parser.error('--upgrade-failure requires the native upgrade adapter')
+    if options.upgrade_recover and not options.upgrade_failure:
+        parser.error('--upgrade-recover requires --upgrade-failure')
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')

@@ -1,7 +1,7 @@
 # Approved operator upgrades
 
-`fc upgrade` is a short-lived host-side Compose operation. Run it from the
-installed bundle directory on the Linux Docker host. It does not add an agent,
+`foc upgrade` is a short-lived host-side Compose operation. After the Compose
+installer registers the deployment, run it from any host directory. It does not add an agent,
 Docker socket access to Web, a business upgrade API, or a fleet rollout.
 
 The deployment must already have an immutable `.fc-deployment.json` receipt,
@@ -12,6 +12,56 @@ updates component images only. Configuration changes require their own reviewed
 procedure; an environment edit is not a database or disk migration.
 
 ## Review, back up, prepare, then open
+
+Upgrade recovery always uses `upgrade-state`: SQLite database/WAL/SHM or a
+consistent MySQL dump, deployment configuration, identity keys, certificates,
+Redis and native lifecycle state. Media, lyrics and recording files remain in
+their original mounts and are never copied into the upgrade recovery point.
+The plan binds this scope into its approval digest; no media-exclusion flag is
+required. `foc backup plan` estimates this same upgrade scope.
+
+The archive explicitly records the excluded business files and is not a complete
+data restore for a new machine. Original media mounts must be retained. The
+upgrade verifies managed reads against these retained files before opening.
+Database rollback still requires controlled recovery; no DDL rollback is implied.
+
+For a `failed_fenced` preparation which has never begun public activation,
+`foc upgrade recover-state` restores the verified pre-upgrade database and state
+into the same retained mounts. It requires the original plan digest, exact NodeID,
+original archive SHA and a new private recovery directory. Current failed state
+is retained there before any restoration; no media bytes are captured. SQLite
+restores the archived database/WAL/SHM, and MySQL requires external-writer
+confirmation, retains a logical dump of the failed database, then explicitly
+recreates only the recorded database from the verified dump. Identity keys,
+including `data/media-keys/media-premaster.key`, configuration and certificate
+state are restored without replacing native lifecycle/control lease files.
+
+Before a MySQL database is dropped, recovery checks its server data volume's
+free space against the source table/index storage estimate recorded in the
+archive, an expansion allowance and remaining reserve. Historical state archives
+without that estimate cannot authorize destructive MySQL restoration. This
+estimate is independent of the compressed dump size and archive destination.
+On a continuing recovery, allocated private `.ibd` files in the recorded database
+directory can count as space reclaimed by the explicit database drop. Shared
+tablespaces and hard-linked files never count as reclaimed space.
+Recovery refuses MySQL credential drift before replacing any live state. Password
+rotation or loss of the server credential requires separately coordinated MySQL
+credential recovery; an application dump cannot restore server account state.
+
+Recovery validates the source generation, identity and original managed files
+and remains `prepared_fenced`. Its returned plan records `recovery_of` and a new
+approval digest. Use that returned digest with `foc upgrade open` to separately
+confirm opening the restored source. Recovery refuses any upgrade which began
+activation or accepted new writes; it never silently discards post-opening data.
+An interrupted `restoring_state` operation can be retried with the same original
+approval, archive SHA and recorded recovery directory. Failed capture materials
+are retained and a capture error makes no database restoration.
+Recovery inventories all captured state classes, retains target-created files,
+and removes target-only state before restoring archived files. The original
+native/runtime/site lease files remain pinned. Recovery destinations require a
+real parent with no symlink ancestors and cannot lie inside any retained root.
+Destination capacity includes cumulative positive file-size growth across all
+state roots sharing a filesystem, peak temporary copies and remaining reserve.
 
 Use an explicit published main commit for an existing installation. `latest`
 is accepted by initial installation only. A plan performs read-only Docker

@@ -16,6 +16,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 var Revision string
@@ -38,7 +39,7 @@ func run(args []string) (exitCode int) {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | self-update --revision SHA | install master|storage|resume | status | logs | restart | diagnose | backup plan|create|verify|set-create|set-verify | restore check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup plan/verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | self-update --revision SHA | install master|storage|resume | status | logs | restart | diagnose | backup plan|create|verify|set-create|set-verify | restore state-check|state|state-open|check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|recover-state|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup plan/verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -47,10 +48,19 @@ func run(args []string) (exitCode int) {
 		}
 		return 0
 	}
+	if args[0] == "operator-generation" && len(args) == 1 {
+		if _, e := fmt.Fprintln(os.Stdout, migrations.Generation); e != nil {
+			return 2
+		}
+		return 0
+	}
 	parent, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := commandContext(parent, args)
 	defer cancel()
+	if args[0] == "compose-register" && len(args) == 1 {
+		return composeRegisterCommand(ctx, *directory, os.Stderr)
+	}
 	if args[0] == "self-update" {
 		return selfUpdateCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}

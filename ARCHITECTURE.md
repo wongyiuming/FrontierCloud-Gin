@@ -210,9 +210,34 @@ reopen the native offline migration fence. Reviewed releases are deployed by the
 operator with Compose after compatible database backup/migration checks. The update controller implementation, image and retired CD entry points are removed. Only explicit host-side operator commands manage upgrades. See
 [operator release procedure](docs/master-self-release.md).
 
+Application upgrade recovery and ordinary operator backups default to state-only
+archives: database state, deployment configuration, identity keys, certificates
+and native control state. Media, lyric and recording files remain in their
+original mounts and are excluded. Upgrade approval binds this scope and cannot
+select a full media archive. These recovery points cannot claim fresh-machine
+business restoration; explicit complete disaster-recovery archives and sets
+retain a separate opt-in contract. See [upgrade recovery scope](docs/operator-upgrade.md).
+
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
 
 ## 12. Supported runtime and validation
+
+### Frontend baseline — HTML, CSS and native JavaScript
+
+All frontend development MUST use HTML, CSS and native JavaScript. This applies
+to public pages, players, Admin GUI, new views and subsequent UI changes.
+
+Use browser-native DOM, CSS, Canvas, SVG and Web APIs for rendering, interaction
+and animation. Do not introduce frontend frameworks or framework runtimes,
+including React, Vue, Angular, Svelte, Solid, Next.js or Nuxt. Do not add JSX/TSX,
+framework-specific component files, virtual-DOM rendering, or framework-based UI
+component systems. Do not replace native browser rendering with an engine such
+as Three.js.
+
+Build-only tooling, such as the existing JavaScript obfuscator, and test-only
+browser automation do not change this baseline. They must not introduce a
+frontend framework into shipped browser code. A new UI feature, dependency or
+visual redesign is not authorization to change this architecture boundary.
 
 ### Operator installation boundary
 
@@ -333,11 +358,18 @@ workers. Reports retain the existing maximum eight observed addresses.
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
 The owner explicitly authorized a limited global-operator exception: the one-shot
-`compose.foc.yaml` installer may write `/usr/local/bin/foc`, a private backend
+`compose.foc.yaml` installer and the same bounded `foc-host-init` stage in normal
+Compose startup may write `/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
+Normal startup registers automatic discovery; first use verifies the marked
+standard project's running public images and provenance before recording its
+receipt and immutable image lock. This installation completion writes only
+operator metadata, never business data, DDL, permissions or service state.
+Unrelated Compose projects are not adopted. Host installation state is excluded
+from business recovery archives and is reproducible from the published bundle.
 Business and certificate processes remain Compose services. The installer has
 three writable install binds plus read-only deployment and `/usr`/`/etc` parent views;
 no host-root/runtime-directory bind, Docker socket or network is attached.

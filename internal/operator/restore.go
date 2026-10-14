@@ -46,6 +46,9 @@ func RestoreCheck(ctx context.Context, input, target, expected string) (recovery
 	if e != nil {
 		return r, e
 	}
+	if r.Manifest.Scope == recovery.UpgradeStateScope {
+		return r, errors.New("upgrade-state archive excludes media and lyrics; original business mounts are required and fresh restoration is refused")
+	}
 	if target == "" || len(r.Manifest.Missing) > 0 {
 		return r, errors.New("restore target or matching related-node recovery state is missing")
 	}

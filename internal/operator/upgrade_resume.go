@@ -105,12 +105,15 @@ func (d *Deployment) ResumeUpgrade(ctx context.Context, receipt Receipt, approva
 			} else if !os.IsNotExist(err) {
 				return state, err
 			}
+			if p.RecoveryScope != recovery.UpgradeStateScope {
+				return state, errors.New("legacy pending backup intent requires review; no new media archive will be created")
+			}
 			backup, err = d.backupLocked(ctx, state.Previous, state.BackupFile, false, external)
 			if err != nil {
 				return state, errors.New("approved source backup remains incomplete; native fence and retained materials preserved")
 			}
 		}
-		if !backup.Verified || backup.Manifest.NodeID != p.NodeID || backup.Manifest.Revision != state.Previous.Revision || backup.Manifest.SchemaGeneration != p.FromGeneration {
+		if !backup.Verified || backup.Manifest.Scope != upgradeRecoveryScope(p) || backup.Manifest.NodeID != p.NodeID || backup.Manifest.Revision != state.Previous.Revision || backup.Manifest.SchemaGeneration != p.FromGeneration {
 			return state, errors.New("interrupted backup identity/generation mismatch")
 		}
 		state.BackupSHA = backup.SHA256

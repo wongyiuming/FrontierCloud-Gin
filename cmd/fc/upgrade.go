@@ -23,7 +23,12 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 	node := flags.String("confirm-node-id", "", "exact source NodeID")
 	backup := flags.String("backup-output", "", "new private consistent recovery archive path")
 	external := flags.Bool("confirm-external-writers-stopped", false, "confirm external MySQL writers are stopped")
+	recoveryDirectory := flags.String("recovery-directory", "", "new private retained failed-state and restoration material directory")
+	backupSHA := flags.String("backup-sha256", "", "exact original upgrade-state archive SHA-256")
 	if flags.Parse(args[2:]) != nil || flags.NArg() != 0 {
+		return 2
+	}
+	if args[1] != "recover-state" && (*recoveryDirectory != "" || *backupSHA != "") {
 		return 2
 	}
 	d, r, e := operator.Open(directory)
@@ -34,6 +39,12 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 	d.Runner = dockerRunner{d.Directory}
 	var value any
 	switch args[1] {
+	case "recover-state":
+		if *planFile != "" || *backup != "" || revision != "" || *recoveryDirectory == "" {
+			e = errors.New("upgrade recover-state requires original plan digest, NodeID, backup SHA and private recovery directory")
+			break
+		}
+		value, e = d.RecoverUpgradeState(ctx, r, *approval, *node, *backupSHA, *recoveryDirectory, *external)
 	case "plan", "apply", "resume":
 		registry := release.NewRegistryClient()
 		defer registry.Close()
@@ -78,7 +89,7 @@ func upgradeCommand(ctx context.Context, directory, revision string, args []stri
 		}
 		value, e = d.OpenUpgrade(ctx, r, *approval, *node)
 	default:
-		e = errors.New("upgrade requires plan, apply, resume or open")
+		e = errors.New("upgrade requires plan, apply, resume, recover-state or open")
 	}
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)

@@ -30,6 +30,9 @@ import (
 const Format = "frontiercloud-deployment-recovery"
 const MaxManifest = 16 << 20
 const MaxFiles = 100000
+const UpgradeStateScope = "upgrade-state"
+const ExcludedBusinessFiles = "media, lyric and recording files are excluded; original business file mounts must be retained"
+const legacyExcludedBusinessFiles = "media and lyric files are excluded; original business file mounts must be retained"
 
 var hashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var nodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -57,6 +60,7 @@ type Manifest struct {
 	Role                 string      `json:"role"`
 	Revision             string      `json:"revision"`
 	Database             string      `json:"database"`
+	MySQLRestoreBytes    uint64      `json:"mysql_restore_storage_budget_bytes,omitempty"`
 	SchemaGeneration     int         `json:"schema_generation"`
 	ConfigurationVersion int         `json:"configuration_version"`
 	CreatedAt            string      `json:"created_at"`
@@ -81,8 +85,23 @@ type Report struct {
 	RetainedScratch  string   `json:"retained_scratch,omitempty"`
 }
 type Root struct {
-	Class     string
-	Directory string
+	Class        string
+	Directory    string
+	IncludePaths []string
+}
+
+// SelectedPath prunes unselected subtrees without reading or copying their files.
+// A nil selection retains the explicit complete-recovery behavior.
+func SelectedPath(paths []string, name string, directory bool) bool {
+	if paths == nil || name == "." {
+		return true
+	}
+	for _, selected := range paths {
+		if name == selected || directory && strings.HasPrefix(selected, name+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func validClass(v string) bool {
@@ -148,7 +167,13 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	}
 	m.Format = Format
 	m.Version = 1
-	m.Scope = "deployment"
+	if m.Scope == "" {
+		m.Scope = "deployment"
+	}
+	if m.Scope == UpgradeStateScope {
+		m.CompleteCluster = false
+		m.Missing = append(m.Missing, ExcludedBusinessFiles)
+	}
 	if m.SchemaGeneration == 0 {
 		m.SchemaGeneration = migrations.Generation
 	}
@@ -164,6 +189,9 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 		}
 	}()
 	for _, source := range sources {
+		if m.Scope == UpgradeStateScope && source.Class == "data" && source.IncludePaths == nil {
+			return report, ErrUnsafe
+		}
 		if !validClass(source.Class) || roots[source.Class] != nil {
 			return report, ErrUnsafe
 		}
@@ -187,6 +215,12 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 			}
 			if e := ctx.Err(); e != nil {
 				return e
+			}
+			if !SelectedPath(source.IncludePaths, name, item.IsDir()) {
+				if item.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
 			}
 			if item.Type()&os.ModeSymlink != 0 {
 				return ErrUnsafe
@@ -300,8 +334,19 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 }
 
 func validateManifest(m Manifest) error {
-	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
+	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" && m.Scope != UpgradeStateScope || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
 		return ErrUnsafe
+	}
+	if m.Scope == UpgradeStateScope {
+		found := false
+		for _, item := range m.Missing {
+			if item == ExcludedBusinessFiles || item == legacyExcludedBusinessFiles {
+				found = true
+			}
+		}
+		if !found || m.CompleteCluster || m.RecoverySet != "" {
+			return ErrUnsafe
+		}
 	}
 	if m.RecoverySet != "" && !nodePattern.MatchString(m.RecoverySet) || len(m.Relations) > MaxSetMembers {
 		return ErrUnsafe
@@ -453,9 +498,44 @@ func Apply(ctx context.Context, input, target, expected, confirmation string) (R
 	return applySetMember(ctx, input, target, expected, confirmation, "")
 }
 
+// ExtractState publishes private state material only. It grants no fresh-node
+// restoration authority; the caller must retain and fence the original mounts.
+func ExtractState(ctx context.Context, input, target, expected, confirmation string) (Report, error) {
+	return extractMaterial(ctx, input, target, expected, confirmation, "", true)
+}
+
+// ReadStateFile returns bounded verified metadata without extracting an archive.
+func ReadStateFile(ctx context.Context, input, expected, name string) ([]byte, error) {
+	f, e := openArchive(input)
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	var raw []byte
+	r, e := walkArchive(ctx, f, func(entry Entry, content io.Reader) error {
+		if entry.Path == name {
+			if entry.Bytes > 1<<20 {
+				return ErrUnsafe
+			}
+			var err error
+			raw, err = io.ReadAll(io.LimitReader(content, (1<<20)+1))
+			return err
+		}
+		_, err := io.Copy(io.Discard, content)
+		return err
+	})
+	if e != nil || r.SHA256 != expected || r.Manifest.Scope != UpgradeStateScope || raw == nil {
+		return nil, ErrUnsafe
+	}
+	return raw, nil
+}
+
 // The nonempty set permission is available only after CheckSet verified every
 // member and mutual relationship. Public single-archive Apply cannot grant it.
 func applySetMember(ctx context.Context, input, target, expected, confirmation, set string) (Report, error) {
+	return extractMaterial(ctx, input, target, expected, confirmation, set, false)
+}
+func extractMaterial(ctx context.Context, input, target, expected, confirmation, set string, stateOnly bool) (Report, error) {
 	var report Report
 	if !hashPattern.MatchString(expected) || !nodePattern.MatchString(confirmation) {
 		return report, ErrUnsafe
@@ -467,7 +547,7 @@ func applySetMember(ctx context.Context, input, target, expected, confirmation, 
 	if e != nil {
 		return checked, e
 	}
-	if checked.Manifest.NodeID != confirmation || len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
+	if checked.Manifest.NodeID != confirmation || stateOnly && checked.Manifest.Scope != UpgradeStateScope || !stateOnly && len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
 		return checked, ErrUnsafe
 	}
 	stage, e := os.MkdirTemp(filepath.Dir(target), ".fc-restore-")
