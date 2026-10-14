@@ -1,5 +1,39 @@
 # FrontierCloud operator manual
 
+## Global host command
+
+The global entry is `foc`, preserving Bash's existing `fc` builtin. From an
+extracted operator bundle, use its separate `compose.foc.yaml` installer with
+an explicitly verified public Web digest, full revision and existing deployment:
+
+```sh
+export FOC_OPERATOR_IMAGE=ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:VERIFIED_DIGEST
+export FOC_OPERATOR_REVISION=FULL_PUBLISHED_MAIN_SHA
+export FOC_DEPLOYMENT_DIRECTORY=/absolute/existing/deployment
+docker compose -f /absolute/operator-bundle/compose.foc.yaml run --rm --no-deps install
+```
+
+The short-lived Compose service installs `/usr/local/bin/foc`, a private copy
+of the operator binary, and a deployment registry. It has no network, Docker
+socket, extra capabilities or application writes; only its explicit host install
+paths are writable. It leaves no resident service and never enters an agent shell.
+Direct host invocation of the installer is refused. This is the explicitly
+authorized host operator entry; business Web remains deployed through Compose.
+Docker and deployment-file permissions are still required; no privilege is granted.
+
+From any working directory, `foc` defaults to status; `foc status`, `foc logs`,
+`foc upgrade plan --revision SHA` and other existing commands use the recorded
+deployment. Discovery combines registered directories and all Compose container
+working-directory labels, including stopped containers, deduplicating canonical
+paths with native receipts. Multiple deployments require explicit selection:
+`foc --directory /absolute/deployment status`. Missing registered receipts or
+failed Docker discovery fail closed. `foc version` reports the host tool version;
+`foc status` reports the deployment version. These versions are independent.
+
+Installing a newer operator bundle refreshes this managed host entry and binary;
+it does not update running images or modify deployment configuration. Existing
+upgrade/backup approvals and recovery boundaries remain unchanged.
+
 ## First installation
 
 The public Web image contains an operator bundle: `fc`, Compose definitions,

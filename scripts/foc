@@ -1,0 +1,55 @@
+#!/bin/sh
+# Global host entry; never replaces Bash's fc builtin.
+set -eu
+backend=/usr/local/lib/frontiercloud/foc/fc
+registry=/etc/frontiercloud/foc-deployments
+case "${1:-}" in version|--help|-h) exec "$backend" "$@" ;; esac
+directory=''
+pending=false
+explicit=false
+for argument in "$@"; do
+  if [ "$pending" = true ]; then directory=$argument; pending=false; continue; fi
+  case "$argument" in
+    --directory|-directory) pending=true; explicit=true ;;
+    --directory=*|-directory=*) directory=${argument#*=}; explicit=true ;;
+  esac
+done
+[ "$pending" = false ] || { echo 'foc: --directory requires a value' >&2; exit 2; }
+if [ "$explicit" = true ]; then
+  [ -n "$directory" ] || { echo 'foc: --directory must not be empty' >&2; exit 2; }
+  exec "$backend" "$@"
+fi
+work=$(mktemp -d)
+trap 'rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+: > "$work/candidates"
+if [ -e "$registry" ]; then
+  [ -f "$registry" ] && [ ! -L "$registry" ] || { echo 'foc: unsafe deployment registry' >&2; exit 2; }
+  while IFS= read -r candidate || [ -n "$candidate" ]; do
+    [ -n "$candidate" ] || continue
+    [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ] || {
+      echo 'foc: registered deployment receipt missing or unsafe; use --directory explicitly' >&2; exit 2;
+    }
+    (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
+  done < "$registry"
+fi
+docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' > "$work/labels" || {
+  echo 'foc: Docker discovery failed; check host permissions or use --directory explicitly' >&2; exit 2;
+}
+while IFS= read -r candidate || [ -n "$candidate" ]; do
+  case "$candidate" in /*) ;; *) continue ;; esac
+  if [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ]; then
+    (CDPATH= cd -P "$candidate" && pwd) >> "$work/candidates"
+  fi
+done < "$work/labels"
+LC_ALL=C sort -u "$work/candidates" > "$work/unique"
+count=$(wc -l < "$work/unique" | tr -d ' ')
+case "$count" in
+  0) echo 'foc: no recorded deployment found; use --directory for first installation' >&2; exit 2 ;;
+  1) IFS= read -r directory < "$work/unique" ;;
+  *) echo 'foc: multiple deployments found; select with --directory:' >&2
+     cat "$work/unique" >&2; exit 2 ;;
+esac
+[ "$#" -gt 0 ] || set -- status
+exec "$backend" --directory "$directory" "$@"

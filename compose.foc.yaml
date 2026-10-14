@@ -1,0 +1,38 @@
+name: frontiercloud-foc
+services:
+  install:
+    image: ${FOC_OPERATOR_IMAGE:?Select the verified public Web image digest}
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
+    command: ["${FOC_DEPLOYMENT_DIRECTORY:?Select the existing host deployment directory}"]
+    environment:
+      FOC_COMPOSE_INSTALL: "1"
+      FOC_OPERATOR_REVISION: ${FOC_OPERATOR_REVISION:?Select the verified full main revision}
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 128M
+    volumes:
+      - type: bind
+        source: ${FOC_DEPLOYMENT_DIRECTORY:?Select the existing deployment}
+        target: /deployment
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/local/bin
+        target: /usr/local/bin
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/local/lib/frontiercloud
+        target: /usr/local/lib/frontiercloud
+      - type: bind
+        source: /etc/frontiercloud
+        target: /etc/frontiercloud
