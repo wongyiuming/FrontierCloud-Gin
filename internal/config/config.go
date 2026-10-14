@@ -64,9 +64,6 @@ type Config struct {
 	SecurityContact        string
 	LogLevel               string
 	LogFormat              string
-	GitHubAPIToken         string
-	ReleaseBranch          string
-	ReleaseSourceBranch    string
 }
 
 // Load reads configuration from the process environment.
@@ -120,17 +117,8 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 			return Config{}, errors.New("SECURITY_CONTACT must be one real HTTPS reporting URL or mailto address")
 		}
 	}
-	value.GitHubAPIToken = strings.TrimSpace(getenv("GITHUB_API_TOKEN"))
-	if len(value.GitHubAPIToken) > 4096 || strings.ContainsAny(value.GitHubAPIToken, "\r\n") {
-		return Config{}, errors.New("invalid GITHUB_API_TOKEN")
-	}
-	value.ReleaseBranch = fallback(getenv("RELEASE_BRANCH"), "main")
-	value.ReleaseSourceBranch = fallback(getenv("RELEASE_SOURCE_BRANCH"), "dev")
 	if strings.TrimSpace(getenv("RELEASE_MANIFEST_PATH")) != "" {
 		return Config{}, errors.New("whole-cluster release manifests are retired")
-	}
-	if value.ReleaseBranch != "main" || value.ReleaseSourceBranch != "dev" {
-		return Config{}, errors.New("FrontierCloud-Gin release policy must select main/dev")
 	}
 	value.MediaCatalogCacheTTL, err = integer(getenv("MEDIA_CATALOG_CACHE_TTL"), 300)
 	if err != nil || value.MediaCatalogCacheTTL < 0 || value.MediaCatalogCacheTTL > 86400 {

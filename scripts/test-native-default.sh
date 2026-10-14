@@ -31,7 +31,6 @@ FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 export FRONTIERCLOUD_REVISION="$revision"
 export PUBLIC_BIND_ADDRESS=127.0.0.1 WEBRTC_STUN_PORT=0
 export TLS_ENABLED=false SERVER_NAME=localhost DB_TYPE=sqlite
-export RELEASE_BRANCH=main RELEASE_SOURCE_BRANCH=dev
 for database in sqlite mysql; do
   project="$prefix-$database"
   export COMPOSE_PROJECT_NAME="$project" DATA_DIRECTORY="$work/data-$database"

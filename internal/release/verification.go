@@ -44,6 +44,10 @@ type Verifier struct {
 }
 
 func NewVerifier(policy Policy, token string) (*Verifier, error) {
+	token = strings.TrimSpace(token)
+	if len(token) > 4096 || strings.ContainsAny(token, "\r\n") {
+		return nil, errors.New("invalid release API token")
+	}
 	if !policy.Valid() {
 		return nil, errors.New("invalid release branch policy")
 	}

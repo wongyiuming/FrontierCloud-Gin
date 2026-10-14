@@ -189,3 +189,7 @@ upgrade marker staging uses the approved plan's digest in its filename, so
 retained prior staging does not obstruct another plan. Cleanup failure is
 persisted as `stage_cleanup_warning`; repeating the same completed `upgrade open`
 retries only that recorded generated stage, preserving administrator maintenance.
+
+The host-side `fc` verifier may use an optional read-only `GITHUB_API_TOKEN`
+for GitHub API rate limits. Do not pass it to Web or certificate containers.
+Business configuration has no release branch, CD or GitHub credential fields.

@@ -68,9 +68,8 @@ require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
         and '  build:' not in compose, "Initializers must be native")
-require('RELEASE_BRANCH: ${RELEASE_BRANCH:-main}' in compose
-        and 'RELEASE_SOURCE_BRANCH: ${RELEASE_SOURCE_BRANCH:-dev}' in compose,
-        "Default release profile must be native main/dev in FrontierCloud-Gin")
+for token in ('RELEASE_BRANCH:', 'RELEASE_SOURCE_BRANCH:', 'GITHUB_API_TOKEN:', 'STAGING_CD:'):
+    require(token not in compose, f"Business Compose retains retired release configuration: {token}")
 for token in ("app/", "main.py", "tests/", "scripts/"):
     require(token in read(".dockerignore").splitlines(), f"Build context exclusion missing: {token}")
 

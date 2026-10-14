@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestConfiguredPublicOriginsUseOnlyStandardPorts(t *testing.T) {
 	for _, test := range []struct {
@@ -99,18 +102,16 @@ func TestRejectsUnknownDatabase(t *testing.T) {
 	}
 }
 
-func TestReleasePolicyAndTokenValidation(t *testing.T) {
+func TestBusinessConfigDoesNotConsumeRetiredReleaseCredentials(t *testing.T) {
 	defaults, err := LoadFrom(environment(nil))
-	if err != nil || defaults.ReleaseBranch != "main" || defaults.ReleaseSourceBranch != "dev" {
-		t.Fatal("native default release policy", defaults.ReleaseBranch, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	value, err := LoadFrom(environment(map[string]string{"RELEASE_BRANCH": "main", "GITHUB_API_TOKEN": " scoped-token "}))
-	if err != nil || value.ReleaseSourceBranch != "dev" || value.GitHubAPIToken != "scoped-token" {
-		t.Fatal("explicit Gin release policy", err)
-	}
-	for _, values := range []map[string]string{{"RELEASE_BRANCH": "dev"}, {"RELEASE_BRANCH": "gin_main", "RELEASE_SOURCE_BRANCH": "dev"}, {"GITHUB_API_TOKEN": "secret\r\nInjected: value"}} {
-		if _, err := LoadFrom(environment(values)); err == nil {
-			t.Fatal("invalid release configuration accepted")
-		}
+	actual, err := LoadFrom(environment(map[string]string{
+		"RELEASE_BRANCH": "dev", "RELEASE_SOURCE_BRANCH": "unknown",
+		"GITHUB_API_TOKEN": "unused\r\ncredential", "STAGING_CD": "true",
+	}))
+	if err != nil || !reflect.DeepEqual(actual, defaults) {
+		t.Fatal("retired release inputs changed business configuration", err)
 	}
 }
