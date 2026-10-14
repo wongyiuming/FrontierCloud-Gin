@@ -134,6 +134,9 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 		}
 		mysqlPresent := true
 		if r.Database == "mysql" {
+			if err = checkMySQLRecoveryCredential(roots, verified.Manifest.Files); err != nil {
+				return err
+			}
 			raw, err := d.Compose(ctx, true, "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -N -u root -e "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '$MYSQL_DATABASE'"`)
 			if err != nil || strings.TrimSpace(string(raw)) != "0" && strings.TrimSpace(string(raw)) != "1" {
 				return errors.New("recorded MySQL database presence cannot be verified")
@@ -271,7 +274,7 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 			return err
 		}
 		if r.Database == "mysql" {
-			if err = d.checkMySQLRestoreCapacity(ctx, cfg, verified.Manifest.MySQLRestoreBytes); err != nil {
+			if err = d.checkMySQLRestoreCapacity(ctx, cfg, verified.Manifest.MySQLRestoreBytes, entries...); err != nil {
 				return err
 			}
 		}
@@ -385,26 +388,7 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 }
 
 func checkRestoreDestinationCapacity(roots map[string]string, entries []recovery.Entry, free func(string) (uint64, error)) error {
-	peaks := map[string]uint64{}
-	for _, entry := range entries {
-		class, _, ok := strings.Cut(entry.Path, "/")
-		if !ok || roots[class] == "" {
-			return recovery.ErrUnsafe
-		}
-		if uint64(entry.Bytes) > peaks[roots[class]] {
-			peaks[roots[class]] = uint64(entry.Bytes)
-		}
-	}
-	for root, peak := range peaks {
-		available, e := free(root)
-		if e != nil {
-			return e
-		}
-		if available < peak+(512<<20) {
-			return errors.New("in-place state destination lacks temporary-copy capacity and reserve; no restoration performed")
-		}
-	}
-	return nil
+	return checkRestoreFilesystemCapacity(roots, entries, free, diskFilesystem)
 }
 
 func restoreStateDirectories(roots map[string]string, directories []recovery.Directory) error {

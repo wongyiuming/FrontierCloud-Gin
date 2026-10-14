@@ -41,6 +41,9 @@ free space against the source table/index storage estimate recorded in the
 archive, an expansion allowance and remaining reserve. Historical state archives
 without that estimate cannot authorize destructive MySQL restoration. This
 estimate is independent of the compressed dump size and archive destination.
+Recovery refuses MySQL credential drift before replacing any live state. Password
+rotation or loss of the server credential requires separately coordinated MySQL
+credential recovery; an application dump cannot restore server account state.
 
 Recovery validates the source generation, identity and original managed files
 and remains `prepared_fenced`. Its returned plan records `recovery_of` and a new
@@ -54,6 +57,8 @@ Recovery inventories all captured state classes, retains target-created files,
 and removes target-only state before restoring archived files. The original
 native/runtime/site lease files remain pinned. Recovery destinations require a
 real parent with no symlink ancestors and cannot lie inside any retained root.
+Destination capacity includes cumulative positive file-size growth across all
+state roots sharing a filesystem, peak temporary copies and remaining reserve.
 
 Use an explicit published main commit for an existing installation. `latest`
 is accepted by initial installation only. A plan performs read-only Docker

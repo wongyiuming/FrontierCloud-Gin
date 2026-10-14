@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
 
 // Capture source physical table/index/free space with an expansion allowance.
@@ -24,7 +26,7 @@ func (d *Deployment) mysqlRestoreStorageBudget(ctx context.Context, cfg Config) 
 	return bytes*4 + (512 << 20), nil
 }
 
-func (d *Deployment) checkMySQLRestoreCapacity(ctx context.Context, cfg Config, budget uint64) error {
+func (d *Deployment) checkMySQLRestoreCapacity(ctx context.Context, cfg Config, budget uint64, stateFiles ...recovery.Entry) error {
 	if budget < (512<<20) || budget > 41*1024*1024*1024*1024 {
 		return errors.New("MySQL recovery requires a captured source storage budget; destructive import refused")
 	}
@@ -36,7 +38,22 @@ func (d *Deployment) checkMySQLRestoreCapacity(ctx context.Context, cfg Config, 
 	if e != nil {
 		return e
 	}
-	return checkMySQLDataCapacity(root, budget, diskFree)
+	// Conservatively allow all state-file growth plus the largest temporary
+	// copy here as well: those roots may share the server data filesystem.
+	var peak uint64
+	for _, entry := range stateFiles {
+		if entry.Bytes < 0 || uint64(entry.Bytes) > ^uint64(0)-budget {
+			return recovery.ErrUnsafe
+		}
+		budget += uint64(entry.Bytes)
+		if uint64(entry.Bytes) > peak {
+			peak = uint64(entry.Bytes)
+		}
+	}
+	if budget > ^uint64(0)-peak-(512<<20) {
+		return recovery.ErrUnsafe
+	}
+	return checkMySQLDataCapacity(root, budget+peak, diskFree)
 }
 
 func checkMySQLDataCapacity(root string, budget uint64, available func(string) (uint64, error)) error {

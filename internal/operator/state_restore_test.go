@@ -33,16 +33,16 @@ func TestOrdinaryStateBackupRejectsIncompleteUpgrade(t *testing.T) {
 }
 
 func TestStateRestoreChecksEveryDestinationCapacity(t *testing.T) {
-	roots := map[string]string{"data": "/different-data-fs", "runtime_secrets": "/different-volume-fs"}
+	roots := map[string]string{"data": t.TempDir(), "runtime_secrets": t.TempDir()}
 	entries := []recovery.Entry{{Path: "data/db", Bytes: 100}, {Path: "runtime_secrets/key", Bytes: 32}}
 	seen := map[string]bool{}
-	err := checkRestoreDestinationCapacity(roots, entries, func(root string) (uint64, error) {
+	err := checkRestoreFilesystemCapacity(roots, entries, func(root string) (uint64, error) {
 		seen[root] = true
 		if root == roots["runtime_secrets"] {
 			return 0, nil
 		}
 		return 1 << 30, nil
-	})
+	}, func(root string) (string, error) { return root, nil })
 	if err == nil || !seen[roots["runtime_secrets"]] {
 		t.Fatal("full live destination filesystem passed", err, seen)
 	}
