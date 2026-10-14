@@ -26,7 +26,10 @@ func TestHostReleaseCredentialsReachAuthenticatedRequest(t *testing.T) {
 			}
 			previous := http.DefaultTransport
 			http.DefaultTransport = transport
-			t.Cleanup(func() { http.DefaultTransport = previous; transport.CloseIdleConnections() })
+			t.Cleanup(func() {
+				http.DefaultTransport = previous
+				transport.CloseIdleConnections()
+			})
 			verifier, err := hostReleaseVerifier()
 			if err != nil {
 				t.Fatal(err)
