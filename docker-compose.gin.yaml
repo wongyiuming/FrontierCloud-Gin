@@ -29,7 +29,35 @@ x-logging: &service-logging
   options: {max-size: "10m", max-file: "3"}
 
 services:
+  foc-host-init:
+    <<: *app-image
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
+    command: ["auto"]
+    environment:
+      FOC_COMPOSE_INSTALL: "1"
+      FOC_AUTOMATIC_PROJECT: "1"
+    labels:
+      frontiercloud.foc-bootstrap: "1"
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    deploy:
+      resources:
+        limits: {cpus: "0.10", memory: 128M, pids: 32}
+    volumes:
+      - {type: bind, source: /usr, target: /host/usr, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: /etc, target: /host/etc, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: /usr/local/bin, target: /usr/local/bin, bind: {create_host_path: false}}
+      - {type: bind, source: /usr/local/lib/frontiercloud, target: /usr/local/lib/frontiercloud}
+      - {type: bind, source: /etc/frontiercloud, target: /etc/frontiercloud}
+
   secrets-init:
+    depends_on:
+      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:0"
     command: [init-secrets]

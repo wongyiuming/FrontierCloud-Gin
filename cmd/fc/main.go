@@ -16,6 +16,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 var Revision string
@@ -47,10 +48,19 @@ func run(args []string) (exitCode int) {
 		}
 		return 0
 	}
+	if args[0] == "operator-generation" && len(args) == 1 {
+		if _, e := fmt.Fprintln(os.Stdout, migrations.Generation); e != nil {
+			return 2
+		}
+		return 0
+	}
 	parent, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := commandContext(parent, args)
 	defer cancel()
+	if args[0] == "compose-register" && len(args) == 1 {
+		return composeRegisterCommand(ctx, *directory, os.Stderr)
+	}
 	if args[0] == "self-update" {
 		return selfUpdateCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}

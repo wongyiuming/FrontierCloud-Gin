@@ -45,6 +45,9 @@ func (d *Deployment) RestoreState(ctx context.Context, r Receipt, input, expecte
 		return result, errors.New("state restore requires archive checksum, exact NodeID, retained mounts, source-offline and state-loss confirmations")
 	}
 	if recorded, e := d.upgradeState(); e == nil && recorded.Plan.StateRestore && recorded.BackupSHA == expected && recorded.Plan.NodeID == node && (recorded.Phase == "restoring_state" || recorded.Phase == "failed_fenced") {
+		if !ordinaryRecoveryReceiptMatches(recorded, r) {
+			return result, errors.New("ordinary state recovery receipt differs from the recorded intent")
+		}
 		if freeze {
 			cfg, err := d.Config(ctx, true)
 			if err != nil {
@@ -111,7 +114,8 @@ func (d *Deployment) RestoreState(ctx context.Context, r Receipt, input, expecte
 	}
 	p.Architecture = Architecture(string(arch))
 	p.SHA256 = p.digest()
-	result = UpgradeState{Version: 1, Phase: "failed_fenced", Plan: p, Previous: source, BackupFile: input, BackupSHA: expected, Failure: "explicit ordinary state restoration; state loss accepted"}
+	r.State = "upgrade_fenced"
+	result = UpgradeState{Version: 1, Phase: "failed_fenced", Plan: p, Previous: source, RestoreReceipt: &r, BackupFile: input, BackupSHA: expected, Failure: "explicit ordinary state restoration; state loss accepted"}
 	if e = d.saveUpgrade(result); e != nil {
 		_ = done()
 		return result, e

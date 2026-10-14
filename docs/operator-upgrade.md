@@ -41,6 +41,9 @@ free space against the source table/index storage estimate recorded in the
 archive, an expansion allowance and remaining reserve. Historical state archives
 without that estimate cannot authorize destructive MySQL restoration. This
 estimate is independent of the compressed dump size and archive destination.
+On a continuing recovery, allocated private `.ibd` files in the recorded database
+directory can count as space reclaimed by the explicit database drop. Shared
+tablespaces and hard-linked files never count as reclaimed space.
 Recovery refuses MySQL credential drift before replacing any live state. Password
 rotation or loss of the server credential requires separately coordinated MySQL
 credential recovery; an application dump cannot restore server account state.

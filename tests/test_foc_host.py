@@ -108,7 +108,7 @@ class HostEntryTests(unittest.TestCase):
         bundle = self.root / 'bundle'
         bundle.mkdir()
         binary = bundle / 'fc'
-        binary.write_text('#!/bin/sh\nprintf "%s\\n" ' + 'a' * 40 + '\n')
+        binary.write_text('#!/bin/sh\nif [ "${1:-}" = operator-generation ]; then echo 7; else printf "%s\\n" ' + 'a' * 40 + '; fi\n')
         binary.chmod(0o755)
         (bundle / 'foc').write_text((ROOT / 'scripts/foc').read_text())
         installer = (ROOT / 'scripts/install-foc.sh').read_text()
@@ -128,6 +128,28 @@ class HostEntryTests(unittest.TestCase):
     def install(self):
         return subprocess.run(['sh', str(self.installer), str(self.native)],
                               env=self.install_env, capture_output=True, text=True)
+
+    def test_automatic_compose_install_needs_no_receipt_or_manual_registration(self):
+        self.installer_fixture()
+        (self.native / '.fc-deployment.json').unlink()
+        self.install_env['FOC_AUTOMATIC_PROJECT'] = '1'
+        self.install_env.pop('FOC_OPERATOR_REVISION')
+        result = subprocess.run(['sh', str(self.installer), 'auto'], env=self.install_env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.global_entry.exists())
+        self.assertIn('@compose', (self.root / 'etc/frontiercloud/foc-deployments').read_text())
+
+    def test_auto_registry_ignores_unrelated_compose_deployments(self):
+        native = self.deployment('managed')
+        unrelated = self.root / 'other'
+        unrelated.mkdir()
+        self.registry.write_text('@compose\n' + str(native) + '\n')
+        self.labels.write_text(str(unrelated) + '\n' + str(native) + '\n')
+        docker = self.root / 'docker'
+        docker.write_text('#!/bin/sh\ncase "$*" in *foc-bootstrap*) exit 0 ;; esac\ncat "$LABELS"\n')
+        self.assertEqual(self.invoke('status').returncode, 0)
+        self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), 'status'])
 
     def test_installer_refuses_unmanaged_command_and_preserves_bytes(self):
         self.installer_fixture()

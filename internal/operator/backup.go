@@ -103,6 +103,18 @@ func (d *Deployment) backupWithScope(ctx context.Context, receipt Receipt, outpu
 		} else if err != nil && !os.IsNotExist(err) {
 			return empty, err
 		}
+		if _, err := d.ValidateReceipt(ctx, receipt); err != nil {
+			return empty, err
+		}
+		fact, err := d.runtimeFact(ctx)
+		if err != nil {
+			return empty, err
+		}
+		for _, node := range fact.Nodes {
+			if node.State != "revoked" {
+				return empty, errors.New("ordinary state backup requires no active related nodes; coordinated recovery evidence is required")
+			}
+		}
 	}
 	if freeze {
 		capacity, capacityErr := d.backupCapacityScope(ctx, receipt, output, "", scope)
@@ -113,19 +125,19 @@ func (d *Deployment) backupWithScope(ctx context.Context, receipt Receipt, outpu
 			return empty, errors.New("backup capacity insufficient before freeze")
 		}
 	}
-	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, scope)
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, scope, scope == recovery.UpgradeStateScope)
 }
 
 // backupLocked shares the already held host-operation lock with approved upgrades.
 func (d *Deployment) backupLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
-	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, recovery.UpgradeStateScope)
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, recovery.UpgradeStateScope, false)
 }
 
 // The set coordinator holds every member lifecycle lease before entering here.
 func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool) (recovery.Report, error) {
-	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, set, held, "deployment")
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, set, held, "deployment", false)
 }
-func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool, scope string) (recovery.Report, error) {
+func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool, scope string, ordinary bool) (recovery.Report, error) {
 	var empty recovery.Report
 	cfg, e := d.ValidateReceipt(ctx, receipt)
 	if e != nil {
@@ -205,6 +217,13 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
 		}
+		if ordinary {
+			for _, node := range fact.Nodes {
+				if node.State != "revoked" {
+					return errors.New("ordinary state backup cannot capture uncoordinated related-node state")
+				}
+			}
+		}
 		capacity, capacityErr := d.backupCapacityScope(ctx, receipt, output, "", scope)
 		if capacityErr != nil {
 			return capacityErr
@@ -259,6 +278,9 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		boundClasses := map[string]string{}
 		mountedVolumes := map[string]bool{}
 		for name, service := range cfg.Services {
+			if focHostInstaller(name, service) {
+				continue
+			}
 			for _, mount := range service.Volumes {
 				if mount.Type == "volume" {
 					mountedVolumes[mount.Source] = true

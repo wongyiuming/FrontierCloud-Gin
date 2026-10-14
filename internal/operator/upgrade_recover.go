@@ -47,6 +47,9 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 	}
 	recoveredReceipt := state.Previous
 	recoveredReceipt.State = "upgrade_fenced"
+	if ordinary && !ordinaryRecoveryReceiptMatches(state, r) {
+		return state, errors.New("ordinary state recovery receipt differs from the recorded intent")
+	}
 	if !ordinary && !reflect.DeepEqual(r, upgradeTargetReceipt(state)) && !reflect.DeepEqual(r, state.Previous) && !(continuing && reflect.DeepEqual(r, recoveredReceipt)) {
 		return state, errors.New("receipt is outside the failed source/target upgrade")
 	}
@@ -274,7 +277,7 @@ func (d *Deployment) recoverState(ctx context.Context, r Receipt, approval, node
 			return err
 		}
 		if r.Database == "mysql" {
-			if err = d.checkMySQLRestoreCapacity(ctx, cfg, verified.Manifest.MySQLRestoreBytes, entries...); err != nil {
+			if err = d.checkMySQLRestoreCapacity(ctx, cfg, verified.Manifest.MySQLRestoreBytes, continuing, entries...); err != nil {
 				return err
 			}
 		}
@@ -391,6 +394,12 @@ func checkRestoreDestinationCapacity(roots map[string]string, entries []recovery
 	return checkRestoreFilesystemCapacity(roots, entries, free, diskFilesystem)
 }
 
+func ordinaryRecoveryReceiptMatches(state UpgradeState, r Receipt) bool {
+	recovered := state.Previous
+	recovered.State = "upgrade_fenced"
+	return state.RestoreReceipt != nil && (reflect.DeepEqual(r, *state.RestoreReceipt) || state.Phase == "restoring_state" && reflect.DeepEqual(r, recovered))
+}
+
 func restoreStateDirectories(roots map[string]string, directories []recovery.Directory) error {
 	for _, directory := range directories {
 		class, relative, ok := strings.Cut(directory.Path, "/")
@@ -449,6 +458,9 @@ func (d *Deployment) upgradeRecoveryRoots(ctx context.Context, cfg Config) (map[
 	roots := map[string]string{"data": data, "deployment": d.Directory}
 	classes := map[string]string{"runtime_secrets": "runtime_secrets", "storage_secrets": "runtime_secrets", "certificate_state": "certificate_state", "certificate_published": "certificate_published", "redis_data": "redis_data"}
 	for name, service := range cfg.Services {
+		if focHostInstaller(name, service) {
+			continue
+		}
 		for _, m := range service.Volumes {
 			class := ""
 			directory := ""

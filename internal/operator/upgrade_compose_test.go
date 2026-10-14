@@ -27,10 +27,11 @@ type composeUpgradeSpec struct {
 	ExpectedSourceGeneration int    `json:"expected_source_generation,omitempty"`
 }
 type nativeUpgradeRunner struct {
-	directory   string
-	images      map[string]string
-	override    map[string]map[string]any
-	failPrepare bool
+	directory          string
+	images             map[string]string
+	override           map[string]map[string]any
+	failPrepare        bool
+	failRecoveryVerify bool
 }
 
 func (r *nativeUpgradeRunner) arguments(args []string) ([]string, error) {
@@ -64,6 +65,9 @@ func (r *nativeUpgradeRunner) arguments(args []string) ([]string, error) {
 	}
 	if r.failPrepare && strings.Contains(strings.Join(args, " "), "prepare-release") {
 		return nil, errors.New("injected target preparation failure at the native offline boundary")
+	}
+	if r.failRecoveryVerify && strings.Contains(strings.Join(args, " "), "recovery-verify") {
+		return nil, errors.New("injected post-import recovery verification failure")
 	}
 	raw, e := os.ReadFile(filepath.Join(r.directory, ImagesFile))
 	if e != nil {
@@ -289,6 +293,16 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 			material := filepath.Join(filepath.Dir(spec.Directory), "state-recovery-"+filepath.Base(spec.Directory))
+			runner.failRecoveryVerify = true
+			state, err = d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
+			if err == nil || state.Phase != "restoring_state" {
+				t.Fatal("post-import recovery failure did not preserve retry journal", err)
+			}
+			runner.failRecoveryVerify = false
+			_, current, err = Open(spec.Directory)
+			if err != nil {
+				t.Fatal(err)
+			}
 			state, err = d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
 			if err != nil || state.Phase != "prepared_fenced" || state.Plan.RecoveryOf != p.SHA256 {
 				t.Fatal("native retained-mount state restoration", err)

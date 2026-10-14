@@ -1,14 +1,55 @@
 package operator
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
+
+func TestOrdinaryStateBackupRejectsRelationsBeforeFreeze(t *testing.T) {
+	d, r, runner, _ := upgradeFixture(t)
+	runner.relations = []NodeFact{{NodeID: strings.Repeat("a", 32), State: "active"}}
+	output := filepath.Join(t.TempDir(), "refused.tar")
+	if _, e := d.BackupState(context.Background(), r, output, true, false); e == nil {
+		t.Fatal("unrestorable ordinary cluster archive admitted")
+	}
+	if _, e := os.Lstat(output); !os.IsNotExist(e) {
+		t.Fatal("refused archive was published", e)
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+			t.Fatal("cluster refusal froze writers", call)
+		}
+	}
+}
+
+func TestOrdinaryRestoreRetryRejectsDatabaseReceiptDrift(t *testing.T) {
+	d, r, runner, p := upgradeFixture(t)
+	r.Database = "mysql"
+	r.State = "upgrade_fenced"
+	p.StateRestore = true
+	p.Database = "mysql"
+	p.SHA256 = p.digest()
+	state := UpgradeState{Version: 1, Phase: "restoring_state", Plan: p, Previous: r, RestoreReceipt: &r, BackupSHA: strings.Repeat("a", 64)}
+	if e := d.saveUpgrade(state); e != nil {
+		t.Fatal(e)
+	}
+	runner.calls = nil
+	tampered := r
+	tampered.Database = "sqlite"
+	if _, e := d.RestoreState(context.Background(), tampered, "unused", state.BackupSHA, p.NodeID, t.TempDir(), true, true, true, false); e == nil {
+		t.Fatal("database drift bypassed external-writer confirmation")
+	}
+	if len(runner.calls) != 0 {
+		t.Fatal("tampered retry invoked Docker before refusal", runner.calls)
+	}
+}
 
 func TestRestoreCapacityAggregatesGrowthAcrossStateRoots(t *testing.T) {
 	roots := map[string]string{"data": t.TempDir(), "runtime_secrets": t.TempDir()}

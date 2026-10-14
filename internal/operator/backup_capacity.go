@@ -137,6 +137,9 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 	roots := map[string]string{"data": data}
 	mounted := map[string]bool{}
 	for name, service := range cfg.Services {
+		if focHostInstaller(name, service) {
+			continue
+		}
 		for _, mount := range service.Volumes {
 			if mount.Type == "volume" {
 				mounted[mount.Source] = true

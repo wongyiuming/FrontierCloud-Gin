@@ -341,11 +341,18 @@ workers. Reports retain the existing maximum eight observed addresses.
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
 The owner explicitly authorized a limited global-operator exception: the one-shot
-`compose.foc.yaml` installer may write `/usr/local/bin/foc`, a private backend
+`compose.foc.yaml` installer and the same bounded `foc-host-init` stage in normal
+Compose startup may write `/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
+Normal startup registers automatic discovery; first use verifies the marked
+standard project's running public images and provenance before recording its
+receipt and immutable image lock. This installation completion writes only
+operator metadata, never business data, DDL, permissions or service state.
+Unrelated Compose projects are not adopted. Host installation state is excluded
+from business recovery archives and is reproducible from the published bundle.
 Business and certificate processes remain Compose services. The installer has
 three writable install binds plus read-only deployment and `/usr`/`/etc` parent views;
 no host-root/runtime-directory bind, Docker socket or network is attached.

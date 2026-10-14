@@ -53,6 +53,7 @@ type UpgradeState struct {
 	Phase                 string      `json:"phase"`
 	Plan                  UpgradePlan `json:"plan"`
 	Previous              Receipt     `json:"previous_receipt"`
+	RestoreReceipt        *Receipt    `json:"state_restore_receipt,omitempty"`
 	BackupFile            string      `json:"backup_file"`
 	BackupSHA             string      `json:"backup_sha256,omitempty"`
 	BackupCompleteCluster bool        `json:"backup_complete_cluster"`

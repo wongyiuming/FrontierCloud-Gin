@@ -235,6 +235,16 @@ def run(args):
     for path in (data / 'media', data / 'media/music', folder, folder / 'song.mp3'):
         os.chown(path, 10001, 10001)
     shutil.copyfile(source / 'docker-compose.yaml', directory / 'docker-compose.yaml')
+    # These scenarios recover an existing deployment whose public source image
+    # predates automatic foc installation. Fresh-node bootstrap has its own
+    # actual Compose acceptance; retain the historical service graph here.
+    compose_file = directory / 'docker-compose.yaml'
+    legacy = compose_file.read_text()
+    if '\n  foc-host-init:\n' in legacy:
+        before, after = legacy.split('\n  foc-host-init:\n', 1)
+        legacy = before + '\n  secrets-init:\n' + after.split('\n  secrets-init:\n', 1)[1]
+        legacy = legacy.replace('    depends_on:\n      foc-host-init: {condition: service_completed_successfully}\n', '', 1)
+        compose_file.write_text(legacy)
     if args.database == 'mysql':
         shutil.copyfile(source / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')
     # Use an isolated loopback address and the canonical stack. No global host

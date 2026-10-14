@@ -53,7 +53,14 @@ func TestOrdinaryStateRestoreRejectsMissingActiveRelations(t *testing.T) {
 	runner.role = "Master"
 	runner.relations = []NodeFact{{NodeID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: "active", Direction: "downstream", Protocol: 2}}
 	archive := filepath.Join(t.TempDir(), "cluster.tar")
-	backup, e := d.BackupState(context.Background(), r, archive, true, false)
+	done, e := d.AcquireOperation()
+	if e != nil {
+		t.Fatal(e)
+	}
+	backup, e := d.backupLocked(context.Background(), r, archive, true, false)
+	if closeErr := done(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
 	if e != nil {
 		t.Fatal(e)
 	}

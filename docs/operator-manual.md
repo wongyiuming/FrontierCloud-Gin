@@ -2,9 +2,25 @@
 
 ## Global host command
 
-The global entry is `foc`, preserving Bash's existing `fc` builtin. From an
-extracted operator bundle, use its separate `compose.foc.yaml` installer with
-an explicitly verified public Web digest, full revision and existing deployment:
+The global entry is `foc`, preserving Bash's existing `fc` builtin. Normal
+Master/Storage Compose startup installs it automatically through the exiting
+`foc-host-init` service before application initialization. There is no separate
+operator installation or manual deployment registration step for a new node.
+After startup, run `foc status` from any host directory.
+
+The first invocation completes metadata-only registration of a marked standard
+Compose project: it verifies the actual running public image configuration
+digests, reviewed main/source CI, native identity and database generation, then
+records the deployment receipt and immutable image lock. It does not initialize
+or migrate databases, pull images, restart services or copy business files.
+This first-use registration writes operator metadata; subsequent status checks
+are read-only. Unrelated Docker projects are never adopted automatically.
+Ambiguous deployments still require explicit selection. Host installation
+refuses an unrelated `foc` command; the existing Bash `fc` command is untouched.
+
+An existing deployment using older Compose files can bootstrap the same entry
+with its separate `compose.foc.yaml` installer and an explicitly verified public
+Web digest, full revision and existing deployment:
 
 ```sh
 export FOC_OPERATOR_IMAGE=ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:VERIFIED_DIGEST
@@ -80,6 +96,10 @@ separate `upgrade open` confirms the returned recovery plan digest. See
 [controlled upgrade state recovery](operator-upgrade.md).
 Ordinary state backups are restorable with `restore state-check` and `restore
 state` without an upgrade journal. They require the original deployment receipt
+and no non-revoked related nodes. Ordinary state capture refuses uncoordinated
+node relations before freezing writers and rechecks under the capture lease.
+This restriction does not replace the separate approved upgrade recovery flow.
+State restoration requires the original deployment receipt
 and mount selection, trusted archive SHA, exact NodeID, source-offline and
 state-loss confirmations. `--freeze` can stop and fence the selected deployment.
 The tool retains current database/key/state material, restores into the original
