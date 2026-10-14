@@ -1,7 +1,7 @@
 # Approved operator upgrades
 
-`fc upgrade` is a short-lived host-side Compose operation. Run it from the
-installed bundle directory on the Linux Docker host. It does not add an agent,
+`foc upgrade` is a short-lived host-side Compose operation. After the Compose
+installer registers the deployment, run it from any host directory. It does not add an agent,
 Docker socket access to Web, a business upgrade API, or a fleet rollout.
 
 The deployment must already have an immutable `.fc-deployment.json` receipt,
@@ -12,6 +12,18 @@ updates component images only. Configuration changes require their own reviewed
 procedure; an environment edit is not a database or disk migration.
 
 ## Review, back up, prepare, then open
+
+Upgrade recovery always uses `upgrade-state`: SQLite database/WAL/SHM or a
+consistent MySQL dump, deployment configuration, identity keys, certificates,
+Redis and native lifecycle state. Media, lyrics and recording files remain in
+their original mounts and are never copied into the upgrade recovery point.
+The plan binds this scope into its approval digest; no media-exclusion flag is
+required. `foc backup plan` estimates this same upgrade scope.
+
+The archive explicitly records the excluded business files and is not a complete
+data restore for a new machine. Original media mounts must be retained. The
+upgrade verifies managed reads against these retained files before opening.
+Database rollback still requires controlled recovery; no DDL rollback is implied.
 
 Use an explicit published main commit for an existing installation. `latest`
 is accepted by initial installation only. A plan performs read-only Docker

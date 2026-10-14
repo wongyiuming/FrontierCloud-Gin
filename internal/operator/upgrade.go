@@ -43,6 +43,7 @@ type UpgradePlan struct {
 	CreatedAt      int64                         `json:"created_at"`
 	ExpiresAt      int64                         `json:"expires_at"`
 	SHA256         string                        `json:"plan_sha256"`
+	RecoveryScope  string                        `json:"recovery_scope,omitempty"`
 }
 
 type UpgradeState struct {
@@ -86,7 +87,7 @@ func ReadUpgradePlan(path string) (UpgradePlan, error) {
 	return p, nil
 }
 func (p UpgradePlan) valid(now time.Time) bool {
-	return p.Version == 1 && p.NodeID != "" && release.ValidSHA(p.From) && release.ValidSHA(p.Target) && p.Target != p.From && p.Generation == migrations.Generation && recovery.SupportedSchemaGeneration(p.FromGeneration) && p.CreatedAt <= now.Unix() && p.ExpiresAt > now.Unix() && p.ExpiresAt-p.CreatedAt == 3600 && p.SHA256 == p.digest()
+	return (p.RecoveryScope == "" || p.RecoveryScope == recovery.UpgradeStateScope) && p.Version == 1 && p.NodeID != "" && release.ValidSHA(p.From) && release.ValidSHA(p.Target) && p.Target != p.From && p.Generation == migrations.Generation && recovery.SupportedSchemaGeneration(p.FromGeneration) && p.CreatedAt <= now.Unix() && p.ExpiresAt > now.Unix() && p.ExpiresAt-p.CreatedAt == 3600 && p.SHA256 == p.digest()
 }
 
 func (d *Deployment) upgradeFact(ctx context.Context, r Receipt) (RuntimeFact, error) {
@@ -164,7 +165,7 @@ func (d *Deployment) PlanUpgrade(ctx context.Context, r Receipt, target, arch st
 		return p, e
 	}
 	now := time.Now().Unix()
-	p = UpgradePlan{Version: 1, NodeID: fact.NodeID, Project: r.Project, Role: r.Role, Database: r.Database, From: r.Revision, Target: target, SourceSHA: source, Architecture: arch, Generation: migrations.Generation, ReceiptSHA: upgradeHash(r), Images: components, ServiceImages: services, CreatedAt: now, ExpiresAt: now + 3600}
+	p = UpgradePlan{Version: 1, NodeID: fact.NodeID, Project: r.Project, Role: r.Role, Database: r.Database, From: r.Revision, Target: target, SourceSHA: source, Architecture: arch, Generation: migrations.Generation, ReceiptSHA: upgradeHash(r), Images: components, ServiceImages: services, CreatedAt: now, ExpiresAt: now + 3600, RecoveryScope: recovery.UpgradeStateScope}
 	p.FromGeneration = fact.Database.SchemaGeneration
 	p.SHA256 = p.digest()
 	return p, nil
@@ -194,6 +195,9 @@ func (d *Deployment) upgradeState() (UpgradeState, error) {
 // separate confirmed command which verifies the running target before traffic.
 func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan, approval, node, output string, external bool, evidence Evidence, images Images) (operationResult UpgradeState, operationErr error) {
 	var state UpgradeState
+	if p.RecoveryScope != recovery.UpgradeStateScope {
+		return state, errors.New("regenerate the upgrade plan with mandatory state-only recovery scope")
+	}
 	if !p.valid(time.Now()) || approval != p.SHA256 || node != p.NodeID || p.ReceiptSHA != upgradeHash(r) || p.From != r.Revision || p.Project != r.Project || p.Role != r.Role || p.Database != r.Database || r.State != "ready" || output == "" {
 		return state, errors.New("current plan digest, exact source NodeID and new backup path required")
 	}
@@ -254,7 +258,7 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 	if e != nil {
 		return state, e
 	}
-	if e = d.requireBackupCapacity(ctx, r, output); e != nil {
+	if e = d.requireUpgradeBackupCapacity(ctx, r, output); e != nil {
 		return state, e
 	}
 	state = UpgradeState{Version: 1, Phase: "backup_pending", Plan: p, Previous: r, BackupFile: output}
@@ -274,7 +278,7 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 	if e != nil {
 		return fail("consistent backup did not complete")
 	}
-	if !backup.Verified || backup.Manifest.NodeID != p.NodeID || backup.Manifest.Revision != p.From || backup.Manifest.SchemaGeneration != p.FromGeneration {
+	if !backup.Verified || backup.Manifest.Scope != recovery.UpgradeStateScope || backup.Manifest.NodeID != p.NodeID || backup.Manifest.Revision != p.From || backup.Manifest.SchemaGeneration != p.FromGeneration {
 		return fail("backup identity or integrity verification failed")
 	}
 	verified, e := recovery.Check(ctx, output, backup.SHA256)

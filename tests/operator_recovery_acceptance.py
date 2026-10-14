@@ -356,9 +356,18 @@ def run(args):
             upgrade['actual_image_switch'] = True
             upgrade['http_range_and_identity_preserved'] = True
             upgrade['post_business_cpu_samples'] = idle_cpu(upgraded_web)
+        state_archive = directory / 'default-state.tar'
+        state_report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
+                                           '--freeze', '--output', str(state_archive),
+                                           *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
+        assert state_report['integrity_verified']
+        assert state_report['manifest']['scope'] == 'upgrade-state'
+        assert not state_report['manifest']['complete_cluster']
+        assert all(not item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
+                   for item in state_report['manifest']['files'])
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
-                                     '--freeze', '--output', str(archive),
+                                     '--freeze', '--include-business-files', '--output', str(archive),
                                      *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
         assert report['integrity_verified'] and not report['restored_business_verified']
         assert report['manifest']['node_id'] == before_fact['node_id']

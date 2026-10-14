@@ -60,6 +60,16 @@ the refreshed tool's supported migration assets and an approved upgrade plan.
 Tool refresh refuses images from an older database generation.
 
 Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
+Ordinary `backup plan` and `backup create` also default to this state-only scope.
+Upgrade plans and archives always use `upgrade-state`: database/WAL/SHM or logical
+MySQL dump, configuration, keys, certificates, Redis and lifecycle state. Media,
+lyrics and recordings remain in their original mounts and are excluded without
+an extra flag. The capacity report sets `business_files_included` to false.
+These upgrade recovery points cannot replace the retained media or claim a full
+fresh-machine restore. Only explicitly requested full disaster recovery uses
+`backup plan/create --include-business-files`; coordinated `backup set-create`
+retains its explicit complete recovery-set contract. Application upgrades never
+select these complete workflows.
 The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
 configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
 It rejects metadata above the archive's 16 MiB manifest limit. It does not hash
@@ -203,7 +213,8 @@ recovery material. A local deployment archive does not silently include other
 nodes' media and identity; missing node state blocks applying it as a recovery set.
 
 ```sh
-./fc backup create --freeze --output /protected-backups/deployment.tar
+./fc backup plan --include-business-files --output /protected-backups/deployment.tar
+./fc backup create --include-business-files --freeze --output /protected-backups/deployment.tar
 ./fc backup verify --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256>
 ./fc restore check --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256> --target /new/recovery-material
 ./fc restore apply --file /protected-backups/deployment.tar --sha256 <trusted-archive-sha256> --target /new/recovery-material --confirm-node-id <exact-source-node-id>

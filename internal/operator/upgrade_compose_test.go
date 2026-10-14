@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 	"io"
 	"os"
 	"os/exec"
@@ -220,11 +221,22 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 		t.Fatal("source runtime schema differs from explicitly requested acceptance generation")
 	}
 	state, e := d.ApplyUpgrade(ctx, r, p, p.SHA256, p.NodeID, filepath.Join(spec.Directory, "pre-upgrade-recovery.tar"), true, fakeEvidence{true}, upgradeImages{})
+	if state.BackupSHA != "" {
+		checked, err := recovery.Check(ctx, filepath.Join(spec.Directory, "pre-upgrade-recovery.tar"), state.BackupSHA)
+		if err != nil || checked.Manifest.Scope != recovery.UpgradeStateScope || checked.Manifest.CompleteCluster {
+			t.Fatal("upgrade backup scope mismatch", err)
+		}
+		for _, entry := range checked.Manifest.Files {
+			if strings.HasPrefix(entry.Path, "data/media/") || strings.HasPrefix(entry.Path, "data/lyrics/") || strings.HasPrefix(entry.Path, "data/recordings/") {
+				t.Fatal("business file entered upgrade archive", entry.Path)
+			}
+		}
+	}
 	if spec.FailPrepare {
 		if e == nil || state.Phase != "failed_fenced" || state.BackupSHA == "" {
 			t.Fatal("target failure did not retain a verified fenced recovery point", e)
 		}
-		if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "target_failure_injected": true, "backup_sha256": state.BackupSHA, "no_automatic_rollback": true}); e != nil {
+		if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "target_failure_injected": true, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "no_automatic_rollback": true}); e != nil {
 			t.Fatal(e)
 		}
 		return
@@ -273,7 +285,7 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if _, e = d.ValidateReceipt(ctx, next); e != nil {
 		t.Fatal("concrete private-fixture handover did not retain binding", e)
 	}
-	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "native_managed_business_reads": state.BusinessVerified, "native_prepared_upgrade_resume_verified": true}); e != nil {
+	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "native_managed_business_reads": state.BusinessVerified, "native_prepared_upgrade_resume_verified": true}); e != nil {
 		t.Fatal(e)
 	}
 }

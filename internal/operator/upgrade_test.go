@@ -105,6 +105,7 @@ func upgradeFixture(t *testing.T) (*Deployment, Receipt, *upgradeRunner, Upgrade
 	t.Helper()
 	d, base := fixture(t)
 	base.config.Services["web"].Environment["DATA_ROOT"] = "/app/data"
+	base.config.Services["web"].Environment["SQLITE_PATH"] = "/app/data/frontiercloud.db"
 	r, e := d.Install(context.Background(), strings.Repeat("a", 40), "amd64", fakeEvidence{true}, upgradeImages{})
 	if e != nil {
 		t.Fatal(e)
@@ -116,7 +117,7 @@ func upgradeFixture(t *testing.T) (*Deployment, Receipt, *upgradeRunner, Upgrade
 			t.Fatal(e)
 		}
 	}
-	for path, content := range map[string]string{filepath.Join(secrets, "node-vault.key"): "isolated-key", filepath.Join(data, "media", "music", "actual.mp3"): "ID3-actual-recovery-bytes", filepath.Join(d.Directory, "docker-compose.yaml"): "services: {}\n"} {
+	for path, content := range map[string]string{filepath.Join(secrets, "node-vault.key"): "isolated-key", filepath.Join(data, "frontiercloud.db"): "isolated-database-state", filepath.Join(data, "media", "music", "actual.mp3"): "ID3-actual-recovery-bytes", filepath.Join(d.Directory, "docker-compose.yaml"): "services: {}\n"} {
 		if e = os.WriteFile(path, []byte(content), 0600); e != nil {
 			t.Fatal(e)
 		}
@@ -212,12 +213,12 @@ func TestUpgradeUsesRealRecoveryBytesBeforeTargetAndExplicitOpen(t *testing.T) {
 		t.Fatal(check.Manifest)
 	}
 	target := filepath.Join(d.Directory, "material")
-	if _, e = recovery.Apply(ctx, output, target, state.BackupSHA, p.NodeID); e != nil {
-		t.Fatal(e)
+	if _, e = recovery.Apply(ctx, output, target, state.BackupSHA, p.NodeID); e == nil {
+		t.Fatal("upgrade state backup was treated as a complete media restore")
 	}
-	actual, e := os.ReadFile(filepath.Join(target, "data", "media", "music", "actual.mp3"))
+	actual, e := os.ReadFile(filepath.Join(runner.data, "media", "music", "actual.mp3"))
 	if e != nil || string(actual) != "ID3-actual-recovery-bytes" {
-		t.Fatal("backup lost actual source bytes", e)
+		t.Fatal("upgrade changed retained media bytes", e)
 	}
 	_, next, e := Open(d.Directory)
 	if e != nil {

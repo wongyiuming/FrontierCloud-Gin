@@ -148,7 +148,7 @@ func (d *Deployment) OpenUpgrade(ctx context.Context, r Receipt, approval, node 
 	}
 	checkRecovery := func() error {
 		backup, err := recovery.Check(ctx, state.BackupFile, state.BackupSHA)
-		if err != nil || !backup.Verified || backup.Manifest.NodeID != node || backup.Manifest.Revision != state.Previous.Revision {
+		if err != nil || !backup.Verified || backup.Manifest.Scope != upgradeRecoveryScope(state.Plan) || backup.Manifest.NodeID != node || backup.Manifest.Revision != state.Previous.Revision {
 			return errors.New("verified original recovery point is no longer available")
 		}
 		return nil

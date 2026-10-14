@@ -210,6 +210,14 @@ reopen the native offline migration fence. Reviewed releases are deployed by the
 operator with Compose after compatible database backup/migration checks. The update controller implementation, image and retired CD entry points are removed. Only explicit host-side operator commands manage upgrades. See
 [operator release procedure](docs/master-self-release.md).
 
+Application upgrade recovery and ordinary operator backups default to state-only
+archives: database state, deployment configuration, identity keys, certificates
+and native control state. Media, lyric and recording files remain in their
+original mounts and are excluded. Upgrade approval binds this scope and cannot
+select a full media archive. These recovery points cannot claim fresh-machine
+business restoration; explicit complete disaster-recovery archives and sets
+retain a separate opt-in contract. See [upgrade recovery scope](docs/operator-upgrade.md).
+
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
 
 ## 12. Supported runtime and validation

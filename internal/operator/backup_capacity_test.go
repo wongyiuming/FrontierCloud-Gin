@@ -165,7 +165,7 @@ type liveGrowthRunner struct {
 func (r *liveGrowthRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if !r.grown && strings.Contains(strings.Join(args, " "), "config --format json") {
 		if _, err := os.Lstat(filepath.Join(r.directory, UpgradeJournal)); err == nil {
-			f, e := os.Create(filepath.Join(r.data, "growth-after-preflight.dat"))
+			f, e := os.Create(filepath.Join(r.data, "frontiercloud.db"))
 			if e != nil {
 				return nil, e
 			}
@@ -212,7 +212,7 @@ func TestInsufficientBackupCapacityRefusesUpgradeBeforeFreezeOrJournal(t *testin
 		t.Fatal(err)
 	}
 	// A sparse source proves that capacity counts logical archive bytes, not blocks.
-	f, err := os.Create(filepath.Join(runner.data, "huge.dat"))
+	f, err := os.Create(filepath.Join(runner.data, "frontiercloud.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

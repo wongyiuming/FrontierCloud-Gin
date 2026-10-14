@@ -21,7 +21,13 @@ func upgradeTargetReceipt(state UpgradeState) Receipt {
 
 func checkUpgradeRecovery(ctx context.Context, state UpgradeState) (bool, error) {
 	report, e := recovery.Check(ctx, state.BackupFile, state.BackupSHA)
-	return e == nil && report.Verified && report.Manifest.NodeID == state.Plan.NodeID && report.Manifest.Revision == state.Previous.Revision && report.Manifest.SchemaGeneration == state.Plan.FromGeneration, e
+	return e == nil && report.Verified && report.Manifest.Scope == upgradeRecoveryScope(state.Plan) && report.Manifest.NodeID == state.Plan.NodeID && report.Manifest.Revision == state.Previous.Revision && report.Manifest.SchemaGeneration == state.Plan.FromGeneration, e
+}
+func upgradeRecoveryScope(p UpgradePlan) string {
+	if p.RecoveryScope == "" {
+		return "deployment"
+	}
+	return p.RecoveryScope
 }
 
 func (d *Deployment) prepareUpgradeLocked(ctx context.Context, cfg Config, state UpgradeState) (UpgradeState, error) {

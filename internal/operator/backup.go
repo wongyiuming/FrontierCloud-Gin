@@ -76,6 +76,15 @@ func (d *Deployment) volumeRoot(ctx context.Context, name string) (string, error
 // lease and all its filesystem writers stopped. It never copies a hot MySQL
 // directory, reopens traffic or claims to include another node's media/state.
 func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (operationResult recovery.Report, operationErr error) {
+	return d.backupWithScope(ctx, receipt, output, freeze, externalWritersStopped, "deployment")
+}
+
+// BackupState excludes business files and requires the original data mounts.
+func (d *Deployment) BackupState(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
+	return d.backupWithScope(ctx, receipt, output, freeze, externalWritersStopped, recovery.UpgradeStateScope)
+}
+
+func (d *Deployment) backupWithScope(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, scope string) (operationResult recovery.Report, operationErr error) {
 	var empty recovery.Report
 	if receipt.Database == "mysql" && !externalWritersStopped {
 		return empty, errors.New("MySQL backup requires explicit confirmation that external database writers are stopped")
@@ -86,20 +95,27 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 	}
 	defer func() { operationErr = errors.Join(operationErr, done()) }()
 	if freeze {
-		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
-			return empty, e
+		capacity, capacityErr := d.backupCapacityScope(ctx, receipt, output, "", scope)
+		if capacityErr != nil {
+			return empty, capacityErr
+		}
+		if !capacity.Fits {
+			return empty, errors.New("backup capacity insufficient before freeze")
 		}
 	}
-	return d.backupLocked(ctx, receipt, output, freeze, externalWritersStopped)
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, scope)
 }
 
 // backupLocked shares the already held host-operation lock with approved upgrades.
 func (d *Deployment) backupLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (recovery.Report, error) {
-	return d.backupSetLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false)
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, "", false, recovery.UpgradeStateScope)
 }
 
 // The set coordinator holds every member lifecycle lease before entering here.
 func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool) (recovery.Report, error) {
+	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, set, held, "deployment")
+}
+func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool, scope string) (recovery.Report, error) {
 	var empty recovery.Report
 	cfg, e := d.ValidateReceipt(ctx, receipt)
 	if e != nil {
@@ -179,7 +195,18 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
 		}
-		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+		capacity, capacityErr := d.backupCapacityScope(ctx, receipt, output, "", scope)
+		if capacityErr != nil {
+			return capacityErr
+		}
+		if !capacity.Fits {
+			return errors.New("backup capacity insufficient under offline lease")
+		}
+		var selection []string
+		if scope == recovery.UpgradeStateScope {
+			selection, e = upgradeDataSelection(cfg, receipt)
+		}
+		if e != nil {
 			return e
 		}
 		workspace, e := os.MkdirTemp(filepath.Dir(output), ".fc-backup-")
@@ -209,8 +236,9 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 				return e
 			}
 		}
-		sources := []recovery.Root{{Class: "data", Directory: data}, {Class: "deployment", Directory: deployment}}
+		sources := []recovery.Root{{Class: "data", Directory: data, IncludePaths: selection}, {Class: "deployment", Directory: deployment}}
 		m := recovery.Manifest{NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, Consistency: "native-offline-and-deployment-writers-stopped", Missing: []string{}, KeyReferences: []string{"runtime_secrets/node-vault.key"}}
+		m.Scope = scope
 		m.RecoverySet = set
 		m.SchemaGeneration = fact.Database.SchemaGeneration
 		boundClasses := map[string]string{}

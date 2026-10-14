@@ -30,6 +30,8 @@ import (
 const Format = "frontiercloud-deployment-recovery"
 const MaxManifest = 16 << 20
 const MaxFiles = 100000
+const UpgradeStateScope = "upgrade-state"
+const ExcludedBusinessFiles = "media and lyric files are excluded; original business file mounts must be retained"
 
 var hashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var nodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -81,8 +83,23 @@ type Report struct {
 	RetainedScratch  string   `json:"retained_scratch,omitempty"`
 }
 type Root struct {
-	Class     string
-	Directory string
+	Class        string
+	Directory    string
+	IncludePaths []string
+}
+
+// SelectedPath prunes unselected subtrees without reading or copying their files.
+// A nil selection retains the explicit complete-recovery behavior.
+func SelectedPath(paths []string, name string, directory bool) bool {
+	if paths == nil || name == "." {
+		return true
+	}
+	for _, selected := range paths {
+		if name == selected || directory && strings.HasPrefix(selected, name+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func validClass(v string) bool {
@@ -148,7 +165,13 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	}
 	m.Format = Format
 	m.Version = 1
-	m.Scope = "deployment"
+	if m.Scope == "" {
+		m.Scope = "deployment"
+	}
+	if m.Scope == UpgradeStateScope {
+		m.CompleteCluster = false
+		m.Missing = append(m.Missing, ExcludedBusinessFiles)
+	}
 	if m.SchemaGeneration == 0 {
 		m.SchemaGeneration = migrations.Generation
 	}
@@ -164,6 +187,9 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 		}
 	}()
 	for _, source := range sources {
+		if m.Scope == UpgradeStateScope && source.Class == "data" && source.IncludePaths == nil {
+			return report, ErrUnsafe
+		}
 		if !validClass(source.Class) || roots[source.Class] != nil {
 			return report, ErrUnsafe
 		}
@@ -187,6 +213,12 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 			}
 			if e := ctx.Err(); e != nil {
 				return e
+			}
+			if !SelectedPath(source.IncludePaths, name, item.IsDir()) {
+				if item.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
 			}
 			if item.Type()&os.ModeSymlink != 0 {
 				return ErrUnsafe
@@ -300,8 +332,19 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 }
 
 func validateManifest(m Manifest) error {
-	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
+	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" && m.Scope != UpgradeStateScope || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
 		return ErrUnsafe
+	}
+	if m.Scope == UpgradeStateScope {
+		found := false
+		for _, item := range m.Missing {
+			if item == ExcludedBusinessFiles {
+				found = true
+			}
+		}
+		if !found || m.CompleteCluster || m.RecoverySet != "" {
+			return ErrUnsafe
+		}
 	}
 	if m.RecoverySet != "" && !nodePattern.MatchString(m.RecoverySet) || len(m.Relations) > MaxSetMembers {
 		return ErrUnsafe

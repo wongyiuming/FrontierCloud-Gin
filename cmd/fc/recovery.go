@@ -37,7 +37,11 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 	sourceOffline := flags.Bool("confirm-source-offline", false, "confirm source identity is no longer running on any host")
 	freeze := flags.Bool("freeze", false, "enter native maintenance and stop this deployment's writers; remains stopped after backup")
 	external := flags.Bool("confirm-external-writers-stopped", false, "confirm all external MySQL writers are stopped")
+	full := flags.Bool("include-business-files", false, "explicit full disaster-recovery archive including media, lyrics and recordings")
 	if flags.Parse(args[2:]) != nil || flags.NArg() != 0 {
+		return 2
+	}
+	if *full && action != "backup plan" && action != "backup create" {
 		return 2
 	}
 	if action == "backup plan" {
@@ -47,7 +51,11 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 			return 2
 		}
 		d.Runner = dockerRunner{d.Directory}
-		plan, e := d.BackupCapacity(ctx, r, *output)
+		capacity := d.UpgradeBackupCapacity
+		if *full {
+			capacity = d.BackupCapacity
+		}
+		plan, e := capacity(ctx, r, *output)
 		if e != nil {
 			fmt.Fprintln(errorWriter, e)
 			return 2
@@ -69,7 +77,11 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 		d, receipt, err = operator.Open(directory)
 		if err == nil {
 			d.Runner = dockerRunner{d.Directory}
-			report, err = d.Backup(ctx, receipt, *output, *freeze, *external)
+			backup := d.BackupState
+			if *full {
+				backup = d.Backup
+			}
+			report, err = backup(ctx, receipt, *output, *freeze, *external)
 		}
 	case "backup verify":
 		report, err = recovery.Check(ctx, *input, *checksum)
