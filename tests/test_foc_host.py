@@ -104,7 +104,7 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.invoke().returncode, 2)
         self.assertFalse(self.calls.exists())
 
-    def test_installer_refuses_unmanaged_command_and_preserves_bytes(self):
+    def installer_fixture(self):
         bundle = self.root / 'bundle'
         bundle.mkdir()
         binary = bundle / 'fc'
@@ -114,18 +114,83 @@ class HostEntryTests(unittest.TestCase):
         installer = (ROOT / 'scripts/install-foc.sh').read_text()
         for prefix in ('/usr/local', '/etc/frontiercloud'):
             installer = installer.replace(prefix, str(self.root / prefix.lstrip('/')))
+        installer = installer.replace('host_root=/host', "host_root=''")
         installer = installer.replace('[ "$(id -u)" -eq 0 ]', '[ 0 -eq 0 ]')
         native = self.deployment('native')
         installer = installer.replace('receipt_directory=/deployment', 'receipt_directory=' + shlex.quote(str(native)))
-        path = bundle / 'install-foc.sh'
-        path.write_text(installer)
-        collision = self.root / 'usr/local/bin/foc'
-        collision.parent.mkdir(parents=True)
-        collision.write_text('unrelated-program')
-        env = dict(os.environ, FOC_COMPOSE_INSTALL='1', FOC_OPERATOR_REVISION='a' * 40)
-        result = subprocess.run(['sh', str(path), str(native)], env=env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 2)
-        self.assertEqual(collision.read_text(), 'unrelated-program')
+        self.installer = bundle / 'install-foc.sh'
+        self.installer.write_text(installer)
+        self.native = native
+        self.global_entry = self.root / 'usr/local/bin/foc'
+        self.home = self.root / 'usr/local/lib/frontiercloud/foc'
+        self.install_env = dict(self.env, FOC_COMPOSE_INSTALL='1', FOC_OPERATOR_REVISION='a' * 40)
+
+    def install(self):
+        return subprocess.run(['sh', str(self.installer), str(self.native)],
+                              env=self.install_env, capture_output=True, text=True)
+
+    def test_installer_refuses_unmanaged_command_and_preserves_bytes(self):
+        self.installer_fixture()
+        self.global_entry.parent.mkdir(parents=True)
+        self.global_entry.write_text('unrelated-program')
+        self.assertEqual(self.install().returncode, 2)
+        self.assertEqual(self.global_entry.read_text(), 'unrelated-program')
+
+    def test_managed_marker_does_not_allow_changed_command_replacement(self):
+        self.installer_fixture()
+        self.assertEqual(self.install().returncode, 0)
+        self.global_entry.write_text('administrator-replacement')
+        self.assertEqual(self.install().returncode, 2)
+        self.assertEqual(self.global_entry.read_text(), 'administrator-replacement')
+
+    def test_interrupted_first_install_and_publication_are_retryable(self):
+        self.installer_fixture()
+        real_mv = shutil.which('mv')
+        fake_mv = self.root / 'mv'
+        # SIGTERM the installer before backend publication, then after launcher
+        # publication (registry rename). No production test hook is required.
+        fake_mv.write_text('#!/bin/sh\ncase "$*" in *"$FAIL_MATCH"*) kill -TERM "$PPID"; exit 1 ;; esac\nexec ' + shlex.quote(real_mv) + ' "$@"\n')
+        fake_mv.chmod(0o755)
+        for match in ('fc.new.', 'foc-deployments.new.'):
+            with self.subTest(match=match):
+                self.install_env['FAIL_MATCH'] = match
+                self.assertNotEqual(self.install().returncode, 0)
+                self.assertFalse((self.home / '.install-lock').exists())
+                self.install_env['FAIL_MATCH'] = '__never__'
+                self.assertEqual(self.install().returncode, 0)
+                self.assertEqual(self.global_entry.read_bytes(), (self.home / 'launcher.current').read_bytes())
+                self.assertFalse((self.home / 'launcher.pending').exists())
+                self.global_entry.unlink()
+                shutil.rmtree(self.home)
+
+    def test_host_symlink_parent_refused(self):
+        self.installer_fixture()
+        actual = self.root / 'elsewhere'
+        actual.mkdir()
+        parent = self.root / 'usr/local'
+        parent.parent.mkdir()
+        parent.symlink_to(actual, target_is_directory=True)
+        self.assertEqual(self.install().returncode, 2)
+        self.assertEqual(list(actual.iterdir()), [])
+
+    def test_global_options_without_command_default_to_status(self):
+        native = self.deployment('master')
+        self.labels.write_text(str(native) + '\n')
+        for args in (['--json'], ['--directory', str(native)], ['--json', '--directory=' + str(native)]):
+            with self.subTest(args=args):
+                self.assertEqual(self.invoke(*args).returncode, 0)
+                self.assertEqual(self.calls.read_text().splitlines()[-1], 'status')
+
+    def test_independent_commands_work_during_docker_outage(self):
+        self.env['DOCKER_EXIT'] = '1'
+        for args in (['--json', 'version'], ['node', 'retire', 'check', 'node-id'],
+                     ['backup', 'verify', '--file', '/archive'], ['backup', 'set-verify', '--file', '/set'],
+                     ['restore', 'check', '--file', '/archive', '--target', '/target'],
+                     ['restore', 'apply', '--file', '/archive', '--target', '/target'],
+                     ['backup', 'set-create', '--spec', '/spec'], ['restore', 'set-check', '--spec', '/spec']):
+            with self.subTest(args=args):
+                self.assertEqual(self.invoke(*args).returncode, 0)
+                self.assertEqual(self.calls.read_text().splitlines(), args)
 
     def test_direct_host_installer_is_refused(self):
         env = dict(os.environ)

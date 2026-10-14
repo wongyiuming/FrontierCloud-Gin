@@ -20,6 +20,13 @@ services:
           memory: 128M
           pids: 32
     volumes:
+      # Unmasked, read-only host paths for symlink checks before installation.
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: ${FOC_DEPLOYMENT_DIRECTORY:?Select the existing deployment}
         target: /deployment

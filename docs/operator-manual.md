@@ -21,13 +21,23 @@ Direct host invocation of the installer is refused. This is the explicitly
 authorized host operator entry; business Web remains deployed through Compose.
 Docker and deployment-file permissions are still required; no privilege is granted.
 
+The installer also mounts `/` read-only at `/host` to inspect the actual host
+parents before writing: Docker bind mounts can otherwise hide symlinks. It reads
+those path attributes, and writes only the three installation roots above. It
+refuses unrelated or altered global launchers even when an ownership marker is
+present. An interrupted install retains its candidate launcher identity so a
+retry can safely finish; a stale lock from an uncatchable kill requires inspection.
+
 From any working directory, `foc` defaults to status; `foc status`, `foc logs`,
 `foc upgrade plan --revision SHA` and other existing commands use the recorded
 deployment. Discovery combines registered directories and all Compose container
 working-directory labels, including stopped containers, deduplicating canonical
 paths with native receipts. Multiple deployments require explicit selection:
 `foc --directory /absolute/deployment status`. Missing registered receipts or
-failed Docker discovery fail closed. `foc version` reports the host tool version;
+failed Docker discovery fail closed. Archive verification, explicit-target restore/set workflows and remote `node`
+commands bypass local discovery, including during a Docker outage. Global options
+without a command (for example `foc --json`) still select `status`.
+`foc version` reports the host tool version;
 `foc status` reports the deployment version. These versions are independent.
 
 Installing a newer operator bundle refreshes this managed host entry and binary;

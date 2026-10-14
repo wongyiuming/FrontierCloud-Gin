@@ -10,18 +10,31 @@ esac
 directory=''
 pending=false
 explicit=false
+value=false
+command=''
+action=''
 for argument in "$@"; do
   if [ "$pending" = true ]; then directory=$argument; pending=false; continue; fi
+  if [ "$value" = true ]; then value=false; continue; fi
   case "$argument" in
     --directory|-directory) pending=true; explicit=true ;;
     --directory=*|-directory=*) directory=${argument#*=}; explicit=true ;;
+    --role|-role|--database|-database|--revision|-revision) value=true ;;
+    -*) ;;
+    *) if [ -z "$command" ]; then command=$argument; elif [ -z "$action" ]; then action=$argument; fi ;;
   esac
 done
 [ "$pending" = false ] || { echo 'foc: --directory requires a value' >&2; exit 2; }
+[ -n "$command" ] || set -- "$@" status
 if [ "$explicit" = true ]; then
   [ -n "$directory" ] || { echo 'foc: --directory must not be empty' >&2; exit 2; }
   exec "$backend" "$@"
 fi
+# These commands select remote nodes, archives or explicit recovery targets.
+# They do not use the implicitly selected local deployment.
+case "$command:$action" in
+  version:*|node:*|backup:verify|backup:set-*|restore:*) exec "$backend" "$@" ;;
+esac
 work=$(mktemp -d)
 cleanup() { rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"; }
 trap cleanup EXIT
@@ -55,7 +68,6 @@ case "$count" in
   *) echo 'foc: multiple deployments found; select with --directory:' >&2
      cat "$work/unique" >&2; exit 2 ;;
 esac
-[ "$#" -gt 0 ] || set -- status
 cleanup
 trap - EXIT
 exec "$backend" --directory "$directory" "$@"
