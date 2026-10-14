@@ -82,6 +82,11 @@ func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string,
 		return empty, e
 	}
 	defer func() { operationErr = errors.Join(operationErr, done()) }()
+	if freeze {
+		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+			return empty, e
+		}
+	}
 	return d.backupLocked(ctx, receipt, output, freeze, externalWritersStopped)
 }
 
@@ -140,9 +145,6 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		return empty, errors.New("offline backup requires the recorded local DATA_ROOT bind")
 	}
 	if freeze {
-		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
-			return empty, e
-		}
 		if _, e = d.Compose(ctx, true, "run", "--rm", "--no-deps", "-T", "web", "maintenance", "enter", "--wait-seconds", "120"); e != nil {
 			return empty, errors.New("native freeze failed; preserve maintenance and inspect unfinished transactions")
 		}

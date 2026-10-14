@@ -41,7 +41,27 @@ func (c *byteCounter) Write(p []byte) (int, error) {
 // BackupCapacity inspects metadata and, for MySQL, counts a read-only logical dump.
 // It creates no files/locks, pulls no images and does not freeze any writer.
 func (d *Deployment) BackupCapacity(ctx context.Context, receipt Receipt, output string) (BackupCapacity, error) {
+	return d.backupCapacity(ctx, receipt, output, "")
+}
+
+func generatedBackupDirectories(database string) int {
+	if database == "mysql" {
+		return 2
+	}
+	return 1
+}
+func (p *BackupCapacity) addSourceDirectory() error {
+	p.Directories++
+	if p.Directories > recovery.MaxFiles {
+		return recovery.ErrUnsafe
+	}
+	return nil
+}
+
+// setParent is used only for a new recovery-set directory on an existing parent.
+func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output, setParent string) (BackupCapacity, error) {
 	p := BackupCapacity{ReadOnly: true, Snapshot: "live estimate; repeated before freeze and under the offline lease"}
+	p.Directories = generatedBackupDirectories(receipt.Database)
 	if output == "" {
 		return p, errors.New("new backup output required")
 	}
@@ -58,6 +78,9 @@ func (d *Deployment) BackupCapacity(ctx context.Context, receipt Receipt, output
 		return p, errors.New("backup output already exists or cannot be inspected")
 	}
 	parent := filepath.Dir(output)
+	if setParent != "" {
+		parent = setParent
+	}
 	info, err := os.Lstat(parent)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return p, errors.New("backup parent must exist and be a real directory")
@@ -140,11 +163,7 @@ func (d *Deployment) BackupCapacity(ctx context.Context, receipt Receipt, output
 				return e
 			}
 			if info.IsDir() {
-				p.Directories++
-				if p.Directories > recovery.MaxFiles {
-					return recovery.ErrUnsafe
-				}
-				return nil
+				return p.addSourceDirectory()
 			}
 			if !info.Mode().IsRegular() || info.Size() < 0 || p.Files >= recovery.MaxFiles {
 				return recovery.ErrUnsafe

@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,107 @@ func TestBackupCapacityIsReadOnlyAndIncludesActualManagedRoots(t *testing.T) {
 				t.Fatal("capacity froze or started a writer", call)
 			}
 		}
+	}
+}
+
+func TestGeneratedScratchDirectoriesCountAgainstArchiveLimit(t *testing.T) {
+	for _, database := range []string{"sqlite", "mysql"} {
+		p := BackupCapacity{Directories: recovery.MaxFiles - 1}
+		for i := 0; i < generatedBackupDirectories(database); i++ {
+			if err := p.addSourceDirectory(); (err != nil) != (i > 0) {
+				t.Fatal(database, p, err)
+			}
+		}
+		if err := p.addSourceDirectory(); err == nil {
+			t.Fatal("generated roots omitted from limit", database)
+		}
+	}
+}
+
+func TestRecoverySetAggregatesAllArchivesBeforeAnyMemberFreeze(t *testing.T) {
+	items, runners := recoverySetFixture(t)
+	output := filepath.Join(t.TempDir(), "new-set")
+	first, err := items[0].Deployment.BackupCapacity(context.Background(), items[0].Receipt, filepath.Join(filepath.Dir(output), "probe.tar"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, item := range items {
+		f, e := os.Create(filepath.Join(runners[i].data, "sparse-state.dat"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		e = f.Truncate(int64(first.FreeBytes * 55 / 100))
+		f.Close()
+		if e != nil {
+			t.Fatal(e)
+		}
+		p, e := item.Deployment.BackupCapacity(context.Background(), item.Receipt, filepath.Join(filepath.Dir(output), "probe.tar"))
+		if e != nil || !p.Fits {
+			t.Fatal("individual archive should fit", p, e)
+		}
+		runners[i].calls = nil
+	}
+	if _, err = BackupSet(context.Background(), items, output, runners[0].node, true, false); err == nil || !strings.Contains(err.Error(), "capacity insufficient") {
+		t.Fatal(err)
+	}
+	for _, runner := range runners {
+		for _, call := range runner.calls {
+			if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+				t.Fatal("capacity stopped member", call)
+			}
+		}
+	}
+	if _, err = os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("capacity created set output", err)
+	}
+}
+
+type liveGrowthRunner struct {
+	*upgradeRunner
+	directory string
+	size      int64
+	grown     bool
+}
+
+func (r *liveGrowthRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if !r.grown && strings.Contains(strings.Join(args, " "), "config --format json") {
+		if _, err := os.Lstat(filepath.Join(r.directory, UpgradeJournal)); err == nil {
+			f, e := os.Create(filepath.Join(r.data, "growth-after-preflight.dat"))
+			if e != nil {
+				return nil, e
+			}
+			e = f.Truncate(r.size)
+			f.Close()
+			if e != nil {
+				return nil, e
+			}
+			r.grown = true
+		}
+	}
+	return r.upgradeRunner.Run(ctx, name, args...)
+}
+
+func TestCapacityGrowthAfterJournalIsRecheckedOnlyUnderActualFreeze(t *testing.T) {
+	d, r, base, p := upgradeFixture(t)
+	output := filepath.Join(t.TempDir(), "new.tar")
+	capacity, e := d.BackupCapacity(context.Background(), r, output)
+	if e != nil {
+		t.Fatal(e)
+	}
+	runner := &liveGrowthRunner{upgradeRunner: base, directory: d.Directory, size: int64(capacity.FreeBytes) + (1 << 30)}
+	d.Runner = runner
+	state, e := d.ApplyUpgrade(context.Background(), r, p, p.SHA256, p.NodeID, output, false, fakeEvidence{true}, upgradeImages{})
+	if e == nil || !runner.grown || state.Phase != "failed_fenced" {
+		t.Fatal(state, e)
+	}
+	entered := false
+	for _, call := range base.calls {
+		if strings.Contains(call, "maintenance enter --wait-seconds 120") {
+			entered = true
+		}
+	}
+	if !entered {
+		t.Fatal("capacity refusal jumped directly into failure fencing before the requested freeze")
 	}
 }
 

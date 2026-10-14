@@ -51,7 +51,7 @@ func TestImageProofBindsConfigProvenanceAndImmutableRuntime(t *testing.T) {
 }
 
 func TestOperatorRefreshAllowsNewGenerationWithoutWeakeningBusinessProof(t *testing.T) {
-	for _, value := range []string{strconv.Itoa(migrations.Generation + 1), "0", "-1", "08", "invalid"} {
+	for _, value := range []string{strconv.Itoa(migrations.Generation + 1), strconv.Itoa(migrations.Generation - 1), "0", "-1", "08", "invalid"} {
 		r, revision, _ := imageProofFixture(t, func(c map[string]any) {
 			c["config"].(map[string]any)["Labels"].(map[string]string)["frontiercloud.schema-generation"] = value
 		})

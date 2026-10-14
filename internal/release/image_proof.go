@@ -214,7 +214,7 @@ func (r *RegistryClient) prove(ctx context.Context, target, component, architect
 	if config.OS != "linux" || config.Architecture != architecture {
 		return proof, ErrImagePlatform
 	}
-	if generationErr != nil || generation < 1 || generation > 1<<31-1 || labels["frontiercloud.schema-generation"] != strconv.Itoa(generation) || !operatorOnly && generation != migrations.Generation || !ValidSHA(revision) || target != "latest" && revision != target || labels["org.opencontainers.image.revision"] != revision || labels["org.opencontainers.image.source"] != ImageSource || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.automatic-tls"] != "1" || component != "nginx" && labels["frontiercloud.release-manifest-version"] != "1" {
+	if generationErr != nil || generation < migrations.Generation || generation > 1<<31-1 || labels["frontiercloud.schema-generation"] != strconv.Itoa(generation) || !operatorOnly && generation != migrations.Generation || !ValidSHA(revision) || target != "latest" && revision != target || labels["org.opencontainers.image.revision"] != revision || labels["org.opencontainers.image.source"] != ImageSource || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.automatic-tls"] != "1" || component != "nginx" && labels["frontiercloud.release-manifest-version"] != "1" {
 		return proof, ErrImageIntegrity
 	}
 	return ImageProof{repository + "@" + digest, revision, m.Config.Digest, "linux/" + architecture, generation}, nil

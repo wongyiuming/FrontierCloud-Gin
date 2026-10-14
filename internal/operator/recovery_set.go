@@ -113,6 +113,9 @@ func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, ma
 	if recovery.ValidateSetGraph(m) != nil {
 		return empty, errors.New("directories do not cover exactly one Master and every mutually paired Storage member")
 	}
+	if e := preflightRecoverySetCapacity(ctx, items, output, facts); e != nil {
+		return empty, e
+	}
 	// Freeze the Master first so no new remote mutation is issued while the
 	// remaining members drain. Any failure leaves all acquired fences closed.
 	sort.SliceStable(items, func(i, j int) bool {
@@ -198,6 +201,29 @@ func BackupSet(ctx context.Context, deployments []RecoveryDeployment, output, ma
 		return result, e
 	}
 	return result, nil
+}
+
+// All member archives share the new output directory's filesystem. Sum their
+// complete upper bounds before freezing anyone; keep one final filesystem reserve.
+func preflightRecoverySetCapacity(ctx context.Context, items []RecoveryDeployment, output string, facts map[string]RuntimeFact) error {
+	parent, err := filepath.Abs(filepath.Dir(output))
+	if err != nil {
+		return err
+	}
+	required := uint64((512 << 20) + recovery.MaxManifest)
+	var free uint64
+	for _, item := range items {
+		p, e := item.Deployment.backupCapacity(ctx, item.Receipt, filepath.Join(output, facts[item.Deployment.Directory].NodeID+".tar"), parent)
+		if e != nil {
+			return e
+		}
+		free = p.FreeBytes
+		required += p.RequiredBytes - (512 << 20)
+	}
+	if free < required {
+		return errors.New("recovery-set backup capacity insufficient before member freeze")
+	}
+	return nil
 }
 
 func sameOrInside(parent, child string) bool {

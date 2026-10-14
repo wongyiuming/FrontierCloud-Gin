@@ -57,6 +57,7 @@ and does not change the application's receipt, images, data or traffic. Installa
 and refresh preserve the same host ownership/collision checks.
 Tool refresh can verify a newer image generation; business upgrade still requires
 the refreshed tool's supported migration assets and an approved upgrade plan.
+Tool refresh refuses images from an older database generation.
 
 Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
 The read-only report counts actual capture roots, tar/manifest overhead, temporary
@@ -64,7 +65,10 @@ configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining res
 It does not hash files, create an archive or freeze writers. MySQL sizing streams a
 read-only logical snapshot to a counter. A live estimate is not a reservation; apply
 repeats it after image pulls, before maintenance and under the offline boundary.
-Insufficient space rejects before the source is stopped. Unclassified mounts, unsafe
+Pre-freeze capacity refusal leaves the source running. A later offline recheck
+failure preserves the fence. Recovery-set capture sums every member's archive and
+scratch bounds on the shared output filesystem before freezing any member.
+Unclassified mounts, unsafe
 entries, inaccessible roots and missing output parents are errors, not green estimates.
 
 Installing a newer operator bundle refreshes this managed host entry and binary;
