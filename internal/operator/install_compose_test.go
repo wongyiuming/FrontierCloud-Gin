@@ -221,12 +221,15 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 		}
 		result["actual_docker_pull_failed_before_initialization"] = true
 	} else if spec.Case == "certificate-failure" {
-		if e == nil || r.State != "prepared" {
+		// CA rejection can stop Compose readiness before it publishes prepared,
+		// or be observed by the independent certificate proof after that point.
+		// Neither phase permits a ready receipt or fresh reinitialization.
+		if e == nil || r.State != "prepared" && r.State != "initializing" {
 			t.Fatal("failed certificate installation claimed ready", e)
 		}
 		_, saved, e := Open(spec.Directory)
-		if e != nil || saved.State != "prepared" {
-			t.Fatal("failed installation lost prepared receipt", e)
+		if e != nil || saved.State != r.State {
+			t.Fatal("failed installation lost its recorded incomplete phase", e)
 		}
 		if _, e := os.Stat(filepath.Join(spec.Directory, "control", "ca-rejected")); e != nil {
 			t.Fatal("CA rejection was not actually exercised")
@@ -255,7 +258,8 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 		if e != nil || string(before) != string(after) {
 			t.Fatal("failed install receipt overwritten")
 		}
-		result["failed_prepared_receipt_retained"] = true
+		result["failed_receipt_phase"] = saved.State
+		result["failed_incomplete_receipt_retained"] = true
 		result["actual_ca_rejection_verified"] = true
 		result["failed_native_vault_key_preserved"] = true
 	} else if spec.Case == "success" {
