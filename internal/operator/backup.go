@@ -140,6 +140,9 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		return empty, errors.New("offline backup requires the recorded local DATA_ROOT bind")
 	}
 	if freeze {
+		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+			return empty, e
+		}
 		if _, e = d.Compose(ctx, true, "run", "--rm", "--no-deps", "-T", "web", "maintenance", "enter", "--wait-seconds", "120"); e != nil {
 			return empty, errors.New("native freeze failed; preserve maintenance and inspect unfinished transactions")
 		}
@@ -170,6 +173,9 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		}
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
+		}
+		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+			return e
 		}
 		workspace, e := os.MkdirTemp(filepath.Dir(output), ".fc-backup-")
 		if e != nil {

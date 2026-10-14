@@ -38,7 +38,7 @@ func run(args []string) (exitCode int) {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | install master|storage|resume | status | logs | restart | diagnose | backup create|verify|set-create|set-verify | restore check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | self-update --revision SHA | install master|storage|resume | status | logs | restart | diagnose | backup plan|create|verify|set-create|set-verify | restore check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup plan/verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -51,6 +51,9 @@ func run(args []string) (exitCode int) {
 	defer stop()
 	ctx, cancel := commandContext(parent, args)
 	defer cancel()
+	if args[0] == "self-update" {
+		return selfUpdateCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
+	}
 	if args[0] == "node" {
 		return nodeCommand(ctx, args, *structured, os.Stdin, os.Stdout, os.Stderr)
 	}

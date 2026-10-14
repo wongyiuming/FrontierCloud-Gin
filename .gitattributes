@@ -4,3 +4,7 @@
 *.go text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
+
+# Operator installer templates must embed identically on Windows and Linux.
+compose.foc.yaml text eol=lf
+internal/operator/foc_installer.yaml text eol=lf

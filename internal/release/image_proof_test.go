@@ -49,6 +49,28 @@ func TestImageProofBindsConfigProvenanceAndImmutableRuntime(t *testing.T) {
 		t.Fatal("different source accepted", e)
 	}
 }
+
+func TestOperatorRefreshAllowsNewGenerationWithoutWeakeningBusinessProof(t *testing.T) {
+	for _, value := range []string{strconv.Itoa(migrations.Generation + 1), "0", "-1", "08", "invalid"} {
+		r, revision, _ := imageProofFixture(t, func(c map[string]any) {
+			c["config"].(map[string]any)["Labels"].(map[string]string)["frontiercloud.schema-generation"] = value
+		})
+		p, e := r.ProveOperator(context.Background(), revision, "amd64")
+		if value == strconv.Itoa(migrations.Generation+1) {
+			if e != nil || p.Generation != migrations.Generation+1 {
+				t.Fatal(p, e)
+			}
+		} else if !errors.Is(e, ErrImageIntegrity) {
+			t.Fatal(value, e)
+		}
+		if _, e = r.Prove(context.Background(), revision, "web", "amd64"); !errors.Is(e, ErrImageIntegrity) {
+			t.Fatal("old business operator accepted foreign generation", e)
+		}
+		if _, e = r.ProveOperator(context.Background(), "latest", "amd64"); !errors.Is(e, ErrImageIntegrity) {
+			t.Fatal("moving operator alias accepted", e)
+		}
+	}
+}
 func TestImageProofRejectsBadLabelsAndPlatform(t *testing.T) {
 	for _, key := range []string{"frontiercloud.component", "frontiercloud.runtime", "frontiercloud.schema-generation", "frontiercloud.automatic-tls", "org.opencontainers.image.source", "org.opencontainers.image.revision", "frontiercloud.release-manifest-version"} {
 		t.Run(key, func(t *testing.T) {

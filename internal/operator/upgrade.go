@@ -254,6 +254,9 @@ func (d *Deployment) ApplyUpgrade(ctx context.Context, r Receipt, p UpgradePlan,
 	if e != nil {
 		return state, e
 	}
+	if e = d.requireBackupCapacity(ctx, r, output); e != nil {
+		return state, e
+	}
 	state = UpgradeState{Version: 1, Phase: "backup_pending", Plan: p, Previous: r, BackupFile: output}
 	if e = d.saveUpgrade(state); e != nil {
 		return state, e
