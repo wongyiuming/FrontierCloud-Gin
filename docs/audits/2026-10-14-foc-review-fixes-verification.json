@@ -1,0 +1,40 @@
+{
+  "host": "192.168.6.201",
+  "tested_source": "bc9eb213120acb815ed48bbe4155c1f0173aa41a",
+  "source_checks": {
+    "command": "bash scripts/test-ci-source.sh",
+    "exit_code": 0,
+    "python_cases": 203,
+    "python_skipped": 2
+  },
+  "foc_regression_cases": 16,
+  "verified": [
+    "TERM-interrupted initial and launcher-publication install retry",
+    "altered managed launcher refuses replacement",
+    "host symlink parent refuses before write",
+    "global options alone default to status",
+    "archive/remote-node/explicit-target recovery bypass discovery",
+    "real Compose first and repeat install",
+    "root and wyium login PATH lookup and version",
+    "Bash fc builtin preserved",
+    "global JSON status equals explicit backend status",
+    "real cold archive integrity verification",
+    "real Compose unmasked host-view symlink refusal preserves global entry",
+    "real archive verification with failing Docker executable"
+  ],
+  "installer": {
+    "ownership_marker": "frontiercloud-foc-v2",
+    "writable_host_bind_count": 3,
+    "read_only_host_root_view": "/host",
+    "docker_socket_mounted": false,
+    "resident_service": false
+  },
+  "private_fixture_image": "foc-install-test:bc9eb21",
+  "fixture_operator_binary_revision": "fc6adc75c7cdb9064163f938a31f176add843e0a",
+  "fixture_public_parent_digest": "sha256:73f1864caa76fd3b8440aa46d4ac237c3646bab1088bcda4520bea22cc4a3e23",
+  "scope": "Installer and entry scripts over an unchanged publicly released backend. Existing native deployment fixture is stopped; no healthy live-site upgrade acceptance claimed.",
+  "production_changed": false,
+  "publication": "Held: PR16 remains draft because canonical dev contains owner acceptance-update commits. This isolated source is not pushed and no owner commit is changed.",
+  "canonical_dev_observed": "b180f2223edd6ed1638179c8537cfa5865569d0f",
+  "command_audit": "C:/Users/wyium/.codex/tmp/foc-host-20261014/command-audit.json"
+}
