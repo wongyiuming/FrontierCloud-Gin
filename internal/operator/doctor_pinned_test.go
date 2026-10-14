@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 )
@@ -131,5 +132,44 @@ func TestDoctorRejectsPinnedDigestDriftAndRegistryErrors(t *testing.T) {
 				t.Fatal("invalid receipt fell back to discovery", images.calls)
 			}
 		})
+	}
+}
+
+// Opt-in development-host network acceptance; hosted source CI never enables it.
+func TestDoctorActualPublicPinnedImages(t *testing.T) {
+	revision := os.Getenv("FC_DOCTOR_PUBLIC_REVISION")
+	if revision == "" {
+		t.Skip("development-host public registry acceptance only")
+	}
+	if !release.ValidSHA(revision) {
+		t.Fatal("exact public revision required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	images := release.NewRegistryClient()
+	defer images.Close()
+	d, runner := fixture(t)
+	receipt, err := d.Install(ctx, revision, "amd64", fakeEvidence{true}, images)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, service := range runner.config.Services {
+		service.Image = receipt.ServiceImages[name]
+		runner.config.Services[name] = service
+	}
+	runner.calls = nil
+	runner.requireNoWrites = true
+	d.ImageInspector = images
+	report := d.Doctor(ctx)
+	check := registryCheck(t, report)
+	if check.State != "pass" || !strings.Contains(check.Reason, revision) {
+		t.Fatal(check)
+	}
+	for _, call := range runner.calls {
+		for _, forbidden := range []string{" pull ", " run ", " up ", " stop ", " exec "} {
+			if strings.Contains(call, forbidden) {
+				t.Fatal("doctor mutated", call)
+			}
+		}
 	}
 }
