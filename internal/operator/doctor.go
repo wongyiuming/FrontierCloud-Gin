@@ -221,7 +221,11 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 		if e != nil {
 			r.Add("registry", "blocked", e.Error(), "correct package access/network/platform; do not fall back to compilation")
 		} else {
-			if d.Role == "master" {
+			verifyNginx := d.Role == "master"
+			if boundReceipt != nil {
+				verifyNginx = boundReceipt.Role == "master"
+			}
+			if verifyNginx {
 				var nginx release.ImageProof
 				nginx, e = d.ImageInspector.Prove(ctx, proof.Revision, "nginx", arch)
 				if e == nil && boundReceipt != nil && (nginx.Revision != target || nginx.Image != boundReceipt.ServiceImages["nginx"]) {

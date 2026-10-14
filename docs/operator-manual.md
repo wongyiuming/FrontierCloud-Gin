@@ -43,7 +43,8 @@ commands bypass local discovery, including during a Docker outage.
 without a command (for example `foc --json`) still select `status`.
 `foc version` reports the host tool version;
 `foc status` reports the deployment version. These versions are independent.
-For an existing deployment, `doctor` verifies the full revision from its validated
+For an existing deployment, `doctor` selects its recorded role and database,
+rejecting conflicting explicit flags. It verifies the full revision from its validated
 receipt and compares public Web/Nginx proofs with the recorded immutable digests.
 A changed digest, invalid receipt or registry failure remains blocking; verification
 never replaces the lock with `latest` or pulls/restarts the deployment.

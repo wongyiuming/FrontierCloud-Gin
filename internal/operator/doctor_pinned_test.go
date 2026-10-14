@@ -53,6 +53,7 @@ func TestDoctorVerifiesRecordedRevisionAndPinnedDigestWithoutWrites(t *testing.T
 				}
 				d.Runner = runner
 				runner.config.Services["web"].Environment["DEPLOYMENT_MODE"] = "only_stroge"
+				delete(runner.config.Services, "nginx")
 			}
 			receipt, err := d.Install(context.Background(), strings.Repeat("a", 40), "amd64", fakeEvidence{true}, &fakeImages{})
 			if err != nil {

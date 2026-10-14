@@ -90,7 +90,22 @@ func run(args []string) (exitCode int) {
 		} else if len(args) != 1 {
 			return 2
 		}
-		d, err := operator.New(*directory, *role, *database)
+		var d *operator.Deployment
+		var err error
+		if args[0] == "doctor" {
+			roleExplicit, databaseExplicit := false, false
+			flags.Visit(func(f *flag.Flag) {
+				if f.Name == "role" {
+					roleExplicit = true
+				}
+				if f.Name == "database" {
+					databaseExplicit = true
+				}
+			})
+			d, err = doctorDeployment(*directory, *role, *database, roleExplicit, databaseExplicit)
+		} else {
+			d, err = operator.New(*directory, *role, *database)
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
