@@ -40,6 +40,26 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 	if flags.Parse(args[2:]) != nil || flags.NArg() != 0 {
 		return 2
 	}
+	if action == "backup plan" {
+		d, r, e := operator.Open(directory)
+		if e != nil {
+			fmt.Fprintln(errorWriter, e)
+			return 2
+		}
+		d.Runner = dockerRunner{d.Directory}
+		plan, e := d.BackupCapacity(ctx, r, *output)
+		if e != nil {
+			fmt.Fprintln(errorWriter, e)
+			return 2
+		}
+		if e = json.NewEncoder(outputWriter).Encode(plan); e != nil {
+			return 2
+		}
+		if !plan.Fits {
+			return 2
+		}
+		return 0
+	}
 	var report recovery.Report
 	var err error
 	switch action {

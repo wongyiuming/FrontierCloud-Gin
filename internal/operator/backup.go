@@ -77,11 +77,19 @@ func (d *Deployment) volumeRoot(ctx context.Context, name string) (string, error
 // directory, reopens traffic or claims to include another node's media/state.
 func (d *Deployment) Backup(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool) (operationResult recovery.Report, operationErr error) {
 	var empty recovery.Report
+	if receipt.Database == "mysql" && !externalWritersStopped {
+		return empty, errors.New("MySQL backup requires explicit confirmation that external database writers are stopped")
+	}
 	done, e := d.AcquireOperation()
 	if e != nil {
 		return empty, e
 	}
 	defer func() { operationErr = errors.Join(operationErr, done()) }()
+	if freeze {
+		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+			return empty, e
+		}
+	}
 	return d.backupLocked(ctx, receipt, output, freeze, externalWritersStopped)
 }
 
@@ -170,6 +178,9 @@ func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, outpu
 		}
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
+		}
+		if e = d.requireBackupCapacity(ctx, receipt, output); e != nil {
+			return e
 		}
 		workspace, e := os.MkdirTemp(filepath.Dir(output), ".fc-backup-")
 		if e != nil {

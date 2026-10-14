@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 )
@@ -43,8 +45,21 @@ func (d dockerRunner) RunFrom(ctx context.Context, input io.Reader, name string,
 	return nil
 }
 func (d dockerRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return d.RunEnv(ctx, nil, name, args...)
+}
+func (d dockerRunner) RunEnv(ctx context.Context, environment map[string]string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = d.Directory
+	if environment != nil {
+		for _, entry := range os.Environ() {
+			if _, override := environment[strings.SplitN(entry, "=", 2)[0]]; !override {
+				cmd.Env = append(cmd.Env, entry)
+			}
+		}
+		for key, value := range environment {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+	}
 	var out limitedBuffer
 	cmd.Stdout = &out
 	// Arbitrary Docker errors may contain credentials or signed URLs. Only

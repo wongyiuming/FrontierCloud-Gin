@@ -110,6 +110,19 @@ func digestBytes(raw []byte) string {
 // Prove accepts latest only for discovery. Its returned revision is then used
 // for every component of an installation; no independent moving aliases.
 func (r *RegistryClient) Prove(ctx context.Context, target, component, architecture string) (ImageProof, error) {
+	return r.prove(ctx, target, component, architecture, false)
+}
+
+// ProveOperator permits a newer tool generation without permitting the old
+// operator to apply that generation's database upgrade. No moving alias is used.
+func (r *RegistryClient) ProveOperator(ctx context.Context, target, architecture string) (ImageProof, error) {
+	if !ValidSHA(target) {
+		return ImageProof{}, ErrImageIntegrity
+	}
+	return r.prove(ctx, target, "web", architecture, true)
+}
+
+func (r *RegistryClient) prove(ctx context.Context, target, component, architecture string, operatorOnly bool) (ImageProof, error) {
 	var proof ImageProof
 	repository, err := ImageRepository(component)
 	if err != nil || target != "latest" && !ValidSHA(target) || architecture != "amd64" && architecture != "arm64" || r == nil || r.Client == nil {
@@ -197,11 +210,12 @@ func (r *RegistryClient) Prove(ctx context.Context, target, component, architect
 	}
 	labels := config.Config.Labels
 	revision := labels["frontiercloud.revision"]
+	generation, generationErr := strconv.Atoi(labels["frontiercloud.schema-generation"])
 	if config.OS != "linux" || config.Architecture != architecture {
 		return proof, ErrImagePlatform
 	}
-	if !ValidSHA(revision) || target != "latest" && revision != target || labels["org.opencontainers.image.revision"] != revision || labels["org.opencontainers.image.source"] != ImageSource || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.schema-generation"] != strconv.Itoa(migrations.Generation) || labels["frontiercloud.automatic-tls"] != "1" || component != "nginx" && labels["frontiercloud.release-manifest-version"] != "1" {
+	if generationErr != nil || generation < migrations.Generation || generation > 1<<31-1 || labels["frontiercloud.schema-generation"] != strconv.Itoa(generation) || !operatorOnly && generation != migrations.Generation || !ValidSHA(revision) || target != "latest" && revision != target || labels["org.opencontainers.image.revision"] != revision || labels["org.opencontainers.image.source"] != ImageSource || labels["frontiercloud.component"] != component || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.automatic-tls"] != "1" || component != "nginx" && labels["frontiercloud.release-manifest-version"] != "1" {
 		return proof, ErrImageIntegrity
 	}
-	return ImageProof{repository + "@" + digest, revision, m.Config.Digest, "linux/" + architecture, migrations.Generation}, nil
+	return ImageProof{repository + "@" + digest, revision, m.Config.Digest, "linux/" + architecture, generation}, nil
 }

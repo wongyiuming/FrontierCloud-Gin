@@ -50,6 +50,30 @@ A changed digest, invalid receipt or registry failure remains blocking; verifica
 never replaces the lock with `latest` or pulls/restarts the deployment.
 
 
+For subsequent tool updates, use `foc self-update --revision FULL_PUBLISHED_MAIN_SHA`.
+It verifies reviewed-main/source-CI and public immutable Web image evidence, then
+runs the embedded bounded Compose installer. It refuses active deployment operations
+and does not change the application's receipt, images, data or traffic. Installation
+and refresh preserve the same host ownership/collision checks.
+Tool refresh can verify a newer image generation; business upgrade still requires
+the refreshed tool's supported migration assets and an approved upgrade plan.
+Tool refresh refuses images from an older database generation.
+
+Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
+The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
+configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
+It rejects metadata above the archive's 16 MiB manifest limit. It does not hash
+files, create an archive or freeze writers. Runtime facts come from the existing
+Web process or a one-shot read-only offline command with image pulls disabled.
+MySQL sizing streams a
+read-only logical snapshot to a counter. A live estimate is not a reservation; apply
+repeats it after image pulls, before maintenance and under the offline boundary.
+Pre-freeze capacity refusal leaves the source running. A later offline recheck
+failure preserves the fence. Recovery-set capture sums every member's archive and
+scratch bounds on the shared output filesystem before freezing any member.
+Unclassified mounts, unsafe
+entries, inaccessible roots and missing output parents are errors, not green estimates.
+
 Installing a newer operator bundle refreshes this managed host entry and binary;
 it does not update running images or modify deployment configuration. Existing
 upgrade/backup approvals and recovery boundaries remain unchanged.
