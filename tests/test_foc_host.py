@@ -21,6 +21,8 @@ class HostEntryTests(unittest.TestCase):
         self.registry = self.root / 'registry'
         self.labels = self.root / 'labels'
         self.labels.write_text('')
+        self.scratch = self.root / 'scratch'
+        self.scratch.mkdir()
         self.backend.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CALLS"\nexit 0\n')
         self.backend.chmod(0o755)
         docker = self.root / 'docker'
@@ -32,7 +34,7 @@ class HostEntryTests(unittest.TestCase):
         self.entry = self.root / 'foc'
         self.entry.write_text(source)
         self.env = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'],
-                        CALLS=str(self.calls), LABELS=str(self.labels))
+                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch))
 
     def deployment(self, name):
         path = self.root / name
@@ -50,6 +52,7 @@ class HostEntryTests(unittest.TestCase):
         self.labels.write_text((str(deployment) + '\n') * 3)
         self.assertEqual(self.invoke().returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(deployment), 'status'])
+        self.assertEqual(list(self.scratch.iterdir()), [])
 
     def test_multiple_deployments_refuse_before_backend(self):
         a, b = self.deployment('master'), self.deployment('storage')
@@ -85,6 +88,13 @@ class HostEntryTests(unittest.TestCase):
         self.env['DOCKER_EXIT'] = '1'
         self.assertEqual(self.invoke('version').returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['version'])
+
+    def test_help_needs_no_deployment_or_docker(self):
+        self.env['DOCKER_EXIT'] = '1'
+        result = self.invoke('--help')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('foc [--directory DIR]', result.stdout)
+        self.assertFalse(self.calls.exists())
 
     def test_unrelated_and_symlinked_receipts_are_not_selected(self):
         other = self.root / 'unrelated'

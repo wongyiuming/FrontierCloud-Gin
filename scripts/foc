@@ -3,7 +3,10 @@
 set -eu
 backend=/usr/local/lib/frontiercloud/foc/fc
 registry=/etc/frontiercloud/foc-deployments
-case "${1:-}" in version|--help|-h) exec "$backend" "$@" ;; esac
+case "${1:-}" in
+  version) exec "$backend" "$@" ;;
+  --help|-h) printf '%s\n' 'foc [--directory DIR] [--json] COMMAND' 'With no command, inspect the single discovered deployment.' 'Commands: status, logs, diagnose, restart, doctor, install, upgrade, backup, restore, node, version.'; exit 0 ;;
+esac
 directory=''
 pending=false
 explicit=false
@@ -20,7 +23,8 @@ if [ "$explicit" = true ]; then
   exec "$backend" "$@"
 fi
 work=$(mktemp -d)
-trap 'rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"' EXIT
+cleanup() { rm -f "$work/labels" "$work/candidates" "$work/unique"; rmdir "$work"; }
+trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 : > "$work/candidates"
@@ -52,4 +56,6 @@ case "$count" in
      cat "$work/unique" >&2; exit 2 ;;
 esac
 [ "$#" -gt 0 ] || set -- status
+cleanup
+trap - EXIT
 exec "$backend" --directory "$directory" "$@"
