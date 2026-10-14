@@ -1,0 +1,50 @@
+{
+  "host": "192.168.6.201",
+  "tested_source": "cba31fff8220abaaa914c426d24b3f8f69606859",
+  "source_checks": {
+    "command": "bash scripts/test-ci-source.sh",
+    "exit_code": 0,
+    "python_cases": 205,
+    "python_skipped": 2
+  },
+  "race": {
+    "packages": [
+      "./internal/operator",
+      "./internal/release",
+      "./cmd/fc"
+    ],
+    "command": "go test -race -count=1 -p=1 ./internal/operator ./internal/release ./cmd/fc",
+    "exit_code": 0
+  },
+  "regressions": [
+    "master and storage recorded full revision instead of digest-as-version",
+    "Web digest drift blocks",
+    "Nginx digest drift blocks",
+    "registry error blocks",
+    "invalid receipt refuses registry fallback",
+    "no pull/run/start/stop/exec or durable state mutation by doctor"
+  ],
+  "actual_public_registry": {
+    "revisions": [
+      "bb1b1430b4a7066b9c706e53757331e78cb5595d",
+      "2aa7bc71782f4f1fa58113882ffeab1c9a47e19a"
+    ],
+    "test": "TestDoctorActualPublicPinnedImages",
+    "exit_codes": [
+      0,
+      0
+    ],
+    "scope": "Actual anonymous GHCR Web/Nginx proofs with isolated synthetic Docker config responses and temporary receipts; not actual live-site installation or upgrade acceptance."
+  },
+  "earlier_fixture_attempt": {
+    "source": "417ee142f3bc7f2040499886cc680e05a03fde4f",
+    "exit_code": 1,
+    "before_doctor_exit": 3,
+    "after_doctor_exit": 2,
+    "reason": "Historical private acceptance fixture references an unpublished revision. Old doctor incorrectly proved the current latest instead; corrected doctor refused the recorded unavailable release. Original log retained, not counted as successful public deployment acceptance."
+  },
+  "development_archive_integrity_verified": true,
+  "database_ddl_changed": false,
+  "production_changed": false,
+  "command_audit": "C:/Users/wyium/.codex/tmp/foc-host-20261014/command-audit.json"
+}
