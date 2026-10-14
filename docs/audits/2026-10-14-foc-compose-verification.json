@@ -1,0 +1,39 @@
+{
+  "host": "192.168.6.201",
+  "tested_source": "915f3f59e65dc964c5a75a1bfbf27e8abd42258a",
+  "source_checks": {"command": "bash scripts/test-ci-source.sh", "exit_code": 0, "python_cases": 198, "python_skipped": 2},
+  "foc_regression_cases": 11,
+  "installer": {
+    "deployment": "docker compose -f compose.foc.yaml run --rm --no-deps install",
+    "first_install_exit_code": 0,
+    "repeat_install_exit_code": 0,
+    "network_mode": "none",
+    "read_only_container_root": true,
+    "capabilities": "ALL dropped",
+    "docker_socket_mounted": false,
+    "writable_host_bind_count": 3,
+    "application_deployment_bind_read_only": true,
+    "resident_installer_containers_after_run": 0
+  },
+  "global_entry": {
+    "path": "/usr/local/bin/foc",
+    "root_login_from_slash": "passed",
+    "wyium_login_path_and_version": "passed",
+    "bash_fc_builtin_preserved": true,
+    "no_command_defaults_to_status": true,
+    "auto_status_equals_explicit_backend_status": true,
+    "actual_backup_integrity_verified": true,
+    "historical_stopped_fixture_status_exit_code": 2,
+    "healthy_live_site_claimed": false
+  },
+  "private_fixture_image": "foc-install-test:915f3f5",
+  "fixture_operator_binary_revision": "fc6adc75c7cdb9064163f938a31f176add843e0a",
+  "fixture_public_parent_digest": "sha256:73f1864caa76fd3b8440aa46d4ac237c3646bab1088bcda4520bea22cc4a3e23",
+  "fixture_scope": "Private overlay tests the committed installer/launcher with an unchanged published operator binary; not a claim that this candidate is publicly released.",
+  "previous_manual_install": "Removed before Compose validation; not counted as Compose acceptance.",
+  "previous_failed_runs": "Build-context omissions and Compose PID-limit compatibility were corrected; original failed logs retained.",
+  "business_go_inputs_changed": false,
+  "database_generation": 7,
+  "production_updated_at_recording": false,
+  "private_command_audit_directory": "C:/Users/wyium/.codex/tmp/foc-host-20261014"
+}
