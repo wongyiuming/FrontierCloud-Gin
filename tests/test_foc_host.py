@@ -34,7 +34,8 @@ class HostEntryTests(unittest.TestCase):
         self.entry = self.root / 'foc'
         self.entry.write_text(source)
         self.env = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'],
-                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch))
+                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch),
+                        XDG_STATE_HOME=str(self.root / 'user-state'))
 
     def deployment(self, name):
         path = self.root / name
@@ -72,6 +73,26 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.invoke('--directory=', 'restart').returncode, 2)
         self.assertFalse(self.calls.exists())
 
+    def test_sanitized_environment_bypasses_user_registry_for_explicit_commands(self):
+        self.env.pop('HOME', None)
+        self.env.pop('XDG_STATE_HOME', None)
+        self.env['DOCKER_EXIT'] = '1'
+        for args in (['--directory', '/chosen path', 'status'], ['version']):
+            with self.subTest(args=args):
+                result = self.invoke(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls.read_text().splitlines(), args)
+        self.assertEqual(self.invoke('--help').returncode, 0)
+
+    def test_sanitized_environment_still_discovers_system_registry(self):
+        self.env.pop('HOME', None)
+        self.env.pop('XDG_STATE_HOME', None)
+        deployment = self.deployment('system-only')
+        self.registry.write_text(str(deployment) + '\n')
+        result = self.invoke('status')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(deployment), 'status'])
+
     def test_missing_registered_receipt_fails_closed(self):
         self.registry.write_text('/missing/deployment\n')
         self.labels.write_text(str(self.deployment('other')) + '\n')
@@ -84,10 +105,31 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.invoke('restart').returncode, 2)
         self.assertFalse(self.calls.exists())
 
+    def test_user_registration_survives_container_removal(self):
+        native=self.deployment('remembered')
+        registry=self.root/'user-state/frontiercloud/foc-deployments'
+        registry.parent.mkdir(parents=True)
+        registry.write_text(str(native)+'\n')
+        self.labels.write_text('')
+        self.assertEqual(self.invoke('restart').returncode,0)
+        self.assertEqual(self.calls.read_text().splitlines(),['--directory',str(native),'restart'])
+
     def test_version_works_without_docker(self):
         self.env['DOCKER_EXIT'] = '1'
         self.assertEqual(self.invoke('version').returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['version'])
+
+    def test_auto_discovery_does_not_register_existing_nonready_receipts(self):
+        deployment = self.deployment('interrupted')
+        self.registry.write_text('@compose\n')
+        self.labels.write_text(str(deployment) + '\n')
+        self.backend.write_text('#!/bin/sh\nfor arg do [ "$arg" != compose-register ] || exit 33; done\nprintf "%s\\n" "$@" > "$CALLS"\n')
+        for state, args in [('prepared', ['install', 'resume']), ('upgrade_fenced', ['upgrade'])]:
+            with self.subTest(state=state):
+                (deployment / '.fc-deployment.json').write_text('{"state":"' + state + '"}')
+                result = self.invoke(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(deployment), *args])
 
     def test_help_needs_no_deployment_or_docker(self):
         self.env['DOCKER_EXIT'] = '1'

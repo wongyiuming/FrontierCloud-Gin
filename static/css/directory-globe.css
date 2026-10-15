@@ -41,6 +41,25 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; c
 .orbit-list .card-grid { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 32px 24px; }
 .orbit-list .card { position: static; width: 100%; padding: 10px; will-change: auto; }
 .orbit-list .card-title { text-align: left; padding-top: 10px; }
+.frontier-covers .orbit-layout { grid-template-columns: minmax(0, 1fr); }
+.frontier-covers .orbit-intro, .frontier-covers .page-brand-suffix { display: none; }
+.frontier-covers .globe-toolbar { margin: auto; }
+.frontier-covers #globeHint { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.frontier-covers .globe-stage { height: auto; min-height: 0; width: 100%; margin: 0 auto; touch-action: auto; cursor: default; border-radius: 0; }
+.frontier-covers .card-grid { position: relative; inset: auto; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.frontier-covers .card-grid::-webkit-scrollbar { display: none; }
+.album-page { flex: 0 0 100%; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 12px; scroll-snap-align: start; scroll-snap-stop: always; }
+.frontier-covers .card { position: relative; top: auto; left: auto; align-self: start; width: 100%; padding: 0; min-width: 0; min-height: 0; will-change: auto; transition: none; }
+.frontier-covers .card-artwork { border-radius: 16px; }
+.frontier-covers .card-title { position: absolute; inset: auto 0 0; padding: 26px 8px 8px; border-radius: 0 0 16px 16px; background: linear-gradient(transparent, #071014dd); font-size: 12px; white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; }
+.frontier-covers .orbit-dragging .card-grid { scroll-snap-type: none; cursor: grabbing; }
+.album-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; min-height: 52px; }
+.album-pagination[hidden] { display: none; }
+.album-pages { display: flex; align-items: center; overflow-x: auto; max-width: 240px; }
+.album-page-dot { flex: 0 0 28px; width: 28px; height: 24px; display: inline-flex; align-items: center; }
+.album-page-dot::after { content: ''; display: block; height: 6px; width: 6px; margin: auto; border-radius: 8px; background: #70827b; transition: width .2s, background .2s; }
+.album-page-dot[aria-current="true"]::after { width: 18px; background: var(--orbit-mint); }
+#albumPageStatus { color: #8d9f9c; font-size: 12px; min-width: 32px; }
 @media (max-width: 650px) {
     .container { width: 92%; padding: 16px 0; }
     .header { min-height: 48px; }
@@ -57,5 +76,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; c
     #globeHint { font-size: 9px; }
     .globe-stage { height: max(350px, calc(100svh - 280px)); }
     .orbit-list .card-grid { grid-template-columns: repeat(2, 1fr); gap: 22px 16px; }
+    .frontier-covers .globe-stage { width: 100%; }
+    .album-page { gap: 12px 10px; padding: 8px 2px; }
+    .frontier-covers .card-artwork { border-radius: 12px; }
+    .frontier-covers .card-title { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .card { will-change: auto; } * { transition: none !important; } }

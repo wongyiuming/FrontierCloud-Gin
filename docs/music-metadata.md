@@ -11,8 +11,24 @@ PNG, WebP or GIF artwork. It does not decode audio, transcode or execute externa
 tools. Storage-node reads stop after the tag prefix. Derived metadata and images
 share a cache bounded to 256 entries and 32 MiB. File size/modification time or
 remote object identity/ETag key the cache; cover requests revalidate the source
-before serving cached artwork. Encrypted objects remain opaque and use fallback
-display metadata. Non-MP3 audio formats retain their existing playback behavior.
+before serving cached artwork. Non-MP3 audio formats retain their existing
+playback behavior.
+
+Encrypted MP3 metadata is derived in the authorized browser through the existing
+service-worker Range adapter. The Master and storage nodes never decrypt it.
+ID3 tag reads are bounded to 8 MiB, pictures to 4 MiB, and at most two metadata
+jobs run concurrently. The player reads only the selected track's tags, rather
+than scanning the entire encrypted playlist. Covers are deduplicated by SHA-256 in a page-local 32 MiB
+blob pool and revoked on page exit; decrypted tags/covers never enter session
+storage, uploads, SQL, or a server-side cache. Directory listings contain only
+an artwork endpoint URL per album; they do not embed track descriptors. The
+browser requests that endpoint only for a visible card, receiving its plain
+cover or at most eight visible encrypted track descriptors as candidates. Directory
+scans admit one read at a time and reselect from the currently visible
+page after each result; paging away leaves at most one already admitted read.
+Existing file-ID, visibility, replacement and authorization checks apply to every Range.
+Metadata failures retain filename/default art and do not block playback. Already
+uploaded encrypted files require no re-upload or database migration.
 
 Cover URLs identify the current managed music path and resource ID through
 `/api/v1/media/cover`. Tracks without their own artwork may share another
@@ -21,11 +37,12 @@ representative artwork from visible plain tracks; a directory without embedded
 artwork uses a consistent album placeholder. Artwork follows catalog visibility
 and mutations; it does not introduce separately managed image files.
 
-The directory globe uses perspective, GPU card transforms and precomputed
-latitude/longitude geometry. Pointer and wheel input interpolate toward a target,
-with time-based inertia and damping. Rendering stops when movement settles or
-the document is hidden. Keyboard navigation, a cover-grid alternative and reduced
-motion remain available.
+Frontier UI shows nine large album covers per horizontally snapped page. Native
+touch scrolling, mouse drag, wheel and keyboard navigation share the
+same ordered cards; reduced motion disables animated page changes. Vertical
+wheel scroll remains available whenever large covers exceed the viewport.
+The existing list layout retains its information sidebar while Frontier UI hides those
+labels. No animation loop, frontend framework or rendering engine is introduced.
 
 `scripts/ops/import_music.py` imports an artist/album/MP3 tree through normal
 Standalone Admin uploads. Its resumable manifest records source hashes and

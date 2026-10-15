@@ -71,6 +71,9 @@ func run(args []string) (exitCode int) {
 		return recoveryCommand(ctx, *directory, args)
 	}
 	if args[0] == "upgrade" {
+		if len(args) == 1 || strings.HasPrefix(args[1], "-") {
+			return simpleUpgradeCommand(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured)
+		}
 		return upgradeCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}
 	emit := func(v any) error { return writeOperatorOutput(os.Stdout, *structured, v) }
@@ -85,6 +88,10 @@ func run(args []string) (exitCode int) {
 		receipt, e = d.ResumeInstall(ctx, receipt)
 		if e != nil {
 			fmt.Fprintln(os.Stderr, e)
+			return 2
+		}
+		if e = rememberDeployment(ctx, d.Directory); e != nil {
+			fmt.Fprintln(os.Stderr, "installation completed but deployment registration failed:", e)
 			return 2
 		}
 		if e := emit(receipt); e != nil {
@@ -168,6 +175,10 @@ func run(args []string) (exitCode int) {
 		receipt, err := d.Install(ctx, *revision, operator.Architecture(string(raw)), v, registry)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		if err = rememberDeployment(ctx, d.Directory); err != nil {
+			fmt.Fprintln(os.Stderr, "installation completed but deployment registration failed:", err)
 			return 2
 		}
 		if e := emit(receipt); e != nil {

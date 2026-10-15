@@ -44,7 +44,7 @@ type Service struct {
 	tagsMu           sync.Mutex
 	tagsCache        map[string]MusicTags
 	tagsBytes        int
-	categoryCovers   map[string]string
+	categoryCovers   map[string]directoryArtwork
 	coverGeneration  uint64
 }
 

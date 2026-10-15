@@ -48,3 +48,32 @@ func TestMusicTagsMalformedBoundedFallback(t *testing.T) {
 		t.Fatal("active image accepted")
 	}
 }
+
+func TestMusicTagsV24DataLengthIndicator(t *testing.T) {
+	jpeg := append([]byte{255, 216, 255, 224, 0, 16, 'J', 'F', 'I', 'F', 0}, make([]byte, 600)...)
+	art := append([]byte("\x03image/jpeg\x00\x03\x00"), jpeg...)
+	withIndicator := func(name string, body []byte, invalid bool, unsync bool) []byte {
+		n := len(body)
+		indicator := []byte{byte(n>>21) & 127, byte(n>>14) & 127, byte(n>>7) & 127, byte(n) & 127}
+		if invalid {
+			indicator[0] = 128
+		}
+		if unsync {
+			body = bytes.ReplaceAll(body, []byte{255}, []byte{255, 0})
+		}
+		frame := tagFrame(4, name, append(indicator, body...))
+		frame[9] = 1
+		if unsync {
+			frame[9] |= 2
+		}
+		return frame
+	}
+	tags := readMusicTags(bytes.NewReader(tagFixture(4, withIndicator("TIT2", []byte("\x03Indicator title"), false, false), withIndicator("APIC", art, false, true))))
+	if tags.Title != "Indicator title" || !bytes.Equal(tags.Picture, jpeg) {
+		t.Fatal("valid data length indicator lost metadata", tags)
+	}
+	tags = readMusicTags(bytes.NewReader(tagFixture(4, withIndicator("TIT2", []byte("\x03Invalid"), true, false))))
+	if tags.Title != "" {
+		t.Fatal("malformed data length accepted", tags)
+	}
+}

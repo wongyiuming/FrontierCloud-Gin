@@ -19,7 +19,7 @@ function element() {
     };
 }
 
-function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl} = {}) {
+function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl, windowExtras = {}, now = Date.now} = {}) {
     const grid = element();
     const heading = element();
     heading.textContent = '前沿音乐 - 達明一派';
@@ -39,9 +39,11 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
             location: {href: 'https://catalog.fixture.invalid/api/v1/media/music/category?path=music%2Fartist'},
             frontierCloudCatalogConfig: config ?? {bootstrap: [{name: 'Album', url: '/album'}], cacheKey: '', url: ''},
             addEventListener: (event, callback, options) => listeners.push({event, callback, options}),
+            ...windowExtras,
         },
         sessionStorage: {getItem: () => null, setItem() {}},
         URL,
+        Date: {now},
         // Do not fire DOMContentLoaded, idle timers, or any observation script:
         // they represent an independent resource download that never completes.
         setTimeout() {},
@@ -51,7 +53,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
         },
     };
     vm.runInNewContext(source, context);
-    return {grid, elements, listeners, requests};
+    return {grid, elements, listeners: listeners.filter(item => item.event === 'DOMContentLoaded'), artworkListeners: listeners, requests};
 }
 
 {
@@ -96,4 +98,59 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(page.grid.children[0].href, '/fresh');
 }
 
+{
+    let visible = [], finish, rejectRead, clock = 10000;
+    const reads = [];
+    const page = fixture({
+        now: () => clock,
+        config: {bootstrap: Array.from({length: 18}, (_, i) => ({name: String(i), artwork_url: `/api/v1/media/catalog/artwork?path=${i}`}))},
+        fetchImpl: async url => ({ok: true, json: async () => ({metadata_tracks: Array.from({length: 8}, (_, n) => `${new URL(url, 'https://fixture').searchParams.get('path')}/${n}`)})}),
+        windowExtras: {
+            innerHeight: 800,
+            FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible},
+            FrontierMusicMetadata: {metadata(track) { reads.push(track); return new Promise((resolve, reject) => { finish = resolve; rejectRead = reject; }); }},
+        },
+    });
+    page.grid.contains = card => page.grid.children.includes(card);
+    page.grid.children.forEach(card => {card.getBoundingClientRect = () => ({top: 0, bottom: 200});});
+    const hydrate = page.artworkListeners.find(item => item.event === 'frontier-directory-visible').callback;
+    visible = page.grid.children.slice(0, 9); hydrate();
+    await new Promise(setImmediate);
+    assert.deepEqual(reads, ['0/0'], 'directory scans must not enqueue nine cards at once');
+    visible = page.grid.children.slice(9); hydrate();
+    finish({}); await new Promise(setImmediate);
+    assert.deepEqual(reads, ['0/0', '9/0'], 'after paging away, skip all remaining old-page candidates');
+    assert.deepEqual(page.requests.map(item => item.url), ['/api/v1/media/catalog/artwork?path=0', '/api/v1/media/catalog/artwork?path=9'], 'offscreen directories must not fetch candidate descriptors');
+    visible = []; finish({}); await new Promise(setImmediate);
+    assert.equal(reads.length, 2, 'no visible cards means no further reads');
+    visible = page.grid.children.slice(0, 9); hydrate();
+    assert.equal(reads.at(-1), '0/1', 'returning to a page resumes its bounded candidate cursor');
+    visible = []; finish({}); await new Promise(setImmediate);
+    visible = page.grid.children.slice(0, 1); hydrate();
+    assert.equal(reads.at(-1), '0/2');
+    rejectRead(new Error('transient Range failure')); await new Promise(setImmediate);
+    const beforeRetry = reads.length; hydrate();
+    assert.equal(reads.length, beforeRetry, 'artwork failure needs backoff, not a tight retry loop');
+    clock += 2100; hydrate();
+    assert.equal(reads.at(-1), '0/2', 'failed candidate must remain available for a later visible retry');
+    visible = []; finish({}); await new Promise(setImmediate);
+}
+
+{
+    let visible = [], clock = 10000, attempts = 0, reads = 0;
+    const page = fixture({
+        now: () => clock,
+        config: {bootstrap: [{name: 'Retry endpoint', artwork_url: '/api/v1/media/catalog/artwork?path=retry'}]},
+        fetchImpl: async () => (++attempts === 1 ? {ok: false} : {ok: true, json: async () => ({metadata_tracks: ['only']})}),
+        windowExtras: {innerHeight: 800, FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible}, FrontierMusicMetadata: {metadata: async () => { reads++; return {}; }}},
+    });
+    page.grid.contains = card => page.grid.children.includes(card);
+    page.grid.children[0].getBoundingClientRect = () => ({top: 0, bottom: 200});
+    visible = page.grid.children;
+    const hydrate = page.artworkListeners.find(item => item.event === 'frontier-directory-visible').callback;
+    hydrate(); await new Promise(setImmediate); hydrate();
+    assert.equal(attempts, 1, 'candidate endpoint failure must back off');
+    clock += 2100; hydrate(); await new Promise(setImmediate);
+    assert.equal(attempts, 2); assert.equal(reads, 1, 'candidate endpoint must be retryable after a transient failure');
+}
 console.log('catalog-startup-smoke-ok');

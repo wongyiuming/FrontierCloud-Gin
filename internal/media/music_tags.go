@@ -199,11 +199,17 @@ func readMusicTags(reader io.Reader) MusicTags {
 		}
 		frame := data[width : width+length]
 		data = data[width+length:]
-		if version == 3 && flags&0xe0 != 0 || version == 4 && flags&0x4d != 0 {
+		if version == 3 && flags&0xe0 != 0 || version == 4 && flags&0x4c != 0 {
 			continue
 		}
 		if version == 4 && (header[5]&128 != 0 || flags&2 != 0) {
 			frame = unSync(frame)
+		}
+		if version == 4 && flags&1 != 0 {
+			if len(frame) < 4 || syncSafe(frame[:4]) != len(frame)-4 {
+				continue
+			}
+			frame = frame[4:]
 		}
 		switch name {
 		case "TIT2", "TT2":

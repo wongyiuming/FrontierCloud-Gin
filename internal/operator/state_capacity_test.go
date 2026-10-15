@@ -87,6 +87,11 @@ func TestMySQLCredentialDriftRefusedWithoutReplacingSecret(t *testing.T) {
 	if e := os.WriteFile(file, []byte("current-test-password"), 0600); e != nil {
 		t.Fatal(e)
 	}
+	if e := os.WriteFile(filepath.Join(dir, "mysql_password"), []byte("application-test-password"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	appHash := sha256.Sum256([]byte("application-test-password"))
+	appEntry := recovery.Entry{Path: "runtime_secrets/mysql_password", SHA256: hex.EncodeToString(appHash[:])}
 	h := sha256.Sum256([]byte("archived-test-password"))
 	entry := recovery.Entry{Path: "runtime_secrets/mysql_root_password", SHA256: hex.EncodeToString(h[:])}
 	if e := checkMySQLRecoveryCredential(map[string]string{"runtime_secrets": dir}, []recovery.Entry{entry}); e == nil {
@@ -98,7 +103,18 @@ func TestMySQLCredentialDriftRefusedWithoutReplacingSecret(t *testing.T) {
 	}
 	h = sha256.Sum256(actual)
 	entry.SHA256 = hex.EncodeToString(h[:])
-	if e = checkMySQLRecoveryCredential(map[string]string{"runtime_secrets": dir}, []recovery.Entry{entry}); e != nil {
+	if e = checkMySQLRecoveryCredential(map[string]string{"runtime_secrets": dir}, []recovery.Entry{entry, appEntry}); e != nil {
 		t.Fatal(e)
+	}
+	appFile := filepath.Join(dir, "mysql_password")
+	if e = os.WriteFile(appFile, []byte("rotated-application-password"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = checkMySQLRecoveryCredential(map[string]string{"runtime_secrets": dir}, []recovery.Entry{entry, appEntry}); e == nil {
+		t.Fatal("application credential drift admitted despite unchanged root credential")
+	}
+	appActual, e := os.ReadFile(appFile)
+	if e != nil || string(appActual) != "rotated-application-password" {
+		t.Fatal("application credential refusal changed live state", e)
 	}
 }

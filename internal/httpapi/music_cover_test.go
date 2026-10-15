@@ -54,12 +54,25 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 	}
 	found := false
 	for _, entry := range categories.Entries {
-		if entry.Name == "artist" && entry.Cover == track.Cover {
+		if entry.Name == "artist" && entry.ArtworkURL != "" {
+			if len(entry.MetadataTracks) != 0 || entry.Cover != "" {
+				t.Fatal("listing eagerly embedded artwork", entry)
+			}
+			response := request(router, "GET", entry.ArtworkURL, "")
+			var artwork media.CategoryArtwork
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &artwork) != nil || artwork.Cover != track.Cover {
+				t.Fatal(response.Code, response.Body.String())
+			}
 			found = true
 		}
 	}
 	if !found {
 		t.Fatal(categories)
+	}
+	for _, target := range []string{"/api/v1/media/catalog/artwork?path=music/missing", "/api/v1/media/catalog/artwork?path=video/artist", "/api/v1/media/catalog/artwork?path=../music/artist"} {
+		if response := request(router, "GET", target, ""); response.Code != 404 {
+			t.Fatal("invalid artwork path accepted", target, response.Code)
+		}
 	}
 	// A deleted file must not be disclosed from the derived-picture cache.
 	if err := os.Remove(file); err != nil {

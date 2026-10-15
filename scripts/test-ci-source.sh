@@ -15,12 +15,14 @@ node tests/media_crypto_build_smoke.mjs
 node tests/media_crypto_smoke.mjs
 FC_CRYPTO_COMPILED=1 node tests/media_crypto_smoke.mjs
 node tests/admin_ui_smoke.mjs
+node tests/priority_conflict_smoke.mjs
 node tests/node_retirement_ui_smoke.mjs
 node tests/node_migration_ui_smoke.mjs
 node tests/admin_crypto_upload_smoke.mjs
 node tests/karaoke_encrypted_snapshot_smoke.mjs
 node tests/catalog_startup_smoke.mjs
 node tests/directory_globe_smoke.mjs
+node tests/music_metadata_smoke.mjs
 node tests/player_cache_smoke.mjs
 node tests/network_observation_smoke.mjs
 node tests/audio_continuous_stream_smoke.mjs

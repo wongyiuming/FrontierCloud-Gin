@@ -50,7 +50,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		return nil, err
 	}
 	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}}
-	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/directory-globe.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
+	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
 		content, err := root.ReadFile(name)
 		if err != nil {
 			root.Close()
@@ -89,6 +89,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		c.Redirect(http.StatusSeeOther, "/api/v1/media?ui="+strings.ReplaceAll(id, "-", ""))
 	})
 	group.GET("/catalog/categories", p.categories)
+	group.GET("/catalog/artwork", p.directoryArtwork)
 	group.GET("/catalog/media", p.catalog)
 	group.GET("/cover", p.musicCover)
 	group.GET("/music", func(c *gin.Context) { p.categoryPage(c, "music") })
@@ -180,6 +181,28 @@ func (p *Public) categories(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": p.media.CategoryArtwork(c.Request.Context(), kind, entries, include)})
 }
+func (p *Public) directoryArtwork(c *gin.Context) {
+	name, ok := queryText(c, "path", 1024)
+	if !ok {
+		return
+	}
+	include, ok := queryBool(c, "include_hidden")
+	if !ok {
+		return
+	}
+	artwork, err := p.media.DirectoryArtwork(c.Request.Context(), name, include)
+	if err != nil {
+		if errors.Is(err, media.ErrCategory) {
+			detail(c, 404, "Music category not found")
+		} else {
+			internalError(c, err)
+		}
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	c.JSON(200, artwork)
+}
+
 func (p *Public) catalog(c *gin.Context) {
 	kind, ok := kindQuery(c)
 	if !ok {
@@ -399,6 +422,9 @@ func (p *Public) template(c *gin.Context, name string) (string, error) {
 	content := string(bytes)
 	cryptoScripts := `<script src="` + p.assets["js/compiled/media-crypto-common.js"] + `"></script>` + "\n" + `<script src="` + p.assets["js/compiled/media-crypto.js"] + `"></script>` + "\n"
 	content = strings.Replace(content, "<script", cryptoScripts+"<script", 1)
+	if name == "category.html" || name == "audio-player.html" {
+		content = strings.Replace(content, "<script", `<script src="`+p.assets["js/music-metadata.js"]+`"></script>`+"\n<script", 1)
+	}
 	if name == "audio-player.html" || name == "video-player.html" {
 		content = strings.Replace(content, "<span>四大发明</span>", `<span id="playerDirectoryLabel">当前目录</span>`, 1)
 		if name == "audio-player.html" {

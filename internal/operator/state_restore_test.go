@@ -116,10 +116,13 @@ func TestStateRestoreCanRetryHistoryAndEstablishMissingFence(t *testing.T) {
 
 func TestStateBackupRestoresNativeReceiptsAndMissingDirectoryMetadata(t *testing.T) {
 	d, r, runner, _ := upgradeFixture(t)
+	admission := map[string][]byte{}
 	for _, name := range []string{".native-store", ".native-runtime"} {
-		if e := os.WriteFile(filepath.Join(runner.data, name), []byte("captured-"+name), 0600); e != nil {
+		value, e := os.ReadFile(filepath.Join(runner.data, name))
+		if e != nil {
 			t.Fatal(e)
 		}
+		admission[name] = value
 	}
 	nested := filepath.Join(runner.secrets, "nested")
 	if e := os.Mkdir(nested, 0750); e != nil {
@@ -161,7 +164,7 @@ func TestStateBackupRestoresNativeReceiptsAndMissingDirectoryMetadata(t *testing
 	}
 	for _, name := range []string{".native-store", ".native-runtime"} {
 		raw, e := os.ReadFile(filepath.Join(runner.data, name))
-		if e != nil || string(raw) != "captured-"+name {
+		if e != nil || string(raw) != string(admission[name]) {
 			t.Fatal("native receipt missing", e)
 		}
 	}

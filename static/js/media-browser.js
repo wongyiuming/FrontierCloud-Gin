@@ -5,6 +5,49 @@
     const MAX_CACHE_BYTES = 256 * 1024;
     const HIDDEN_REVEAL_CLICK_LIMIT = 15;
     const HIDDEN_REVEAL_WINDOW_MS = 60 * 1000;
+    const artworkJobs = new WeakMap();
+    let artworkRunning = false;
+
+    function hydrateVisibleArtwork() {
+        if (artworkRunning) return;
+        const grid = document.getElementById('categoryGrid');
+        const cards = window.FrontierDirectoryGlobe?.visibleCards?.() || [];
+        for (const card of cards) {
+            const job = artworkJobs.get(card);
+            if (!job || job.done || job.retryAt > Date.now() || (job.tracks && job.next >= job.tracks.length) || !grid.contains(card)) continue;
+            const box = card.getBoundingClientRect();
+            if (box.bottom < 0 || box.top > window.innerHeight + 200) continue;
+            // Admit only one directory read at a time, then choose from the
+            // current page again. Hidden pages cannot retain queued scans.
+            artworkRunning = true;
+            void (async () => {
+                try {
+                    if (!job.tracks) {
+                        const response = await fetch(job.url, {credentials: 'same-origin', cache: 'no-store'});
+                        if (!response.ok) throw new Error('Artwork candidates unavailable');
+                        const artwork = await response.json();
+                        if (String(artwork.cover || '').startsWith('/api/v1/media/cover?')) {
+                            if (grid.contains(card)) job.show(artwork.cover);
+                            job.done = true;
+                        }
+                        job.tracks = Array.isArray(artwork.metadata_tracks) ? artwork.metadata_tracks.slice(0, 8) : [];
+                        return;
+                    }
+                    if (!window.FrontierMusicMetadata) { job.done = true; return; }
+                    const tags = await window.FrontierMusicMetadata.metadata(job.tracks[job.next]);
+                    job.next++;
+                    if (tags.cover && grid.contains(card)) { job.show(tags.cover); job.done = true; }
+                } catch (_) { job.retryAt = Date.now() + 2000; /* Retry on a later visibility event without a tight failure loop. */ }
+                finally {
+                    artworkRunning = false;
+                    hydrateVisibleArtwork();
+                }
+            })();
+            return;
+        }
+    }
+    window.addEventListener('frontier-directory-visible', hydrateVisibleArtwork);
+    window.addEventListener('scroll', hydrateVisibleArtwork, {passive: true});
 
     function cacheRead(key) {
         if (!key) return null;
@@ -76,16 +119,21 @@
             placeholder.className = 'card-placeholder';
             placeholder.textContent = Array.from(String(entry.name || '音'))[0];
             artwork.append(placeholder);
-            if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
+            const show = source => {
+                artwork.querySelector('img')?.remove();
                 const image = document.createElement('img');
-                image.src = entry.cover;
+                image.src = source;
                 image.alt = '';
                 image.decoding = 'async';
                 image.draggable = false;
                 placeholder.hidden = true;
                 image.addEventListener('error', () => { image.hidden = true; placeholder.hidden = false; }, {once: true});
                 artwork.append(image);
+            };
+            if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
+                show(entry.cover);
             }
+            if (String(entry.artwork_url || '').startsWith('/api/v1/media/catalog/artwork?')) artworkJobs.set(card, {url: entry.artwork_url, tracks: null, show, next: 0, done: false});
             const title = document.createElement('div');
             title.className = 'card-title';
             title.textContent = middleEllipsis(entry.name || '');

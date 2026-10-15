@@ -218,6 +218,12 @@ select a full media archive. These recovery points cannot claim fresh-machine
 business restoration; explicit complete disaster-recovery archives and sets
 retain a separate opt-in contract. See [upgrade recovery scope](docs/operator-upgrade.md).
 
+The normal `foc upgrade --revision SHA` entry owns its plan and recovery paths.
+One explicit confirmation approves preparation and subsequent verified opening;
+the existing identity, provenance, capacity, freeze and image checks still apply.
+Recorded resumable stages reuse their original recovery point. Failed phases and
+database restoration remain explicit and never authorize automatic reopening.
+
 GitHub-side ref creation cannot be fully prevented by a unit test. The repository-policy workflow detects non-canonical branch creation after the event, while true pre-creation prevention requires GitHub repository ruleset/administrative enforcement. The no-new-branch invariant must remain documented here, in `CONTRIBUTING.md`, and in the Wiki/ruleset configuration.
 
 ## 12. Supported runtime and validation

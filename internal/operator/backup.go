@@ -217,6 +217,11 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
 		}
+		if scope == recovery.UpgradeStateScope {
+			if e := d.validateBackupAdmission(ctx, cfg, receipt, fact); e != nil {
+				return e
+			}
+		}
 		if ordinary {
 			for _, node := range fact.Nodes {
 				if node.State != "revoked" {
