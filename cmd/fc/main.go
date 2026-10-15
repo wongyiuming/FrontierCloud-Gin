@@ -90,6 +90,10 @@ func run(args []string) (exitCode int) {
 			fmt.Fprintln(os.Stderr, e)
 			return 2
 		}
+		if e = rememberDeployment(ctx, d.Directory); e != nil {
+			fmt.Fprintln(os.Stderr, "installation completed but deployment registration failed:", e)
+			return 2
+		}
 		if e := emit(receipt); e != nil {
 			fmt.Fprintln(os.Stderr, "operation result could not be written; recorded state is retained")
 			return 2
@@ -171,6 +175,10 @@ func run(args []string) (exitCode int) {
 		receipt, err := d.Install(ctx, *revision, operator.Architecture(string(raw)), v, registry)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		if err = rememberDeployment(ctx, d.Directory); err != nil {
+			fmt.Fprintln(os.Stderr, "installation completed but deployment registration failed:", err)
 			return 2
 		}
 		if e := emit(receipt); e != nil {

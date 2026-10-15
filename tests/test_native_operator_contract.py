@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NativeOperatorTests(unittest.TestCase):
+    def test_successful_install_and_resume_register_before_reporting_success(self):
+        source = (ROOT / "cmd/fc/main.go").read_text(encoding="utf-8")
+        for operation in ("d.ResumeInstall(ctx, receipt)", "d.Install(ctx, *revision"):
+            with self.subTest(operation=operation):
+                completion = source.split(operation, 1)[1].split("if e := emit(receipt)", 1)[0]
+                self.assertIn("rememberDeployment(ctx, d.Directory)", completion)
+                self.assertIn("installation completed but deployment registration failed:", completion)
+
     def test_inventory_has_exact_native_five_nodes(self):
         source = (ROOT / "internal/nativeacceptance/native_matrix_real_test.go").read_text()
         self.assertIn("const fleetNodeCount = 5", source)
