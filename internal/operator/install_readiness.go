@@ -27,7 +27,7 @@ func (d *Deployment) installCertificateReady(ctx context.Context, cfg Config) er
 	}
 	for ctx.Err() == nil {
 		probe, cancel := context.WithTimeout(ctx, 5*time.Second)
-		raw, err := d.Compose(probe, true, "exec", "-T", "certificate-agent", "/app/frontiercloud", "certificate-status")
+		raw, err := d.Compose(probe, true, "exec", "-T", "web", "/app/frontiercloud", "certificate-status")
 		cancel()
 		if err == nil {
 			var v certificate.View

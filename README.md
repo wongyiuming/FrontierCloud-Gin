@@ -26,6 +26,10 @@ require exact-source proof. Bootstrap history alone is not release proof.
 
 ## Quick start
 
+Already have a registered global `foc` deployment? Use the separate
+[daily foc guide](docs/foc-quickstart.md) for status and the two-command update
+path; installation and advanced recovery remain in the complete manual.
+
 For the guarded installation path without a source checkout, use the public
 [operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
 one published main release, configure the domain and run `./fc doctor` followed

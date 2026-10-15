@@ -1,5 +1,9 @@
 # FrontierCloud operator manual
 
+For daily operation of an already registered host, start with the separate
+[foc quick guide](foc-quickstart.md). It distinguishes the two-command update
+path from first installation, optional audits and controlled recovery.
+
 ## Global host command
 
 The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
@@ -209,6 +213,20 @@ initialized identity; resolve the certificate failure without reinitialization.
 `status`, `logs` and `diagnose` are read-only. They check selection/image locks,
 containers, application/database readiness and the automatic certificate
 controller, database generation, maintenance and authenticated node health facts.
+The certificate read runs in Web through the existing read-only Unix socket;
+it does not start an extra Web process inside the 0.05 CPU certificate agent.
+The controller gives local cache work a separate 3-second context and each online
+TLS probe a fresh 8-second context covering DNS, TCP and the verified handshake.
+`serving_probe_timeout`, `serving_dns`, `serving_connection`,
+`serving_tls_verification` and `serving_tls_handshake` indicate unverified probes;
+`serving_certificate_mismatch` requires a successful verified handshake with a
+different fingerprint. Failed probes never count as verified HTTPS. A subsequent
+successful matching probe clears only probe errors, preserving renewal/cache
+failures. CA transport timeouts are reported as `ca_timeout`.
+Admin GUI facts and `foc status` are observations at different times, not a
+continuous availability guarantee. A healthy GUI snapshot does not invalidate an
+earlier failed probe; compare the specific error and observation time.
+
 A container being Running is not sufficient. Playback acceptance remains an
 explicit unverified check until probed. Stable
 exit codes: 0 all checks passed; 2 blocked; 3 degraded/warnings/unverified.

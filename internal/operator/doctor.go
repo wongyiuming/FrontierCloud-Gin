@@ -352,20 +352,29 @@ func (d *Deployment) Status(ctx context.Context, receipt Receipt) Report {
 	} else {
 		r.Add("application_database", "pass", "application readiness probe passed", "this does not replace playback/Range acceptance")
 	}
-	raw, err = d.Compose(ctx, true, "exec", "-T", "certificate-agent", "/app/frontiercloud", "certificate-status")
+	// Query from the existing Web cgroup through its read-only socket mount.
+	// Starting full CLI processes in the 0.05 CPU controller can exhaust its
+	// small PID budget and starve the observation being measured.
+	raw, err = d.Compose(ctx, true, "exec", "-T", "web", "/app/frontiercloud", "certificate-status")
 	if err != nil {
 		r.Add("certificate", "blocked", "certificate controller status unavailable", "inspect controller service and persistent certificate volumes")
 	} else {
 		var v struct {
-			Enabled           bool `json:"enabled"`
-			HTTPSReady        bool `json:"https_ready"`
-			ServingMatches    bool `json:"serving_matches"`
-			ControllerRunning bool `json:"controller_running"`
+			Enabled           bool   `json:"enabled"`
+			HTTPSReady        bool   `json:"https_ready"`
+			ServingMatches    bool   `json:"serving_matches"`
+			ControllerRunning bool   `json:"controller_running"`
+			LastError         string `json:"last_error"`
 		}
 		if json.Unmarshal(raw, &v) != nil {
 			r.Add("certificate", "blocked", "invalid certificate status", "check controller compatibility")
 		} else if !v.ControllerRunning || v.Enabled && (!v.HTTPSReady || !v.ServingMatches) {
-			r.Add("certificate", "blocked", "automatic HTTPS is not ready or serving bytes differ", "check DNS, HTTP-01 and certificate controller")
+			reason := "automatic HTTPS is not ready or serving bytes differ"
+			switch v.LastError {
+			case "serving_probe_timeout", "serving_dns", "serving_connection", "serving_tls_verification", "serving_tls_handshake", "serving_certificate_mismatch":
+				reason = "automatic HTTPS serving check: " + v.LastError
+			}
+			r.Add("certificate", "blocked", reason, "check DNS, HTTP-01 and certificate controller")
 		} else {
 			r.Add("certificate", "pass", "certificate controller ready", "none")
 		}

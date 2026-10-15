@@ -1,5 +1,6 @@
 """Real development-only Compose certificate acceptance, outside hosted CI."""
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import http.client
 import json
@@ -144,6 +145,31 @@ def run(work, project, revision):
         compose("up", "-d", "--no-build", *targets)
         (case / "serving-started").write_text("ready")
         wait_file("active")
+        # Exercise the shipping CLI and real socket with the same cgroup split
+        # used by foc: Web issues status reads, the 0.05 CPU agent owns TLS.
+        assert inspect(names["certificate-agent"])["HostConfig"]["NanoCpus"] == 50_000_000
+        def concurrent_status(stage):
+            agent = names["certificate-agent"]
+            inputs = [["docker", "exec", names["web"], "/app/frontiercloud", "certificate-status"] for _ in range(3)]
+            inputs.append(["docker", "exec", agent, "/app/frontiercloud", "certificate-healthcheck"])
+            def check(args):
+                started = time.monotonic()
+                raw = call(args, timeout=45)
+                if args[-1] == "certificate-status":
+                    view = json.loads(raw)
+                    assert view["controller_running"] and view["https_ready"] and view["serving_matches"], view
+                    assert view["state"] == "ACTIVE" and not view.get("last_error"), view
+                return {"argv": args, "elapsed_seconds": round(time.monotonic() - started, 3)}
+            results = []
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                for round_number in range(3):
+                    # Span the controller's five-second observation ticker.
+                    if round_number:
+                        time.sleep(4)
+                    results.append(list(pool.map(check, inputs)))
+            print(json.dumps({"profile": profile, "stage": stage, "agent_cpus": 0.05,
+                              "concurrent_inputs": results}), flush=True)
+        concurrent_status("issued")
         call(["docker", "exec", names["web"], "/app/frontiercloud", "healthcheck"])
         if profile != "business":
             pair = json.loads(call(["docker", "exec", names["web"], "/app/frontiercloud", "storage-pair"]))["payload"]
@@ -156,6 +182,7 @@ def run(work, project, revision):
         assert all(inspect(names[name])["Id"] != before[name] for name in targets)
         (case / "serving-recreated").write_text("ready")
         wait_file("renewed")
+        concurrent_status("renewed-after-restart")
         call(["docker", "exec", names["web"], "/app/frontiercloud", "healthcheck"])
         (case / "verified").write_text("ready")
         code = json.loads(call(["docker", "wait", names["certificate-agent"]]))
