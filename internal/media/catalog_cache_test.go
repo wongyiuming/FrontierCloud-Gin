@@ -96,6 +96,75 @@ func (r *countedCatalogRepository) HiddenPaths(ctx context.Context) (map[string]
 	return r.MediaRepository.HiddenPaths(ctx)
 }
 
+func TestUploadHousekeepingPreservesWarmCatalogAndBusinessInvalidation(t *testing.T) {
+	for _, role := range []string{"Standalone", "Master"} {
+		t.Run(role, func(t *testing.T) {
+			root, db, svc := deleteFixture(t)
+			if role == "Master" {
+				root, db, svc = masterFixture(t)
+			}
+			ctx := context.Background()
+			repo := db.Media()
+			counted := &countedCatalogRepository{MediaRepository: repo, generation: repo.(catalogGeneration)}
+			svc.repository = counted
+			pool := &countedCatalogPool{PoolRepository: db.Pool()}
+			if role == "Master" {
+				svc.pool = pool
+			}
+			svc.ConfigureCatalogCache(5 * time.Minute)
+			read := func() {
+				t.Helper()
+				var err error
+				if role == "Master" {
+					_, err = svc.Catalog(ctx, "music", "music/artist", "cache-test", false)
+				} else {
+					_, err = svc.Categories(ctx, "music", false)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			read()
+			read()
+			reads := func() int64 { return counted.hidden.Load() + pool.reads.Load() }
+			before := reads()
+			if before == 0 || len(svc.catalog.entries) == 0 {
+				t.Fatal("catalog was not warmed")
+			}
+			for _, orphan := range []bool{false, true, false} {
+				var name string
+				if orphan {
+					stage := staged(t, svc, "ID3abandoned")
+					name = stage.name
+					stage.retain = true
+					stage.Close()
+				}
+				if err := svc.RetryExpiredUploads(ctx); err != nil {
+					t.Fatal(err)
+				}
+				read()
+				if reads() != before {
+					t.Fatal("housekeeping repeated catalog queries", orphan, reads(), before)
+				}
+				if name != "" {
+					if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+						t.Fatal("orphan was not removed", err)
+					}
+				}
+			}
+			release, err := svc.acquire(ctx, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			release()
+			read()
+			if reads() <= before {
+				t.Fatal("business write fence stopped invalidating catalog")
+			}
+		})
+	}
+}
+
 func TestCatalogCacheHitSkipsCatalogQueriesAndFilesystemScan(t *testing.T) {
 	root, db, svc := deleteFixture(t)
 	ctx := context.Background()

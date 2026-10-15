@@ -35,6 +35,9 @@ staging project uses independent data, identities, volumes and Compose scope;
 it must never join or mount the production cluster. The retired external CD
 receiver remains removed. For the album-loading/upload-lifecycle delivery, the
 owner requires development and RN staging acceptance before the first push.
+After acceptance, stop this staging project's services and retain its Compose
+configuration and data. Start it only for further acceptance: production Relay
+certificate renewal needs temporary access to host port 80.
 
 ## Documentation ownership
 

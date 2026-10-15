@@ -25,6 +25,8 @@ publication journals are preserved. This closes the ordinary Standalone and
 Master staging-cleanup gap without requiring a restart. It reclaims physical
 staging bytes independently of the Master's unchanged reservation deadline;
 it does not prematurely refund logical quota or replay/hash publication work.
+Stage-only housekeeping retains warm catalog entries; ordinary business write
+leases continue to invalidate the catalog.
 
 - Master-local: acquire the same cross-process session lease as transfer,
   finalize and cancel; take the volume mutation lease. If a committed media
@@ -146,7 +148,9 @@ Admin explicitly aborts active multipart and raw storage requests on `pagehide`
 and browser `offline`, settles aborted raw-upload promises, and stops admitting
 later files in that selection. Prepared browser ciphertext still follows its
 `finally` cleanup. An interrupted queue reports completed, failed and unstarted
-counts; it never silently resumes on reconnect. A genuinely lost network peer
+counts; it never silently resumes on reconnect. Retrying a selection while the
+browser reports offline returns before encryption, reservation or transfer work.
+A genuinely lost network peer
 may not deliver cancellation, so server inactivity deadlines and the existing
 leased recovery protocol remain required. Timeout alone never proves remote
 bytes absent or authorizes quota refund.

@@ -63,6 +63,32 @@ def run(args):
                 facts.append({'case':failure,'partial_bytes_observed':sum(partial.values()),'physical_cleanup_seconds':time.monotonic()-start,'remaining_stages':stages()})
                 context.set_offline(False)
                 session.send('Network.emulateNetworkConditions', {'offline':False,'latency':0,'downloadThroughput':-1,'uploadThroughput':-1})
+            # No new offline event fires when retrying while already disconnected.
+            # Observe the real queue before any encryption or network transfer.
+            context.set_offline(True)
+            blocked=page.evaluate("""async folder => {
+                currentPath='music/'+folder;uploadSiteType.value='primary';uploadInterrupted=true;
+                const encrypt=window.FrontierMediaCrypto?.encryptUploadFile;
+                const transfer=uploadOne;const originalAlert=window.alert;
+                let encryptionCalls=0,transferCalls=0;const alerts=[];
+                if(window.FrontierMediaCrypto) window.FrontierMediaCrypto.encryptUploadFile=async()=>{encryptionCalls++;throw new Error('offline encryption started');};
+                uploadOne=async()=>{transferCalls++;throw new Error('offline transfer started');};
+                window.alert=message=>alerts.push(message);
+                try {
+                    const files=[new File(['ID3'],'offline-a.mp3'),new File(['ID3'],'offline-b.mp3')];
+                    await runUploadTask(files,null,false,'encrypted');
+                    await runUploadTask(files,null,false,'plain');
+                    return {online:navigator.onLine,encryptionCalls,transferCalls,interrupted:uploadInterrupted,running:uploadRunning,alerts};
+                } finally {
+                    uploadOne=transfer;window.alert=originalAlert;
+                    if(encrypt) window.FrontierMediaCrypto.encryptUploadFile=encrypt;
+                }
+            }""",folder)
+            assert blocked['online'] is False and blocked['interrupted'] is True and blocked['running'] is False,blocked
+            assert blocked['encryptionCalls']==0 and blocked['transferCalls']==0 and len(blocked['alerts'])==2,blocked
+            assert all('离线' in alert for alert in blocked['alerts']),blocked
+            facts.append({'case':'retry-while-already-offline','queue':blocked,'remaining_stages':stages()})
+            context.set_offline(False)
             payload=b'ID3\x03\0\0\0\0\0\0'+b'bounded-download-fixture'*(100000)
             relative=folder+'/complete.mp3'
             def upload(data):

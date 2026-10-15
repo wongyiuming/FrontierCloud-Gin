@@ -14,6 +14,21 @@ import (
 // Native RWMutex establishes Go's memory-order boundary; the OS lease protects
 // filesystem and path metadata across independent runtime processes.
 func (s *Service) acquire(ctx context.Context, write bool) (func(), error) {
+	release, err := s.acquireVolume(ctx, write)
+	if err != nil {
+		return nil, err
+	}
+	return func() {
+		if write {
+			s.invalidateCatalog()
+		}
+		release()
+	}, nil
+}
+
+// Temporary-stage housekeeping needs the same admission fence but changes no
+// visible media. Business mutations must use acquire to invalidate the catalog.
+func (s *Service) acquireVolume(ctx context.Context, write bool) (func(), error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -69,9 +84,6 @@ func (s *Service) acquire(ctx context.Context, write bool) (func(), error) {
 		return nil, err
 	}
 	return func() {
-		if write {
-			s.invalidateCatalog()
-		}
 		release()
 		localRelease()
 	}, nil

@@ -96,7 +96,7 @@ func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store
 	// Interrupted ordinary uploads can leave a stage even without a pool
 	// reservation. Reclaim dead staging on every role, without replaying or
 	// hashing publication journals during normal request serving.
-	release, err := s.acquire(ctx, true)
+	release, err := s.acquireVolume(ctx, true)
 	if err != nil {
 		return err
 	}

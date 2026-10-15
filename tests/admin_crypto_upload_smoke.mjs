@@ -138,6 +138,19 @@ assert.equal(transfers.length, transferredBeforeInterrupt + 1, 'offline task mus
 assert.equal(cleanupCalls, 5, 'interruption cleans the prepared ciphertext');
 assert.equal(node('uploadSummary').textContent, '已中断：成功 0，失败 1，未上传 1');
 
+context.navigator = {onLine:false};
+const beforeOfflineRetry = {transfers:transfers.length,encryption:encryptedCalls};
+await context.runUploadTask([file, {...file, name:'still-offline.mp3'}], null, false, 'encrypted');
+assert.equal(transfers.length,beforeOfflineRetry.transfers);
+assert.equal(encryptedCalls,beforeOfflineRetry.encryption,'offline retry must not prepare ciphertext');
+assert.equal(context.uploadInterrupted,true);
+assert.match(alerts.at(-1),/离线/);
+context.navigator.onLine=true;
+interrupted=false;
+await context.runUploadTask([file],null,false,'plain');
+assert.equal(context.uploadInterrupted,false);
+assert.equal(node('uploadSummary').textContent,'完成：成功 1，失败 0');
+
 for (const button of ['uploadFolder', 'uploadLyrics', 'uploadLyricsFolder']) {
     node(button).onclick();
     assert.equal(body.children.at(-1).children[2].children.length, 2, `${button} requires its own explicit choice`);

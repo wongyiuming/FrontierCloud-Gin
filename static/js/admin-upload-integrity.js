@@ -224,6 +224,10 @@ runUploadTask = async function runUploadTaskWithReservationCleanup(fileList, rel
         return;
     }
 
+    if (window.navigator?.onLine === false) {
+        alert('当前网络已离线，请连接网络后重新选择文件');
+        return;
+    }
     uploadInterrupted = false;
     setUploadControlsDisabled(true);
     $('uploadProgress').classList.remove('hidden');

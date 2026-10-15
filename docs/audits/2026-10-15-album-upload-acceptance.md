@@ -5,6 +5,9 @@ its first push. This record describes pre-release acceptance; production release
 and upgrade evidence is a separate record. Machine-readable results and private
 raw-log SHA-256 values are in
 [the acceptance evidence](2026-10-15-album-upload-acceptance.json).
+The subsequent review corrections and repeated r4 acceptance are recorded in
+[the review-fix addendum](2026-10-15-album-review-fixes.md); the initial results
+below retain their original source and image scope.
 
 ## Delivered behavior
 
