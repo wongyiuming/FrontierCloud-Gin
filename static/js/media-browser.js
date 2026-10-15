@@ -14,7 +14,7 @@
         const cards = window.FrontierDirectoryGlobe?.visibleCards?.() || [];
         for (const card of cards) {
             const job = artworkJobs.get(card);
-            if (!job || job.done || (job.tracks && job.next >= job.tracks.length) || !grid.contains(card)) continue;
+            if (!job || job.done || job.retryAt > Date.now() || (job.tracks && job.next >= job.tracks.length) || !grid.contains(card)) continue;
             const box = card.getBoundingClientRect();
             if (box.bottom < 0 || box.top > window.innerHeight + 200) continue;
             // Admit only one directory read at a time, then choose from the
@@ -34,9 +34,10 @@
                         return;
                     }
                     if (!window.FrontierMusicMetadata) { job.done = true; return; }
-                    const tags = await window.FrontierMusicMetadata.metadata(job.tracks[job.next++]);
+                    const tags = await window.FrontierMusicMetadata.metadata(job.tracks[job.next]);
+                    job.next++;
                     if (tags.cover && grid.contains(card)) { job.show(tags.cover); job.done = true; }
-                } catch (_) { if (!job.tracks) job.done = true; /* Retain the placeholder. */ }
+                } catch (_) { job.retryAt = Date.now() + 2000; /* Retry on a later visibility event without a tight failure loop. */ }
                 finally {
                     artworkRunning = false;
                     hydrateVisibleArtwork();

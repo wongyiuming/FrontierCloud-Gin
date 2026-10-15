@@ -65,7 +65,7 @@
         if (moved) go(startPage + (Math.abs(distance) > grid.clientWidth * .12 ? (distance < 0 ? 1 : -1) : 0));
     }
     grid.addEventListener('pointerup', release);
-    grid.addEventListener('pointercancel', event => { if (drag?.id === event.pointerId) { drag = null; stage.classList.remove('orbit-dragging'); go(page); } });
+    grid.addEventListener('pointercancel', event => { if (drag?.id === event.pointerId) { drag = null; moved = false; stage.classList.remove('orbit-dragging'); go(page); } });
     grid.addEventListener('click', event => { if (!list && moved && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); moved = false; } }, true);
     grid.addEventListener('dragstart', event => { if (!list) event.preventDefault(); });
     stage.addEventListener('wheel', event => {
