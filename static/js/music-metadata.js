@@ -110,8 +110,7 @@
         let result = {};
         if (ascii(header.subarray(0, 3)) === 'ID3') {
             const length = syncSafe(header.subarray(6, 10));
-            if (length < 0 || length > TAG_LIMIT || length > size - 10) return result;
-            if (length > 0) {
+            if (length > 0 && length <= TAG_LIMIT && length <= size - 10) {
                 const body = await range(source.url, 10, length + 9, size);
                 const bytes = new Uint8Array(length + 10); bytes.set(header); bytes.set(body, 10); result = parse(bytes);
             }

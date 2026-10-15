@@ -38,4 +38,21 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
         assert.equal(api.parse(tag(4, withIndicator('TIT2', title, indicator))).title, undefined);
     }
 }
+{
+    const requests = [];
+    let invalidHeader;
+    context.window.FrontierMediaCrypto = {prepareCatalog: async entries => { entries[0].url = '/authorized'; }};
+    context.window.FrontierCryptoCommon = {validate() {}, boundedBytes: async response => response.bytes};
+    context.fetch = async (_url, options) => {
+        const range = options.headers.Range; requests.push(range);
+        const tail = new Uint8Array(128); tail.set(ascii('TAGFooter title'), 0); tail.set(ascii('Footer artist'), 33); tail.set(ascii('Footer album'), 63);
+        return {status: 206, headers: {get: () => `bytes ${range.slice(6)}/256`}, bytes: range === 'bytes=0-9' ? invalidHeader : tail};
+    };
+    for (const [index, length] of [[128, 0, 0, 0], size(9 * 1024 * 1024), size(300)].entries()) {
+        invalidHeader = Uint8Array.from([73, 68, 51, 4, 0, 0, ...length]); requests.length = 0;
+        const tags = await api.metadata({media_path: `music/bad-v2-${index}.mp3`, encryption: {plaintext_size: 256}});
+        assert.equal(tags.title, 'Footer title'); assert.equal(tags.artist, 'Footer artist'); assert.equal(tags.album, 'Footer album');
+        assert.deepEqual(requests, ['bytes=0-9', 'bytes=128-255'], 'invalid/oversized v2 must retain the bounded v1 fallback without fetching the tag');
+    }
+}
 console.log('music-metadata-smoke-ok: ID3 versions, Unicode, image signatures, bounded malformed fallback');
