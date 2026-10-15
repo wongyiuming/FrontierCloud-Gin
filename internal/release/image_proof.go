@@ -36,7 +36,7 @@ func (r *RegistryClient) imageRead(ctx context.Context, prefix, suffix string, t
 	path := prefix + suffix
 	body, headers, code, err := r.get(ctx, path, *token)
 	if err != nil {
-		return nil, nil, ErrImageNetwork
+		return nil, nil, imageRequestFailure(ctx, err)
 	}
 	if code == 401 && *token == "" {
 		query := url.Values{"service": {"ghcr.io"}, "scope": {"repository:" + strings.TrimPrefix(prefix, "/v2/") + ":pull"}}
@@ -45,7 +45,7 @@ func (r *RegistryClient) imageRead(ctx context.Context, prefix, suffix string, t
 			Token string `json:"token"`
 		}
 		if e != nil {
-			return nil, nil, ErrImageNetwork
+			return nil, nil, imageRequestFailure(ctx, e)
 		}
 		if status != 200 || json.Unmarshal(raw, &value) != nil || len(value.Token) < 1 || len(value.Token) > 8192 || strings.ContainsAny(value.Token, "\r\n") {
 			return nil, nil, ErrImagePermission
@@ -53,7 +53,7 @@ func (r *RegistryClient) imageRead(ctx context.Context, prefix, suffix string, t
 		*token = value.Token
 		body, headers, code, err = r.get(ctx, path, *token)
 		if err != nil {
-			return nil, nil, ErrImageNetwork
+			return nil, nil, imageRequestFailure(ctx, err)
 		}
 	}
 	if code == 307 && strings.HasPrefix(suffix, "/blobs/sha256:") {
@@ -69,14 +69,17 @@ func (r *RegistryClient) imageRead(ctx context.Context, prefix, suffix string, t
 		}
 		res, e := r.Client.Do(req)
 		if e != nil {
-			return nil, nil, ErrImageNetwork
+			return nil, nil, imageRequestFailure(ctx, e)
 		}
 		defer res.Body.Close()
 		if res.StatusCode != 200 {
 			return nil, nil, ErrImagePermission
 		}
 		body, e = io.ReadAll(io.LimitReader(res.Body, (4<<20)+1))
-		if e != nil || len(body) > 4<<20 {
+		if e != nil {
+			return nil, nil, imageRequestFailure(ctx, e)
+		}
+		if len(body) > 4<<20 {
 			return nil, nil, ErrImageIntegrity
 		}
 		return body, res.Header, nil

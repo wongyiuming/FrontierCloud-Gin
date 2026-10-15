@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,17 +42,36 @@ func (d *Deployment) SelfUpdate(ctx context.Context, target, arch string, eviden
 		return result, err
 	}
 	proof, err := evidence.Artifact(ctx, target)
-	if err != nil || proof["publishable"] != true || proof["sha"] != target || !release.ValidSHA(fmtString(proof["ci_sha"])) {
+	if err != nil {
+		return result, fmt.Errorf("operator self-update release_verification failed: %w", release.SafeVerificationFailure(err))
+	}
+	if proof["publishable"] != true || proof["sha"] != target || !release.ValidSHA(fmtString(proof["ci_sha"])) {
 		return result, errors.New("operator target lacks reviewed main and exact-source CI proof")
 	}
 	image, err := images.ProveOperator(ctx, target, arch)
 	repository, _ := release.ImageRepository("web")
-	if err != nil || image.Revision != target || image.Platform != "linux/"+arch || !strings.HasPrefix(image.Image, repository+"@sha256:") {
+	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		for _, category := range []error{context.DeadlineExceeded, context.Canceled, release.ErrImagePermission, release.ErrImageNetwork, release.ErrImageIntegrity, release.ErrImagePlatform, release.ErrImageUnavailable} {
+			if errors.Is(err, category) {
+				return result, fmt.Errorf("operator self-update image_verification failed: %w", category)
+			}
+		}
+		return result, errors.New("operator self-update image_verification unavailable")
+	}
+	if image.Revision != target || image.Platform != "linux/"+arch || !strings.HasPrefix(image.Image, repository+"@sha256:") {
 		return result, release.ErrImageIntegrity
 	}
 	runner, ok := d.Runner.(EnvironmentRunner)
 	if !ok {
 		return result, errors.New("scoped Compose installer environment unavailable")
+	}
+	// Separate registry/download failures from host installation. Compose must
+	// consume only the already-verified, already-pulled immutable image.
+	if _, err = d.Runner.Run(ctx, "docker", "pull", image.Image); err != nil {
+		return result, fmt.Errorf("operator self-update image_pull failed; business deployment unchanged: %w", safeDockerFailure(err))
 	}
 	temp, err := os.MkdirTemp("", "foc-installer-")
 	if err != nil {
@@ -62,9 +82,9 @@ func (d *Deployment) SelfUpdate(ctx context.Context, target, arch string, eviden
 	if err = os.WriteFile(path, focInstaller, 0600); err != nil {
 		return result, err
 	}
-	_, err = runner.RunEnv(ctx, map[string]string{"FOC_OPERATOR_IMAGE": image.Image, "FOC_OPERATOR_REVISION": target, "FOC_DEPLOYMENT_DIRECTORY": d.Directory}, "docker", "compose", "-f", path, "run", "--rm", "--no-deps", "install")
+	_, err = runner.RunEnv(ctx, map[string]string{"FOC_OPERATOR_IMAGE": image.Image, "FOC_OPERATOR_REVISION": target, "FOC_DEPLOYMENT_DIRECTORY": d.Directory, "FOC_OPERATOR_PULL_POLICY": "never"}, "docker", "compose", "-f", path, "run", "--rm", "--no-deps", "-T", "--interactive=false", "install")
 	if err != nil {
-		return result, errors.New("operator Compose installation did not complete; business deployment was not updated")
+		return result, fmt.Errorf("operator self-update compose_install failed; business deployment unchanged: %w", safeDockerFailure(err))
 	}
 	return OperatorUpdate{Revision: target, Image: image.Image, Deployment: d.Directory, BusinessChanged: false}, nil
 }

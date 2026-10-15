@@ -201,6 +201,18 @@ configured hostname, serving certificate fingerprint and HTTPS readiness before
 recording `ready`. Certificate rejection retains the `prepared` receipt and
 initialized identity; resolve the certificate failure without reinitialization.
 
+Self-update proves the published target, then pulls its immutable Web image
+before running the one-shot Compose installer with pulling disabled and no TTY.
+Errors identify `image_pull` or `compose_install`, retain the safe Docker or
+installer failure category and process exit code, and leave the business
+revision unchanged. Known causes include registry/network failures, image
+storage/unpack failures, ownership/path refusals and active installation locks.
+Arbitrary stderr, credentials and signed URLs are never copied into reports.
+Cancellation, deadlines and diagnostic-output overflow have separate categories.
+A successful self-update changes the tool only; check `foc version` before the
+separate business upgrade. Retrying never force-replaces a foreign command or
+removes an unknown installation lock.
+
 ## Daily checks
 
 ```sh

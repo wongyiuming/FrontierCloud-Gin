@@ -77,6 +77,34 @@ type apiFailure struct {
 }
 
 func (f *apiFailure) Error() string { return "release verification unavailable" }
+
+// SafeVerificationFailure exposes only facts owned by the verifier, never an
+// arbitrary transport error, request URL, response body or API credential.
+func SafeVerificationFailure(err error) error {
+	var failure *apiFailure
+	if errors.As(err, &failure) {
+		switch failure.kind {
+		case "rate_limited":
+			return fmt.Errorf("release verification rate limited; retry_after_seconds=%d", max(0, min(failure.retry, 86400)))
+		case "network":
+			return errors.New("release verification network request failed")
+		case "http_status":
+			return fmt.Errorf("release verification API rejected request; http_status=%d", max(100, min(failure.status, 599)))
+		case "unexpected":
+			return errors.New("release verification API response is invalid")
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errors.New("release verification deadline exceeded")
+	}
+	if errors.Is(err, context.Canceled) {
+		return errors.New("release verification canceled")
+	}
+	if errors.Is(err, ErrManifest) {
+		return ErrManifest
+	}
+	return errors.New("release verification unavailable")
+}
 func rateInfo(h http.Header) map[string]any {
 	value := map[string]any{}
 	for name, key := range map[string]string{"X-RateLimit-Limit": "limit", "X-RateLimit-Remaining": "remaining", "X-RateLimit-Used": "used", "X-RateLimit-Reset": "reset_at"} {
@@ -86,6 +114,27 @@ func rateInfo(h http.Header) map[string]any {
 	}
 	return value
 }
+
+func verificationRequestFailure(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	return &apiFailure{kind: "network"}
+}
+
+func retryAfterSeconds(wait time.Duration) int64 {
+	if wait <= 0 {
+		return 0
+	}
+	return int64((wait-1)/time.Second) + 1
+}
+
 func (v *Verifier) get(ctx context.Context, route string, target any) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", v.base+route, nil)
 	if err != nil {
@@ -98,7 +147,7 @@ func (v *Verifier) get(ctx context.Context, route string, target any) (map[strin
 	}
 	response, err := v.client.Do(req)
 	if err != nil {
-		return nil, &apiFailure{kind: "network"}
+		return nil, verificationRequestFailure(ctx, err)
 	}
 	defer response.Body.Close()
 	rate := rateInfo(response.Header)
@@ -117,7 +166,10 @@ func (v *Verifier) get(ctx context.Context, route string, target any) (map[strin
 		return nil, failure
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2*1024*1024+1))
-	if err != nil || len(raw) > 2*1024*1024 || !utf8.Valid(raw) {
+	if err != nil {
+		return nil, verificationRequestFailure(ctx, err)
+	}
+	if len(raw) > 2*1024*1024 || !utf8.Valid(raw) {
 		return nil, &apiFailure{kind: "unexpected"}
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -185,8 +237,8 @@ func (v *Verifier) Artifact(parent context.Context, target string) (map[string]a
 		return nil, parent.Err()
 	}
 	defer func() { <-v.lock }()
-	if v.now().Before(v.backoff) {
-		return nil, errors.New("release verification rate limited")
+	if now := v.now(); now.Before(v.backoff) {
+		return nil, &apiFailure{kind: "rate_limited", retry: retryAfterSeconds(v.backoff.Sub(now))}
 	}
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
@@ -293,7 +345,7 @@ func (v *Verifier) Status(parent context.Context, force bool) (map[string]any, e
 	now := v.now()
 	if now.Before(v.backoff) {
 		out := copyValue(v.cache)
-		out["retry_after_seconds"] = max(0, int64(v.backoff.Sub(now).Seconds()))
+		out["retry_after_seconds"] = retryAfterSeconds(v.backoff.Sub(now))
 		return out, nil
 	}
 	age := 5 * time.Minute

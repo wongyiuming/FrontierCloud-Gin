@@ -45,6 +45,18 @@ func ImageRepository(component string) (string, error) {
 	return "ghcr.io/wongyiuming/frontiercloud-gin-" + component, nil
 }
 
+func imageRequestFailure(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	for _, cause := range []error{context.DeadlineExceeded, context.Canceled, ErrImageIntegrity} {
+		if errors.Is(err, cause) {
+			return cause
+		}
+	}
+	return ErrImageNetwork
+}
+
 func (r *RegistryClient) get(ctx context.Context, path, token string) ([]byte, http.Header, int, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", registryRoot+path, nil)
 	if err != nil {
@@ -56,12 +68,15 @@ func (r *RegistryClient) get(ctx context.Context, path, token string) ([]byte, h
 	}
 	response, err := r.Client.Do(req)
 	if err != nil {
-		return nil, nil, 0, errors.New("public registry request failed")
+		return nil, nil, 0, imageRequestFailure(ctx, err)
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
-	if err != nil || len(body) > 4<<20 {
-		return nil, nil, 0, errors.New("invalid public registry response")
+	if err != nil {
+		return nil, nil, 0, imageRequestFailure(ctx, err)
+	}
+	if len(body) > 4<<20 {
+		return nil, nil, 0, ErrImageIntegrity
 	}
 	return body, response.Header, response.StatusCode, nil
 }

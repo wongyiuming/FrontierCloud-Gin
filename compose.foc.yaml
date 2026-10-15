@@ -2,6 +2,7 @@ name: frontiercloud-foc
 services:
   install:
     image: ${FOC_OPERATOR_IMAGE:?Select the verified public Web image digest}
+    pull_policy: ${FOC_OPERATOR_PULL_POLICY:-missing}
     user: "0:0"
     entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
     command: ["${FOC_DEPLOYMENT_DIRECTORY:?Select the existing host deployment directory}"]
