@@ -31,28 +31,37 @@ func TestSafeVerificationFailureKeepsFactsWithoutRawDetail(t *testing.T) {
 }
 
 func TestVerificationHTTPPreservesInFlightCancellationAndTimeout(t *testing.T) {
-	for _, kind := range []string{"cancel", "context-timeout", "client-timeout"} {
-		t.Run(kind, func(t *testing.T) {
-			started := make(chan struct{})
-			v := verifierFixture(t, func(w http.ResponseWriter, r *http.Request) {
-				close(started)
-				<-r.Context().Done()
-			})
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			want, text := context.DeadlineExceeded, "deadline exceeded"
-			if kind == "cancel" {
-				want, text = context.Canceled, "canceled"
-				go func() { <-started; cancel() }()
-			} else if kind == "client-timeout" {
-				v.client.Timeout = 100 * time.Millisecond
-			} else {
-				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
-				defer cancel()
-			}
-			_, err := v.get(ctx, "/fixture", &map[string]any{})
-			if !errors.Is(err, want) || !strings.Contains(SafeVerificationFailure(err).Error(), text) {
-				t.Fatal("HTTP cause lost", err, SafeVerificationFailure(err))
+	for _, phase := range []string{"headers", "body"} {
+		t.Run(phase, func(t *testing.T) {
+			for _, kind := range []string{"cancel", "context-timeout", "client-timeout"} {
+				t.Run(kind, func(t *testing.T) {
+					started := make(chan struct{})
+					v := verifierFixture(t, func(w http.ResponseWriter, r *http.Request) {
+						if phase == "body" {
+							w.Header().Set("Content-Type", "application/json")
+							fmt.Fprint(w, "{")
+							w.(http.Flusher).Flush()
+						}
+						close(started)
+						<-r.Context().Done()
+					})
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					want, text := context.DeadlineExceeded, "deadline exceeded"
+					if kind == "cancel" {
+						want, text = context.Canceled, "canceled"
+						go func() { <-started; cancel() }()
+					} else if kind == "client-timeout" {
+						v.client.Timeout = 100 * time.Millisecond
+					} else {
+						ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+						defer cancel()
+					}
+					_, err := v.get(ctx, "/fixture", &map[string]any{})
+					if !errors.Is(err, want) || !strings.Contains(SafeVerificationFailure(err).Error(), text) {
+						t.Fatal("HTTP cause lost", err, SafeVerificationFailure(err))
+					}
+				})
 			}
 		})
 	}

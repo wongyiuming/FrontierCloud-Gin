@@ -114,6 +114,20 @@ func rateInfo(h http.Header) map[string]any {
 	}
 	return value
 }
+
+func verificationRequestFailure(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	return &apiFailure{kind: "network"}
+}
+
 func (v *Verifier) get(ctx context.Context, route string, target any) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", v.base+route, nil)
 	if err != nil {
@@ -126,16 +140,7 @@ func (v *Verifier) get(ctx context.Context, route string, target any) (map[strin
 	}
 	response, err := v.client.Do(req)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, context.DeadlineExceeded
-		}
-		if errors.Is(err, context.Canceled) {
-			return nil, context.Canceled
-		}
-		return nil, &apiFailure{kind: "network"}
+		return nil, verificationRequestFailure(ctx, err)
 	}
 	defer response.Body.Close()
 	rate := rateInfo(response.Header)
@@ -154,7 +159,10 @@ func (v *Verifier) get(ctx context.Context, route string, target any) (map[strin
 		return nil, failure
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 2*1024*1024+1))
-	if err != nil || len(raw) > 2*1024*1024 || !utf8.Valid(raw) {
+	if err != nil {
+		return nil, verificationRequestFailure(ctx, err)
+	}
+	if len(raw) > 2*1024*1024 || !utf8.Valid(raw) {
 		return nil, &apiFailure{kind: "unexpected"}
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
