@@ -63,6 +63,11 @@ func (d *Deployment) Upgrade(ctx context.Context, r Receipt, target, arch string
 			if _, e = d.ValidateReceipt(ctx, r); e != nil {
 				return UpgradeResult{}, e
 			}
+			if state.Phase == "opened" && state.StageCleanupWarning != "" {
+				if _, e = d.OpenUpgrade(ctx, r, state.Plan.SHA256, state.Plan.NodeID); e != nil {
+					return UpgradeResult{}, e
+				}
+			}
 			fact, err := d.upgradeFact(ctx, r)
 			if err != nil {
 				return UpgradeResult{}, err
@@ -81,6 +86,17 @@ func (d *Deployment) Upgrade(ctx context.Context, r Receipt, target, arch string
 		if !capacity.Fits {
 			return UpgradeResult{}, errors.New("upgrade state backup capacity insufficient; business files are excluded")
 		}
+		// A logical dump capacity scan can outlast the one-hour plan lifetime.
+		// Refresh the complete release/runtime proof before displaying consent.
+		plan, err = d.PlanUpgrade(ctx, r, target, arch, evidence, images)
+		if err != nil {
+			return UpgradeResult{}, err
+		}
+		output = filepath.Join(d.Directory, ".foc-before-"+plan.SHA256+".tar")
+		if _, err = os.Lstat(output); !os.IsNotExist(err) {
+			return UpgradeResult{}, errors.New("backup output already exists or cannot be inspected")
+		}
+		capacity.Output = output
 		preview = UpgradePreview{Plan: plan, Capacity: &capacity}
 	}
 	consent, e := confirm(preview)

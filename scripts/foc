@@ -3,7 +3,6 @@
 set -eu
 backend=/usr/local/lib/frontiercloud/foc/fc
 registry=/etc/frontiercloud/foc-deployments
-user_registry=${XDG_STATE_HOME:-${HOME}/.local/state}/frontiercloud/foc-deployments
 case "${1:-}" in
   version) exec "$backend" "$@" ;;
   --help|-h) printf '%s\n' 'foc [--directory DIR] [--json] COMMAND' 'With no command, inspect the single discovered deployment.' 'Commands: status, logs, diagnose, restart, doctor, install, upgrade, backup, restore, node, self-update, version.'; exit 0 ;;
@@ -36,6 +35,12 @@ fi
 case "$command:$action" in
   version:*|node:*|backup:verify|backup:set-*|restore:check|restore:apply|restore:prepare|restore:set-*) exec "$backend" "$@" ;;
 esac
+user_registry=''
+if [ -n "${XDG_STATE_HOME:-}" ]; then
+  user_registry=$XDG_STATE_HOME/frontiercloud/foc-deployments
+elif [ -n "${HOME:-}" ]; then
+  user_registry=$HOME/.local/state/frontiercloud/foc-deployments
+fi
 work=$(mktemp -d)
 cleanup() { rm -f "$work/labels" "$work/automatic" "$work/candidates" "$work/unique"; rmdir "$work"; }
 trap cleanup EXIT

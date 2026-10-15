@@ -16,6 +16,8 @@ procedure; an environment edit is not a database or disk migration.
 Run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA` from any host directory.
 The tool verifies the selected public release and deployment, displays version,
 database generation and state-backup capacity, and asks for one confirmation.
+After the capacity scan, it refreshes the release plan before requesting consent,
+so a long MySQL dump estimate does not consume the plan's one-hour validity.
 It manages the private plan and recovery archive in the registered deployment
 directory, invokes the existing apply checks, and opens only after preparation
 and managed read verification succeed. No plan filename, hash or NodeID needs
@@ -31,7 +33,8 @@ Repeating the command with the same target detects a recorded resumable stage
 and requests consent to finish it using its existing plan and recovery point.
 A different target, failed phase, controlled recovery, changed receipt, or
 interrupted operation lock is refused. An already current ready deployment is
-reported without another upgrade. The command never silently restores a database
+reported without another upgrade, after retrying any recorded generated-stage
+cleanup through the same guarded opening path. The command never silently restores a database
 or opens a failed upgrade. Keep managed plan, backup and journal evidence.
 
 ## Detailed preparation and opening
@@ -263,7 +266,8 @@ Prior completed upgrade journals can be archived again only when the existing
 history file is byte-identical. Conflicting history remains blocked. Generated
 upgrade marker staging uses the approved plan's digest in its filename, so
 retained prior staging does not obstruct another plan. Cleanup failure is
-persisted as `stage_cleanup_warning`; repeating the same completed `upgrade open`
+persisted as `stage_cleanup_warning`; repeating the same target with the
+one-command entry or repeating the same completed `upgrade open`
 retries only that recorded generated stage, preserving administrator maintenance.
 
 The host-side `fc` verifier may use an optional read-only `GITHUB_API_TOKEN`
