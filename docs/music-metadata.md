@@ -24,8 +24,17 @@ storage, uploads, SQL, or a server-side cache. Directory listings contain only
 an artwork endpoint URL per album; they do not embed track descriptors. The
 browser requests that endpoint only for a visible card, receiving its plain
 cover or at most eight visible encrypted track descriptors as candidates. Directory
-scans admit one read at a time and reselect from the currently visible
-page after each result; paging away leaves at most one already admitted read.
+scans admit at most three visible-card jobs and reselect from the currently
+visible page after each phase; paging away cannot enqueue more old-page scans.
+Candidate queries have an eight-second deadline. Encrypted metadata Range reads
+have a fifteen-second per-read deadline and retain their candidate for later
+retry on transient failure. The existing two-job decryption limit is unchanged.
+A page-memory lookup cache deduplicates candidate queries, holds at most 32
+entries for 30 seconds, and clears when the catalog structure changes, access
+is refused, or the page exits. Hidden/public scopes use distinct query keys.
+It never persists decrypted tags or cover bytes. Original image bytes, dimensions
+and formats remain unchanged; no thumbnail conversion or runtime compression
+is introduced.
 Existing file-ID, visibility, replacement and authorization checks apply to every Range.
 Metadata failures retain filename/default art and do not block playback. Already
 uploaded encrypted files require no re-upload or database migration.

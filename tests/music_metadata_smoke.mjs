@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
-const context = {window: {addEventListener() {}}, TextDecoder, Uint8Array, DataView, Blob, URL, crypto: webcrypto};
+const context = {window: {addEventListener() {}}, TextDecoder, Uint8Array, DataView, Blob, URL, crypto: webcrypto, AbortController, setTimeout, clearTimeout};
 vm.runInNewContext(fs.readFileSync(new URL('../static/js/music-metadata.js', import.meta.url), 'utf8'), context);
 const api = context.window.FrontierMusicMetadata;
 const size = n => [n >> 21 & 127, n >> 14 & 127, n >> 7 & 127, n & 127];
@@ -55,4 +55,17 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
         assert.deepEqual(requests, ['bytes=0-9', 'bytes=128-255'], 'invalid/oversized v2 must retain the bounded v1 fallback without fetching the tag');
     }
 }
-console.log('music-metadata-smoke-ok: ID3 versions, Unicode, image signatures, bounded malformed fallback');
+{
+    let expire;
+    context.setTimeout=(callback,delay)=>{assert.equal(delay,15000);expire=callback;return 1;};
+    context.clearTimeout=()=>{};
+    context.fetch=async (_url,options)=>new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('test slow Range aborted')),{once:true}));
+    const entry={media_path:'music/slow-retry.mp3',encryption:{plaintext_size:256}};
+    const pending=api.metadata(entry);
+    await new Promise(setImmediate);
+    assert.ok(expire,'Range request must own a bounded deadline');
+    expire();await assert.rejects(pending,/slow Range aborted/);
+    context.fetch=async (_url,options)=>({status:206,headers:{get:()=>`bytes ${options.headers.Range.slice(6)}/256`},bytes:new Uint8Array(options.headers.Range==='bytes=0-9'?10:128)});
+    assert.deepEqual(Object.keys(await api.metadata(entry)),[],'timed-out metadata must remain retryable');
+}
+console.log('music-metadata-smoke-ok: ID3 versions, Unicode, image signatures, bounded fallback and slow Range retry');

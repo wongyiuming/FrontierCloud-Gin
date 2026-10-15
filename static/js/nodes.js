@@ -300,7 +300,7 @@
         return shell;
     }
 
-    function memberCard(member, relation, observed) {
+    function memberCard(member, relation, observed, localCertificate) {
         const row = document.createElement('tr'); row.className = 'node-card-row';
         const cell = document.createElement('td'); cell.colSpan = 4;
         const card = make('article', 'node-card');
@@ -312,6 +312,7 @@
         header.append(title, badges);
         const grid = make('div', 'node-card-grid');
         grid.append(connectionPanel(relation, observed), storagePanel(member, observed), backupPanel(member, observed));
+        if (localCertificate && member.member_kind === 'MasterLocal') grid.append(certificatePanel(localCertificate));
         if (relation?.direction === 'downstream' && relation.state === 'active') grid.append(certificatePanel(relation));
         if (relation?.direction === 'downstream' && ['active', 'retiring', 'revoked'].includes(relation.state)) grid.append(retirementPanel(member, relation));
         card.append(header, grid, controls(member, relation)); cell.append(card); row.append(cell);
@@ -322,7 +323,7 @@
         const section = make('section', 'node-resource-panel');
         section.append(make('strong', '', '整节点资源迁出'));
         section.append(make('p', 'node-note', '选择源与目标后生成只读计划。计划包含隐藏、加密及子目录对象；Master Local 暂不支持迁入或迁出。'));
-        const members = node.storage_pool?.members || [];
+        const members = (node.storage_pool?.members || []).filter(member => member.member_id !== 'auto' && member.member_kind !== 'Auto');
         for (const [key, label] of [['source', '源节点'], ['target', '目标节点']]) {
             const field = make('label', '', label); const select = make('select');
             select.append(make('option', '', '请选择节点'));
@@ -608,15 +609,21 @@
 
     function renderRows(node, observed, migrations) {
         const body = $('nodeRelationships'); body.replaceChildren();
-        if (node.certificate) {
-            const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 4;
-            cell.append(certificatePanel({local: true, relationship_id: node.node_id, summary: {certificate: node.certificate}})); row.append(cell); body.append(row);
-        }
+        const localCertificate = node.certificate ? {local: true, relationship_id: node.node_id, summary: {certificate: node.certificate}} : null;
         const relations = new Map((node.relationships || []).map(item => [item.peer_id, item]));
         const observedMembers = new Map((observed.members || []).map(item => [item.member_id, item]));
         if (node.storage_pool) {
-            for (const member of node.storage_pool.members || []) body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id)));
+            for (const member of node.storage_pool.members || []) {
+                if (member.member_id === 'auto' || member.member_kind === 'Auto') continue;
+                body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id), localCertificate));
+            }
 
+        }
+        if (localCertificate && !(node.storage_pool?.members || []).some(member => member.member_kind === 'MasterLocal')) {
+            const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
+            const card = make('article', 'node-card'), grid = make('div', 'node-card-grid');
+            const header = make('header', 'node-card-header'); header.append(make('strong', '', `${node.role} · ${node.node_id}`));
+            grid.append(certificatePanel(localCertificate)); card.append(header, grid); cell.append(card); row.append(cell); body.append(row);
         }
         if (node.role === 'Master' && migrations) {
             const row = make('tr'); const cell = make('td'); cell.colSpan = 4;

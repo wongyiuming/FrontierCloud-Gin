@@ -34,6 +34,7 @@ let encryptedCalls = 0;
 let cleanupCalls = 0;
 let encryptionFails = false;
 let serverFails = false;
+let interrupted = false;
 class TestFormData {
     constructor() { this.fields = new Map(); }
     append(name, value) { this.fields.set(name, value); }
@@ -41,7 +42,7 @@ class TestFormData {
 const context = {
     document: {getElementById: node, createElement: () => new Element(), body, querySelectorAll: () => []},
     $: node, alert: message => alerts.push(message), FormData: TestFormData,
-    currentPath: 'music/category', clusterUpload: false, uploadRunning: false,
+    currentPath: 'music/category', clusterUpload: false, uploadRunning: false, uploadInterrupted: false,
     uploadLimits: {max_upload_task_files: 5000, max_upload_file_size: 1000000, max_lyric_file_size: 100000},
     selected: new Set(), selectionKind: 'file', console,
     requestHeaders: () => ({}), formatSize: String,
@@ -59,6 +60,7 @@ const context = {
     },
     async uploadOne(form, progress, endpoint) {
         transfers.push({form, endpoint}); progress(1);
+        if (interrupted) { context.uploadInterrupted = true; throw new Error('上传已取消'); }
         if (serverFails) throw new Error('storage rejected ciphertext');
         return {path: 'music/category/a.mp3'};
     },
@@ -127,6 +129,27 @@ assert(reservations.every(request => request.body.storage_mode === 'encrypted' &
 assert(reservations.every(request => request.body.preparation_token === 'signed-preparation'));
 assert.equal(transfers.at(-1).file.name, 'temporary-ciphertext');
 assert.equal(cleanupCalls, 4, 'successful direct uploads also remove ciphertext temporary files');
+
+context.clusterUpload = false;
+interrupted = true;
+const transferredBeforeInterrupt = transfers.length;
+await context.runUploadTask([file, {...file, name: 'not-started.mp3'}], null, false, 'encrypted');
+assert.equal(transfers.length, transferredBeforeInterrupt + 1, 'offline task must not start another file');
+assert.equal(cleanupCalls, 5, 'interruption cleans the prepared ciphertext');
+assert.equal(node('uploadSummary').textContent, '已中断：成功 0，失败 1，未上传 1');
+
+context.navigator = {onLine:false};
+const beforeOfflineRetry = {transfers:transfers.length,encryption:encryptedCalls};
+await context.runUploadTask([file, {...file, name:'still-offline.mp3'}], null, false, 'encrypted');
+assert.equal(transfers.length,beforeOfflineRetry.transfers);
+assert.equal(encryptedCalls,beforeOfflineRetry.encryption,'offline retry must not prepare ciphertext');
+assert.equal(context.uploadInterrupted,true);
+assert.match(alerts.at(-1),/离线/);
+context.navigator.onLine=true;
+interrupted=false;
+await context.runUploadTask([file],null,false,'plain');
+assert.equal(context.uploadInterrupted,false);
+assert.equal(node('uploadSummary').textContent,'完成：成功 1，失败 0');
 
 for (const button of ['uploadFolder', 'uploadLyrics', 'uploadLyricsFolder']) {
     node(button).onclick();

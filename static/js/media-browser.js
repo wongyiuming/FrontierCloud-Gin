@@ -6,48 +6,80 @@
     const HIDDEN_REVEAL_CLICK_LIMIT = 15;
     const HIDDEN_REVEAL_WINDOW_MS = 60 * 1000;
     const artworkJobs = new WeakMap();
-    let artworkRunning = false;
+    const artworkCache = new Map();
+    const ARTWORK_CONCURRENCY = 3, ARTWORK_CACHE_LIMIT = 32, ARTWORK_CACHE_MS = 30000;
+    let artworkRunning = 0, artworkCursor = 0, artworkPage = null, renderedCategories = '';
+
+    function lookupArtwork(url) {
+        const cached = artworkCache.get(url);
+        if (cached && Date.now() - cached.at < ARTWORK_CACHE_MS) return cached.promise;
+        if (artworkCache.size >= ARTWORK_CACHE_LIMIT) artworkCache.delete(artworkCache.keys().next().value);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const entry = {at: Date.now()};
+        entry.promise = fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal})
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) artworkCache.clear();
+                    throw new Error('Artwork candidates unavailable');
+                }
+                return response.json();
+            }).catch(error => { if (artworkCache.get(url) === entry) artworkCache.delete(url); throw error; })
+            .finally(() => clearTimeout(timeout));
+        artworkCache.set(url, entry);
+        return entry.promise;
+    }
 
     function hydrateVisibleArtwork() {
-        if (artworkRunning) return;
         const grid = document.getElementById('categoryGrid');
         const cards = window.FrontierDirectoryGlobe?.visibleCards?.() || [];
-        for (const card of cards) {
+        if (!grid || !cards.length) return;
+        if (artworkPage !== cards[0]) { artworkPage = cards[0]; artworkCursor = 0; }
+        const start = artworkCursor;
+        for (let inspected = 0; inspected < cards.length && artworkRunning < ARTWORK_CONCURRENCY; inspected++) {
+            const index = (start + inspected) % cards.length;
+            const card = cards[index];
             const job = artworkJobs.get(card);
-            if (!job || job.done || job.retryAt > Date.now() || (job.tracks && job.next >= job.tracks.length) || !grid.contains(card)) continue;
+            if (!job || job.running || job.done || job.retryAt > Date.now() || (job.tracks && !job.cover && job.next >= job.tracks.length) || !grid.contains(card)) continue;
             const box = card.getBoundingClientRect();
             if (box.bottom < 0 || box.top > window.innerHeight + 200) continue;
-            // Admit only one directory read at a time, then choose from the
-            // current page again. Hidden pages cannot retain queued scans.
-            artworkRunning = true;
+            // Bounded workers select visible cards afresh after each phase.
+            // A slow album cannot own the entire page's request queue.
+            job.running = true;
+            artworkRunning++;
+            artworkCursor = (index + 1) % cards.length;
             void (async () => {
                 try {
                     if (!job.tracks) {
-                        const response = await fetch(job.url, {credentials: 'same-origin', cache: 'no-store'});
-                        if (!response.ok) throw new Error('Artwork candidates unavailable');
-                        const artwork = await response.json();
+                        const artwork = await lookupArtwork(job.url);
                         if (String(artwork.cover || '').startsWith('/api/v1/media/cover?')) {
-                            if (grid.contains(card)) job.show(artwork.cover);
-                            job.done = true;
+                            job.cover = artwork.cover;
                         }
                         job.tracks = Array.isArray(artwork.metadata_tracks) ? artwork.metadata_tracks.slice(0, 8) : [];
+                    }
+                    if (job.cover) {
+                        if (grid.contains(card) && window.FrontierDirectoryGlobe.visibleCards().includes(card)) { job.show(job.cover); job.done = true; }
                         return;
                     }
+                    if (!grid.contains(card) || !window.FrontierDirectoryGlobe.visibleCards().includes(card)) return;
+                    if (job.next >= job.tracks.length) { job.done = true; return; }
                     if (!window.FrontierMusicMetadata) { job.done = true; return; }
                     const tags = await window.FrontierMusicMetadata.metadata(job.tracks[job.next]);
                     job.next++;
-                    if (tags.cover && grid.contains(card)) { job.show(tags.cover); job.done = true; }
+                    if (tags.cover) job.cover = tags.cover;
+                    if (job.cover && grid.contains(card) && window.FrontierDirectoryGlobe.visibleCards().includes(card)) { job.show(job.cover); job.done = true; }
                 } catch (_) { job.retryAt = Date.now() + 2000; /* Retry on a later visibility event without a tight failure loop. */ }
                 finally {
-                    artworkRunning = false;
+                    job.running = false;
+                    artworkRunning--;
                     hydrateVisibleArtwork();
                 }
             })();
-            return;
         }
     }
     window.addEventListener('frontier-directory-visible', hydrateVisibleArtwork);
     window.addEventListener('scroll', hydrateVisibleArtwork, {passive: true});
+    window.addEventListener('pagehide', event => { if (!event.persisted) artworkCache.clear(); });
 
     function cacheRead(key) {
         if (!key) return null;
@@ -97,6 +129,9 @@
     function renderCategories(entries) {
         const grid = document.getElementById('categoryGrid');
         if (!grid) return;
+        const signature = JSON.stringify(entries);
+        if (renderedCategories && signature !== renderedCategories) artworkCache.clear();
+        renderedCategories = signature;
         grid.replaceChildren();
         if (!entries.length) {
             const empty = document.createElement('div');

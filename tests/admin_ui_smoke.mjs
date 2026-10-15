@@ -87,7 +87,15 @@ const context = {
     FormData: TestFormData,
     URL,
     Blob,
-    XMLHttpRequest: class {},
+    XMLHttpRequest: class {
+        constructor() { this.upload = {}; this.listeners = new Map(); }
+        open() {}
+        setRequestHeader() {}
+        addEventListener(name, callback) { this.listeners.set(name, callback); }
+        send() {}
+        abort() { this.onabort?.(); this.listeners.get('loadend')?.(); }
+    },
+    window: {addEventListener(name, callback) { documentListeners.set(`window:${name}`, callback); }},
     setInterval: () => 1,
     clearInterval: () => {},
     console,
@@ -95,6 +103,17 @@ const context = {
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('static/js/admin.js', 'utf8'), context);
 await new Promise(resolve => setTimeout(resolve, 0));
+
+for (const [expression, event] of [
+    ['uploadOne(new FormData(), () => {})', 'pagehide'],
+    ["uploadRaw('/upload', new Blob(['partial']), () => {})", 'offline'],
+]) {
+    const pending = vm.runInContext(expression, context);
+    assert.equal(vm.runInContext('activeUploadRequests.size', context), 1);
+    documentListeners.get(`window:${event}`)();
+    await assert.rejects(pending, /上传已取消/);
+    assert.equal(vm.runInContext('activeUploadRequests.size', context), 0);
+}
 
 await vm.runInContext(`
     adminLastActivityAt = Date.now() - ADMIN_ACTIVITY_GRACE_MS - 1;

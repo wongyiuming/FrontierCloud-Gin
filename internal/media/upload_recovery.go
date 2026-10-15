@@ -93,6 +93,21 @@ func uploadRecoveryBudget(v store.UploadReservation) time.Duration {
 // The budget function permits fast deadline tests without changing production
 // limits. Both investigation and rotation still inherit caller cancellation.
 func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store.UploadReservation) time.Duration, cleanupGrace time.Duration) error {
+	// Interrupted ordinary uploads can leave a stage even without a pool
+	// reservation. Reclaim dead staging on every role, without replaying or
+	// hashing publication journals during normal request serving.
+	release, err := s.acquireVolume(ctx, true)
+	if err != nil {
+		return err
+	}
+	err = s.ready()
+	if err == nil {
+		err = s.sweepAbandonedUploadStages(ctx)
+	}
+	release()
+	if err != nil {
+		return err
+	}
 	if s.pool == nil || s.nodes == nil {
 		return nil
 	}

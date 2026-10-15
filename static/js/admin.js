@@ -6,6 +6,20 @@ const selectedItemKinds = new Map();
 let currentPath = '';
 let csrfCookieName = '__Host-admin-csrf';
 let uploadRunning = false;
+let uploadInterrupted = false;
+const activeUploadRequests = new Set();
+function trackedUploadRequest() {
+    const xhr = new XMLHttpRequest();
+    activeUploadRequests.add(xhr);
+    xhr.addEventListener('loadend', () => activeUploadRequests.delete(xhr), {once: true});
+    return xhr;
+}
+function interruptUploadRequests() {
+    uploadInterrupted = true;
+    for (const xhr of activeUploadRequests) xhr.abort();
+}
+window.addEventListener('pagehide', interruptUploadRequests);
+window.addEventListener('offline', interruptUploadRequests);
 let clusterUpload = false;
 let mediaSearchTimer = null;
 let securityTimer = null;
@@ -402,7 +416,7 @@ function parseXhrData(xhr) {
 
 function uploadOne(formData, onProgress, endpoint = '/api/v1/media/admin/upload/item') {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+        const xhr = trackedUploadRequest();
         xhr.open('POST', endpoint);
         xhr.responseType = 'json';
         xhr.setRequestHeader('X-CSRF-Token', csrf());
@@ -1154,12 +1168,13 @@ function priorityMediaRow(item, data) {
 
 function uploadRaw(url, file, onProgress, direct = false) {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+        const xhr = trackedUploadRequest();
         xhr.open('PUT', url); xhr.responseType = 'json';
         if (!direct) xhr.setRequestHeader('X-CSRF-Token', csrf());
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
         xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
         xhr.onerror = () => reject(new Error('存储节点连接中断'));
+        xhr.onabort = () => reject(new Error('上传已取消'));
         xhr.onload = () => {
             const data = parseXhrData(xhr);
             if (xhr.status < 200 || xhr.status >= 300) reject(new Error(formatErrorDetail(data.detail)));

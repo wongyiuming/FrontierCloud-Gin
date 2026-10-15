@@ -1,0 +1,372 @@
+{
+  "version": 1,
+  "validated_at": "2026-10-15T12:15:08.831768+00:00",
+  "reviewed_parent": "79aa5ee2fdb6f5089112afaedd16b77e2c93d19c",
+  "production_updated": false,
+  "fixes": [
+    "Stage-only sweeps retain warm catalog caches; business write leases still invalidate.",
+    "Already-offline retries return before ciphertext preparation or upload admission."
+  ],
+  "go_inputs": {
+    "count": 767,
+    "aggregate_sha256": "236210283ea74f7c69de7003b38e0ab04909564db61997e102065d2677e991c0",
+    "differences": []
+  },
+  "go_race": {
+    "pass": 1384,
+    "skip": 28
+  },
+  "real_native_fleet": {
+    "sqlite": "passed",
+    "mysql": "passed",
+    "web_cpus": 1,
+    "web_memory_mib": 512
+  },
+  "candidate_images": {
+    "fc-album-candidate:20261015-r4": {
+      "id": "sha256:d91ab2e23d0c99d5c05032627fc4972fed91cae6cf13f2d67a46bb284eda5278",
+      "binary_sha256": "2a1e1414630d78dfd88d70a4b60f42291bd11254718f86666522f3fa780225d2"
+    },
+    "fc-album-edge-candidate:20261015-r4": {
+      "id": "sha256:3ad2224f36488d009ea1f6d122bdbbaaf9cb9bbb5fc8cb0ab8b4569b6bff556e"
+    },
+    "development_static": {
+      "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+      "static/js/admin-upload-integrity.js": "a10187588f74db79a8f48e64c79e092ae76a0cceae09933274a8f9bb2a8c249c",
+      "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+      "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+      "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+      "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+      "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+    }
+  },
+  "rn_runtime_inputs": {
+    "fc-rn-preprod-web-1": {
+      "image_id": "sha256:d91ab2e23d0c99d5c05032627fc4972fed91cae6cf13f2d67a46bb284eda5278",
+      "static": {
+        "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+        "static/js/admin-upload-integrity.js": "a10187588f74db79a8f48e64c79e092ae76a0cceae09933274a8f9bb2a8c249c",
+        "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+        "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+        "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+        "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+        "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+      }
+    },
+    "fc-rn-preprod-nginx-1": {
+      "image_id": "sha256:3ad2224f36488d009ea1f6d122bdbbaaf9cb9bbb5fc8cb0ab8b4569b6bff556e",
+      "static": {
+        "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+        "static/js/admin-upload-integrity.js": "a10187588f74db79a8f48e64c79e092ae76a0cceae09933274a8f9bb2a8c249c",
+        "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+        "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+        "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+        "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+        "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+      }
+    }
+  },
+  "performance": {
+    "development": {
+      "median_before_seconds": 0.11770000004768372,
+      "median_after_seconds": 0.07610000002384186,
+      "improvement_percent": 35.344095163116805,
+      "original_cover_sha256_equal": true,
+      "rounds_per_variant": 5
+    },
+    "rn": {
+      "median_before_seconds": 3.7367999999523165,
+      "median_after_seconds": 1.7617000000476837,
+      "improvement_percent": 52.85538428414248,
+      "original_cover_sha256_equal": true,
+      "rounds_per_variant": 5
+    }
+  },
+  "upload_browser": {
+    "real_chromium": true,
+    "real_http_server": true,
+    "role": "Standalone",
+    "base_url": "http://127.0.0.1:18080",
+    "cases": [
+      {
+        "case": "refresh",
+        "partial_bytes_observed": 15876,
+        "physical_cleanup_seconds": 0.04640433704480529,
+        "remaining_stages": {}
+      },
+      {
+        "case": "offline",
+        "partial_bytes_observed": 15876,
+        "physical_cleanup_seconds": 0.10175212996546179,
+        "remaining_stages": {}
+      },
+      {
+        "case": "retry-while-already-offline",
+        "queue": {
+          "online": false,
+          "encryptionCalls": 0,
+          "transferCalls": 0,
+          "interrupted": true,
+          "running": false,
+          "alerts": [
+            "当前网络已离线，请连接网络后重新选择文件",
+            "当前网络已离线，请连接网络后重新选择文件"
+          ]
+        },
+        "remaining_stages": {}
+      },
+      {
+        "case": "retry-conflict-download-abort",
+        "upload_status": 200,
+        "duplicate_status": 409,
+        "cancelled_download": {
+          "status": 200,
+          "read_bytes": 262144
+        },
+        "subsequent_original_sha256": "ed344c13ae5fd3ee108567119f041999bd891f0097f217eac65bafc576ffb1fa",
+        "remaining_stages": {}
+      }
+    ]
+  },
+  "encrypted_browser": {
+    "real_chromium": true,
+    "verified_public_https": true,
+    "base_url": "https://rnlsj.520mall.cc",
+    "original_picture": {
+      "source": true,
+      "sha256": "c0e26653bf5b8a0f6cf3fb80797cb26f40cb3bcdbd7af61eebc86c035661c7b0",
+      "width": 500,
+      "height": 500
+    },
+    "browser_encrypted_upload": {
+      "result": {
+        "path": "music/加密封面验收-7e3efeca3777402da07e8551913e6a9e/Album/01-cover.mp3"
+      },
+      "ciphertext_sha256": "3e814f0ebc3cc81e8917e1127c1bbee9b1d12b539539e34bb062e2f63b6727ee",
+      "ciphertext_bytes": 64817
+    },
+    "browser_temporary_files_after_upload": [],
+    "server_ciphertext_matches_browser": true,
+    "browser_roundtrip": {
+      "status": 200,
+      "sha256": "0e763035bb0425fdb14244666307f3ca0ea2d0ef422ccb693ec765aa718a58e3",
+      "range_status": 206,
+      "range": [
+        3,
+        0,
+        0,
+        0,
+        3,
+        90,
+        19
+      ]
+    },
+    "fixture_path": "music/加密封面验收-7e3efeca3777402da07e8551913e6a9e/Album/01-cover.mp3"
+  },
+  "lyrics_browser": {
+    "real_chromium": true,
+    "font_sizing_rules_unchanged": true,
+    "layouts": [
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 127,
+          "scrollHeight": 127,
+          "clientHeight": 127,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "lines": 5,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 94,
+          "scroll": 94
+        }
+      },
+      {
+        "viewport": [
+          768,
+          1024
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 100,
+          "scrollHeight": 100,
+          "clientHeight": 100,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "lines": 3,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 47,
+          "scroll": 47
+        }
+      },
+      {
+        "viewport": [
+          1360,
+          768
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 100,
+          "scrollHeight": 100,
+          "clientHeight": 100,
+          "scrollWidth": 1360,
+          "clientWidth": 1360,
+          "lines": 2,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 24,
+          "scroll": 24
+        }
+      }
+    ]
+  },
+  "nodes_browser": {
+    "real_chromium": true,
+    "backend": "deterministic fixture",
+    "unmodified_node_module": true,
+    "plan_paging_and_typed_confirmation": true,
+    "task_controls": true,
+    "backup_blocks_retirement": true,
+    "retirement_confirmation_and_history": true,
+    "csrf_headers": true,
+    "html_injection_rejected": true,
+    "module_order_preserved": true
+  },
+  "development_idle": [
+    {
+      "cpu_percent": 0.42,
+      "memory": "44.87MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.37,
+      "memory": "45.25MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.35,
+      "memory": "44.54MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.44,
+      "memory": "45.03MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.41,
+      "memory": "44.63MiB / 512MiB"
+    }
+  ],
+  "rn_staging": {
+    "running_containers": 0,
+    "compose_and_data_retained": true,
+    "stop_record_sha256": "e85041660d5728f09acba3461ddc957ebe58f09598d2cf44aad05431c59fdd0a",
+    "five_idle_samples": [
+      {
+        "cpu_percent": 6.72,
+        "memory": "49.31MiB / 512MiB"
+      },
+      {
+        "cpu_percent": 0.58,
+        "memory": "49.31MiB / 512MiB"
+      },
+      {
+        "cpu_percent": 0.8,
+        "memory": "49.3MiB / 512MiB"
+      },
+      {
+        "cpu_percent": 0.95,
+        "memory": "49.3MiB / 512MiB"
+      },
+      {
+        "cpu_percent": 1.25,
+        "memory": "49.3MiB / 512MiB"
+      }
+    ],
+    "production_read_only_status": {
+      "operation": "status",
+      "state": "degraded",
+      "read_only": true,
+      "checks": [
+        {
+          "item": "version",
+          "state": "pass",
+          "reason": "source da11d10a8f70fcdb05dc240ba4051f2243f341cd; images fixed by digest",
+          "next": "upgrade requires an explicit target release"
+        },
+        {
+          "item": "container:certificate-agent",
+          "state": "pass",
+          "reason": "running healthy",
+          "next": "inspect scoped diagnostics if not healthy"
+        },
+        {
+          "item": "container:web",
+          "state": "pass",
+          "reason": "running healthy",
+          "next": "inspect scoped diagnostics if not healthy"
+        },
+        {
+          "item": "application_database",
+          "state": "pass",
+          "reason": "application readiness probe passed",
+          "next": "this does not replace playback/Range acceptance"
+        },
+        {
+          "item": "certificate",
+          "state": "pass",
+          "reason": "certificate controller ready",
+          "next": "none"
+        },
+        {
+          "item": "database_generation",
+          "state": "pass",
+          "reason": "generation 7; role Follower; node 5a95e7378dbd7529eec1e03c890a33de",
+          "next": "retain matching recovery images"
+        },
+        {
+          "item": "node:6f3e96c0c76349eb840c845585b266fb",
+          "state": "pass",
+          "reason": "active online",
+          "next": "check node connectivity and authenticated health"
+        },
+        {
+          "item": "business_read",
+          "state": "unverified",
+          "reason": "playback and managed Range reads have not been exercised",
+          "next": "test a representative authorized managed Range read"
+        }
+      ]
+    }
+  },
+  "private_evidence_sha256": {
+    "go-race-r4.jsonl": "f90298d6984ae1c08d015a6bf31fa925a2080206fefc8b18492b3ef17fbfab8f",
+    "native-matrix-r4.txt": "2e4886ab21912fd93f9bd11aead82f1445866ff59801094816ca5b8e0f6fe196",
+    "source-ci-r4-final.txt": "1b612623c422e5993078cc8b76801543c206915f85d627cfc47b3375cc2efc5b",
+    "candidate-r4-build.txt": "683633f52c8cf8e5c26eef14823695ce5f0c4e9b1c784ada490163a8d1452ff1",
+    "image-input-proof-r4.json": "773cfc7edb1222327bb5e8e165c06d8edf1ed30e588ca6a3bb0f209c84bbb02d",
+    "development-idle-r4.json": "f95b6c0bcebd2a7c3ea5ac8bab687ccb83818e1730a94cd0078d7a15820688eb",
+    "rn-speed-r4/evidence.json": "b1ce223061b1371b694a6ebfadd040b03dc02d12272b5fad210469db00dcfec7",
+    "development-speed-r4/evidence.json": "4825ac266531c68ced4607ac1cd847ad0c7b098a288d3c4cc70ef19f41009b69",
+    "rn-encrypted-r4/evidence.json": "ef8a87aa6545b22581b6b1d51e5af3faa062cce06c577187b6555711079542a3",
+    "upload-browser-r4/evidence.json": "934d4f90fd918d57e595e152726989997442d49354fd005585004eff1e1cb01e",
+    "lyrics-r4/evidence.json": "e36ca01a03fdb0bfdde85a9004031aff1336a9864bc42eb139872959e0839b3d",
+    "nodes-r4/evidence.json": "f8a6669ac12436ce1ec6678d11d99157d1a11e7643033178fd63e958f9ce11ae"
+  },
+  "limits": [
+    "Initial r2/r3 evidence remains historical; this record describes r4 review fixes.",
+    "Private candidate revision labels inherit their base; public release proof follows merge.",
+    "Performance compares browser schedulers on the same candidate backend using the original fixture cover; WAN timings vary.",
+    "Initial actual-ENOSPC acceptance is not relabeled as an r4 rerun; storage publication logic is unchanged.",
+    "No production mutation occurred during development or RN acceptance."
+  ]
+}
