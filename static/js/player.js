@@ -21,6 +21,7 @@ const DIRECT_SEEK_ZONE_START = 0.75;
 const PRELOAD_MAX_BYTES = 128 * 1024 * 1024;
 const PRELOAD_START_SECONDS = 5;
 const cryptoPreparedCatalogs = new WeakSet();
+const metadataCatalogs = new WeakSet();
 let cryptoCatalogSequence = 0;
 
 
@@ -1241,6 +1242,17 @@ function applyMediaCatalog(entries) {
         : -1;
     currentIndex = matched >= 0 ? matched : 0;
     renderPlaylist();
+    if (window.FrontierMusicMetadata && !metadataCatalogs.has(entries)) {
+        metadataCatalogs.add(entries);
+        void window.FrontierMusicMetadata.decorate(entries, item => {
+            if (currentMediaList !== entries) return;
+            renderPlaylist();
+            if (currentMediaList[currentIndex] === item) {
+                if (art) art.title = middleEllipsis(item.title, 54);
+                updateMediaSession(item);
+            }
+        });
+    }
     if (!art || (selectedIdentity && matched < 0)) {
         initPlayer(currentMediaList[currentIndex], currentIndex);
     }

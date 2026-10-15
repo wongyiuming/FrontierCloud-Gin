@@ -1,0 +1,68 @@
+{
+  "scope": "Native nine-cover paging and browser-only encrypted MP3 metadata",
+  "base": "d1d6e6dce59e84c1de63647dcecc72f514e69a33",
+  "development_host": "192.168.6.201",
+  "production_modified": false,
+  "frontend": {
+    "technology": "HTML, CSS and native JavaScript",
+    "cards_per_page": 9,
+    "uses_available_width": true,
+    "path_label": true,
+    "click_paging_controls": false,
+    "list_layout_and_priority_order_preserved": true,
+    "desktop_and_mobile_layout_inspected": true
+  },
+  "encrypted_metadata": {
+    "server_decrypts_media": false,
+    "source": "Existing authorized browser service-worker plaintext Range adapter",
+    "tag_limit_bytes": 8388608,
+    "picture_limit_bytes": 4194304,
+    "page_picture_budget_bytes": 33554432,
+    "concurrent_metadata_jobs": 2,
+    "directory_candidates_limit": 8,
+    "existing_uploads_require_reupload": false,
+    "real_browser_sample": {
+      "directory": "music/加密封面验收/若水",
+      "encrypted": true,
+      "original_bytes": 6544381,
+      "parsed_title": "阿姆斯特丹",
+      "parsed_artist": "黃耀明",
+      "cover_natural_size": [
+        500,
+        498
+      ],
+      "cover_source": "page-local blob URL",
+      "playback_observed_seconds": 10.49791,
+      "transport": "Loopback-only SSH forwarding to isolated development Web; no TLS warning bypass"
+    }
+  },
+  "validation": {
+    "native_paging_smoke": "passed",
+    "id3_versions_unicode_image_signatures_and_malformed_fallback": "passed",
+    "catalog_startup_smoke": "passed",
+    "complete_media_race": "passed, 54.918 seconds",
+    "primary_direct_relay_real_webcrypto_http_metadata_cover_and_rename": "passed, 5.89 seconds; Node browser/service-worker adapters against disposable verified-TLS Gin servers, not a full browser fleet",
+    "focused_httpapi_race": "passed, 7.737 seconds",
+    "httpapi_full_race": "One unrelated existing diagnostic-retirement expectation failed with HTTP 410 instead of 202",
+    "baseline_reproduction": "Same failure reproduced on unchanged 4906da3 (same tree as base d1d6e6d). Diagnostics intentionally retired at 2026-10-15T00:00:00Z; test expectation was not changed.",
+    "final_source_checks": "passed, including source policy, Python regressions, crypto build integrity and native JavaScript smoke tests",
+    "idle_web_cpu_percent_samples": [
+      0.36,
+      0.52,
+      0.39,
+      0.43,
+      0.54
+    ],
+    "idle_web_memory_mib_range": [
+      43.33,
+      44.08
+    ],
+    "web_cpu_limit": 1,
+    "web_memory_limit_mib": 512
+  },
+  "limits": [
+    "Encrypted metadata needs HTTPS or the existing loopback secure-context exception; the LAN HTTP preview continues to support plaintext music and the new UI",
+    "No production upgrade or public image publication is claimed",
+    "Retired live staging was not rebuilt"
+  ]
+}

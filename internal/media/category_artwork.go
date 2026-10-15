@@ -9,7 +9,13 @@ import (
 
 type CategoryArtwork struct {
 	Category
-	Cover string `json:"cover,omitempty"`
+	Cover          string  `json:"cover,omitempty"`
+	MetadataTracks []Track `json:"metadata_tracks,omitempty"`
+}
+
+type directoryArtwork struct {
+	Cover  string
+	Tracks []Track
 }
 
 // Artwork is derived from visible, authorized tracks. Folder icons never
@@ -21,16 +27,17 @@ func (s *Service) CategoryArtwork(ctx context.Context, kind string, entries []Ca
 		if kind == "music" {
 			parsed, err := url.Parse(entry.URL)
 			if err == nil {
-				row.Cover = s.categoryArtwork(ctx, parsed.Query().Get("path"), include)
+				artwork := s.categoryArtwork(ctx, parsed.Query().Get("path"), include)
+				row.Cover, row.MetadataTracks = artwork.Cover, artwork.Tracks
 			}
 		}
 		result = append(result, row)
 	}
 	return result
 }
-func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) string {
+func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) directoryArtwork {
 	if !categoryShape(name, "music") {
-		return ""
+		return directoryArtwork{}
 	}
 	generation := uint64(0)
 	reliable, cacheable := s.repository.(catalogGeneration)
@@ -50,7 +57,7 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 			return cached
 		}
 	}
-	cover := ""
+	artwork := directoryArtwork{}
 	tracks, err := s.Catalog(ctx, "music", name, "", include)
 	if err == nil && len(tracks) > 0 {
 		ids := make([]string, len(tracks))
@@ -61,11 +68,17 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		if e == nil {
 			for i := range tracks {
 				if metadata[tracks[i].MediaID] != nil {
+					if len(artwork.Tracks) < 8 && strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3") {
+						track := tracks[i]
+						track.Encryption = metadata[track.MediaID]
+						artwork.Tracks = append(artwork.Tracks, track)
+					}
 					continue
 				}
 				s.applyMusicTags(ctx, &tracks[i])
 				if strings.HasPrefix(tracks[i].Cover, "/api/v1/media/cover?") {
-					cover = tracks[i].Cover
+					artwork.Cover = tracks[i].Cover
+					artwork.Tracks = nil
 					break
 				}
 			}
@@ -74,9 +87,16 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		children, e := s.Subcategories(ctx, "music", name, include)
 		if e == nil {
 			for _, child := range children {
-				cover = s.categoryArtwork(ctx, name+"/"+child.Name, include)
-				if cover != "" {
+				candidate := s.categoryArtwork(ctx, name+"/"+child.Name, include)
+				if candidate.Cover != "" {
+					artwork = candidate
 					break
+				}
+				if remaining := 8 - len(artwork.Tracks); remaining > 0 {
+					if len(candidate.Tracks) > remaining {
+						candidate.Tracks = candidate.Tracks[:remaining]
+					}
+					artwork.Tracks = append(artwork.Tracks, candidate.Tracks...)
 				}
 			}
 		}
@@ -88,11 +108,11 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 				s.categoryCovers = nil
 			}
 			if s.categoryCovers == nil {
-				s.categoryCovers = map[string]string{}
+				s.categoryCovers = map[string]directoryArtwork{}
 			}
-			s.categoryCovers[key] = cover
+			s.categoryCovers[key] = artwork
 		}
 		s.tagsMu.Unlock()
 	}
-	return cover
+	return artwork
 }

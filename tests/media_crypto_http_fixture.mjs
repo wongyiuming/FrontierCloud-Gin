@@ -92,6 +92,7 @@ page.window = page;
 vm.createContext(page);
 vm.runInContext(source('media-crypto-common.js'), page);
 vm.runInContext(source('media-crypto.js'), page);
+vm.runInContext(fs.readFileSync('static/js/music-metadata.js', 'utf8'), page);
 const keyConstructor = (await webcrypto.subtle.importKey('raw', new Uint8Array(32), 'AES-GCM', false, ['decrypt'])).constructor;
 worker = {
     crypto: webcrypto, CryptoKey: keyConstructor, TextEncoder, TextDecoder, Uint8Array, Uint32Array,
@@ -123,8 +124,19 @@ async function browserFetch(input, init = {}) {
 const directory = `music/Browser-${site}`;
 const renamedDirectory = `music/Browser-renamed-${site}`;
 const records = [];
+const artwork = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1YQAAAAASUVORK5CYII=', 'base64'));
+const safeSize = length => [length >> 21 & 127, length >> 14 & 127, length >> 7 & 127, length & 127];
+const tagFrame = (name, body) => [...new TextEncoder().encode(name), ...safeSize(body.length), 0, 0, ...body];
+const tagBody = [
+    ...tagFrame('TIT2', [3, ...new TextEncoder().encode('Encrypted song')]),
+    ...tagFrame('TPE1', [3, ...new TextEncoder().encode('Encrypted artist')]),
+    ...tagFrame('TALB', [3, ...new TextEncoder().encode('Encrypted album')]),
+    ...tagFrame('APIC', [3, ...new TextEncoder().encode('image/png'), 0, 3, 0, ...artwork]),
+];
+page.fetch = (input, init) => String(input).startsWith('/__fc_media/') ? browserFetch(input, init) : networkFetch(input, init);
 for (const [index, size] of [1048576 + 97, 61].entries()) {
     const plain = Uint8Array.from({length: size}, (_, offset) => (offset * 13 + index * 7) % 251);
+    if (index === 0) plain.set([73, 68, 51, 4, 0, 0, ...safeSize(tagBody.length), ...tagBody]);
     const file = {name: `browser-${index}.mp3`, size, slice(start, end) {
         assert(end - start <= 1048576, 'browser read beyond one plaintext chunk');
         return {async arrayBuffer() { return plain.slice(start, end).buffer; }};
@@ -153,6 +165,11 @@ for (const [index, size] of [1048576 + 97, 61].entries()) {
     records.push(record);
 }
 assert.equal(temporary.size, 0);
+const directories = await (await networkFetch('/api/v1/media/catalog/categories?media_type=music')).json();
+const directoryArtwork = directories.entries.find(entry => entry.name === `Browser-${site}`);
+assert.equal(directoryArtwork.metadata_tracks.length, 2, 'encrypted directory omitted browser metadata candidates');
+assert(directoryArtwork.metadata_tracks.every(entry => entry.encryption?.file_id && !entry.album && entry.cover === '/favicon.ico'),
+    'server must pass authorized opaque descriptors, not decrypt encrypted metadata');
 assert.equal(calls.filter(call => call.path.endsWith('/session')).length, 1,
     'multiple actual HTTP upload preparations did not reuse the browser ECDH session');
 
@@ -169,6 +186,14 @@ async function verify(record, path) {
     assert.equal(partial.headers.get('Content-Range'), `bytes ${start}-${end}/${record.plain.length}`);
     assert.deepEqual(new Uint8Array(await partial.arrayBuffer()), record.plain.subarray(start, end + 1),
         'browser seek across authenticated chunks mismatch');
+    const tags = await page.FrontierMusicMetadata.metadata(entries[0]);
+    if (record.plain.length > 1048576) {
+        assert.equal(tags.title, 'Encrypted song');
+        assert.equal(tags.artist, 'Encrypted artist');
+        assert.equal(tags.album, 'Encrypted album');
+        const cover = await fetch(tags.cover);
+        assert.deepEqual(new Uint8Array(await cover.arrayBuffer()), artwork, 'encrypted cover bytes changed');
+    } else assert.equal(Object.keys(tags).length, 0, 'untagged encrypted music must retain fallback display');
     const download = await browserFetch(page.FrontierMediaCrypto.virtualUrl(path, true, record.encryption.file_id));
     assert.match(download.headers.get('Content-Disposition'), /attachment/);
     assert.equal(createHash('sha256').update(new Uint8Array(await download.arrayBuffer())).digest('hex'),

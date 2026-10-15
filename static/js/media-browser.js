@@ -5,6 +5,31 @@
     const MAX_CACHE_BYTES = 256 * 1024;
     const HIDDEN_REVEAL_CLICK_LIMIT = 15;
     const HIDDEN_REVEAL_WINDOW_MS = 60 * 1000;
+    const artworkJobs = new WeakMap();
+
+    function hydrateVisibleArtwork() {
+        const grid = document.getElementById('categoryGrid');
+        const cards = window.FrontierDirectoryGlobe?.visibleCards?.() || [];
+        for (const card of cards) {
+            const job = artworkJobs.get(card);
+            if (!job || job.started || !window.FrontierMusicMetadata) continue;
+            const box = card.getBoundingClientRect();
+            if (box.bottom < 0 || box.top > window.innerHeight + 200) continue;
+            job.started = true;
+            void (async () => {
+                for (const track of job.tracks) {
+                    try {
+                        const tags = await window.FrontierMusicMetadata.metadata(track);
+                        if (tags.cover && grid.contains(card)) { job.show(tags.cover); return; }
+                    } catch (_) { /* Authorization/tag errors retain the album placeholder. */ }
+                }
+            })();
+        }
+    }
+    if (window.FrontierMusicMetadata) {
+        window.addEventListener('frontier-directory-visible', hydrateVisibleArtwork);
+        window.addEventListener('scroll', hydrateVisibleArtwork, {passive: true});
+    }
 
     function cacheRead(key) {
         if (!key) return null;
@@ -76,16 +101,21 @@
             placeholder.className = 'card-placeholder';
             placeholder.textContent = Array.from(String(entry.name || '音'))[0];
             artwork.append(placeholder);
-            if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
+            const show = source => {
+                artwork.querySelector('img')?.remove();
                 const image = document.createElement('img');
-                image.src = entry.cover;
+                image.src = source;
                 image.alt = '';
                 image.decoding = 'async';
                 image.draggable = false;
                 placeholder.hidden = true;
                 image.addEventListener('error', () => { image.hidden = true; placeholder.hidden = false; }, {once: true});
                 artwork.append(image);
+            };
+            if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
+                show(entry.cover);
             }
+            if (Array.isArray(entry.metadata_tracks) && entry.metadata_tracks.length) artworkJobs.set(card, {tracks: entry.metadata_tracks, show, started: false});
             const title = document.createElement('div');
             title.className = 'card-title';
             title.textContent = middleEllipsis(entry.name || '');

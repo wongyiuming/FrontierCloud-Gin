@@ -21,6 +21,7 @@ node tests/admin_crypto_upload_smoke.mjs
 node tests/karaoke_encrypted_snapshot_smoke.mjs
 node tests/catalog_startup_smoke.mjs
 node tests/directory_globe_smoke.mjs
+node tests/music_metadata_smoke.mjs
 node tests/player_cache_smoke.mjs
 node tests/network_observation_smoke.mjs
 node tests/audio_continuous_stream_smoke.mjs

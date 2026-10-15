@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="frontier-covers">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,13 +23,16 @@
             </section>
             <section class="orbit-panel" aria-label="音乐目录">
                 <div class="globe-toolbar">
-                    <span id="globeHint">拖动探索 · 滚轮旋转</span>
+                    <span id="globeHint">音乐目录</span>
                     <button id="globeToggle" class="globe-toggle" type="button" aria-pressed="false">列表视图</button>
                 </div>
-                <div id="globeStage" class="globe-stage" role="region" aria-label="前沿UI三维音乐目录，方向键旋转" tabindex="0">
-                    <canvas id="globeCanvas" aria-hidden="true"></canvas>
+                <div id="globeStage" class="globe-stage" role="region" aria-label="九宫格专辑目录，左右滑动翻页" tabindex="0">
                     <div id="categoryGrid" class="card-grid"><div class="empty">正在加载目录…</div></div>
                 </div>
+                <nav id="albumPagination" class="album-pagination" aria-label="专辑翻页" hidden>
+                    <div id="albumPages" class="album-pages" aria-hidden="true"></div>
+                    <span id="albumPageStatus" aria-live="polite"></span>
+                </nav>
             </section>
         </main>
     </div>
@@ -53,6 +56,10 @@
             pageTitle.slice(sourcePrefix.length).replace(/^\s*-\s*/, '') || '音乐目录';
         const directoryLabel = pageTitle.slice(sourcePrefix.length).replace(/^\s*-\s*/, '');
         if (directoryLabel) document.getElementById('globeTitle').textContent = directoryLabel;
+        const directoryPath = new URL(location.href).searchParams.get('path') || (brandKind === 'media' ? 'vido' : 'music');
+        const pathLabel = directoryPath.split('/').map(part => part === 'music' ? '音乐' : part === 'vido' ? '视频' : part).join(' / ');
+        document.getElementById('globeHint').dataset.pathLabel = pathLabel;
+        document.getElementById('globeHint').textContent = pathLabel;
         window.frontierCloudCatalogRevealKind =
             brandKind === 'music' ? 'music' : (brandKind === 'media' ? 'video' : '');
         window.frontierCloudStunUrls = {{STUN_URLS_JSON}};
