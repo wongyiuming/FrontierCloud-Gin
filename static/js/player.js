@@ -21,7 +21,7 @@ const DIRECT_SEEK_ZONE_START = 0.75;
 const PRELOAD_MAX_BYTES = 128 * 1024 * 1024;
 const PRELOAD_START_SECONDS = 5;
 const cryptoPreparedCatalogs = new WeakSet();
-const metadataCatalogs = new WeakSet();
+const metadataTracks = new WeakSet();
 let cryptoCatalogSequence = 0;
 
 
@@ -853,6 +853,7 @@ function bindPlayerBusinessEvents() {
 function initPlayer(media, index) {
     accountPlaybackTime();
     currentIndex = index;
+    loadSelectedMetadata(media);
     const sequence = ++playerSwitchSequence;
     const previousObjectUrl = activeObjectUrl;
     activeObjectUrl = nextPreload?.url === media.url && nextPreload.status === 'ready'
@@ -1214,6 +1215,21 @@ function mediaIdentity(item) {
     return item?.resource_id || item?.media_id || item?.media_path || '';
 }
 
+function loadSelectedMetadata(media) {
+    if (!media?.encryption || !window.FrontierMusicMetadata || metadataTracks.has(media)) return;
+    metadataTracks.add(media);
+    // Only the selected track is read; opening a large album must not enqueue
+    // its entire encrypted catalog behind the next selection's metadata.
+    void window.FrontierMusicMetadata.decorate([media], item => {
+        if (!currentMediaList.includes(item)) return;
+        renderPlaylist();
+        if (currentMediaList[currentIndex] === item) {
+            if (art) art.title = middleEllipsis(item.title, 54);
+            updateMediaSession(item);
+        }
+    });
+}
+
 function applyMediaCatalog(entries) {
     if (!Array.isArray(entries)) return;
     const generation = ++cryptoCatalogSequence;
@@ -1242,17 +1258,7 @@ function applyMediaCatalog(entries) {
         : -1;
     currentIndex = matched >= 0 ? matched : 0;
     renderPlaylist();
-    if (window.FrontierMusicMetadata && !metadataCatalogs.has(entries)) {
-        metadataCatalogs.add(entries);
-        void window.FrontierMusicMetadata.decorate(entries, item => {
-            if (currentMediaList !== entries) return;
-            renderPlaylist();
-            if (currentMediaList[currentIndex] === item) {
-                if (art) art.title = middleEllipsis(item.title, 54);
-                updateMediaSession(item);
-            }
-        });
-    }
+    loadSelectedMetadata(entries[currentIndex]);
     if (!art || (selectedIdentity && matched < 0)) {
         initPlayer(currentMediaList[currentIndex], currentIndex);
     }

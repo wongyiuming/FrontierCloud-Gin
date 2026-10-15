@@ -168,4 +168,19 @@ for (const failure of ['network', 'status', 'truncated']) {
     assert.equal(p.run('art.notice.show'), '媒体暂不可用，请稍后重试');
 }
 
+{
+    const p = playerContext(async () => new Response('unused'));
+    const scheduled = [];
+    p.context.window.FrontierMusicMetadata = {decorate(entries) { scheduled.push(...entries); return Promise.resolve(); }};
+    p.context.window.FrontierMediaCrypto = {prepareCatalog: async () => {}, resetFault() {}};
+    p.run(`currentMediaList = Array.from({length: 500}, (_, i) => ({media_id: String(i), type: 'audio', url: '/track-' + i, cover: '', title: String(i), encryption: {version: 1}}));
+        cryptoPreparedCatalogs.add(currentMediaList); applyMediaCatalog(currentMediaList);`);
+    assert.equal(scheduled.length, 1, 'opening a large encrypted album reads only the selected track');
+    assert.equal(scheduled[0].media_id, '0');
+    p.run('selectMedia(400)');
+    assert.equal(scheduled.length, 2, 'selecting a distant track must not queue intervening tracks');
+    assert.equal(scheduled[1].media_id, '400');
+    p.run('selectMedia(0)');
+    assert.equal(scheduled.length, 2, 'already requested metadata is reused');
+}
 console.log('player-cache-smoke-ok');

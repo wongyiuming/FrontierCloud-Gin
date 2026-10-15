@@ -17,7 +17,8 @@ playback behavior.
 Encrypted MP3 metadata is derived in the authorized browser through the existing
 service-worker Range adapter. The Master and storage nodes never decrypt it.
 ID3 tag reads are bounded to 8 MiB, pictures to 4 MiB, and at most two metadata
-jobs run concurrently. Covers are deduplicated by SHA-256 in a page-local 32 MiB
+jobs run concurrently. The player reads only the selected track's tags, rather
+than scanning the entire encrypted playlist. Covers are deduplicated by SHA-256 in a page-local 32 MiB
 blob pool and revoked on page exit; decrypted tags/covers never enter session
 storage, uploads, SQL, or a server-side cache. Directory responses include at
 most eight visible encrypted track descriptors as artwork candidates. Existing
