@@ -13,11 +13,15 @@ import (
 )
 
 type dockerRunner struct{ Directory string }
-type limitedBuffer struct{ bytes.Buffer }
+type limitedBuffer struct {
+	bytes.Buffer
+	exceeded bool
+}
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 8<<20 {
-		return 0, errors.New("command output exceeded limit")
+		b.exceeded = true
+		return 0, operator.ErrDockerOutputLimit
 	}
 	return b.Buffer.Write(p)
 }
@@ -67,7 +71,19 @@ func (d dockerRunner) RunEnv(ctx context.Context, environment map[string]string,
 	var diagnostic limitedBuffer
 	cmd.Stderr = &diagnostic
 	if err := cmd.Run(); err != nil {
-		return nil, operator.ClassifyDockerFailure(diagnostic.String())
+		category := operator.ClassifyDockerFailure(diagnostic.String())
+		if ctx.Err() == context.DeadlineExceeded {
+			category = operator.ErrDockerTimeout
+		} else if ctx.Err() != nil {
+			category = operator.ErrDockerCanceled
+		} else if out.exceeded || diagnostic.exceeded {
+			category = operator.ErrDockerOutputLimit
+		}
+		exitCode := -1
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
+		return nil, &operator.CommandFailure{Category: category, ExitCode: exitCode}
 	}
 	return out.Bytes(), nil
 }

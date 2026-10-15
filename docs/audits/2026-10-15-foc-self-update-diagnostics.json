@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "accepted_at": "2026-10-15T15:01:45.724116+00:00",
+  "base_revision": "c438232d16a8c95baa94fa81289e9afed980c881",
+  "development_host": "192.168.6.201",
+  "production_mutations_during_development_acceptance": false,
+  "tested_inputs": {
+    "cmd/fc/docker.go": "d476ec590553adc5730a041d5af9149e5f7143dc4550488d4fa8de6a2bed0f93",
+    "cmd/fc/docker_test.go": "4a97e0616b4d35098629d27d65f9ffc94b20352b139dc335dad794637f0beb2c",
+    "cmd/fc/self_update_native_test.go": "9b97d4828a09a530e9195abb9d22b8dd516defddae709320df50c3d37defa712",
+    "compose.foc.yaml": "bbfe7d8f9e50d08a48beca951c6e020f32b84deb18bcb6a8002c2bbd682f8449",
+    "docs/operator-manual.md": "1eaa32300124486f76656bc9a9a283c624bf97f37c8ffd8c011ee563cb1e40b8",
+    "internal/operator/command_errors.go": "4692def1bd47e1af5182d9bdd39202ce2ff7f5e0d38d9b41503439910001b887",
+    "internal/operator/foc_installer.yaml": "bbfe7d8f9e50d08a48beca951c6e020f32b84deb18bcb6a8002c2bbd682f8449",
+    "internal/operator/self_update.go": "5c71a4ca83ac76a0b8b67295e21316d06295e67ecf7e14868848762c7dcb1257",
+    "internal/operator/self_update_test.go": "89533d208ce2fda6c87be2a5b9403cf1f9b2429ffd8329b706004ef1bc0a452d",
+    "internal/release/verification.go": "b20e13a26316764f376ba8b4b5c7475ffd3a3e8dabe784273f917e52e9dfb87c",
+    "internal/release/verification_errors_test.go": "42050f273d864ca0e4958452492c6a450a15de249eb11c4d439e9cc27fa0a376"
+  },
+  "logs": {
+    "focused-race.txt": "3c404439334a4e16a35b081ac01286c999ed1b76b3d7e9482581a19545184f51",
+    "source-ci.txt": "2d6350138f6a3540327016bf56e86b51fbcd9dfd41392e88e08b862fd1156e41",
+    "native-diagnostics.txt": "8d111eafe869e9cda3bf16963c333127fff3e7fe5466684e400b22301434ee65"
+  },
+  "native_scope": {
+    "daemon": "disposable Docker 27.5.1 DinD, 2 CPU and 2 GiB",
+    "public_image_fixture": "c438232d16a8c95baa94fa81289e9afed980c881",
+    "publication_evidence": "fixed in the test binary only; real GHCR image proof, cold download, shipping Docker runner, Compose and host installer remain actual",
+    "checks": [
+      "actual cold image pull and global Compose installation",
+      "modified command refused with compose_install and exit_code=2",
+      "active installer lock refused with compose_install and exit_code=2",
+      "retry after removing fixture-owned conditions",
+      "global version equals the selected published fixture",
+      "business receipt unchanged"
+    ],
+    "not_claimed": [
+      "No native business fleet or database migration was performed for this CLI-only change.",
+      "Earlier complete real public-evidence CLI runs are supplemental evidence, not relabeled as the final test-binary fixture."
+    ]
+  },
+  "submitted_development_input": {
+    "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/foc-diagnostics-final-complete.sh",
+    "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/foc-diagnostics-source\nout=/home/wyium/foc-host-20261014/foc-diagnostics-evidence-final-complete\nbin=/home/wyium/foc-host-20261014/foc-diagnostics-bin\ncache=/home/wyium/fc-operations-20261012-01a13082\nmkdir -p \"$src\" \"$out\" \"$bin\"\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\ndocker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -v \"$src:/src\" -v \"$bin:/out\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm bash -ec 'gofmt -w internal/operator/command_errors.go internal/operator/self_update.go internal/operator/self_update_test.go cmd/fc/docker.go cmd/fc/docker_test.go cmd/fc/self_update_native_test.go internal/release/verification.go internal/release/verification_errors_test.go; go test -race -count=1 -p=1 ./internal/operator ./internal/release ./cmd/fc > /out/focused-race.txt 2>&1; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/foc-candidate ./cmd/fc; CGO_ENABLED=0 go test -c -p=1 -o /out/foc-native.test ./cmd/fc'\ncp \"$bin/focused-race.txt\" \"$out/focused-race.txt\"\nif [ ! -d .git ]; then git init -b dev >/dev/null; fi\ngit add --all\ngit -c user.name=Codex -c user.email=codex@openai.com commit --allow-empty -m \"Private self-update diagnostics acceptance source\" >/dev/null\nnpm ci --ignore-scripts --no-audit --no-fund > \"$out/npm.txt\" 2>&1\nbash scripts/test-ci-source.sh > \"$out/source-ci.txt\" 2>&1\nprintf 'PASS: self-update diagnostics source CI and focused race\\n'\n\nnode=fc-foc-complete-$(cat /proc/sys/kernel/random/uuid)\nprintf '%s\\n' \"$node\" > \"$out/native-node.txt\"\ncleanup() { docker stop \"$node\" >/dev/null 2>&1 || true; }\ntrap cleanup EXIT\ndocker run -d --privileged --cpus=2 --memory=2g --memory-swap=2g --name \"$node\" -e DOCKER_TLS_CERTDIR= docker:27.5.1-dind > \"$out/native-node-id.txt\"\nfor attempt in $(seq 1 60); do if docker exec \"$node\" docker info >/dev/null 2>&1; then break; fi; sleep 1; done\ndocker cp \"$bin/foc-native.test\" \"$node:/root/foc-native.test\"\ndocker exec \"$node\" mkdir -p /root/foc-node\ndocker exec \"$node\" sh -c 'printf \"disposable-foc-self-update\\n\" > /root/foc-native-fixture; printf \"{\\\"configuration_version\\\":1,\\\"role\\\":\\\"storage\\\",\\\"project\\\":\\\"fc-self-update-fixture\\\",\\\"database\\\":\\\"sqlite\\\",\\\"revision\\\":\\\"c438232d16a8c95baa94fa81289e9afed980c881\\\",\\\"compose_files\\\":[\\\"docker-compose.storage.yaml\\\"],\\\"state\\\":\\\"ready\\\"}\\n\" > /root/foc-node/.fc-deployment.json'\ndocker exec -e FC_SELF_UPDATE_DISPOSABLE_DAEMON=1 \"$node\" /root/foc-native.test -test.v -test.timeout=6m -test.run '^TestNativeSelfUpdateDiagnostics$' > \"$out/native-diagnostics.txt\" 2>&1\nprintf 'PASS: exact-source native cold pull, Compose install, diagnostic refusals and retry\\n'\n\n",
+    "record_sha256": "8cbfca9e3156c0fa5e80c84b549ea81cc5b4c064d96318c4a40feda45d291c2e",
+    "completed_at": "2026-10-15T14:59:31.895068+00:00"
+  },
+  "production_read_only_diagnostic_inputs": {
+    "ml.520mall.cc.foc-update-failure-readonly.json": {
+      "sha256": "9d81e3ca8bc154107456cf177b0ee62a4eaf1b18e498e313ef234b0512d6ecb6",
+      "submitted_input": "set -eu\nprintf 'READ_ONLY_DOCKER_EVENTS\\n'\ndocker events --since 2026-10-15T13:43:10Z --until 2026-10-15T13:43:25Z --filter label=com.docker.compose.project=frontiercloud-foc --format '{{json .}}'\nprintf 'READ_ONLY_INSTALLER_RESIDUE\\n'\ndocker ps -a --filter label=com.docker.compose.project=frontiercloud-foc --format '{{.Names}} {{.Status}}'\nprintf 'READ_ONLY_DISK\\n'\ndf -Pk / /usr/local /tmp\nprintf 'READ_ONLY_MANAGED_FILE_METADATA\\n'\nfor path in /usr/local/bin/foc /usr/local/lib/frontiercloud /usr/local/lib/frontiercloud/foc /usr/local/lib/frontiercloud/foc/.managed /usr/local/lib/frontiercloud/foc/.install-lock /usr/local/lib/frontiercloud/foc/launcher.current /usr/local/lib/frontiercloud/foc/launcher.pending /etc/frontiercloud; do\n if [ -e \"$path\" ] || [ -L \"$path\" ]; then stat -c '%n %F %u:%g %a' \"$path\"; fi\ndone\nprintf 'READ_ONLY_MANAGED_FILE_HASHES\\n'\nfor path in /usr/local/bin/foc /usr/local/lib/frontiercloud/foc/launcher.current /usr/local/lib/frontiercloud/foc/launcher.pending /usr/local/lib/frontiercloud/foc/.managed; do\n if [ -f \"$path\" ]; then sha256sum \"$path\"; fi\ndone\n",
+      "checked_at": "2026-10-15T14:28:35.250606+00:00",
+      "read_only": true
+    },
+    "ml.520mall.cc.foc-update-daemon-readonly.json": {
+      "sha256": "dd6d37e79c5a4c8aacbf4d74ea7a7ce8bca54c37de4479d81b897bd4ae05589e",
+      "submitted_input": "set -eu\nprintf 'READ_ONLY_TARGET_IMAGE\\n'\ndocker image inspect ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:5b8414c0b005317f16d7fdcedc1677a2f69ecfed896725c9a0ad03d6ae3d6b1d --format '{{.Id}} {{.Created}}' || true\nprintf 'READ_ONLY_DAEMON_ERROR_CATEGORIES\\n'\njournalctl -u docker --since '2026-10-15 13:43:10 UTC' --until '2026-10-15 13:43:25 UTC' --output=json --no-pager | python3 -c '\nimport json,sys\npatterns=[\"no space left on device\",\"permission denied\",\"operation not permitted\",\"read-only file system\",\"failed to resolve\",\"failed to copy\",\"failed to register layer\",\"failed to create\",\"failed to start\",\"no such file or directory\",\"connection refused\",\"context deadline exceeded\",\"i/o timeout\",\"tls handshake timeout\",\"unauthorized\",\"toomanyrequests\",\"invalid argument\",\"exec format error\",\"out of memory\",\"oom\",\"error\",\"failed\"]\nfor line in sys.stdin:\n try: row=json.loads(line)\n except ValueError: continue\n message=row.get(\"MESSAGE\",\"\").lower();matches=[x for x in patterns if x in message]\n if matches: print(json.dumps({\"timestamp\":row.get(\"__REALTIME_TIMESTAMP\"),\"matched_categories\":matches}))\n'\n",
+      "checked_at": "2026-10-15T14:29:32.754315+00:00",
+      "read_only": true
+    },
+    "ml.520mall.cc.foc-update-daemon-detail-readonly.json": {
+      "sha256": "d113ace5edd26b223de447fd849c3915e4947ccbdb10fdf5801727324290509d",
+      "submitted_input": "set -eu\njournalctl -u docker --since '2026-10-15 13:43:10 UTC' --until '2026-10-15 13:43:25 UTC' --output=json --no-pager | python3 -c '\nimport json,re,sys\nfor line in sys.stdin:\n try: row=json.loads(line)\n except ValueError: continue\n message=row.get(\"MESSAGE\",\"\")\n if not any(x in message.lower() for x in (\"error\",\"failed\")): continue\n message=re.sub(r\"[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s\\\"]+\", \"<url-redacted>\", message)\n message=re.sub(r\"(?i)(authorization|password|token|secret|credential)[=: ]+[^ ,\\\"]+\", r\"\\1=<redacted>\", message)\n message=re.sub(r\"\\?[^ \\\"]+\", \"?<query-redacted>\", message)\n print(json.dumps({\"timestamp\":row.get(\"__REALTIME_TIMESTAMP\"),\"message_redacted\":message[:4096]}))\n'\n",
+      "checked_at": "2026-10-15T14:30:01.231609+00:00",
+      "read_only": true
+    },
+    "ml.520mall.cc.foc-update-containerd-readonly.json": {
+      "sha256": "d67c53bafc73e9ae8281f566bf1f4fc8b32454162b1762e9211a0ab9854eb6f4",
+      "submitted_input": "set -eu\njournalctl -u docker -u containerd --since '2026-10-15 13:42:55 UTC' --until '2026-10-15 13:43:40 UTC' --output=json --no-pager | python3 -c '\nimport json,re,sys\nfor line in sys.stdin:\n try: row=json.loads(line)\n except ValueError: continue\n message=row.get(\"MESSAGE\",\"\")\n if not any(x in message.lower() for x in (\"error\",\"failed\")): continue\n message=re.sub(r\"[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s\\\"]+\", \"<url-redacted>\", message)\n message=re.sub(r\"(?i)(authorization|password|token|secret|credential)[=: ]+[^ ,\\\"]+\", r\"\\1=<redacted>\", message)\n message=re.sub(r\"\\?[^ \\\"]+\", \"?<query-redacted>\", message)\n print(json.dumps({\"timestamp\":row.get(\"__REALTIME_TIMESTAMP\"),\"message_redacted\":message[:4096]}))\n'\n",
+      "checked_at": "2026-10-15T14:31:07.610813+00:00",
+      "read_only": true
+    },
+    "ml.520mall.cc.foc-update-kernel-readonly.json": {
+      "sha256": "a57cad97aa10584109d5cfd07d948827536a0ef049872c0885281846556a2a59",
+      "submitted_input": "set -eu\nprintf 'READ_ONLY_KERNEL_OOM_WINDOW\\n'\njournalctl -k --since '2026-10-15 13:42:55 UTC' --until '2026-10-15 13:43:40 UTC' --output=json --no-pager | python3 -c '\nimport json,sys\nfor line in sys.stdin:\n try: row=json.loads(line)\n except ValueError: continue\n message=row.get(\"MESSAGE\",\"\")\n if any(x in message.lower() for x in (\"out of memory\",\"killed process\",\"oom-kill\",\"memory cgroup\")):print(json.dumps({\"timestamp\":row.get(\"__REALTIME_TIMESTAMP\"),\"kernel_memory_event\":message[:4096]}))\n'\nprintf 'READ_ONLY_MEMORY_TOTAL\\n'\npython3 -c 'from pathlib import Path; print(\"\\n\".join(x for x in Path(\"/proc/meminfo\").read_text().splitlines() if x.startswith((\"MemTotal:\",\"MemAvailable:\",\"SwapTotal:\"))))'\n",
+      "checked_at": "2026-10-15T14:50:57.643187+00:00",
+      "read_only": true
+    }
+  },
+  "historical_failure_limit": "The 13:43:14-13:43:21 UTC attempt has layer Write context-canceled and subsequent snapshot-cleanup errors. Its initiating stderr was discarded by the old tool, so its precise trigger cannot be reconstructed. Current files match the managed identity, no install lock remains, disk has about 4.7 GB available, and no kernel OOM event was found in that window. These later observations do not prove every original condition."
+}

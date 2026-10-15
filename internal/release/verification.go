@@ -77,6 +77,34 @@ type apiFailure struct {
 }
 
 func (f *apiFailure) Error() string { return "release verification unavailable" }
+
+// SafeVerificationFailure exposes only facts owned by the verifier, never an
+// arbitrary transport error, request URL, response body or API credential.
+func SafeVerificationFailure(err error) error {
+	var failure *apiFailure
+	if errors.As(err, &failure) {
+		switch failure.kind {
+		case "rate_limited":
+			return fmt.Errorf("release verification rate limited; retry_after_seconds=%d", max(0, min(failure.retry, 86400)))
+		case "network":
+			return errors.New("release verification network request failed")
+		case "http_status":
+			return fmt.Errorf("release verification API rejected request; http_status=%d", max(100, min(failure.status, 599)))
+		case "unexpected":
+			return errors.New("release verification API response is invalid")
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errors.New("release verification deadline exceeded")
+	}
+	if errors.Is(err, context.Canceled) {
+		return errors.New("release verification canceled")
+	}
+	if errors.Is(err, ErrManifest) {
+		return ErrManifest
+	}
+	return errors.New("release verification unavailable")
+}
 func rateInfo(h http.Header) map[string]any {
 	value := map[string]any{}
 	for name, key := range map[string]string{"X-RateLimit-Limit": "limit", "X-RateLimit-Remaining": "remaining", "X-RateLimit-Used": "used", "X-RateLimit-Reset": "reset_at"} {
@@ -186,7 +214,7 @@ func (v *Verifier) Artifact(parent context.Context, target string) (map[string]a
 	}
 	defer func() { <-v.lock }()
 	if v.now().Before(v.backoff) {
-		return nil, errors.New("release verification rate limited")
+		return nil, &apiFailure{kind: "rate_limited", retry: int64(v.backoff.Sub(v.now()).Seconds())}
 	}
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
