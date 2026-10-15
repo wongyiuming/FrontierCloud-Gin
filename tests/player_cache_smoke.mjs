@@ -171,7 +171,7 @@ for (const failure of ['network', 'status', 'truncated']) {
 {
     const p = playerContext(async () => new Response('unused'));
     const scheduled = [];
-    p.context.window.FrontierMusicMetadata = {decorate(entries) { scheduled.push(...entries); return Promise.resolve(); }};
+    p.context.window.FrontierMusicMetadata = {metadata(entry) { scheduled.push(entry); return Promise.resolve({}); }};
     p.context.window.FrontierMediaCrypto = {prepareCatalog: async () => {}, resetFault() {}};
     p.run(`currentMediaList = Array.from({length: 500}, (_, i) => ({media_id: String(i), type: 'audio', url: '/track-' + i, cover: '', title: String(i), encryption: {version: 1}}));
         cryptoPreparedCatalogs.add(currentMediaList); applyMediaCatalog(currentMediaList);`);
@@ -182,5 +182,19 @@ for (const failure of ['network', 'status', 'truncated']) {
     assert.equal(scheduled[1].media_id, '400');
     p.run('selectMedia(0)');
     assert.equal(scheduled.length, 2, 'already requested metadata is reused');
+}
+{
+    const p = playerContext(async () => new Response('unused'));
+    let attempts = 0;
+    p.context.window.FrontierMusicMetadata = {metadata() {
+        return ++attempts === 1 ? Promise.reject(new Error('transient Range failure')) : Promise.resolve({title: 'Recovered'});
+    }};
+    p.run('currentMediaList[0].encryption = {version: 1}; loadSelectedMetadata(currentMediaList[0]); loadSelectedMetadata(currentMediaList[0]);');
+    assert.equal(attempts, 1, 'an in-flight selected-track read remains deduplicated');
+    await flush();
+    p.run('loadSelectedMetadata(currentMediaList[0])');
+    await flush();
+    assert.equal(attempts, 2, 'a failed selected-track read must be retryable');
+    assert.equal(p.run('currentMediaList[0].title'), 'Recovered');
 }
 console.log('player-cache-smoke-ok');

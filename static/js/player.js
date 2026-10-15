@@ -1220,14 +1220,15 @@ function loadSelectedMetadata(media) {
     metadataTracks.add(media);
     // Only the selected track is read; opening a large album must not enqueue
     // its entire encrypted catalog behind the next selection's metadata.
-    void window.FrontierMusicMetadata.decorate([media], item => {
-        if (!currentMediaList.includes(item)) return;
+    void window.FrontierMusicMetadata.metadata(media).then(tags => {
+        for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) media[field] = tags[field];
+        if (!currentMediaList.includes(media)) return;
         renderPlaylist();
-        if (currentMediaList[currentIndex] === item) {
-            if (art) art.title = middleEllipsis(item.title, 54);
-            updateMediaSession(item);
+        if (currentMediaList[currentIndex] === media) {
+            if (art) art.title = middleEllipsis(media.title, 54);
+            updateMediaSession(media);
         }
-    });
+    }).catch(() => { metadataTracks.delete(media); });
 }
 
 function applyMediaCatalog(entries) {
