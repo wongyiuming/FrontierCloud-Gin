@@ -6,24 +6,31 @@
     const HIDDEN_REVEAL_CLICK_LIMIT = 15;
     const HIDDEN_REVEAL_WINDOW_MS = 60 * 1000;
     const artworkJobs = new WeakMap();
+    let artworkRunning = false;
 
     function hydrateVisibleArtwork() {
+        if (artworkRunning || !window.FrontierMusicMetadata) return;
         const grid = document.getElementById('categoryGrid');
         const cards = window.FrontierDirectoryGlobe?.visibleCards?.() || [];
         for (const card of cards) {
             const job = artworkJobs.get(card);
-            if (!job || job.started || !window.FrontierMusicMetadata) continue;
+            if (!job || job.next >= job.tracks.length || !grid.contains(card)) continue;
             const box = card.getBoundingClientRect();
             if (box.bottom < 0 || box.top > window.innerHeight + 200) continue;
-            job.started = true;
+            // Admit only one directory read at a time, then choose from the
+            // current page again. Hidden pages cannot retain queued scans.
+            artworkRunning = true;
             void (async () => {
-                for (const track of job.tracks) {
-                    try {
-                        const tags = await window.FrontierMusicMetadata.metadata(track);
-                        if (tags.cover && grid.contains(card)) { job.show(tags.cover); return; }
-                    } catch (_) { /* Authorization/tag errors retain the album placeholder. */ }
+                try {
+                    const tags = await window.FrontierMusicMetadata.metadata(job.tracks[job.next++]);
+                    if (tags.cover && grid.contains(card)) { job.show(tags.cover); job.next = job.tracks.length; }
+                } catch (_) { /* Authorization/tag errors retain the album placeholder. */ }
+                finally {
+                    artworkRunning = false;
+                    hydrateVisibleArtwork();
                 }
             })();
+            return;
         }
     }
     if (window.FrontierMusicMetadata) {
@@ -115,7 +122,7 @@
             if (String(entry.cover || '').startsWith('/api/v1/media/cover?')) {
                 show(entry.cover);
             }
-            if (Array.isArray(entry.metadata_tracks) && entry.metadata_tracks.length) artworkJobs.set(card, {tracks: entry.metadata_tracks, show, started: false});
+            if (Array.isArray(entry.metadata_tracks) && entry.metadata_tracks.length) artworkJobs.set(card, {tracks: entry.metadata_tracks, show, next: 0});
             const title = document.createElement('div');
             title.className = 'card-title';
             title.textContent = middleEllipsis(entry.name || '');

@@ -19,7 +19,7 @@ function element() {
     };
 }
 
-function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl} = {}) {
+function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl, windowExtras = {}} = {}) {
     const grid = element();
     const heading = element();
     heading.textContent = '前沿音乐 - 達明一派';
@@ -39,6 +39,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
             location: {href: 'https://catalog.fixture.invalid/api/v1/media/music/category?path=music%2Fartist'},
             frontierCloudCatalogConfig: config ?? {bootstrap: [{name: 'Album', url: '/album'}], cacheKey: '', url: ''},
             addEventListener: (event, callback, options) => listeners.push({event, callback, options}),
+            ...windowExtras,
         },
         sessionStorage: {getItem: () => null, setItem() {}},
         URL,
@@ -96,4 +97,29 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(page.grid.children[0].href, '/fresh');
 }
 
+{
+    let visible = [], finish;
+    const reads = [];
+    const page = fixture({
+        config: {bootstrap: Array.from({length: 18}, (_, i) => ({name: String(i), metadata_tracks: Array.from({length: 8}, (_, n) => `${i}/${n}`)}))},
+        windowExtras: {
+            innerHeight: 800,
+            FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible},
+            FrontierMusicMetadata: {metadata(track) { reads.push(track); return new Promise(resolve => { finish = resolve; }); }},
+        },
+    });
+    page.grid.contains = card => page.grid.children.includes(card);
+    page.grid.children.forEach(card => {card.getBoundingClientRect = () => ({top: 0, bottom: 200});});
+    const hydrate = page.listeners.find(item => item.event === 'frontier-directory-visible').callback;
+    visible = page.grid.children.slice(0, 9); hydrate();
+    assert.deepEqual(reads, ['0/0'], 'directory scans must not enqueue nine cards at once');
+    visible = page.grid.children.slice(9); hydrate();
+    finish({}); await new Promise(setImmediate);
+    assert.deepEqual(reads, ['0/0', '9/0'], 'after paging away, skip all remaining old-page candidates');
+    visible = []; finish({}); await new Promise(setImmediate);
+    assert.equal(reads.length, 2, 'no visible cards means no further reads');
+    visible = page.grid.children.slice(0, 9); hydrate();
+    assert.equal(reads.at(-1), '0/1', 'returning to a page resumes its bounded candidate cursor');
+    visible = []; finish({}); await new Promise(setImmediate);
+}
 console.log('catalog-startup-smoke-ok');

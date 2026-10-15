@@ -21,8 +21,10 @@ jobs run concurrently. The player reads only the selected track's tags, rather
 than scanning the entire encrypted playlist. Covers are deduplicated by SHA-256 in a page-local 32 MiB
 blob pool and revoked on page exit; decrypted tags/covers never enter session
 storage, uploads, SQL, or a server-side cache. Directory responses include at
-most eight visible encrypted track descriptors as artwork candidates. Existing
-file-ID, visibility, replacement and authorization checks apply to every Range.
+most eight visible encrypted track descriptors as artwork candidates. Directory
+scans admit one read at a time and reselect from the currently visible
+page after each result; paging away leaves at most one already admitted read.
+Existing file-ID, visibility, replacement and authorization checks apply to every Range.
 Metadata failures retain filename/default art and do not block playback. Already
 uploaded encrypted files require no re-upload or database migration.
 
