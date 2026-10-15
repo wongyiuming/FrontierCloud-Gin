@@ -68,8 +68,12 @@
             if (length <= 0 || length > data.length - width) break;
             const flags = version === 2 ? 0 : data[9];
             let body = data.subarray(width, width + length); data = data.subarray(width + length);
-            if ((version === 3 && (flags & 224)) || (version === 4 && (flags & 77))) continue;
+            if ((version === 3 && (flags & 224)) || (version === 4 && (flags & 76))) continue;
             if (version === 4 && ((flags & 2) || (bytes[5] & 128))) body = unSync(body);
+            if (version === 4 && (flags & 1)) {
+                if (body.length < 4 || syncSafe(body.subarray(0, 4)) !== body.length - 4) continue;
+                body = body.subarray(4);
+            }
             const field = {TIT2: 'title', TT2: 'title', TPE1: 'artist', TP1: 'artist', TALB: 'album', TAL: 'album'}[name];
             if (field) result[field] = text(body);
             if (name === 'APIC' || name === 'PIC') {

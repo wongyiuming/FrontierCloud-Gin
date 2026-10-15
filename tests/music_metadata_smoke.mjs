@@ -25,4 +25,17 @@ for (const invalid of [new Uint8Array(), Uint8Array.from([73, 68, 51, 4, 0, 0, 1
     assert.equal(api.parse(invalid).picture, undefined);
 }
 assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).length, 0);
+{
+    const withIndicator = (name, body, indicator = size(body.length), unsync = false) => {
+        const payload = unsync ? body.flatMap(byte => byte === 255 ? [255, 0] : [byte]) : body;
+        const bytes = frame(4, name, [...indicator, ...payload]); bytes[9] = unsync ? 3 : 1; return bytes;
+    };
+    const title = [3, ...ascii('Indicator title')], art = [3, ...ascii('image/jpeg\0'), 3, 0, ...image];
+    const result = api.parse(tag(4, [...withIndicator('TIT2', title), ...withIndicator('APIC', art, size(art.length), true)]));
+    assert.equal(result.title, 'Indicator title');
+    assert.deepEqual(Array.from(result.picture.bytes), image, 'DLI length describes the de-unsynchronized payload');
+    for (const indicator of [[128, 0, 0, 0], size(title.length + 1)]) {
+        assert.equal(api.parse(tag(4, withIndicator('TIT2', title, indicator))).title, undefined);
+    }
+}
 console.log('music-metadata-smoke-ok: ID3 versions, Unicode, image signatures, bounded malformed fallback');
