@@ -23,7 +23,7 @@ const data = {scope:'music', searching:false, directories:[
 const context = {
     document:{cookie:'admin_csrf=test',hidden:false,getElementById:element,createElement:()=>element('created'),querySelectorAll:()=>[],addEventListener(){}},
     location:{href:'',protocol:'https:'},URL,URLSearchParams,Blob,FormData:class{},XMLHttpRequest:class{},
-    setInterval:()=>1,clearInterval(){},console,alert(message){throw new Error(message);},
+    setInterval:()=>1,clearInterval(){},addEventListener(){},console,alert(message){throw new Error(message);},
     fetch:async (url,options={})=>{
         calls.push({url,method:options.method||'GET'});
         let status=200,body={};

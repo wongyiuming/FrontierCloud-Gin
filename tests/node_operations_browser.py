@@ -27,10 +27,10 @@ def run(output):
       target:{member_id:targetID,transport:'Relay'},review_sha256:'a'.repeat(64),unit_count:2,
       object_count:20,total_bytes:200,verified_objects:20,verified_bytes:200,objects:[],
       blockers:[],source_residuals:[],complete:false,next:'b'.repeat(64)};
-    window.nodes={role:'Master',node_id:'4'.repeat(32),protocol:2,app_version:'fixture',
+    window.nodes={role:'Master',node_id:'4'.repeat(32),protocol:2,app_version:'fixture',certificate:{state:'ready',mode:'automatic',hostname:'fixture.localhost'},
       relationships:[{relationship_id:'6'.repeat(32),peer_id:sourceID,state:'active',status:'online',direction:'downstream'},
       {relationship_id:'7'.repeat(32),peer_id:targetID,state:'active',status:'online',direction:'downstream'}],
-      storage_pool:{members:[{member_id:sourceID,member_kind:'Follower',transport:'Direct',health:'online',storage_enabled:1,writable:1},
+      storage_pool:{members:[{member_id:'auto',member_kind:'Auto',transport:'Automatic'}, {member_id:sourceID,member_kind:'Follower',transport:'Direct',health:'online',storage_enabled:1,writable:1},
       {member_id:targetID,member_kind:'Follower',transport:'Relay',health:'online',storage_enabled:1,writable:1},
       {member_id:'8'.repeat(32),member_kind:'MasterLocal',transport:'Local',health:'online'}]}};
     window.requestHeaders=()=>({'X-CSRF-Token':'browser-fixture'});
@@ -74,6 +74,11 @@ def run(output):
         original_order = page.locator('[data-admin-module]').evaluate_all('(x)=>x.map(e=>e.dataset.adminModule)')
         page.locator('#nodesRefresh').click()
         expect(page.locator('#nodeRelationships')).to_contain_text('target_unavailable')
+        expect(page.locator('.node-card-title strong').filter(has_text='auto')).to_have_count(0)
+        expect(page.locator('#nodeRelationships')).not_to_contain_text('Automatic')
+        local_card = page.locator('.node-card').filter(has=page.locator('.node-card-title strong', has_text='Master Local'))
+        expect(local_card.locator('.node-card-grid')).to_contain_text('本机证书')
+        expect(local_card.locator('.node-card-grid > .node-resource-panel')).to_have_count(4)
         planner = page.locator('.node-resource-panel').filter(has=page.get_by_text('整节点迁移计划', exact=True))
         if planner.count() == 0:
             planner = page.locator('.node-resource-panel').filter(has=page.get_by_role('button', name='生成只读迁移计划', exact=True))
@@ -123,7 +128,24 @@ def run(output):
         assert json.loads(start['options']['body']) == {'review_sha256': 'a' * 64,
             'confirm_source_id': '2' * 32, 'confirm_target_id': '3' * 32}
         assert not errors, errors
+        for stylesheet in ('admin.css', 'nodes-observability.css'):
+            page.add_style_tag(content=(source / 'static/css' / stylesheet).read_text())
+        page.locator('#nodesPanel').evaluate("""panel => {
+            for (const other of document.querySelectorAll('[data-admin-module]')) if (other!==panel) other.style.display='none';
+            panel.classList.remove('hidden'); panel.classList.add('expanded');
+            Object.assign(panel.style,{display:'block',position:'fixed',inset:'0',height:'100vh',maxHeight:'none',overflow:'auto',zIndex:'100'});
+        }""")
+        expect(local_card).to_be_visible()
+        panel_tops=local_card.locator('.node-card-grid > .node-resource-panel').evaluate_all('(panels)=>panels.map(p=>p.getBoundingClientRect().top)')
+        assert max(panel_tops)-min(panel_tops)<1, panel_tops
+        local_card.screenshot(path=str(output / 'node-local-certificate-master.png'))
         page.locator('#nodesPanel').screenshot(path=str(output / 'node-operations.png'))
+        page.evaluate("() => { nodes.role='Follower'; nodes.storage_pool={members:[]}; }")
+        page.locator('#nodesRefresh').evaluate('button => button.click()')
+        expect(page.locator('#nodeRelationships .node-card-grid')).to_contain_text('本机证书')
+        expect(page.locator('#nodeRelationships .node-card')).to_have_count(1)
+        page.locator('#nodeRelationships .node-card').screenshot(path=str(output / 'node-local-certificate-follower-card.png'))
+        page.locator('#nodesPanel').screenshot(path=str(output / 'node-local-certificate-follower.png'))
         (output / 'evidence.json').write_text(json.dumps({'real_chromium': True, 'backend': 'deterministic fixture',
             'unmodified_node_module': True, 'plan_paging_and_typed_confirmation': True,
             'task_controls': True, 'backup_blocks_retirement': True, 'retirement_confirmation_and_history': True,

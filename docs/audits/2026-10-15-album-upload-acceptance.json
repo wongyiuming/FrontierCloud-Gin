@@ -1,0 +1,598 @@
+{
+  "version": 1,
+  "validated_at": "2026-10-15T11:34:46.651964+00:00",
+  "base_revision": "da11d10a8f70fcdb05dc240ba4051f2243f341cd",
+  "production_updated": false,
+  "first_push_after_acceptance": true,
+  "go_inputs": {
+    "count": 767,
+    "aggregate_sha256": "59d259abe951a877da2ca4b3317e3da1610c94e22cd0f33f3ea82f0f7bcd709b",
+    "all_equal_to_development_test_source": true
+  },
+  "candidate_images": {
+    "fc-album-candidate:20261015-r2": {
+      "id": "sha256:783b1528d6058ceea735691180df5966c6f05d205d81dbbfeb0486ad52548956",
+      "binary_sha256": "490bd5f7b116e46778a9e53ba4ce0cd10952bf36ed3e6acfa149b8fbd33eab11"
+    },
+    "fc-album-candidate:20261015-r3": {
+      "id": "sha256:3d2f024ce653fd492995d2d1ebdd9dd00f5c4239186e18e5d93dd8348ab15224",
+      "binary_sha256": "490bd5f7b116e46778a9e53ba4ce0cd10952bf36ed3e6acfa149b8fbd33eab11"
+    },
+    "fc-album-edge-candidate:20261015-r3": {
+      "id": "sha256:62122075a542a3c8842039791499828c960063e6aa178ea826850911d267ea1c"
+    },
+    "development_static": {
+      "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+      "static/js/admin-upload-integrity.js": "8ec85b3e071a044abcd06d7341f80156115c2ef917642bf17fa7ce9946bf6f7e",
+      "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+      "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+      "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+      "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+      "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+    }
+  },
+  "candidate_image_scope": "Private development/staging images; inherited revision labels are not a public release proof. Native fleet used r2; r3 contains the identical Go binary and final browser assets.",
+  "go_race": {
+    "counts": {
+      "pass": 1381,
+      "skip": 28
+    },
+    "isolated_real_mysql": true,
+    "isolated_real_redis": true,
+    "skipped_tests": [
+      "TestCacheCrashHelper",
+      "TestCertificateBrowserFixture",
+      "TestAutomaticTLSContainerLifecycle",
+      "TestCertificateFleetObserver",
+      "TestAutomaticTLSInstallFixture",
+      "TestActualComposeSQLiteAndMySQLSelection",
+      "TestBrowserEncryptedHTTPClusterPrimaryDirectRelayLifecycle",
+      "TestMasterMigrationPagedRecoveryAcceptance",
+      "TestMasterMigrationPlanLargeActualNativeSourceBytes",
+      "TestAuthenticatedRecordingPagedPlanningRecoveryAcceptance",
+      "TestRealNativeMatrixFleetControl",
+      "TestRealNativeMatrixFleetMigrations",
+      "TestNativeDefaultComposeRegistersGlobalFoc",
+      "TestDoctorActualPublicPinnedImages",
+      "TestOperatorInstallComposeAcceptance",
+      "TestOperatorRecoverySetNativeSeed",
+      "TestOperatorRecoverySetNativeVerify",
+      "TestOperatorUpgradeComposeAcceptance",
+      "TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive",
+      "TestPeerBackupObservationColdReadDoesNotRepairLease",
+      "TestGlobalReservationAndFinalizationAuditFailurePreserveFunds",
+      "TestSQLiteAuditFailureRollsBackMutation",
+      "TestResourceMigrationPublishedShadowGrantScaling",
+      "TestPeerMigrationPublishedShadowGrantScaling",
+      "TestNodeAuditFailureRollsBackIssuedPair",
+      "TestExpectedColdBackupFilesReportMissingArtifactAndChunk",
+      "TestPromotionAuditFailureRollsBackRoleCatalogAndAllocation",
+      "TestSecurityAuditFailureRollsBackPolicy"
+    ]
+  },
+  "native_fleet": {
+    "sqlite": "passed",
+    "mysql": "passed",
+    "stores_per_database": 5,
+    "web_cpus": 1,
+    "web_memory_mib": 512,
+    "five_idle_samples_below_20_percent": true
+  },
+  "final_serial_browser": true,
+  "performance": {
+    "development": {
+      "median_before_seconds": 0.11670000004768372,
+      "median_after_seconds": 0.081,
+      "improvement_percent": 30.591259668463294,
+      "original_cover_sha256_equal": true,
+      "equal_emulated_network_latency_ms": 0,
+      "rounds": 5,
+      "before_seconds": [
+        0.11279999995231628,
+        0.1235,
+        0.11670000004768372,
+        0.12089999997615815,
+        0.11639999997615814
+      ],
+      "after_seconds": [
+        0.07719999992847443,
+        0.081,
+        0.0825,
+        0.07089999997615815,
+        0.08840000009536743
+      ]
+    },
+    "rn": {
+      "median_before_seconds": 5.2255,
+      "median_after_seconds": 1.7327000000476838,
+      "improvement_percent": 66.84145057797944,
+      "original_cover_sha256_equal": true,
+      "equal_emulated_network_latency_ms": 0,
+      "rounds": 5,
+      "before_seconds": [
+        7.1985,
+        2.123200000047684,
+        5.2255,
+        2.2338000000715255,
+        8.037199999928474
+      ],
+      "after_seconds": [
+        1.7376999999284743,
+        1.7321999999284745,
+        1.6420999999046326,
+        1.7327000000476838,
+        1.9324000000953674
+      ]
+    },
+    "earlier_r3_rn": {
+      "median_before_seconds": 2.1721000000238417,
+      "median_after_seconds": 1.6947000000476837,
+      "improvement_percent": 21.97873025969881,
+      "original_cover_sha256_equal": true,
+      "equal_emulated_network_latency_ms": 0,
+      "rounds": 5,
+      "before_seconds": [
+        4.348600000023842,
+        2.1097000000476838,
+        5.9443999999761585,
+        2.130100000023842,
+        2.1721000000238417
+      ],
+      "after_seconds": [
+        1.846,
+        1.6466000000238419,
+        1.6947000000476837,
+        1.8406000000238418,
+        1.687
+      ]
+    }
+  },
+  "encrypted_browser": {
+    "real_chromium": true,
+    "verified_public_https": true,
+    "base_url": "https://rnlsj.520mall.cc",
+    "original_picture": {
+      "source": true,
+      "sha256": "c0e26653bf5b8a0f6cf3fb80797cb26f40cb3bcdbd7af61eebc86c035661c7b0",
+      "width": 500,
+      "height": 500
+    },
+    "browser_encrypted_upload": {
+      "result": {
+        "path": "music/加密封面验收-97cba3d4484e479287df694dbf6d99b2/Album/01-cover.mp3"
+      },
+      "ciphertext_sha256": "637c473e962ccb7bf5b1b646e8284c21595d0a0b6ed639facb41e19fc081e435",
+      "ciphertext_bytes": 64817
+    },
+    "browser_temporary_files_after_upload": [],
+    "server_ciphertext_matches_browser": true,
+    "browser_roundtrip": {
+      "status": 200,
+      "sha256": "0e763035bb0425fdb14244666307f3ca0ea2d0ef422ccb693ec765aa718a58e3",
+      "range_status": 206,
+      "range": [
+        3,
+        0,
+        0,
+        0,
+        3,
+        90,
+        19
+      ]
+    },
+    "fixture_path": "music/加密封面验收-97cba3d4484e479287df694dbf6d99b2/Album/01-cover.mp3"
+  },
+  "upload_browser": {
+    "real_chromium": true,
+    "real_http_server": true,
+    "role": "Standalone",
+    "base_url": "http://127.0.0.1:18080",
+    "cases": [
+      {
+        "case": "refresh",
+        "partial_bytes_observed": 15876,
+        "physical_cleanup_seconds": 0.046294884057715535,
+        "remaining_stages": {}
+      },
+      {
+        "case": "offline",
+        "partial_bytes_observed": 15876,
+        "physical_cleanup_seconds": 0.10277750203385949,
+        "remaining_stages": {}
+      },
+      {
+        "case": "retry-conflict-download-abort",
+        "upload_status": 200,
+        "duplicate_status": 409,
+        "cancelled_download": {
+          "status": 200,
+          "read_bytes": 425984
+        },
+        "subsequent_original_sha256": "ed344c13ae5fd3ee108567119f041999bd891f0097f217eac65bafc576ffb1fa",
+        "remaining_stages": {}
+      }
+    ]
+  },
+  "lyrics_browser": {
+    "real_chromium": true,
+    "font_sizing_rules_unchanged": true,
+    "layouts": [
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 127,
+          "scrollHeight": 127,
+          "clientHeight": 127,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "lines": 5,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 94,
+          "scroll": 94
+        }
+      },
+      {
+        "viewport": [
+          768,
+          1024
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 100,
+          "scrollHeight": 100,
+          "clientHeight": 100,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "lines": 3,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 47,
+          "scroll": 47
+        }
+      },
+      {
+        "viewport": [
+          1360,
+          768
+        ],
+        "inline": {
+          "fontSize": "20.88px",
+          "height": 100,
+          "scrollHeight": 100,
+          "clientHeight": 100,
+          "scrollWidth": 1360,
+          "clientWidth": 1360,
+          "lines": 2,
+          "allTextInsideRow": true
+        },
+        "fullscreen": {
+          "whiteSpace": "normal",
+          "height": 24,
+          "scroll": 24
+        }
+      }
+    ]
+  },
+  "nodes_browser": {
+    "real_chromium": true,
+    "backend": "deterministic fixture",
+    "unmodified_node_module": true,
+    "plan_paging_and_typed_confirmation": true,
+    "task_controls": true,
+    "backup_blocks_retirement": true,
+    "retirement_confirmation_and_history": true,
+    "csrf_headers": true,
+    "html_injection_rejected": true,
+    "module_order_preserved": true
+  },
+  "development_idle": [
+    {
+      "cpu_percent": 2.1,
+      "memory": "44.32MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.31,
+      "memory": "44.63MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.33,
+      "memory": "45.14MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.4,
+      "memory": "45.15MiB / 512MiB"
+    },
+    {
+      "cpu_percent": 0.36,
+      "memory": "45.65MiB / 512MiB"
+    }
+  ],
+  "executed_upload_download_regressions": [
+    {
+      "test": "TestCertificateDownloadBoundToBrowserAndVerifiedIdentity",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/certmanager"
+    },
+    {
+      "test": "TestEncryptedDownloadPlanAuditHTTP",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestEncryptedDownloadPlanAuditLargeSelection",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestDownloadPlanIdentityHTTPPrimaryDirectRelay",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestPlaintextDownloadPlanKeepsLargeLegacyZIPAndRejectsOversizeMixedSelection",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestEncryptedPreparePlaintextLimitMatchesLocalAndMasterUpload",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestGlobalDownloadAdminRedisPrimaryDirectRelayAndOffline",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestEncryptedUploadExplicitChoiceSessionReuseRangeAndVisibility",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestNodeOwnedRenameAuthenticatesUpstreamPreservesIDsAndRefundsRenamedUpload",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestRemoteUploadAbsenceRaceLegacyAndExplicitCancelPreserveCommit",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestRemoteExpiredUploadSweepPreservesLiveBodyAndRepairsCompletion",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestUploadRecoveryRemoteRefreshLostFinalizeOfflineAndWrongReceipt",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
+    },
+    {
+      "test": "TestBrowserDownloadPlanChecksAllFilesInBoundedBatches",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestBrowserDownloadPlanRejectsMissingIdentityAndKeepsItsLease",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestBrowserDownloadPlanUsesLogicalGlobalIDAndRejectsMissingLocalBytes",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestDownloadPlanRejectsSameSizeReplacementAndRename",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestDownloadPlanRetainsMutationLeaseThroughPinnedRead",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestDownloadStreamingArchiveDeduplicatesAndProtectsFallback",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestArchiveHonorsCanceledContext",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestEncryptedLocalUploadRenameDeleteRollbackAndNonceTombstone",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestEncryptedUploadSizeAndLyricsMustNotParseCiphertext",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestGlobalDownloadCopyWithholdsFinalBlockUntilSizeDigestAndEOFAreProved",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestMasterLocalUploadVirtualDirectoriesValidationAndCancellation",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestOwnedUploadRechecksExpiredAdmissionBeforeReserve",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestOwnedUploadBoundedValidatedIdempotentAndFailedStreamCleanup",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestOwnedUploadLostCommitAndInterruptedIntentRecoverExactlyOnce",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestSafeRetirementRejectsAlreadyAdmittedUploadBeforeAnyStage",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestPeriodicUploadSweepReclaimsAbandonedStagesWithoutRestart",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestPeriodicUploadSweepPreservesPublicationEvidence",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestPeriodicUploadSweepDoesNotFollowStageSymlinks",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestExpiredRecoveryMaximumItemLeavesRotationGraceAndNextItem",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestExpiredRecoveryParentCancellationDoesNotDetachRotation",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestExpiredRecoveryRotationSQLFailureIsNotSilentlyIgnored",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadRecoveryCooldownStartsAfterShortAndLongSweep",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadRecoveryCancellationStopsCooldownAndPreventsNextSweep",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadRecoveryAlreadyCanceledDoesNotStartFirstSweep",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestExpiredUploadRecoveryPreservesAdmittedLocalTransferUntilCompletion",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestExpiredUploadRecoveryReleasesAbandonedButPreservesLiveUnknownAndComplete",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestAbandonedEncryptedUploadRecoveryRetiresDescriptorAndRequiresFreshFileKey",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadPublishesSimplifiedFilenameAndStableIdentity",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadSignaturesLayoutAndLyricBoundaries",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadStagesWithBoundedBufferAndCleansFailures",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadAmbiguousCommitRecoversWithoutDuplicateAudit",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestUploadRecoversPrePublicationIntentAndRejectsTampering",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+    },
+    {
+      "test": "TestMasterSignedCertificateDownloadRolesSerialAndAudit",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+    },
+    {
+      "test": "TestStorageUploadUsesSeparateStreamingPoolVerifiedTLSAndBoundedReceipt",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+    },
+    {
+      "test": "TestEncryptedStorageUploadCapabilityAuthenticatesDescriptor",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+    },
+    {
+      "test": "TestStorageUploadGenerationSignedAndValidated",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+    },
+    {
+      "test": "TestPrivateStorageUploadSizeFooterReplayAndDeletionRecovery",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+    },
+    {
+      "test": "TestMasterUploadPublicationAtomicIdentityQuotaAndConcurrentReplay",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
+    },
+    {
+      "test": "TestUploadPublicationReplayIsAtomicAndIdempotent",
+      "package": "github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
+    }
+  ],
+  "private_evidence_sha256": {
+    "go-race-final.jsonl": "346945ff89c511fc1cb652262928598ba6dde9718c2035380b3b856e3b352f86",
+    "native-matrix-final.txt": "8eae3b9a3be2e16850609ed5749431638ef119c0c17d7f8d342ad8ee8f412ece",
+    "source-ci-final-browser.txt": "6be344a55453dd19d9716ab79b5375e45735ccedd490b005d8e73ae0220f585e",
+    "image-input-proof.json": "27de18d36a0cf53fa5a8b49cfa09d69818e2030576302f991cf7ba6794d80ec9",
+    "development-idle.json": "7fc3b6748643dfd5da93ed1419578532134c1ba9b3fa5a39b621cf0bdc54d48d",
+    "rn-speed-r3/evidence.json": "8ed26846430c953c5c09f26f6418e144fb28b4b6a78e14e8d9fea8126e9fdecc",
+    "development-speed-final/evidence.json": "b622a0178b6f3b5b136cb3b30ca8476b623dcd36542010615464496c7b063137",
+    "rn-encrypted/evidence.json": "5ea3cb32168cb467d44e1c37b496c7d14936d4fc92aacdc124b9b23f82627c61",
+    "upload-browser/evidence.json": "24766c92aa85e7eb0e34cbee951007c90afa38b5763b5c62bced194d9deec026",
+    "upload-disk-full/evidence.json": "5c381fb88de4af1e345952b5e22dac7e663f29b8fcf38fd4ace7768493e6f3b2",
+    "upload-disk-full/server-enospc.log": "294e0bc8b0e9ec3babee2d101b5a3412aab5abb57ce643b94efcaeed8fa3e877",
+    "lyrics-final/evidence.json": "e36ca01a03fdb0bfdde85a9004031aff1336a9864bc42eb139872959e0839b3d",
+    "nodes-final/evidence.json": "f8a6669ac12436ce1ec6678d11d99157d1a11e7643033178fd63e958f9ce11ae"
+  },
+  "limits": [
+    "Nine synthetic ID3 album fixtures embed one unchanged real 500x500 cover; this is a scheduler benchmark, not playable-audio or production full-library acceptance.",
+    "Both benchmark variants use the same candidate backend and originals; only the browser scheduler is replaced with approved baseline source for the before measurement. Fresh browser contexts alternate variants; WAN latency varies.",
+    "Browser refresh/offline physical cleanup is tested against the Standalone development preview. Direct/Relay failure and quota cases use protocol/repository regressions, supplemented by the real five-node TLS fleet.",
+    "Publication crash and audit failures use controlled injection; actual ENOSPC uses a disposable 16 MiB Compose tmpfs, never a filled production disk or hardware power loss.",
+    "No production media migrations, user-data deletions or database edits were performed for acceptance."
+  ],
+  "actual_disk_full": {
+    "project": "fc-upload-disk-full-46465e8388c7495b8a31deb37f28de31",
+    "isolated_tmpfs_bytes": 16777216,
+    "web_cpus": 1,
+    "web_memory_mib": 512,
+    "fixture_user": "root for disposable tmpfs initialization; not a production configuration",
+    "transport": "isolated loopback publication with trusted-proxy fixture headers; not a TLS acceptance claim",
+    "server_enospc_logged": true,
+    "server_log_sha256": "294e0bc8b0e9ec3babee2d101b5a3412aab5abb57ce643b94efcaeed8fa3e877",
+    "disk_full_status": null,
+    "client_error": "[Errno 32] Broken pipe",
+    "disk_full_rejected": true,
+    "stage_files_after_failure": 0,
+    "catalog_after_failure": 404,
+    "retry_status": 200,
+    "retry_original_sha256": "c57c8f70be249a8f20e10e403c6b603df5950d094e2875d0ec37f8ed84ede087",
+    "five_idle_cpu_samples": [
+      2.93,
+      3.72,
+      3.77,
+      4.03,
+      3.89
+    ],
+    "owned_containers_removed": true
+  },
+  "rn_runtime_input_proof": {
+    "fc-rn-preprod-web-1": {
+      "image_id": "sha256:3d2f024ce653fd492995d2d1ebdd9dd00f5c4239186e18e5d93dd8348ab15224",
+      "static": {
+        "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+        "static/js/admin-upload-integrity.js": "8ec85b3e071a044abcd06d7341f80156115c2ef917642bf17fa7ce9946bf6f7e",
+        "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+        "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+        "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+        "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+        "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+      }
+    },
+    "fc-rn-preprod-nginx-1": {
+      "image_id": "sha256:62122075a542a3c8842039791499828c960063e6aa178ea826850911d267ea1c",
+      "static": {
+        "static/js/admin.js": "d87ac05e4183d1c0ec8f59abfd27d4e7babc1ed5c58a13e7bdcf516ed5de647f",
+        "static/js/admin-upload-integrity.js": "8ec85b3e071a044abcd06d7341f80156115c2ef917642bf17fa7ce9946bf6f7e",
+        "static/js/media-browser.js": "44c58ca82856c8c4463b2564eda8473599397b85d1796cc781b1c1a0371473bf",
+        "static/js/music-metadata.js": "ae72d49a4111448d1bedeb3e864d4f20e620b1297accfa3144198e89cda94aaa",
+        "static/js/nodes.js": "08416143e50ef168f36af58f7720f4405173948184a53003d28dcf0c4f4ea3eb",
+        "static/js/player.js": "c50ecfcb3b355d75e42e2144f4e3c7141f04e503bd74eaa69f98e828770167cd",
+        "static/css/player.css": "53437f6bd6bea484a5e37a2b20695087dd9e183cc11237ec938b5effb468cc23"
+      }
+    }
+  }
+}

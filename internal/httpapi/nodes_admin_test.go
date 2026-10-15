@@ -66,7 +66,9 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		RegisterAdminNodes(router, a, control)
 		RegisterOperational(router, a)
 		diagnosticResolver, _ := network.New(cfg.TrustedProxyNetworks)
-		RegisterPlaybackDiagnostics(router, cfg, diagnosticResolver, control, a, diagnostics.New())
+		// Exercise the active diagnostic contract at a fixed historical time;
+		// the production endpoint deliberately retires on 2026-10-15.
+		registerPlaybackDiagnostics(router, cfg, diagnosticResolver, control, a, diagnostics.New(), func() int64 { return 1790800000 })
 		siteService, err := sitecontrol.Open(dir)
 		if err != nil {
 			t.Fatal(err)

@@ -17,6 +17,15 @@ large files does not consume the ten-second heartbeat pool. Failed checks
 rotate without renewing expiry or refunding quota.
 Expiry permits investigation; it is **never evidence to delete media**.
 
+Each role also performs an online sweep of orphan `.upload-<id>.part`, lease
+and temporary-journal names, with at most 50 removals per pass. It holds the
+exclusive volume lease, checks the stage OS lease and refuses publication
+recovery fences. Live streams, final managed files, unknown names and durable
+publication journals are preserved. This closes the ordinary Standalone and
+Master staging-cleanup gap without requiring a restart. It reclaims physical
+staging bytes independently of the Master's unchanged reservation deadline;
+it does not prematurely refund logical quota or replay/hash publication work.
+
 - Master-local: acquire the same cross-process session lease as transfer,
   finalize and cancel; take the volume mutation lease. If a committed media
   identity, unknown file, recovery journal or active writer exists, defer.
@@ -132,6 +141,15 @@ audio belongs under `music/`. Do not weaken category validation or silently
 move an operator's file while repairing reservations.
 
 ## Regression coverage
+
+Admin explicitly aborts active multipart and raw storage requests on `pagehide`
+and browser `offline`, settles aborted raw-upload promises, and stops admitting
+later files in that selection. Prepared browser ciphertext still follows its
+`finally` cleanup. An interrupted queue reports completed, failed and unstarted
+counts; it never silently resumes on reconnect. A genuinely lost network peer
+may not deliver cancellation, so server inactivity deadlines and the existing
+leased recovery protocol remain required. Timeout alone never proves remote
+bytes absent or authorizes quota refund.
 
 Tests cover abandoned retry, live lease, unknown bytes, completed placement,
 unexpired reservation, audit rollback, periodic dead-stage cleanup without

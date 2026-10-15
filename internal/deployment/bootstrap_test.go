@@ -45,6 +45,7 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		"app/main.py": "excluded reference runtime\n", "updater/server.py": "excluded reference updater\n",
 		"docker-compose.yaml": "services: {}\n", "docker-compose.gin-mysql.yaml": "services: {}\n",
 		"docker-compose.storage.yaml": "services: {}\n", ".env.example": "SERVER_NAME=fixture.invalid\n",
+		"compose.foc.yaml": "services: {}\n", "scripts/foc": "#!/bin/sh\n", "scripts/install-foc.sh": "#!/bin/sh\n",
 		".env.storage.example": "SERVER_NAME=fixture.invalid\n", "docs/operator-manual.md": "Operator fixture\n",
 		"docs/operator-upgrade.md": "Approved upgrade fixture\n", "docs/operator-recovery-sets.md": "Recovery set fixture\n",
 	}
@@ -89,6 +90,9 @@ test "$(cat "$dest/Dockerfile")" = FROM\ committed-native
 test "$(cat "$dest/Dockerfile.gin")" = FROM\ committed-native
 test "$(cat "$dest/docs/operator-upgrade.md")" = Approved\ upgrade\ fixture
 test "$(cat "$dest/docs/operator-recovery-sets.md")" = Recovery\ set\ fixture
+test -f "$dest/compose.foc.yaml"
+test -f "$dest/scripts/foc"
+test -f "$dest/scripts/install-foc.sh"
 for excluded in .env data .git app updater/server.py cmd/untracked.txt; do
   test ! -e "$dest/$excluded"
 done

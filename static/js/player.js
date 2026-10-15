@@ -586,6 +586,7 @@ function sizeSynchronizedLyrics() {
     const panel = document.getElementById('inlineLyrics');
     const track = document.getElementById('inlineLyricsTrack');
     if (!panel || !track || activeLyricEntries.length === 0) return;
+    panel.style.setProperty('--sync-lyric-row-height', `${panel.clientHeight / 4}px`);
     const visible = Array.from(track.children).map(row => row.textContent || '');
     const longest = Math.max(1, ...visible.map(line => Array.from(line).length));
     const heightSize = Math.max(18, panel.clientHeight / 4.9);
@@ -701,7 +702,7 @@ function animateLyricForward(nextIndex) {
     setActiveLyricTime(panel, nextIndex);
     void track.offsetWidth;
     track.classList.add('sliding');
-    track.style.transform = 'translateY(-20%)';
+    track.style.transform = `translateY(-${track.children[0].offsetHeight}px)`;
     lyricSlideTimer = setTimeout(() => renderLyricWindow(nextIndex), LYRIC_SLIDE_MS + 30);
 }
 

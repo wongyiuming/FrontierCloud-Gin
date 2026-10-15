@@ -16,6 +16,9 @@ function element() {
             for (const child of children) this.children.push(...(child.fragment ? child.children : [child]));
         },
         addEventListener() {},
+        getBoundingClientRect: () => ({top: 0, bottom: 200}),
+        querySelector(selector) { return this.children.find(child => child.tagName === selector) || null; },
+        remove() { this.removed = true; },
     };
 }
 
@@ -32,7 +35,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
             getElementById: id => elements.get(id) || null,
             querySelector: selector => selector === 'h1' ? heading : null,
             querySelectorAll: () => [],
-            createElement: () => element(),
+            createElement: name => ({...element(), tagName: name}),
             createDocumentFragment: () => ({...element(), fragment: true}),
         },
         window: {
@@ -43,6 +46,8 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
         },
         sessionStorage: {getItem: () => null, setItem() {}},
         URL,
+        AbortController,
+        clearTimeout() {},
         Date: {now},
         // Do not fire DOMContentLoaded, idle timers, or any observation script:
         // they represent an independent resource download that never completes.
@@ -99,7 +104,8 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
 }
 
 {
-    let visible = [], finish, rejectRead, clock = 10000;
+    let visible = [], clock = 10000;
+    const pendingReads = new Map();
     const reads = [];
     const page = fixture({
         now: () => clock,
@@ -108,7 +114,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
         windowExtras: {
             innerHeight: 800,
             FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible},
-            FrontierMusicMetadata: {metadata(track) { reads.push(track); return new Promise((resolve, reject) => { finish = resolve; rejectRead = reject; }); }},
+            FrontierMusicMetadata: {metadata(track) { reads.push(track); return new Promise((resolve, reject) => { pendingReads.set(track, {resolve, reject}); }); }},
         },
     });
     page.grid.contains = card => page.grid.children.includes(card);
@@ -116,24 +122,26 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     const hydrate = page.artworkListeners.find(item => item.event === 'frontier-directory-visible').callback;
     visible = page.grid.children.slice(0, 9); hydrate();
     await new Promise(setImmediate);
-    assert.deepEqual(reads, ['0/0'], 'directory scans must not enqueue nine cards at once');
+    assert.deepEqual(reads, ['0/0', '1/0', '2/0'], 'directory scans must admit only three visible cards');
     visible = page.grid.children.slice(9); hydrate();
-    finish({}); await new Promise(setImmediate);
-    assert.deepEqual(reads, ['0/0', '9/0'], 'after paging away, skip all remaining old-page candidates');
-    assert.deepEqual(page.requests.map(item => item.url), ['/api/v1/media/catalog/artwork?path=0', '/api/v1/media/catalog/artwork?path=9'], 'offscreen directories must not fetch candidate descriptors');
-    visible = []; finish({}); await new Promise(setImmediate);
-    assert.equal(reads.length, 2, 'no visible cards means no further reads');
-    visible = page.grid.children.slice(0, 9); hydrate();
+    for (const track of ['0/0', '1/0', '2/0']) { pendingReads.get(track).resolve({}); await new Promise(setImmediate); }
+    assert.deepEqual(reads, ['0/0', '1/0', '2/0', '9/0', '10/0', '11/0'], 'after paging away, skip all remaining old-page candidates');
+    assert.deepEqual(page.requests.map(item => item.url), [0,1,2,9,10,11].map(n=>`/api/v1/media/catalog/artwork?path=${n}`), 'offscreen directories must not fetch candidate descriptors');
+    visible = [];
+    for (const track of ['9/0', '10/0', '11/0']) pendingReads.get(track).resolve({});
+    await new Promise(setImmediate);
+    assert.equal(reads.length, 6, 'no visible cards means no further reads');
+    visible = page.grid.children.slice(0, 1); hydrate();
     assert.equal(reads.at(-1), '0/1', 'returning to a page resumes its bounded candidate cursor');
-    visible = []; finish({}); await new Promise(setImmediate);
+    visible = []; pendingReads.get('0/1').resolve({}); await new Promise(setImmediate);
     visible = page.grid.children.slice(0, 1); hydrate();
     assert.equal(reads.at(-1), '0/2');
-    rejectRead(new Error('transient Range failure')); await new Promise(setImmediate);
+    pendingReads.get('0/2').reject(new Error('transient Range failure')); await new Promise(setImmediate);
     const beforeRetry = reads.length; hydrate();
     assert.equal(reads.length, beforeRetry, 'artwork failure needs backoff, not a tight retry loop');
     clock += 2100; hydrate();
     assert.equal(reads.at(-1), '0/2', 'failed candidate must remain available for a later visible retry');
-    visible = []; finish({}); await new Promise(setImmediate);
+    visible = []; pendingReads.get('0/2').resolve({}); await new Promise(setImmediate);
 }
 
 {
@@ -154,3 +162,41 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(attempts, 2); assert.equal(reads, 1, 'candidate endpoint must be retryable after a transient failure');
 }
 console.log('catalog-startup-smoke-ok');
+
+{
+    let visible=[], slowResolve;
+    const requests=[];
+    const page=fixture({
+        config:{bootstrap:Array.from({length:9},(_,i)=>({name:String(i),artwork_url:`/api/v1/media/catalog/artwork?path=${i}`}))},
+        fetchImpl:url=>{
+            requests.push(url);
+            const response={ok:true,json:async()=>({cover:'/api/v1/media/cover?file_path='+url.split('=').at(-1)})};
+            if(url.endsWith('=0')) return new Promise(resolve=>{slowResolve=()=>resolve(response);});
+            return Promise.resolve(response);
+        },
+        windowExtras:{innerHeight:800,FrontierDirectoryGlobe:{refresh(){},visibleCards:()=>visible}},
+    });
+    page.grid.contains=card=>page.grid.children.includes(card);visible=page.grid.children;
+    const hydrate=page.artworkListeners.find(item=>item.event==='frontier-directory-visible').callback;
+    hydrate();assert.equal(requests.length,3,'visible admission must remain bounded');
+    await new Promise(setImmediate);
+    assert.equal(page.grid.children.filter(card=>card.children[0].querySelector('img')).length,8,'one slow lookup must not block the other covers');
+    slowResolve();await new Promise(setImmediate);
+    assert.equal(page.grid.children.filter(card=>card.children[0].querySelector('img')).length,9);
+}
+
+{
+    let page,refreshCatalog,artworkRequests=0;
+    const entries=[{name:'Cached',artwork_url:'/api/v1/media/catalog/artwork?path=cached'}];
+    page=fixture({config:{bootstrap:entries,url:'/catalog'},
+        fetchImpl:url=>url==='/catalog'?new Promise(resolve=>{refreshCatalog=()=>resolve({ok:true,json:async()=>({entries})});}):(artworkRequests++,Promise.resolve({ok:true,json:async()=>({cover:'/api/v1/media/cover?file_path=cached'})})),
+        windowExtras:{innerHeight:800,FrontierDirectoryGlobe:{refresh(){},visibleCards:()=>page?.grid.children||[]}},
+    });
+    page.grid.contains=card=>page.grid.children.includes(card);
+    const hydrate=page.artworkListeners.find(item=>item.event==='frontier-directory-visible').callback;
+    hydrate();await new Promise(setImmediate);
+    assert.equal(artworkRequests,1);
+    refreshCatalog();await new Promise(setImmediate);hydrate();await new Promise(setImmediate);
+    assert.equal(artworkRequests,1,'same-scope validated catalog re-render must reuse the bounded page-memory lookup cache');
+    assert.ok(page.grid.children[0].children[0].querySelector('img'));
+}

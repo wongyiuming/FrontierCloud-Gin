@@ -93,11 +93,17 @@
         }
     }
     async function range(url, start, end, size) {
-        const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {Range: `bytes=${start}-${end}`}});
-        if (response.status !== 206 || response.headers.get('Content-Range') !== `bytes ${start}-${end}/${size}`) {
-            await response.body?.cancel(); throw new Error('音乐标签分段读取失败');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        try {
+            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: {Range: `bytes=${start}-${end}`}});
+            if (response.status !== 206 || response.headers.get('Content-Range') !== `bytes ${start}-${end}/${size}`) {
+                await response.body?.cancel(); throw new Error('音乐标签分段读取失败');
+            }
+            return await window.FrontierCryptoCommon.boundedBytes(response, end - start + 1);
+        } finally {
+            clearTimeout(timeout);
         }
-        return window.FrontierCryptoCommon.boundedBytes(response, end - start + 1);
     }
     async function load(entry) {
         if (!window.FrontierMediaCrypto || !window.FrontierCryptoCommon) throw new Error('浏览器解密组件未加载');

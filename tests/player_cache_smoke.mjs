@@ -28,7 +28,7 @@ function playerContext(fetchImpl) {
         window: {addEventListener() {}}, navigator: {},
         document: {
             getElementById: id => elementFor(id),
-            createElement: () => ({className: '', textContent: '', style: {}, children: [], appendChild(child) { this.children.push(child); }}),
+            createElement: () => ({className: '', textContent: '', style: {}, offsetHeight: 100, children: [], appendChild(child) { this.children.push(child); }}),
             querySelector: () => null,
             querySelectorAll: () => [],
         },
@@ -126,7 +126,7 @@ for (const failure of ['network', 'status', 'truncated']) {
     assert.deepEqual(track.children.slice(0, 4).map(row => row.textContent), ['one', 'two', 'three', 'four']);
     assert.equal(track.children[1].className, 'sync-lyric current');
     p.run('updateSynchronizedLyrics(3.1)');
-    assert.equal(track.style.transform, 'translateY(-20%)');
+    assert.equal(track.style.transform, 'translateY(-100px)', 'slide uses the actual departing row height so wrapped lines are not cut');
     assert.equal(track.children[2].className, 'sync-lyric current');
 }
 

@@ -29,6 +29,13 @@ acceptance can be claimed. Exact-source development-host acceptance and successf
 dev CI remain required; report the missing staging gate in the PR. This exception
 does not authorize merging a PR or upgrading the production Master.
 
+On 2026-10-15 the owner reauthorized an isolated RN preproduction deployment on
+that host's unused ports 80/443, alongside the production Relay on 8443. This
+staging project uses independent data, identities, volumes and Compose scope;
+it must never join or mount the production cluster. The retired external CD
+receiver remains removed. For the album-loading/upload-lifecycle delivery, the
+owner requires development and RN staging acceptance before the first push.
+
 ## Documentation ownership
 
 Keep top-level documentation intentionally separated:

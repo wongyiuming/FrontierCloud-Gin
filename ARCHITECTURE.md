@@ -78,6 +78,12 @@ Managed filesystem paths and database metadata form one business object lifecycl
 
 Deletion uses the recovery journal/quarantine transaction path. Rename must update both bytes and metadata or roll back.
 
+The upload recovery loop also reclaims abandoned staging on every role during
+normal service. A bounded sweep owns the exclusive volume lease and removes
+only reserved upload staging names without a live process lease or publication
+journal. It never hashes or replays publication intents online, removes managed
+final files, or treats elapsed time alone as proof that bytes may be discarded.
+
 ### Folder rename
 
 Folder rename is deliberately narrower than a general move API:
