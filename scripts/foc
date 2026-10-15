@@ -75,7 +75,7 @@ docker ps --all --format '{{.Label "com.docker.compose.project.working_dir"}}' >
 }
 while IFS= read -r candidate || [ -n "$candidate" ]; do
   case "$candidate" in /*) ;; *) continue ;; esac
-  if grep -qxF "$candidate" "$work/automatic" && ! grep -qxF "$candidate" "$registry" && { [ ! -f "$user_registry" ] || ! grep -qxF "$candidate" "$user_registry"; }; then
+  if [ ! -e "$candidate/.fc-deployment.json" ] && grep -qxF "$candidate" "$work/automatic" && ! grep -qxF "$candidate" "$registry" && { [ ! -f "$user_registry" ] || ! grep -qxF "$candidate" "$user_registry"; }; then
     "$backend" --directory "$candidate" compose-register >&2 || exit 2
   fi
   if [ -f "$candidate/.fc-deployment.json" ] && [ ! -L "$candidate/.fc-deployment.json" ]; then

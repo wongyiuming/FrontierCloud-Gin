@@ -119,6 +119,18 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.invoke('version').returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['version'])
 
+    def test_auto_discovery_does_not_register_existing_nonready_receipts(self):
+        deployment = self.deployment('interrupted')
+        self.registry.write_text('@compose\n')
+        self.labels.write_text(str(deployment) + '\n')
+        self.backend.write_text('#!/bin/sh\nfor arg do [ "$arg" != compose-register ] || exit 33; done\nprintf "%s\\n" "$@" > "$CALLS"\n')
+        for state, args in [('prepared', ['install', 'resume']), ('upgrade_fenced', ['upgrade'])]:
+            with self.subTest(state=state):
+                (deployment / '.fc-deployment.json').write_text('{"state":"' + state + '"}')
+                result = self.invoke(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(deployment), *args])
+
     def test_help_needs_no_deployment_or_docker(self):
         self.env['DOCKER_EXIT'] = '1'
         result = self.invoke('--help')
