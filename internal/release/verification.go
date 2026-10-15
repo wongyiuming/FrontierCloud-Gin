@@ -128,6 +128,13 @@ func verificationRequestFailure(ctx context.Context, err error) error {
 	return &apiFailure{kind: "network"}
 }
 
+func retryAfterSeconds(wait time.Duration) int64 {
+	if wait <= 0 {
+		return 0
+	}
+	return int64((wait-1)/time.Second) + 1
+}
+
 func (v *Verifier) get(ctx context.Context, route string, target any) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", v.base+route, nil)
 	if err != nil {
@@ -230,8 +237,8 @@ func (v *Verifier) Artifact(parent context.Context, target string) (map[string]a
 		return nil, parent.Err()
 	}
 	defer func() { <-v.lock }()
-	if v.now().Before(v.backoff) {
-		return nil, &apiFailure{kind: "rate_limited", retry: int64(v.backoff.Sub(v.now()).Seconds())}
+	if now := v.now(); now.Before(v.backoff) {
+		return nil, &apiFailure{kind: "rate_limited", retry: retryAfterSeconds(v.backoff.Sub(now))}
 	}
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
@@ -338,7 +345,7 @@ func (v *Verifier) Status(parent context.Context, force bool) (map[string]any, e
 	now := v.now()
 	if now.Before(v.backoff) {
 		out := copyValue(v.cache)
-		out["retry_after_seconds"] = max(0, int64(v.backoff.Sub(now).Seconds()))
+		out["retry_after_seconds"] = retryAfterSeconds(v.backoff.Sub(now))
 		return out, nil
 	}
 	age := 5 * time.Minute

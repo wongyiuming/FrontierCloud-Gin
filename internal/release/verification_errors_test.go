@@ -66,3 +66,31 @@ func TestVerificationHTTPPreservesInFlightCancellationAndTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestActiveVerificationBackoffRoundsUp(t *testing.T) {
+	for _, wait := range []time.Duration{time.Nanosecond, 999 * time.Millisecond, time.Second, time.Second + time.Nanosecond} {
+		v, err := NewVerifier(DefaultPolicy(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Unix(1, 0)
+		v.now = func() time.Time { return now }
+		v.backoff = now.Add(wait)
+		v.cache = map[string]any{"status": "backoff"}
+		want := int64(1)
+		if wait > time.Second {
+			want = 2
+		}
+		_, err = v.Artifact(context.Background(), strings.Repeat("a", 40))
+		if !strings.Contains(SafeVerificationFailure(err).Error(), fmt.Sprintf("retry_after_seconds=%d", want)) {
+			t.Fatal(wait, err)
+		}
+		status, err := v.Status(context.Background(), true)
+		if err != nil || status["retry_after_seconds"] != want {
+			t.Fatal(wait, status, err)
+		}
+	}
+	if retryAfterSeconds(0) != 0 || retryAfterSeconds(-time.Second) != 0 {
+		t.Fatal("expired backoff")
+	}
+}

@@ -30,6 +30,37 @@ type operatorImages struct{ *fakeImages }
 
 type unavailableOperatorImage struct{}
 
+type canceledOperatorImage struct {
+	failure error
+	cancel  context.CancelFunc
+}
+
+func (i canceledOperatorImage) ProveOperator(context.Context, string, string) (release.ImageProof, error) {
+	if i.cancel != nil {
+		i.cancel()
+	}
+	return release.ImageProof{}, fmt.Errorf("private must-not-escape: %w", i.failure)
+}
+
+func TestSelfUpdatePreservesImageCancellationAndClientTimeout(t *testing.T) {
+	for _, kind := range []string{"cancel", "client-timeout"} {
+		d, _, base, _ := upgradeFixture(t)
+		runner := &installerRunner{upgradeRunner: base}
+		d.Runner = runner
+		ctx, cancel := context.WithCancel(context.Background())
+		image := canceledOperatorImage{failure: context.DeadlineExceeded}
+		want := context.DeadlineExceeded
+		if kind == "cancel" {
+			image.failure, image.cancel, want = release.ErrImageNetwork, cancel, context.Canceled
+		}
+		_, err := d.SelfUpdate(ctx, strings.Repeat("b", 40), "amd64", fakeEvidence{true}, image)
+		cancel()
+		if !errors.Is(err, want) || !strings.Contains(err.Error(), "image_verification") || strings.Contains(err.Error(), "must-not-escape") || runner.installCalls != 0 {
+			t.Fatal(err)
+		}
+	}
+}
+
 func (unavailableOperatorImage) ProveOperator(context.Context, string, string) (release.ImageProof, error) {
 	return release.ImageProof{}, fmt.Errorf("private must-not-escape: %w", release.ErrImageUnavailable)
 }

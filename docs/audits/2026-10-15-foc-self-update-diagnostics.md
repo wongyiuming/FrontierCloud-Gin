@@ -9,7 +9,7 @@ No business upgrade, installer ownership check or lock is bypassed.
 
 ## Development acceptance
 
-The exact eleven implementation, test and manual inputs listed in the companion
+The exact implementation, test and manual inputs listed in the companion
 JSON passed focused Go race tests and the bounded source CI script on
 192.168.6.201. A disposable Docker-in-Docker daemon performed a real anonymous
 GHCR cold download and global Compose installation of published revision
@@ -19,6 +19,14 @@ conditions allowed a successful retry. The business receipt stayed unchanged.
 Publication evidence was fixed inside this test binary only; actual registry
 proof, image download, Docker runner, Compose and host installer were exercised.
 This is operator acceptance, not a new business fleet or database migration test.
+
+Review follow-ups extend real TLS cancellation and context/client timeout tests
+through both response-header and partial-body reads for GitHub verification and
+the registry, public-token, authenticated-retry and fixed-host config redirect
+paths. The self-update image stage preserves these causes. Storage/permission
+failures take precedence over secondary lock messages, unavailable images retain
+their specific category, and an active backoff always reports a positive rounded
+wait. Each follow-up's native/race/source evidence is retained separately in JSON.
 
 ## Historical Direct failure
 

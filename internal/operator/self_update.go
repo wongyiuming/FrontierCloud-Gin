@@ -51,7 +51,10 @@ func (d *Deployment) SelfUpdate(ctx context.Context, target, arch string, eviden
 	image, err := images.ProveOperator(ctx, target, arch)
 	repository, _ := release.ImageRepository("web")
 	if err != nil {
-		for _, category := range []error{release.ErrImagePermission, release.ErrImageNetwork, release.ErrImageIntegrity, release.ErrImagePlatform, release.ErrImageUnavailable} {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		for _, category := range []error{context.DeadlineExceeded, context.Canceled, release.ErrImagePermission, release.ErrImageNetwork, release.ErrImageIntegrity, release.ErrImagePlatform, release.ErrImageUnavailable} {
 			if errors.Is(err, category) {
 				return result, fmt.Errorf("operator self-update image_verification failed: %w", category)
 			}
