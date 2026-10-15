@@ -20,7 +20,7 @@ const ids = ['globeStage', 'globeToggle', 'globeCount', 'globeHint', 'albumPagin
 const nodes = new Map(ids.map(id => [id, element()])); nodes.set('categoryGrid', grid);
 const html = element('frontier-covers'); let reduced = false;
 const context = {document: {documentElement: html, getElementById: id => nodes.get(id), createElement: () => element()},
-    window: {dispatchEvent() {}}, Event: class {}, matchMedia: () => ({get matches() { return reduced; }}), ResizeObserver: class {observe() {}}};
+    window: {dispatchEvent() {}, innerHeight: 800}, Event: class {}, matchMedia: () => ({get matches() { return reduced; }}), ResizeObserver: class {observe() {}}};
 vm.runInNewContext(fs.readFileSync(new URL('../static/js/directory-globe.js', import.meta.url), 'utf8'), context);
 context.window.FrontierDirectoryGlobe.refresh();
 assert.deepEqual(grid.children.map(group => group.children.length), [9, 9, 5]);
@@ -29,6 +29,11 @@ nodes.get('globeStage').handlers.get('keydown')({key: 'ArrowRight', preventDefau
 assert.equal(grid.scrollLeft, 600); assert.equal(grid.lastScroll.behavior, 'smooth');
 assert.equal(nodes.get('albumPageStatus').textContent, '2 / 3');
 assert.deepEqual(Array.from(context.window.FrontierDirectoryGlobe.visibleCards()), cards.slice(9, 18));
+nodes.get('globeStage').getBoundingClientRect = () => ({height: 1200});
+let wheelPrevented = false;
+nodes.get('globeStage').handlers.get('wheel')({deltaY: 100, deltaX: 0, timeStamp: 1000, preventDefault() {wheelPrevented = true;}});
+assert.equal(wheelPrevented, false, 'tall cover pages must preserve vertical scrolling');
+assert.equal(grid.scrollLeft, 600, 'vertical wheel over a tall grid must not flip pages');
 const click = {preventDefault() { this.prevented = true; }, stopPropagation() {}};
 grid.handlers.get('pointerdown')({pointerType: 'mouse', button: 0, pointerId: 1, clientX: 400});
 grid.handlers.get('pointermove')({pointerId: 1, clientX: 230});

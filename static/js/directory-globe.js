@@ -70,6 +70,9 @@
     grid.addEventListener('dragstart', event => { if (!list) event.preventDefault(); });
     stage.addEventListener('wheel', event => {
         if (list || pages() <= 1 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+        // Wide square-cover pages may extend below the viewport. Preserve
+        // vertical wheel scrolling so every row and the footer stay reachable.
+        if (stage.getBoundingClientRect().height > window.innerHeight - 100) return;
         event.preventDefault(); if (event.timeStamp - wheelTime < 450 || Math.abs(event.deltaY) < 8) return;
         wheelTime = event.timeStamp; go(page + Math.sign(event.deltaY));
     }, {passive: false});

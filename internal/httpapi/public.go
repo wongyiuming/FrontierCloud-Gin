@@ -89,6 +89,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		c.Redirect(http.StatusSeeOther, "/api/v1/media?ui="+strings.ReplaceAll(id, "-", ""))
 	})
 	group.GET("/catalog/categories", p.categories)
+	group.GET("/catalog/artwork", p.directoryArtwork)
 	group.GET("/catalog/media", p.catalog)
 	group.GET("/cover", p.musicCover)
 	group.GET("/music", func(c *gin.Context) { p.categoryPage(c, "music") })
@@ -180,6 +181,28 @@ func (p *Public) categories(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": p.media.CategoryArtwork(c.Request.Context(), kind, entries, include)})
 }
+func (p *Public) directoryArtwork(c *gin.Context) {
+	name, ok := queryText(c, "path", 1024)
+	if !ok {
+		return
+	}
+	include, ok := queryBool(c, "include_hidden")
+	if !ok {
+		return
+	}
+	artwork, err := p.media.DirectoryArtwork(c.Request.Context(), name, include)
+	if err != nil {
+		if errors.Is(err, media.ErrCategory) {
+			detail(c, 404, "Music category not found")
+		} else {
+			internalError(c, err)
+		}
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	c.JSON(200, artwork)
+}
+
 func (p *Public) catalog(c *gin.Context) {
 	kind, ok := kindQuery(c)
 	if !ok {

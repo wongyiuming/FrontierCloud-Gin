@@ -52,7 +52,7 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
         },
     };
     vm.runInNewContext(source, context);
-    return {grid, elements, listeners, requests};
+    return {grid, elements, listeners: listeners.filter(item => item.event === 'DOMContentLoaded'), artworkListeners: listeners, requests};
 }
 
 {
@@ -101,7 +101,8 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     let visible = [], finish;
     const reads = [];
     const page = fixture({
-        config: {bootstrap: Array.from({length: 18}, (_, i) => ({name: String(i), metadata_tracks: Array.from({length: 8}, (_, n) => `${i}/${n}`)}))},
+        config: {bootstrap: Array.from({length: 18}, (_, i) => ({name: String(i), artwork_url: `/api/v1/media/catalog/artwork?path=${i}`}))},
+        fetchImpl: async url => ({ok: true, json: async () => ({metadata_tracks: Array.from({length: 8}, (_, n) => `${new URL(url, 'https://fixture').searchParams.get('path')}/${n}`)})}),
         windowExtras: {
             innerHeight: 800,
             FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible},
@@ -110,12 +111,14 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     });
     page.grid.contains = card => page.grid.children.includes(card);
     page.grid.children.forEach(card => {card.getBoundingClientRect = () => ({top: 0, bottom: 200});});
-    const hydrate = page.listeners.find(item => item.event === 'frontier-directory-visible').callback;
+    const hydrate = page.artworkListeners.find(item => item.event === 'frontier-directory-visible').callback;
     visible = page.grid.children.slice(0, 9); hydrate();
+    await new Promise(setImmediate);
     assert.deepEqual(reads, ['0/0'], 'directory scans must not enqueue nine cards at once');
     visible = page.grid.children.slice(9); hydrate();
     finish({}); await new Promise(setImmediate);
     assert.deepEqual(reads, ['0/0', '9/0'], 'after paging away, skip all remaining old-page candidates');
+    assert.deepEqual(page.requests.map(item => item.url), ['/api/v1/media/catalog/artwork?path=0', '/api/v1/media/catalog/artwork?path=9'], 'offscreen directories must not fetch candidate descriptors');
     visible = []; finish({}); await new Promise(setImmediate);
     assert.equal(reads.length, 2, 'no visible cards means no further reads');
     visible = page.grid.children.slice(0, 9); hydrate();

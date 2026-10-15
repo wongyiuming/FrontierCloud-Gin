@@ -11,6 +11,7 @@ type CategoryArtwork struct {
 	Category
 	Cover          string  `json:"cover,omitempty"`
 	MetadataTracks []Track `json:"metadata_tracks,omitempty"`
+	ArtworkURL     string  `json:"artwork_url,omitempty"`
 }
 
 type directoryArtwork struct {
@@ -27,13 +28,24 @@ func (s *Service) CategoryArtwork(ctx context.Context, kind string, entries []Ca
 		if kind == "music" {
 			parsed, err := url.Parse(entry.URL)
 			if err == nil {
-				artwork := s.categoryArtwork(ctx, parsed.Query().Get("path"), include)
-				row.Cover, row.MetadataTracks = artwork.Cover, artwork.Tracks
+				values := url.Values{"path": {parsed.Query().Get("path")}}
+				if include {
+					values.Set("include_hidden", "true")
+				}
+				row.ArtworkURL = "/api/v1/media/catalog/artwork?" + values.Encode()
 			}
 		}
 		result = append(result, row)
 	}
 	return result
+}
+
+func (s *Service) DirectoryArtwork(ctx context.Context, name string, include bool) (CategoryArtwork, error) {
+	if err := s.CategoryExists(ctx, name, "music"); err != nil {
+		return CategoryArtwork{}, err
+	}
+	artwork := s.categoryArtwork(ctx, name, include)
+	return CategoryArtwork{Cover: artwork.Cover, MetadataTracks: artwork.Tracks}, nil
 }
 func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) directoryArtwork {
 	if !categoryShape(name, "music") {

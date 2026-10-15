@@ -166,7 +166,9 @@ for (const [index, size] of [1048576 + 97, 61].entries()) {
 }
 assert.equal(temporary.size, 0);
 const directories = await (await networkFetch('/api/v1/media/catalog/categories?media_type=music')).json();
-const directoryArtwork = directories.entries.find(entry => entry.name === `Browser-${site}`);
+const directoryEntry = directories.entries.find(entry => entry.name === `Browser-${site}`);
+assert.equal(directoryEntry.metadata_tracks, undefined, 'listing must not embed offscreen encrypted candidates');
+const directoryArtwork = await (await networkFetch(directoryEntry.artwork_url)).json();
 assert.equal(directoryArtwork.metadata_tracks.length, 2, 'encrypted directory omitted browser metadata candidates');
 assert(directoryArtwork.metadata_tracks.every(entry => entry.encryption?.file_id && !entry.album && entry.cover === '/favicon.ico'),
     'server must pass authorized opaque descriptors, not decrypt encrypted metadata');

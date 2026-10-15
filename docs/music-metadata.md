@@ -20,8 +20,10 @@ ID3 tag reads are bounded to 8 MiB, pictures to 4 MiB, and at most two metadata
 jobs run concurrently. The player reads only the selected track's tags, rather
 than scanning the entire encrypted playlist. Covers are deduplicated by SHA-256 in a page-local 32 MiB
 blob pool and revoked on page exit; decrypted tags/covers never enter session
-storage, uploads, SQL, or a server-side cache. Directory responses include at
-most eight visible encrypted track descriptors as artwork candidates. Directory
+storage, uploads, SQL, or a server-side cache. Directory listings contain only
+an artwork endpoint URL per album; they do not embed track descriptors. The
+browser requests that endpoint only for a visible card, receiving its plain
+cover or at most eight visible encrypted track descriptors as candidates. Directory
 scans admit one read at a time and reselect from the currently visible
 page after each result; paging away leaves at most one already admitted read.
 Existing file-ID, visibility, replacement and authorization checks apply to every Range.
@@ -37,8 +39,9 @@ and mutations; it does not introduce separately managed image files.
 
 Frontier UI shows nine large album covers per horizontally snapped page. Native
 touch scrolling, mouse drag, wheel and keyboard navigation share the
-same ordered cards; reduced motion disables animated page changes. The existing
-list layout retains its information sidebar while Frontier UI hides those
+same ordered cards; reduced motion disables animated page changes. Vertical
+wheel scroll remains available whenever large covers exceed the viewport.
+The existing list layout retains its information sidebar while Frontier UI hides those
 labels. No animation loop, frontend framework or rendering engine is introduced.
 
 `scripts/ops/import_music.py` imports an artist/album/MP3 tree through normal
