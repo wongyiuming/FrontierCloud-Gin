@@ -75,7 +75,14 @@ Tool refresh can verify a newer image generation; business upgrade still require
 the refreshed tool's supported migration assets and an approved upgrade plan.
 Tool refresh refuses images from an older database generation.
 
-Before application upgrade, run `foc backup plan --output /private/new-recovery.tar`.
+For a normal application upgrade, run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.
+It displays the release, database-generation transition and capacity, requests one
+confirmation, and manages its plan, NodeID approval and private state archive.
+Preparation and opening use the same verified gates as the detailed commands.
+Repeating it can continue recorded resumable stages; failed recovery remains
+explicit. See [one-command upgrade](operator-upgrade.md).
+For a separate read-only capacity inspection, run
+`foc backup plan --output /private/new-recovery.tar`.
 Ordinary `backup plan` and `backup create` also default to this state-only scope.
 Upgrade plans and archives always use `upgrade-state`: database/WAL/SHM or logical
 MySQL dump, configuration, keys, certificates, Redis and lifecycle state. Media,
@@ -83,7 +90,12 @@ lyrics and recordings remain in their original mounts and are excluded without
 an extra flag. The capacity report sets `business_files_included` to false.
 The media premaster at `data/media-keys/media-premaster.key` is identity/encryption
 state, not media content; it is included with its actual archive key reference.
-Native admission receipts `.native-store` and `.native-runtime` are also captured.
+Native admission receipts `.native-store` and `.native-runtime` are validated
+against the recorded store, node identity and vault before state capture;
+missing or corrupt admission state refuses the backup before upgrade freeze.
+Verified automatic registration also persists the deployment directory in the
+host registry, or the invoking Docker operator's private state registry, so
+container removal does not lose deployment discovery.
 These upgrade recovery points cannot replace the retained media or claim a full
 fresh-machine restore. Only explicitly requested full disaster recovery uses
 `backup plan/create --include-business-files`; coordinated `backup set-create`

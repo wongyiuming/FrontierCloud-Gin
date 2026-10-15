@@ -324,6 +324,7 @@ def run(args):
                                         'target_web_image_id': target_image, 'edge_image_id': edge_image,
                                         'fail_prepare': args.upgrade_failure,
                                         'recover_failure': args.upgrade_recover,
+                                        'simple_upgrade': args.simple_upgrade,
                                         'expected_source_generation': args.expected_source_generation}))
             completed = subprocess.run([str(args.upgrade_test_binary), '-test.run',
                                         '^TestOperatorUpgradeComposeAcceptance$', '-test.v'],
@@ -522,6 +523,7 @@ if __name__ == '__main__':
     parser.add_argument('--expected-source-generation', type=int, default=0, help='require this actual source runtime schema for explicit cross-generation acceptance')
     parser.add_argument('--upgrade-failure', action='store_true', help='inject failure at target preparation after real native backup')
     parser.add_argument('--upgrade-recover', action='store_true', help='restore failed database state in original business mounts and reopen source')
+    parser.add_argument('--simple-upgrade', action='store_true', help='exercise the single-consent native upgrade entry')
     parser.add_argument('--state-restore', action='store_true', help='restore an ordinary default state backup after database loss')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -532,6 +534,8 @@ if __name__ == '__main__':
         parser.error('--upgrade-failure requires the native upgrade adapter')
     if options.upgrade_recover and not options.upgrade_failure:
         parser.error('--upgrade-recover requires --upgrade-failure')
+    if options.simple_upgrade and (options.upgrade_test_binary is None or options.upgrade_failure):
+        parser.error('--simple-upgrade requires the native upgrade adapter without --upgrade-failure')
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')

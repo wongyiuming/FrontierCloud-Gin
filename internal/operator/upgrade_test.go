@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
@@ -106,6 +108,10 @@ func upgradeFixture(t *testing.T) (*Deployment, Receipt, *upgradeRunner, Upgrade
 	d, base := fixture(t)
 	base.config.Services["web"].Environment["DATA_ROOT"] = "/app/data"
 	base.config.Services["web"].Environment["SQLITE_PATH"] = "/app/data/frontiercloud.db"
+	base.config.Services["web"].Environment["SECRETS_DIR"] = "/run/frontiercloud-secrets"
+	web := base.config.Services["web"]
+	web.Volumes = append(web.Volumes, Mount{Type: "volume", Source: "runtime_secrets", Target: "/run/frontiercloud-secrets"})
+	base.config.Services["web"] = web
 	r, e := d.Install(context.Background(), strings.Repeat("a", 40), "amd64", fakeEvidence{true}, upgradeImages{})
 	if e != nil {
 		t.Fatal(e)
@@ -123,6 +129,24 @@ func upgradeFixture(t *testing.T) (*Deployment, Receipt, *upgradeRunner, Upgrade
 		}
 	}
 	runner := &upgradeRunner{fakeRunner: base, data: data, secrets: secrets, node: strings.Repeat("d", 32)}
+	key := base64.URLEncoding.EncodeToString(make([]byte, 32))
+	if e = os.WriteFile(filepath.Join(secrets, "node-vault.key"), []byte(key), 0600); e != nil {
+		t.Fatal(e)
+	}
+	v, e := vault.New(key)
+	if e != nil {
+		t.Fatal(e)
+	}
+	binding := expectedNativeBinding(base.config, r.Database)
+	sealed, e := v.Seal("frontiercloud-native-runtime-v1\n" + binding + runner.node)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for name, value := range map[string]string{".native-store": binding, ".native-runtime": sealed} {
+		if e = os.WriteFile(filepath.Join(data, name), []byte(value), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
 	runner.calls = nil
 	d.Runner = runner
 	p, e := d.PlanUpgrade(context.Background(), r, strings.Repeat("b", 40), "amd64", fakeEvidence{true}, upgradeImages{})

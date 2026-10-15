@@ -71,6 +71,9 @@ func run(args []string) (exitCode int) {
 		return recoveryCommand(ctx, *directory, args)
 	}
 	if args[0] == "upgrade" {
+		if len(args) == 1 || strings.HasPrefix(args[1], "-") {
+			return simpleUpgradeCommand(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured)
+		}
 		return upgradeCommand(ctx, *directory, *revision, args, os.Stdout, os.Stderr)
 	}
 	emit := func(v any) error { return writeOperatorOutput(os.Stdout, *structured, v) }

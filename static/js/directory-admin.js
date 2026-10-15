@@ -149,10 +149,20 @@
             if (priorityScope) params.set('path', priorityScope);
             const data = await api(`/api/v1/media/admin/media-priority?${params}`);
             const orders = {};
+            let sortingBlocked = false;
             if (!data.searching && data.scope) {
                 for (const [kind, field] of [['directory', 'directories'], ['media', 'items']]) {
                     if (!data[field]?.length) continue;
-                    orders[kind] = await api(`/api/v1/media/admin/priority-order?scope=${encodeURIComponent(data.scope)}&kind=${kind}`);
+                    try {
+                        orders[kind] = await api(`/api/v1/media/admin/priority-order?scope=${encodeURIComponent(data.scope)}&kind=${kind}`);
+                    } catch (error) {
+                        if (error.status !== 409) throw error;
+                        sortingBlocked = true;
+                        break;
+                    }
+                }
+                if (!sortingBlocked) for (const [kind, field] of [['directory', 'directories'], ['media', 'items']]) {
+                    if (!orders[kind]) continue;
                     const facts = new Map(orders[kind].items.map((item, index) => [item.path, {...item, index}]));
                     data[field] = data[field].filter(item => facts.has(item.path || item.media_path));
                     for (const item of data[field]) item.preference = facts.get(item.path || item.media_path).preference;
@@ -162,7 +172,15 @@
             if (version !== loadVersion) return;
             window.FrontierPriorityDrag?.cancel();
             renderMediaPriority(data);
-            window.FrontierPriorityDrag?.activate(data, orders);
+            window.FrontierPriorityDrag?.activate(data, sortingBlocked ? {} : orders);
+            const status = $('prioritySaveState');
+            status.textContent = '';
+            status.classList.remove('failed');
+            if (sortingBlocked) {
+                for (const input of $('priorityList').querySelectorAll('.priority-control input')) input.disabled = true;
+                status.textContent = '当前目录存在存储操作冲突；可继续浏览，排序暂不可用，请稍后刷新。';
+                status.classList.add('failed');
+            }
             if (!data.searching) {
                 $('prioritySummary').textContent = `${$('priorityPath').title || '/data/media'} 目录和媒体均可独立设置排序优先级`;
             }

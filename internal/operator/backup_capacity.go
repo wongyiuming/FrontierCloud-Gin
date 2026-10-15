@@ -182,6 +182,11 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 	if err != nil {
 		return p, err
 	}
+	if scope == recovery.UpgradeStateScope {
+		if err = d.validateBackupAdmission(ctx, cfg, receipt, fact); err != nil {
+			return p, err
+		}
+	}
 	header := recovery.Manifest{Format: recovery.Format, Version: 1, Scope: scope, NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, SchemaGeneration: fact.Database.SchemaGeneration, ConfigurationVersion: receipt.Version, CreatedAt: "9999-12-31T23:59:59.999999999Z", Consistency: "native-offline-and-deployment-writers-stopped", Bytes: 10 * 1024 * 1024 * 1024 * 1024, RecoverySet: strings.Repeat("f", 32), KeyReferences: []string{"runtime_secrets/node-vault.key", "runtime_secrets/media-premaster.key"}, Classes: []string{"deployment"}}
 	if scope == recovery.UpgradeStateScope {
 		header.Missing = []string{recovery.ExcludedBusinessFiles}

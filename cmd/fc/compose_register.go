@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -23,12 +24,39 @@ func composeRegisterCommand(ctx context.Context, directory string, diagnostic io
 	return 0
 }
 
-func registerCompose(ctx context.Context, directory string) error {
+func registerCompose(ctx context.Context, directory string) (operationErr error) {
 	root, e := filepath.Abs(directory)
 	if e != nil {
 		return e
 	}
 	runner := dockerRunner{root}
+	// A previously verified receipt remains authoritative after installer or
+	// business containers are removed. Revalidate it under its operation lock.
+	if _, err := os.Lstat(filepath.Join(root, operator.ReceiptFile)); err == nil {
+		locked, _, err := operator.Open(root)
+		if err != nil {
+			return err
+		}
+		done, err := locked.AcquireOperation()
+		if err != nil {
+			return err
+		}
+		defer func() { operationErr = errors.Join(operationErr, done()) }()
+		verified, receipt, err := operator.Open(root)
+		if err != nil {
+			return err
+		}
+		if receipt.State != "ready" {
+			return errors.New("existing deployment registration requires a ready receipt")
+		}
+		verified.Runner = runner
+		if _, err = verified.ValidateReceipt(ctx, receipt); err != nil {
+			return err
+		}
+		return rememberDeployment(ctx, root)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	raw, e := runner.Run(ctx, "docker", "ps", "--all", "--filter", "label=com.docker.compose.project.working_dir="+root, "--filter", "label=frontiercloud.foc-bootstrap=1", "--format", "{{.ID}}")
 	ids := strings.Fields(string(raw))
 	if e != nil || len(ids) != 1 {
@@ -72,5 +100,8 @@ func registerCompose(ctx context.Context, directory string) error {
 	images := release.NewRegistryClient()
 	defer images.Close()
 	_, e = d.RegisterCompose(ctx, operator.Architecture(string(raw)), verifier, images)
-	return e
+	if e != nil {
+		return e
+	}
+	return rememberDeployment(ctx, root)
 }

@@ -25,6 +25,7 @@ type composeUpgradeSpec struct {
 	FailPrepare              bool   `json:"fail_prepare"`
 	RecoverFailure           bool   `json:"recover_failure"`
 	ExpectedSourceGeneration int    `json:"expected_source_generation,omitempty"`
+	SimpleUpgrade            bool   `json:"simple_upgrade,omitempty"`
 }
 type nativeUpgradeRunner struct {
 	directory          string
@@ -244,9 +245,71 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if spec.ExpectedSourceGeneration != 0 && p.FromGeneration != spec.ExpectedSourceGeneration {
 		t.Fatal("source runtime schema differs from explicitly requested acceptance generation")
 	}
-	state, e := d.ApplyUpgrade(ctx, r, p, p.SHA256, p.NodeID, filepath.Join(spec.Directory, "pre-upgrade-recovery.tar"), true, fakeEvidence{true}, upgradeImages{})
+	if !spec.FailPrepare {
+		cfg, err := d.Config(ctx, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := upgradeDataRoot(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{".native-store", ".native-runtime"} {
+			file := filepath.Join(data, name)
+			original, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retained := file + ".foc-test-retained"
+			if err = os.Rename(file, retained); err != nil {
+				t.Fatal(err)
+			}
+			_, refused := d.UpgradeBackupCapacity(ctx, r, filepath.Join(spec.Directory, "admission-refused.tar"))
+			if err = os.Rename(retained, file); err != nil {
+				t.Fatal(err)
+			}
+			if refused == nil {
+				t.Fatal("missing native admission passed actual backup preflight")
+			}
+			if err = os.WriteFile(file, []byte("corrupt-native-admission"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			_, refused = d.UpgradeBackupCapacity(ctx, r, filepath.Join(spec.Directory, "admission-refused.tar"))
+			if err = os.WriteFile(file, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if refused == nil {
+				t.Fatal("corrupt native admission passed actual backup preflight")
+			}
+		}
+		fact, err := d.upgradeFact(ctx, r)
+		if err != nil || fact.NativeMaintenance {
+			t.Fatal("admission refusal changed native readiness", err)
+		}
+	}
+	var state UpgradeState
+	if spec.FailPrepare || !spec.SimpleUpgrade {
+		state, e = d.ApplyUpgrade(ctx, r, p, p.SHA256, p.NodeID, filepath.Join(spec.Directory, "pre-upgrade-recovery.tar"), true, fakeEvidence{true}, upgradeImages{})
+	} else {
+		confirmations := 0
+		var result UpgradeResult
+		result, e = d.Upgrade(ctx, r, p.Target, p.Architecture, fakeEvidence{true}, upgradeImages{}, func(preview UpgradePreview) (UpgradeConsent, error) {
+			confirmations++
+			if preview.Capacity == nil || preview.Capacity.BusinessFilesIncluded || preview.Plan.NodeID != p.NodeID {
+				t.Fatal("invalid actual upgrade preview")
+			}
+			return UpgradeConsent{Approved: true, ExternalWritersStopped: true}, nil
+		})
+		if e == nil && (result.Phase != "opened" || !result.BusinessVerified || confirmations != 1) {
+			t.Fatal("single-consent native upgrade did not finish", result)
+		}
+		if e == nil {
+			state, e = d.upgradeState()
+			p = state.Plan
+		}
+	}
 	if state.BackupSHA != "" {
-		checked, err := recovery.Check(ctx, filepath.Join(spec.Directory, "pre-upgrade-recovery.tar"), state.BackupSHA)
+		checked, err := recovery.Check(ctx, state.BackupFile, state.BackupSHA)
 		if err != nil || checked.Manifest.Scope != recovery.UpgradeStateScope || checked.Manifest.CompleteCluster {
 			t.Fatal("upgrade backup scope mismatch", err)
 		}
@@ -293,6 +356,33 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 			material := filepath.Join(filepath.Dir(spec.Directory), "state-recovery-"+filepath.Base(spec.Directory))
+			if r.Database == "mysql" {
+				credential := filepath.Join(stateRoots["runtime_secrets"], "mysql_password")
+				original, readErr := os.ReadFile(credential)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				if err = os.WriteFile(credential, []byte("isolated-rotated-application-credential"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				_, refused := d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
+				if err = os.WriteFile(credential, original, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if refused == nil || !strings.Contains(refused.Error(), "credential drift") {
+					t.Fatal("application credential drift did not refuse actual MySQL restoration", refused)
+				}
+				if _, err = os.Stat(material); !os.IsNotExist(err) {
+					t.Fatal("credential refusal published restoration material", err)
+				}
+				if b, readErr := os.ReadFile(createdState); readErr != nil || string(b) != "retained-target-state" {
+					t.Fatal("credential refusal replaced filesystem state", readErr)
+				}
+				rows, queryErr := runner.Run(ctx, "docker", append(d.composeArgs(true), "exec", "-T", "mysql", "sh", "-c", `MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -N -u root "$MYSQL_DATABASE" -e "SHOW TABLES LIKE 'foc_failed_schema_probe'"`)...)
+				if queryErr != nil || strings.TrimSpace(string(rows)) != "foc_failed_schema_probe" {
+					t.Fatal("credential refusal dropped the failed database", queryErr)
+				}
+			}
 			runner.failRecoveryVerify = true
 			state, err = d.RecoverUpgradeState(ctx, current, p.SHA256, p.NodeID, state.BackupSHA, material, true)
 			if err == nil || state.Phase != "restoring_state" {
@@ -353,16 +443,22 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 		}
 		return
 	}
-	if e != nil || state.Phase != "prepared_fenced" {
-		t.Fatal("native prepare failed", e)
+	expectedPhase := "prepared_fenced"
+	if spec.SimpleUpgrade {
+		expectedPhase = "opened"
+	}
+	if e != nil || state.Phase != expectedPhase {
+		t.Fatal("native upgrade failed", e)
 	}
 	_, next, e := Open(spec.Directory)
 	if e != nil {
 		t.Fatal(e)
 	}
-	state, e = d.ResumeUpgrade(ctx, next, p.SHA256, p.NodeID, true, fakeEvidence{true}, upgradeImages{})
-	if e != nil || state.Phase != "prepared_fenced" {
-		t.Fatal("native interrupted preparation resume failed", e)
+	if !spec.SimpleUpgrade {
+		state, e = d.ResumeUpgrade(ctx, next, p.SHA256, p.NodeID, true, fakeEvidence{true}, upgradeImages{})
+		if e != nil || state.Phase != "prepared_fenced" {
+			t.Fatal("native interrupted preparation resume failed", e)
+		}
 	}
 	state, e = d.OpenUpgrade(ctx, next, p.SHA256, p.NodeID)
 	if e != nil || state.Phase != "opened" || !state.BusinessVerified {
@@ -397,7 +493,7 @@ func TestOperatorUpgradeComposeAcceptance(t *testing.T) {
 	if _, e = d.ValidateReceipt(ctx, next); e != nil {
 		t.Fatal("concrete private-fixture handover did not retain binding", e)
 	}
-	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "native_managed_business_reads": state.BusinessVerified, "native_prepared_upgrade_resume_verified": true}); e != nil {
+	if e = exclusiveJSON(filepath.Join(spec.Directory, "upgrade-evidence.json"), map[string]any{"phase": state.Phase, "actual_compose": true, "publication_proof_injected": true, "source_schema_generation": p.FromGeneration, "target_schema_generation": p.Generation, "source_web_image_id": spec.Web, "target_web_image_id": spec.TargetWeb, "backup_sha256": state.BackupSHA, "backup_scope": recovery.UpgradeStateScope, "business_files_included": false, "native_managed_business_reads": state.BusinessVerified, "native_prepared_upgrade_resume_verified": !spec.SimpleUpgrade, "native_single_command_verified": spec.SimpleUpgrade}); e != nil {
 		t.Fatal(e)
 	}
 }

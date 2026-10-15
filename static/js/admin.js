@@ -141,6 +141,7 @@ async function api(url, options = {}) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         const error = new Error(formatErrorDetail(data.detail));
+        error.status = response.status;
         error.responseData = data;
         throw error;
     }
