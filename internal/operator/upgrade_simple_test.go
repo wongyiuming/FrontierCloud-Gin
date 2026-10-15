@@ -116,6 +116,50 @@ func TestSimpleUpgradeRetriesReadyCleanupAndRejectsChangedStage(t *testing.T) {
 	}
 }
 
+func TestSimpleUpgradeResumesOpenedJournalBeforeReadyReceipt(t *testing.T) {
+	d, r, runner, p := upgradeFixture(t)
+	ctx := context.Background()
+	approve := func(UpgradePreview) (UpgradeConsent, error) { return UpgradeConsent{Approved: true}, nil }
+	if _, e := d.Upgrade(ctx, r, p.Target, "amd64", fakeEvidence{true}, upgradeImages{}, approve); e != nil {
+		t.Fatal(e)
+	}
+	s, e := d.upgradeState()
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, current, e := Open(d.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Recreate the durable crash boundary: journal opened, receipt still fenced,
+	// public marker removed, generated ownership stage not yet cleaned up.
+	current.State = "upgrade_fenced"
+	if e = replaceJSON(filepath.Join(d.Directory, ReceiptFile), current); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(runner.data, upgradeManualStage+"-"+s.Plan.SHA256), []byte("manual\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	confirmations := 0
+	result, e := d.Upgrade(ctx, current, p.Target, "amd64", fakeEvidence{true}, upgradeImages{}, func(preview UpgradePreview) (UpgradeConsent, error) {
+		confirmations++
+		if preview.ResumePhase != "opened" || preview.Plan.SHA256 != s.Plan.SHA256 || preview.Capacity != nil {
+			t.Fatal("opening recovery created another plan/backup", preview)
+		}
+		return UpgradeConsent{Approved: true}, nil
+	})
+	if e != nil || result.Phase != "opened" || !result.BusinessVerified || confirmations != 1 {
+		t.Fatal(result, confirmations, e)
+	}
+	_, ready, e := Open(d.Directory)
+	if e != nil || ready.State != "ready" || ready.Revision != p.Target {
+		t.Fatal(ready, e)
+	}
+	if result.BackupFile != s.BackupFile || result.BackupSHA != s.BackupSHA {
+		t.Fatal("original recovery point changed", result)
+	}
+}
+
 type simpleUpgradeEvidenceFunc func(context.Context, string) (map[string]any, error)
 
 func (f simpleUpgradeEvidenceFunc) Artifact(ctx context.Context, target string) (map[string]any, error) {

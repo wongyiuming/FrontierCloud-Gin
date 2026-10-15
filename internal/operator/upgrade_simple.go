@@ -39,7 +39,7 @@ func (d *Deployment) Upgrade(ctx context.Context, r Receipt, target, arch string
 		return UpgradeResult{}, errors.New("upgrade requires an explicit published revision and consent")
 	}
 	state, e := d.upgradeState()
-	pending := e == nil && state.Phase != "opened"
+	pending := e == nil && (state.Phase != "opened" || r.State == "upgrade_fenced")
 	if e != nil && !os.IsNotExist(e) {
 		return UpgradeResult{}, e
 	}
@@ -50,7 +50,7 @@ func (d *Deployment) Upgrade(ctx context.Context, r Receipt, target, arch string
 			return UpgradeResult{}, errors.New("unfinished operation has a different target or recovery scope; preserve its journal")
 		}
 		switch state.Phase {
-		case "backup_pending", "backed_up_fenced", "switching_fenced", "preparing_fenced", "prepared_fenced", "activating_fenced", "verified_fenced", "opening":
+		case "backup_pending", "backed_up_fenced", "switching_fenced", "preparing_fenced", "prepared_fenced", "activating_fenced", "verified_fenced", "opening", "opened":
 		default:
 			return UpgradeResult{}, errors.New("failed upgrade requires explicit recovery; automatic upgrade will not reopen or roll back it")
 		}
