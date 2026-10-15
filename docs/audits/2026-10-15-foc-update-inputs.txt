@@ -1,0 +1,30 @@
+Actual PR22 production mutation inputs (no command outputs)
+Timestamps use UTC+08:00; original invocation records use UTC.
+Two mutation inputs per host: update the tool, then update the deployment.
+No directory change, container shell, manual plan, NodeID, approval hash or backup path.
+--json selects machine-readable reporting; --yes answers the already authorized confirmation.
+
+Host: 520mall.cc; submitted: 2026-10-15T20:26:16.819512+08:00
+foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306
+
+Host: 520mall.cc; submitted: 2026-10-15T20:26:26.812076+08:00
+foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes
+
+Host: ml.520mall.cc; submitted: 2026-10-15T20:27:20.905181+08:00
+foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306
+
+Host: ml.520mall.cc; submitted: 2026-10-15T20:27:33.201402+08:00
+foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes
+
+Host: rnlsj.520mall.cc; submitted: 2026-10-15T20:28:12.035370+08:00
+foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306
+
+Host: rnlsj.520mall.cc; submitted: 2026-10-15T20:28:37.318403+08:00
+foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes
+
+The additional 22 read-only checks were delivery audits, not required daily update steps.
+Extra backup-verify paths and hashes were extracted automatically from upgrade results.
+These are submitted client invocation records, not reconstructed successful outputs
+and not interactive Bash history. Version selection and per-host execution remain
+explicit; self-update and upgrade are still separate commands.
+Full inventory and original record hashes: 2026-10-15-foc-production-inputs.json.

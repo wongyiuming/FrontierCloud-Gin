@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "recorded_at": "2026-10-15T20:47:11.201880+08:00",
+  "production_revision": "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+  "manager_source_sha256": "24fd34bdce9398dad20d3d78cce7bac020e7a07eb8f112135d27287fd0334df5",
+  "production_changes_performed": false,
+  "automatic_certificate_manager_is_status_producer": true,
+  "confirmed_code_defects": [
+    "Refresh local validation and final TLS probe share a three-second deadline.",
+    "A missing serving fingerprint due to any probe error is labeled serving_certificate_mismatch."
+  ],
+  "production_cpu_quota": "5000 100000",
+  "production_quiet_samples": 6,
+  "production_quiet_all_verified_tls_and_controller_active": true,
+  "quiet_cpu_stats_delta": {
+    "usage_usec": 505245,
+    "user_usec": 435112,
+    "system_usec": 70132,
+    "nr_periods": 120,
+    "nr_throttled": 93,
+    "throttled_usec": 9845361,
+    "nr_bursts": 0,
+    "burst_usec": 0
+  },
+  "foc_status_samples": [
+    {
+      "exit_code": 3,
+      "seconds": 6.010708508081734,
+      "certificate_state": "pass",
+      "independent_tls_fingerprint": "aae8e868cc372646963ea5fc045a6bae07df8665af16d62e060ac63c2d7233bb",
+      "cpu_stats_delta": {
+        "usage_usec": 240993,
+        "user_usec": 171544,
+        "system_usec": 69448,
+        "nr_periods": 53,
+        "nr_throttled": 49,
+        "throttled_usec": 6465188,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    },
+    {
+      "exit_code": 2,
+      "seconds": 14.972145106177777,
+      "certificate_state": "blocked",
+      "independent_tls_fingerprint": "aae8e868cc372646963ea5fc045a6bae07df8665af16d62e060ac63c2d7233bb",
+      "cpu_stats_delta": {
+        "usage_usec": 529637,
+        "user_usec": 381016,
+        "system_usec": 148621,
+        "nr_periods": 126,
+        "nr_throttled": 88,
+        "throttled_usec": 9682631,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    },
+    {
+      "exit_code": 2,
+      "seconds": 11.375518116168678,
+      "certificate_state": "blocked",
+      "independent_tls_fingerprint": "aae8e868cc372646963ea5fc045a6bae07df8665af16d62e060ac63c2d7233bb",
+      "cpu_stats_delta": {
+        "usage_usec": 433042,
+        "user_usec": 331596,
+        "system_usec": 101446,
+        "nr_periods": 100,
+        "nr_throttled": 92,
+        "throttled_usec": 15412927,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    }
+  ],
+  "controlled_development_reproduction": {
+    "test": "TestDiagnosticSharedRefreshDeadlineMislabelsHealthyTLS",
+    "local_test_ca": true,
+    "real_go_tls_handshake": true,
+    "metadata_delay_ms": 3100,
+    "race_enabled": true,
+    "misclassification_reproduced": true,
+    "production_ca_or_keys_copied": false,
+    "private_test_input_sha256": "7806cb4f5eb7456942ad3098914135e75612c6215245b53f67c6244cfc19a57e",
+    "raw_log_sha256": "a0ebdd2bf21322fb5802b6860cec350577cf16ec31c6b0cefb18d8ea8255b03f"
+  },
+  "inference": "CPU throttling and status-query contention are supported contributing triggers for the shared deadline; the individual production probe errors are not logged, so not every occurrence can be attributed uniquely.",
+  "remaining_unknowns": [
+    "Original per-probe production error type and per-phase latency.",
+    "Future production renewal behavior; no forced renewal was requested or performed."
+  ],
+  "raw_evidence_sha256": {
+    "rnlsj.520mall.cc.rn-certificate-root-cause-readonly.json": "df133a89e5cb1ebe4853992931591d4b1b0c4ec2bc479a25c44230d7560c8ca7",
+    "rnlsj.520mall.cc.rn-certificate-status-observation.json": "3345f9403fb669b5bb34049d68422c3c76cb0eeb505a6da77f29bad6119586bf",
+    "certificate-deadline-diagnostic.json": "bbfa6202878b9199cc58b101eb28edd75708783a2bccbb86db3ff63fa666f0d7"
+  }
+}

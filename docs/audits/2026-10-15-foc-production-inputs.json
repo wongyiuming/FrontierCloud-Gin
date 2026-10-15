@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "scope": "Actual caller-side SSH exec inputs for the PR22 production deployment; output and result fields are intentionally excluded.",
+  "source_record_sha256": "2d2dcc3ad3aea0181c9b2442baa504d8cf1e08dadefee381bb9862ac0eca2ca2",
+  "raw_record_sha256": {
+    "pr22-production-520mall.cc-baseline.json": "9dc7726b9514c4d7b01a3c1cd1e647139e5ae0dfb5f8f87681c53f43213cffb2",
+    "pr22-production-520mall.cc-tool.json": "3ac9effdba9658f3cab4941799b498baf6c30c68bd4bd5d47ead73ac7aeae49b",
+    "pr22-production-520mall.cc-upgrade.json": "89377ad3135bd37e707dd5f3484e37ce0b7178d3ab3dd4688e0ebde1de8fa46f",
+    "pr22-production-520mall.cc-backup.json": "b673fa49e83f0bc3e092595c03c6a3e8ed5ba119dedfd3796b38374e8e5a67a5",
+    "pr22-production-520mall.cc-verify.json": "47a776416a6d385e9d540fd6645c47f07ae23b270ca8dc1a9a03ddc3d5df1396",
+    "pr22-production-520mall.cc-final.json": "129bfe0a3aeece26db2daa750aa807d274ef2b7c654bea986273808c763a99ce",
+    "pr22-production-ml.520mall.cc-baseline.json": "a521d6efed2de490dbc3350a71921b12e69ea18c60cfb1371960566b870418e0",
+    "pr22-production-ml.520mall.cc-tool.json": "d477c3e60f4205b54122499dcd676a54cc2ae3c0fffbeae1b27a31b507d0e38c",
+    "pr22-production-ml.520mall.cc-upgrade.json": "422d69a7327eb12f7fe6d3f628dc8c59944998eb778c64bdc9469feab37f8e1a",
+    "pr22-production-ml.520mall.cc-backup.json": "7f812b6df668fefef97840128b98500aed62f7acee7bb37f3e9a9ceb3eabb640",
+    "pr22-production-ml.520mall.cc-verify.json": "a9fa5ab6b10642473c4aa765afdc9de724b91289f813f2dbe1ebf2697aa3bca8",
+    "pr22-production-rnlsj.520mall.cc-baseline.json": "95eeccff66ce202e9b214dbcb61153cddb98a57f0da31d88d44ed8302fa7096f",
+    "pr22-production-rnlsj.520mall.cc-tool.json": "32d81786385f1d529a36efc03d329cb240896c9f5b2984faa633b3d22e2eb8bf",
+    "pr22-production-rnlsj.520mall.cc-upgrade.json": "a38fdbcdb9b89d15208e261d6afd793b236ef91c587e1beb9c662c0a89acec39",
+    "pr22-production-rnlsj.520mall.cc-backup.json": "acaa528bfc307b8fa4c1901b57493cbe5f0b59bcbd4350cd22040922c439258e",
+    "pr22-production-rnlsj.520mall.cc-verify.json": "b924ae38dcf1a66149f2cc5a7a444d111da2d70bc9d0adfedc7e2a5440fcb20a",
+    "pr22-production-rnlsj.520mall.cc-final.json": "3790079c27dd186243e35efa40e051ab020fee20c92d04e816267cd686261f9b"
+  },
+  "published_revision": "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+  "update_command_count": 6,
+  "extra_read_only_command_count": 22,
+  "per_host_update_commands": 2,
+  "selected_release_values": 1,
+  "explicit_release_arguments": 6,
+  "upgrade_plan_path_arguments": 0,
+  "upgrade_approval_hash_arguments": 0,
+  "upgrade_node_id_arguments": 0,
+  "upgrade_backup_path_arguments": 0,
+  "inputs": [
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:52.059809+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:52.895997+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:54.922658+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:54.960554+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:55.620267+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:25:55.780225+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:26:16.819512+00:00",
+      "argv": [
+        "foc",
+        "self-update",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306"
+      ],
+      "command": "foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:26:25.076773+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:26:26.812076+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "upgrade",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+        "--yes"
+      ],
+      "command": "foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:04.506410+00:00",
+      "argv": [
+        "foc",
+        "backup",
+        "verify",
+        "--file",
+        "/opt/frontiercloud/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-61aa7081891380a2d5dea9c57c18d4d5461b471f0ba5357753e0d8100d4291dd.tar",
+        "--sha256",
+        "bee5201dab5d640036f90530850542056400eca68d50921294345d5d89d2cc4b"
+      ],
+      "command": "foc backup verify --file /opt/frontiercloud/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-61aa7081891380a2d5dea9c57c18d4d5461b471f0ba5357753e0d8100d4291dd.tar --sha256 bee5201dab5d640036f90530850542056400eca68d50921294345d5d89d2cc4b",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:06.436722+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:06.916161+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:08.986312+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "diagnose"
+      ],
+      "command": "foc --json diagnose",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:20.905181+00:00",
+      "argv": [
+        "foc",
+        "self-update",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306"
+      ],
+      "command": "foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:30.146825+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:33.201402+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "upgrade",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+        "--yes"
+      ],
+      "command": "foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:55.307293+00:00",
+      "argv": [
+        "foc",
+        "backup",
+        "verify",
+        "--file",
+        "/opt/frontiercloud-storage/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-8c25eb58c47ef2d6110c5c02814ecba0b77066e9922f67a86a77686d99c816da.tar",
+        "--sha256",
+        "a2087c4b0143dcfefa2a44ae589b02e4e3e51acbebbc166581dcc10c0439de74"
+      ],
+      "command": "foc backup verify --file /opt/frontiercloud-storage/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-8c25eb58c47ef2d6110c5c02814ecba0b77066e9922f67a86a77686d99c816da.tar --sha256 a2087c4b0143dcfefa2a44ae589b02e4e3e51acbebbc166581dcc10c0439de74",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:58.224814+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:27:59.062673+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "ml.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:28:01.063123+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "diagnose"
+      ],
+      "command": "foc --json diagnose",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:28:12.035370+00:00",
+      "argv": [
+        "foc",
+        "self-update",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306"
+      ],
+      "command": "foc self-update --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:28:34.080032+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:28:37.318403+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "upgrade",
+        "--revision",
+        "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+        "--yes"
+      ],
+      "command": "foc --json upgrade --revision 6588b7403db2bef9025046cb0d4b74f6a62d5306 --yes",
+      "classification": "tool-or-business-update"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:30:10.547618+00:00",
+      "argv": [
+        "foc",
+        "backup",
+        "verify",
+        "--file",
+        "/opt/frontiercloud-storage/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-146eb69d86e26b304f804f5ee187764f01afdca8d28bc7018e2eda6094a7c890.tar",
+        "--sha256",
+        "cc84bb65d427e6e49a9f7317dac74e0e205a5de2ac17cbe6f9fc57525bac6499"
+      ],
+      "command": "foc backup verify --file /opt/frontiercloud-storage/releases/bb1b1430b4a7066b9c706e53757331e78cb5595d/.foc-before-146eb69d86e26b304f804f5ee187764f01afdca8d28bc7018e2eda6094a7c890.tar --sha256 cc84bb65d427e6e49a9f7317dac74e0e205a5de2ac17cbe6f9fc57525bac6499",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:30:12.564332+00:00",
+      "argv": [
+        "foc",
+        "version"
+      ],
+      "command": "foc version",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:30:13.059783+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:31:04.573914+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    },
+    {
+      "host": "rnlsj.520mall.cc",
+      "submitted_at_utc": "2026-10-15T12:31:07.696270+00:00",
+      "argv": [
+        "foc",
+        "--json",
+        "status"
+      ],
+      "command": "foc --json status",
+      "classification": "additional-read-only-audit"
+    }
+  ],
+  "limits": [
+    "This is a caller-side submission record, not a terminal recording or an independently signed host audit.",
+    "SSH noninteractive exec normally does not append commands to the interactive Bash history.",
+    "The Python coordinator submitted the recorded commands and extracted optional backup-verification arguments from results; it did not supply upgrade plans, NodeIDs, backup paths or approval hashes.",
+    "Six update invocations across three separate hosts are not a single fleet command. Tool refresh and application upgrade are separate invocations.",
+    "Successful execution and the unresolved certificate status are documented separately; they are not proof of input simplicity."
+  ]
+}

@@ -412,7 +412,8 @@ func classify(e error) string {
 			return "ca_unavailable"
 		}
 	}
-	if errors.Is(e, context.DeadlineExceeded) {
+	var network net.Error
+	if errors.Is(e, context.DeadlineExceeded) || errors.As(e, &network) && network.Timeout() {
 		return "ca_timeout"
 	}
 	var dns *net.DNSError
@@ -600,7 +601,10 @@ func (m *Manager) refresh() {
 	defer clear(key)
 	pair, e := Validate(m.opt.host, cert, key, m.opt.roots, time.Now())
 	if e != nil {
-		served, probeErr := probe(ctx, m.opt.serving, m.opt.host, m.opt.roots)
+		served, probeErr := probe(m.ctx, m.opt.serving, m.opt.host, m.opt.roots)
+		if m.ctx.Err() != nil {
+			return
+		}
 		m.mu.Lock()
 		m.journal.State = Failed
 		m.journal.Error = "certificate_invalid"
@@ -636,7 +640,12 @@ func (m *Manager) refresh() {
 			m.mu.Unlock()
 		}
 	}
-	served, e := probe(ctx, m.opt.serving, m.opt.host, m.opt.roots)
+	// Local cache/metadata work must not consume the serving handshake budget.
+	// The independent bound also covers DNS, connect and TLS under CPU quotas.
+	served, e := probe(m.ctx, m.opt.serving, m.opt.host, m.opt.roots)
+	if m.ctx.Err() != nil {
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	previous := m.journal
@@ -648,20 +657,21 @@ func (m *Manager) refresh() {
 	m.view.HTTPSReady = e == nil && served != ""
 	if m.view.ServingMatches {
 		prune(m.opt.published)
+		if servingProbeError(m.journal.Error) {
+			m.journal.Error = ""
+		}
 		if m.journal.Error == "" && m.journal.State != Renewing && m.journal.State != Issuing && m.journal.State != Validating {
 			m.journal.State = Active
 		} else if m.journal.State != Renewing && m.journal.State != Issuing && m.journal.State != Validating {
 			m.journal.State = Degraded
 		}
 	} else {
-		m.journal.State = Degraded
-		if m.journal.Error == "" {
-			m.journal.Error = "serving_certificate_mismatch"
+		if m.journal.State != Renewing && m.journal.State != Issuing && m.journal.State != Validating {
+			m.journal.State = Degraded
 		}
-	}
-	if m.view.ServingMatches && m.journal.Error == "serving_certificate_mismatch" {
-		m.journal.Error = ""
-		m.journal.State = Active
+		if m.journal.Error == "" || servingProbeError(m.journal.Error) {
+			m.journal.Error = classifyServingProbe(e)
+		}
 	}
 	m.updateView()
 	if previous != m.journal {
@@ -673,7 +683,9 @@ func (m *Manager) refresh() {
 	}
 }
 func probe(ctx context.Context, address, host string, roots *x509.CertPool) (string, error) {
-	conn, e := (&tls.Dialer{NetDialer: &net.Dialer{Timeout: 2 * time.Second}, Config: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: roots}}).DialContext(ctx, "tcp", address)
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	conn, e := (&tls.Dialer{NetDialer: &net.Dialer{}, Config: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: roots}}).DialContext(ctx, "tcp", address)
 	if e != nil {
 		return "", e
 	}
@@ -683,6 +695,39 @@ func probe(ctx context.Context, address, host string, roots *x509.CertPool) (str
 		return "", errors.New("no serving certificate")
 	}
 	return fingerprint(&tls.Certificate{Certificate: [][]byte{peer[0].Raw}}), nil
+}
+
+func servingProbeError(code string) bool {
+	switch code {
+	case "serving_certificate_mismatch", "serving_probe_timeout", "serving_dns", "serving_connection", "serving_tls_verification", "serving_tls_handshake":
+		return true
+	}
+	return false
+}
+
+// Return only bounded diagnostic codes; raw network errors may contain node
+// addresses and must not become public Admin/heartbeat error strings.
+func classifyServingProbe(err error) string {
+	if err == nil {
+		return "serving_certificate_mismatch"
+	}
+	var network net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &network) && network.Timeout() {
+		return "serving_probe_timeout"
+	}
+	var verification *tls.CertificateVerificationError
+	if errors.As(err, &verification) {
+		return "serving_tls_verification"
+	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) {
+		return "serving_dns"
+	}
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "dial" {
+		return "serving_connection"
+	}
+	return "serving_tls_handshake"
 }
 func (m *Manager) Close() {
 	m.close.Do(func() {
