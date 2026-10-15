@@ -43,11 +43,11 @@ func ClassifyDockerFailure(diagnostic string) error {
 		err   error
 	}{
 		{[]string{"unmanaged foc installation", "unknown foc ownership marker", "global foc command differs"}, ErrInstallerOwnership},
-		{[]string{"another host installation is active or interrupted"}, ErrInstallerLock},
 		{[]string{"refusing symlinked", "unsafe global foc", "unsafe launcher identity", "existing native deployment receipt required"}, ErrInstallerPath},
 		{[]string{"selected operator revision mismatch", "invalid operator bundle revision"}, ErrInstallerRevision},
 		{[]string{"no space left on device", "read-only file system", "failed to extract", "failed to register layer"}, ErrDockerStorage},
 		{[]string{"permission denied", "unauthorized", "access denied", "denied:"}, ErrDockerPermission},
+		{[]string{"another host installation is active or interrupted"}, ErrInstallerLock},
 		{[]string{"manifest unknown", "no such image"}, ErrDockerImageMissing},
 		{[]string{"no matching manifest", "unsupported platform"}, ErrDockerPlatform},
 		{[]string{"digest mismatch", "unexpected commit digest", "checksum mismatch", "checksum verification failed"}, ErrDockerIntegrity},

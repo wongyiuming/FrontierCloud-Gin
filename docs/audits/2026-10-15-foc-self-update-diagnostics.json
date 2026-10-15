@@ -6,16 +6,16 @@
   "production_mutations_during_development_acceptance": false,
   "tested_inputs": {
     "cmd/fc/docker.go": "d476ec590553adc5730a041d5af9149e5f7143dc4550488d4fa8de6a2bed0f93",
-    "cmd/fc/docker_test.go": "4a97e0616b4d35098629d27d65f9ffc94b20352b139dc335dad794637f0beb2c",
+    "cmd/fc/docker_test.go": "ca344dc57fd694bea4e1806209ffecd8cf55c5180bae9f858db4806ea0e2c809",
     "cmd/fc/self_update_native_test.go": "9b97d4828a09a530e9195abb9d22b8dd516defddae709320df50c3d37defa712",
     "compose.foc.yaml": "bbfe7d8f9e50d08a48beca951c6e020f32b84deb18bcb6a8002c2bbd682f8449",
     "docs/operator-manual.md": "1eaa32300124486f76656bc9a9a283c624bf97f37c8ffd8c011ee563cb1e40b8",
-    "internal/operator/command_errors.go": "4692def1bd47e1af5182d9bdd39202ce2ff7f5e0d38d9b41503439910001b887",
+    "internal/operator/command_errors.go": "72710f85a02274d20ec4000b991d6cb255860a08782c1b79c6f6c3b79ee6d903",
     "internal/operator/foc_installer.yaml": "bbfe7d8f9e50d08a48beca951c6e020f32b84deb18bcb6a8002c2bbd682f8449",
-    "internal/operator/self_update.go": "5c71a4ca83ac76a0b8b67295e21316d06295e67ecf7e14868848762c7dcb1257",
-    "internal/operator/self_update_test.go": "89533d208ce2fda6c87be2a5b9403cf1f9b2429ffd8329b706004ef1bc0a452d",
-    "internal/release/verification.go": "b20e13a26316764f376ba8b4b5c7475ffd3a3e8dabe784273f917e52e9dfb87c",
-    "internal/release/verification_errors_test.go": "42050f273d864ca0e4958452492c6a450a15de249eb11c4d439e9cc27fa0a376"
+    "internal/operator/self_update.go": "3ca118d038a5f43ede66f4155df6b67e242ae4ad6f49c2764643dfc8f48990af",
+    "internal/operator/self_update_test.go": "c832aa8355707e481454d522742c1b45806cbbfd828ac741b71db13e73e60b2a",
+    "internal/release/verification.go": "6c2da14a8be0703f1c5c1f44cb99f8cdcb4325e4abd920e571f1a4e83dd40d22",
+    "internal/release/verification_errors_test.go": "e86830dc63dc8672dedf53bfb5e2b17b83d243fb34e56300c9fa6761946397c4"
   },
   "logs": {
     "focused-race.txt": "3c404439334a4e16a35b081ac01286c999ed1b76b3d7e9482581a19545184f51",
@@ -77,5 +77,24 @@
       "read_only": true
     }
   },
-  "historical_failure_limit": "The 13:43:14-13:43:21 UTC attempt has layer Write context-canceled and subsequent snapshot-cleanup errors. Its initiating stderr was discarded by the old tool, so its precise trigger cannot be reconstructed. Current files match the managed identity, no install lock remains, disk has about 4.7 GB available, and no kernel OOM event was found in that window. These later observations do not prove every original condition."
+  "historical_failure_limit": "The 13:43:14-13:43:21 UTC attempt has layer Write context-canceled and subsequent snapshot-cleanup errors. Its initiating stderr was discarded by the old tool, so its precise trigger cannot be reconstructed. Current files match the managed identity, no install lock remains, disk has about 4.7 GB available, and no kernel OOM event was found in that window. These later observations do not prove every original condition.",
+  "review_followup": {
+    "accepted_at": "2026-10-15T15:13:17.353641+00:00",
+    "logs": {
+      "focused-race.txt": "954230fb1d036dfe08b461a65c61572597cdc7e7ce60df698d4a218d94f2d88c",
+      "source-ci.txt": "700ec53aaaba7c465adfdea2bec3c54ad696c3ef811665e1e320f39855dbfe6a",
+      "native-diagnostics.txt": "31944eea2cf4a4d32e4dac9ff81a799ce7bdb242bb9826d568cfd3d6ef86a65a"
+    },
+    "input": {
+      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/foc-diagnostics-review-r1.sh",
+      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/foc-diagnostics-source\nout=/home/wyium/foc-host-20261014/foc-diagnostics-evidence-review-r1\nbin=/home/wyium/foc-host-20261014/foc-diagnostics-bin\ncache=/home/wyium/fc-operations-20261012-01a13082\nmkdir -p \"$src\" \"$out\" \"$bin\"\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\ndocker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -v \"$src:/src\" -v \"$bin:/out\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm bash -ec 'gofmt -w internal/operator/command_errors.go internal/operator/self_update.go internal/operator/self_update_test.go cmd/fc/docker.go cmd/fc/docker_test.go cmd/fc/self_update_native_test.go internal/release/verification.go internal/release/verification_errors_test.go; go test -race -count=1 -p=1 ./internal/operator ./internal/release ./cmd/fc > /out/focused-race.txt 2>&1; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/foc-candidate ./cmd/fc; CGO_ENABLED=0 go test -c -p=1 -o /out/foc-native.test ./cmd/fc'\ncp \"$bin/focused-race.txt\" \"$out/focused-race.txt\"\nif [ ! -d .git ]; then git init -b dev >/dev/null; fi\ngit add --all\ngit -c user.name=Codex -c user.email=codex@openai.com commit --allow-empty -m \"Private self-update diagnostics acceptance source\" >/dev/null\nnpm ci --ignore-scripts --no-audit --no-fund > \"$out/npm.txt\" 2>&1\nbash scripts/test-ci-source.sh > \"$out/source-ci.txt\" 2>&1\nprintf 'PASS: self-update diagnostics source CI and focused race\\n'\n\nnode=fc-foc-review-r1-$(cat /proc/sys/kernel/random/uuid)\nprintf '%s\\n' \"$node\" > \"$out/native-node.txt\"\ncleanup() { docker stop \"$node\" >/dev/null 2>&1 || true; }\ntrap cleanup EXIT\ndocker run -d --privileged --cpus=2 --memory=2g --memory-swap=2g --name \"$node\" -e DOCKER_TLS_CERTDIR= docker:27.5.1-dind > \"$out/native-node-id.txt\"\nfor attempt in $(seq 1 60); do if docker exec \"$node\" docker info >/dev/null 2>&1; then break; fi; sleep 1; done\ndocker cp \"$bin/foc-native.test\" \"$node:/root/foc-native.test\"\ndocker exec \"$node\" mkdir -p /root/foc-node\ndocker exec \"$node\" sh -c 'printf \"disposable-foc-self-update\\n\" > /root/foc-native-fixture; printf \"{\\\"configuration_version\\\":1,\\\"role\\\":\\\"storage\\\",\\\"project\\\":\\\"fc-self-update-fixture\\\",\\\"database\\\":\\\"sqlite\\\",\\\"revision\\\":\\\"c438232d16a8c95baa94fa81289e9afed980c881\\\",\\\"compose_files\\\":[\\\"docker-compose.storage.yaml\\\"],\\\"state\\\":\\\"ready\\\"}\\n\" > /root/foc-node/.fc-deployment.json'\ndocker exec -e FC_SELF_UPDATE_DISPOSABLE_DAEMON=1 \"$node\" /root/foc-native.test -test.v -test.timeout=6m -test.run '^TestNativeSelfUpdateDiagnostics$' > \"$out/native-diagnostics.txt\" 2>&1\nprintf 'PASS: exact-source native cold pull, Compose install, diagnostic refusals and retry\\n'\n\n",
+      "record_sha256": "162007a3d1745efdc05e27fc500c5c4585096eaf5ebc4037717682e04ac2c5e8"
+    },
+    "regressions": [
+      "real in-flight HTTP cancellation, context timeout and HTTP client timeout",
+      "full/read-only/permission-denied installer lock creation retains concrete cause",
+      "missing operator image retains ErrImageUnavailable"
+    ],
+    "exact_inputs_updated": true
+  }
 }

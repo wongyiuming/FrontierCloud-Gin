@@ -28,6 +28,22 @@ func (r *installerRunner) Run(ctx context.Context, name string, args ...string) 
 
 type operatorImages struct{ *fakeImages }
 
+type unavailableOperatorImage struct{}
+
+func (unavailableOperatorImage) ProveOperator(context.Context, string, string) (release.ImageProof, error) {
+	return release.ImageProof{}, fmt.Errorf("private must-not-escape: %w", release.ErrImageUnavailable)
+}
+
+func TestSelfUpdatePreservesUnavailableImageWithoutInstallation(t *testing.T) {
+	d, _, base, _ := upgradeFixture(t)
+	runner := &installerRunner{upgradeRunner: base}
+	d.Runner = runner
+	_, err := d.SelfUpdate(context.Background(), strings.Repeat("b", 40), "amd64", fakeEvidence{true}, unavailableOperatorImage{})
+	if !errors.Is(err, release.ErrImageUnavailable) || !strings.Contains(err.Error(), "image_verification") || strings.Contains(err.Error(), "must-not-escape") || runner.installCalls != 0 {
+		t.Fatal("missing image diagnosis lost", err)
+	}
+}
+
 type selfUpdateFailedEvidence struct{}
 
 func (selfUpdateFailedEvidence) Artifact(context.Context, string) (map[string]any, error) {

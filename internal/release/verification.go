@@ -126,6 +126,15 @@ func (v *Verifier) get(ctx context.Context, route string, target any) (map[strin
 	}
 	response, err := v.client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
 		return nil, &apiFailure{kind: "network"}
 	}
 	defer response.Body.Close()

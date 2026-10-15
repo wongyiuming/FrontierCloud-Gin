@@ -67,6 +67,10 @@ func TestDockerRunnerClassifiesFailuresWithoutCredentialOutput(t *testing.T) {
 		{"no space left on device\ncontext canceled", operator.ErrDockerStorage},
 		{"unexpected EOF\ncontext canceled", operator.ErrDockerNetwork},
 		{"Another host installation is active or interrupted", operator.ErrInstallerLock},
+		{"mkdir: File exists\nAnother host installation is active or interrupted", operator.ErrInstallerLock},
+		{"mkdir: No space left on device\nAnother host installation is active or interrupted", operator.ErrDockerStorage},
+		{"mkdir: Read-only file system\nAnother host installation is active or interrupted", operator.ErrDockerStorage},
+		{"mkdir: Permission denied\nAnother host installation is active or interrupted", operator.ErrDockerPermission},
 		{"Global foc command differs from managed identity", operator.ErrInstallerOwnership},
 		{"unrecognized fixture failure", operator.ErrDockerCommand},
 	} {

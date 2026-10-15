@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSafeVerificationFailureKeepsFactsWithoutRawDetail(t *testing.T) {
@@ -25,5 +27,33 @@ func TestSafeVerificationFailureKeepsFactsWithoutRawDetail(t *testing.T) {
 		if !strings.Contains(got, tc.want) || strings.Contains(got, "must-not-escape") || strings.Contains(got, "https:") {
 			t.Fatal(got)
 		}
+	}
+}
+
+func TestVerificationHTTPPreservesInFlightCancellationAndTimeout(t *testing.T) {
+	for _, kind := range []string{"cancel", "context-timeout", "client-timeout"} {
+		t.Run(kind, func(t *testing.T) {
+			started := make(chan struct{})
+			v := verifierFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				close(started)
+				<-r.Context().Done()
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			want, text := context.DeadlineExceeded, "deadline exceeded"
+			if kind == "cancel" {
+				want, text = context.Canceled, "canceled"
+				go func() { <-started; cancel() }()
+			} else if kind == "client-timeout" {
+				v.client.Timeout = 100 * time.Millisecond
+			} else {
+				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+				defer cancel()
+			}
+			_, err := v.get(ctx, "/fixture", &map[string]any{})
+			if !errors.Is(err, want) || !strings.Contains(SafeVerificationFailure(err).Error(), text) {
+				t.Fatal("HTTP cause lost", err, SafeVerificationFailure(err))
+			}
+		})
 	}
 }
