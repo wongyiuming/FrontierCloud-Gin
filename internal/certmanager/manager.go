@@ -666,7 +666,9 @@ func (m *Manager) refresh() {
 			m.journal.State = Degraded
 		}
 	} else {
-		m.journal.State = Degraded
+		if m.journal.State != Renewing && m.journal.State != Issuing && m.journal.State != Validating {
+			m.journal.State = Degraded
+		}
 		if m.journal.Error == "" || servingProbeError(m.journal.Error) {
 			m.journal.Error = classifyServingProbe(e)
 		}

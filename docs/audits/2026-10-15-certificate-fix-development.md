@@ -23,6 +23,16 @@ owns automatic management and its healthcheck. No new host service, socket
 permission, Docker mount, CPU allocation or Compose configuration is required.
 Admin GUI and foc display the new safe categories.
 
+## Review correction
+
+The first review identified an in-flight-state bug: a failed serving probe could
+replace RENEWING/ISSUING/VALIDATING with DEGRADED and subsequent recovery could
+prematurely report ACTIVE. Both failure and recovery now preserve these states.
+The regression drives all three states through a real failed handshake and
+recovery, and checks that stalled-cache handling still records renewal failure.
+All gates below were rerun after this correction; the JSON replaces the initial
+acceptance snapshot, whose original is retained in the previous Git commit.
+
 ## Executed development gates
 
 - Race tests: `internal/certmanager`, `internal/operator`, `cmd/fc` and
@@ -44,9 +54,9 @@ Admin GUI and foc display the new safe categories.
   and an agent healthcheck ran in three rounds spanning the five-second observer
   ticker: 72 submitted CLI commands overall, including 54 status reads. Every
   status read returned ACTIVE, verified HTTPS, matching fingerprints and no error.
-  Status latency was 0.058-0.250 seconds. These are component status calls through
+  Status latency was 0.054-0.198 seconds. These are component status calls through
   the same socket path used by foc, not 72 complete host-level foc invocations.
-- Five consecutive Web CPU samples per profile were all below 1 percent; the
+- Five consecutive Web CPU samples per profile were all below 4 percent (required bound: 20 percent); the
   development user preview was also updated and exact nodes.js bytes verified.
 
 The first deliberate concurrent-agent stress run failed to start a process under

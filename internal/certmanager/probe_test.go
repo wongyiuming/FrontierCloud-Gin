@@ -88,11 +88,25 @@ func TestRefreshServingBudgetIndependentOfLocalWork(t *testing.T) {
 	if v = m.Status(); v.LastError != "rate_limited" || v.State != Degraded || !v.ServingMatches {
 		t.Fatalf("serving proof erased renewal failure: %+v", v)
 	}
-	m.journal.Error = "serving_probe_timeout"
+	for _, state := range []string{Renewing, Issuing, Validating} {
+		m.journal.Error = ""
+		m.journal.State = state
+		m.opt.serving = strings.TrimPrefix(wrong.URL, "https://")
+		m.refresh()
+		if v = m.Status(); v.LastError != "serving_tls_verification" || v.State != state || v.ServingMatches || v.HTTPSReady {
+			t.Fatalf("probe failure replaced in-flight %s: %+v", state, v)
+		}
+		m.opt.serving = opt.serving
+		m.refresh()
+		if v = m.Status(); v.LastError != "" || v.State != state || !v.ServingMatches {
+			t.Fatalf("probe recovery replaced in-flight %s: %+v", state, v)
+		}
+	}
 	m.journal.State = Renewing
+	m.issueFinished = time.Now().Add(-11 * time.Second)
 	m.refresh()
-	if v = m.Status(); v.LastError != "" || v.State != Renewing {
-		t.Fatalf("probe recovery replaced in-flight renewal state: %+v", v)
+	if v = m.Status(); v.LastError != "certificate_cache_unwritable" || v.LastRenewal != "failed" || v.State != Degraded {
+		t.Fatalf("stalled-cache failure lost renewal classification: %+v", v)
 	}
 }
 

@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "checked_at": "2026-10-15T13:17:15.256727+00:00",
+  "checked_at": "2026-10-15T13:30:57.028763+00:00",
   "development_host": "192.168.6.201",
-  "base_revision": "6588b7403db2bef9025046cb0d4b74f6a62d5306",
+  "base_revision": "b18057362f177d3706ebfb450372fcea4179cde6",
+  "review_fix": "Preserve RENEWING/ISSUING/VALIDATING across failed probes and recovery; retain stalled-renewal classification",
   "production_modified_during_development_acceptance": false,
   "public_ca_requests": false,
   "test_ca": "isolated local CA via real CertMagic/acmez account/order/HTTP-01/CSR/issuance paths",
@@ -18,31 +19,31 @@
     {
       "profile": "business",
       "web_cpu_percent": [
-        0.48,
-        0.41,
-        0.5,
-        0.58,
-        0.52
+        0.7,
+        3.95,
+        0.68,
+        0.45,
+        0.66
       ]
     },
     {
       "profile": "direct",
       "web_cpu_percent": [
-        0.54,
-        0.64,
+        0.7,
         0.51,
-        0.55,
-        0.84
+        0.39,
+        0.58,
+        0.68
       ]
     },
     {
       "profile": "relay",
       "web_cpu_percent": [
-        0.68,
-        0.62,
-        0.72,
-        0.67,
-        0.88
+        0.42,
+        0.74,
+        0.78,
+        0.71,
+        1.06
       ]
     }
   ],
@@ -51,11 +52,11 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.187,
+      "elapsed_seconds": 0.061,
       "host": "192.168.6.201",
       "profile": "business",
       "stage": "issued",
@@ -65,11 +66,11 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.186,
+      "elapsed_seconds": 0.061,
       "host": "192.168.6.201",
       "profile": "business",
       "stage": "issued",
@@ -79,35 +80,7 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.085,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.988,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
@@ -115,285 +88,19 @@
       "host": "192.168.6.201",
       "profile": "business",
       "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.061,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.059,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.898,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.061,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.061,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.897,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.067,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
       "round": 1
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.25,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.249,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
         "/app/frontiercloud",
         "certificate-healthcheck"
       ],
       "elapsed_seconds": 0.852,
       "host": "192.168.6.201",
       "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.065,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.12,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.796,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.067,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.068,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.066,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-business-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 1.002,
-      "host": "192.168.6.201",
-      "profile": "business",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "direct",
       "stage": "issued",
       "round": 1
     },
@@ -401,55 +108,41 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.103,
+      "elapsed_seconds": 0.096,
       "host": "192.168.6.201",
-      "profile": "direct",
+      "profile": "business",
       "stage": "issued",
-      "round": 1
+      "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.061,
+      "elapsed_seconds": 0.096,
       "host": "192.168.6.201",
-      "profile": "direct",
+      "profile": "business",
       "stage": "issued",
-      "round": 1
+      "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.992,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
       "elapsed_seconds": 0.06,
       "host": "192.168.6.201",
-      "profile": "direct",
+      "profile": "business",
       "stage": "issued",
       "round": 2
     },
@@ -457,21 +150,301 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.999,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "issued",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.108,
+      "elapsed_seconds": 0.105,
       "host": "192.168.6.201",
-      "profile": "direct",
+      "profile": "business",
       "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.196,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.196,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.999,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.088,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.088,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.06,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.862,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
       "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.897,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.097,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.097,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.097,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-business-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.998,
+      "host": "192.168.6.201",
+      "profile": "business",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.058,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.058,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.074,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.951,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
@@ -485,11 +458,11 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
-        "certificate-healthcheck"
+        "certificate-status"
       ],
-      "elapsed_seconds": 0.9,
+      "elapsed_seconds": 0.198,
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "issued",
@@ -499,147 +472,147 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.062,
+      "elapsed_seconds": 0.06,
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "issued",
-      "round": 3
+      "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.108,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
         "/app/frontiercloud",
         "certificate-healthcheck"
       ],
-      "elapsed_seconds": 0.8,
+      "elapsed_seconds": 0.901,
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "issued",
-      "round": 3
+      "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.06,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.06,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.06,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.986,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
       "elapsed_seconds": 0.094,
       "host": "192.168.6.201",
       "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 2
+      "stage": "issued",
+      "round": 3
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.06,
+      "elapsed_seconds": 0.061,
       "host": "192.168.6.201",
       "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 2
+      "stage": "issued",
+      "round": 3
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.095,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 1.095,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.086,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.064,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.086,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.893,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
@@ -653,11 +626,11 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
-        "certificate-healthcheck"
+        "certificate-status"
       ],
-      "elapsed_seconds": 0.699,
+      "elapsed_seconds": 0.062,
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "renewed-after-restart",
@@ -667,35 +640,7 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.093,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.059,
-      "host": "192.168.6.201",
-      "profile": "direct",
-      "stage": "renewed-after-restart",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
@@ -703,17 +648,31 @@
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "renewed-after-restart",
-      "round": 3
+      "round": 2
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-direct-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
         "/app/frontiercloud",
         "certificate-healthcheck"
       ],
-      "elapsed_seconds": 1.097,
+      "elapsed_seconds": 1.295,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.097,
       "host": "192.168.6.201",
       "profile": "direct",
       "stage": "renewed-after-restart",
@@ -723,293 +682,27 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.059,
+      "elapsed_seconds": 0.097,
       "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.167,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.084,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.771,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.113,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.114,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.113,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 1.096,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.096,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
       "round": 3
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.06,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.059,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.897,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "issued",
-      "round": 3
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.059,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.133,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.058,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 0.833,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 1
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
-        "/app/frontiercloud",
-        "certificate-status"
-      ],
-      "elapsed_seconds": 0.062,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
-        "/app/frontiercloud",
-        "certificate-healthcheck"
-      ],
-      "elapsed_seconds": 1.5,
-      "host": "192.168.6.201",
-      "profile": "relay",
-      "stage": "renewed-after-restart",
-      "round": 2
-    },
-    {
-      "argv": [
-        "docker",
-        "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
       "elapsed_seconds": 0.098,
       "host": "192.168.6.201",
-      "profile": "relay",
+      "profile": "direct",
       "stage": "renewed-after-restart",
       "round": 3
     },
@@ -1017,21 +710,301 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-direct-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.901,
+      "host": "192.168.6.201",
+      "profile": "direct",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
-      "elapsed_seconds": 0.098,
+      "elapsed_seconds": 0.055,
       "host": "192.168.6.201",
       "profile": "relay",
-      "stage": "renewed-after-restart",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.054,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.054,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.62,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.901,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.059,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
       "round": 3
     },
     {
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-web-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.059,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.999,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "issued",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.135,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.135,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.073,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 0.839,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 1
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.061,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.062,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
+        "/app/frontiercloud",
+        "certificate-healthcheck"
+      ],
+      "elapsed_seconds": 1.397,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 2
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
         "/app/frontiercloud",
         "certificate-status"
       ],
@@ -1045,11 +1018,39 @@
       "argv": [
         "docker",
         "exec",
-        "fc-certificate-5d950d2a-cc25-4e63-b2c3-063eaa914707-relay-certificate-agent-1",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.06,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-web-1",
+        "/app/frontiercloud",
+        "certificate-status"
+      ],
+      "elapsed_seconds": 0.06,
+      "host": "192.168.6.201",
+      "profile": "relay",
+      "stage": "renewed-after-restart",
+      "round": 3
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "fc-certificate-27511a91-681a-4f6e-93c5-26be292b3984-relay-certificate-agent-1",
         "/app/frontiercloud",
         "certificate-healthcheck"
       ],
-      "elapsed_seconds": 1.001,
+      "elapsed_seconds": 0.999,
       "host": "192.168.6.201",
       "profile": "relay",
       "stage": "renewed-after-restart",
@@ -1057,7 +1058,7 @@
     }
   ],
   "runtime_input_count": 889,
-  "runtime_inputs_sha256": "d2818a74f0888b1fbea78490a7a635fdc755d3e1aa1e047accdcb904a9dfa0b4",
+  "runtime_inputs_sha256": "ca7145c7d0fc0a474b1df4ee4d2dabb4968649863252bf0fe49ab0990b27a23e",
   "runtime_inputs": {
     "Dockerfile": "fe129612bf2ec9f8b3a8fab5fc528d0021d571c44c5c40b31ef361691c801a91",
     "Dockerfile.gin": "fe129612bf2ec9f8b3a8fab5fc528d0021d571c44c5c40b31ef361691c801a91",
@@ -1165,9 +1166,9 @@
     "internal/certmanager/ingress.go": "5f0708174ff634e1cf713c055a2ca6ad32a3e373f235251eb8c0ecb54246ee49",
     "internal/certmanager/ingress_test.go": "777ad093def3c093f25bff3b5b56b300121f14fc68663348e002bea8e1e7a4d4",
     "internal/certmanager/install_real_test.go": "773e4a414a4ad0937445c4e3db16ffc7d13f8be50e115b229a15580c9f6cddaf",
-    "internal/certmanager/manager.go": "de695f38fb1189de00bb36e8422f44b694c21887eb1c3feda1f6cb056e69715f",
+    "internal/certmanager/manager.go": "09c76069a48b33857268a28436d45c3f0964aa8c8b30d1367cc1e8d288c2800a",
     "internal/certmanager/migration.go": "6aa1166ade17c3bcee70e1455601040cd0cb948769810e4ca39790554ca58f09",
-    "internal/certmanager/probe_test.go": "7482a37e6542bd82d7d498272048f7f1bad99b89f6e04de91d075843b99b4d12",
+    "internal/certmanager/probe_test.go": "b212ad0dcd87ca584aa01f5c99380100cf3291fa8c7b03cb6c2cd44a6fcd00b5",
     "internal/certmanager/recovery_test.go": "9ea9eb28a4e14e01494fea4f7db3ac8c65fac0a411d07abe7cef41ddfec5198d",
     "internal/certmanager/serving.go": "6eaecc67f3119bdb2d09faf0752ec540758a627fdf919ed27b64deb6bdaf6d35",
     "internal/certmanager/storage.go": "7b5b03afcccde49afe0110088493258788b68c281d564ac5571cda3bc7611db5",
@@ -1951,63 +1952,39 @@
   },
   "checks": {
     "focused-race.txt": {
-      "sha256": "a18d4a7711813df86163853cff051d211ac19fe8e88a3a9f6d0987610b792006",
+      "sha256": "bc5b56856795ad9f4ef0d844d8f573f1576698c68ffa35e365e0a0bd1d6d7bac",
       "passed": true
     },
     "compose-lifecycle-final.txt": {
-      "sha256": "04c92f4c4a244ab8cab42ea83980607edfe1ba9c545da54d9e460c2c1d4c0bfc",
+      "sha256": "13cd148478237892c6b91d35865b4705753456793db4bc83cac017c1bf5edf89",
       "passed": true
     },
     "source-ci-final.txt": {
-      "sha256": "fb4b63920dff720c85a0f24ade59de13d13f2a08f9ec19c0312883f8454cb09f",
+      "sha256": "478b0acb4404412e29c5eb0be721f6398efaa23a562f4fa55619fd53059c0433",
       "passed": true
     },
     "cli-race.txt": {
-      "sha256": "8e1811ef63673ed55fe1bf510853eaea33134705fad0a528f55873c9660c4999",
+      "sha256": "6e50ea18c7576252566282eb6cd5218f4819acddc123bff09348273dc2b86769",
       "passed": true
     }
   },
   "submitted_development_scripts": [
     {
-      "record": "certificate-fix-build-r3.json",
-      "sha256": "bcda237b3864da97628fc6f3d29a9d4c953489770e26a6032ea0a29e7fd1a27e",
-      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-build-r3.sh",
-      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-r3\nbin=/home/wyium/foc-host-20261014/certificate-fix-bin\ncache=/home/wyium/fc-operations-20261012-01a13082\nmkdir -p \"$src\" \"$out\" \"$bin\"\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\ndocker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -v \"$src:/src\" -v \"$bin:/out\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm bash -ec 'gofmt -w internal/certmanager/manager.go internal/certmanager/probe_test.go internal/operator/doctor.go internal/operator/install_readiness.go internal/operator/certificate_status_test.go; go test -race -count=1 -p=1 -v ./internal/certmanager ./internal/operator > /out/focused-race.txt 2>&1; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/frontiercloud ./cmd/frontiercloud; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/fc ./cmd/fc; CGO_ENABLED=0 go test -c -p=1 -o /out/certificate.test ./internal/certmanager'\ncp \"$bin/focused-race.txt\" \"$out/focused-race.txt\"\ncat > \"$bin/Dockerfile\" <<'DOCKER'\nFROM fc-album-candidate:20261015-r4\nCOPY frontiercloud /app/frontiercloud\nCOPY fc /app/operator/fc\nCOPY static /app/static\nDOCKER\nmkdir -p \"$bin/static\"\ncp -a \"$src/static/.\" \"$bin/static/\"\ndocker build --memory=1g --cpuset-cpus=0,1 -t frontiercloud-go-web:6588b7403db2bef9025046cb0d4b74f6a62d5306 \"$bin\" > \"$out/build.txt\" 2>&1\ndocker tag fc-album-edge-candidate:20261015-r4 frontiercloud-go-nginx:6588b7403db2bef9025046cb0d4b74f6a62d5306\nwork=$(mktemp -d /tmp/fc-certificate-XXXXXXXX)\nidentity=fc-certificate-$(cat /proc/sys/kernel/random/uuid)\nprintf '%s\\n' \"$work\" > \"$out/native-workspace.txt\"\ncp \"$bin/certificate.test\" \"$work/certificate.test\"\nchmod 755 \"$work/certificate.test\"\npython3 tests/storage_certificate_containers.py run \"$work\" \"$identity\" 6588b7403db2bef9025046cb0d4b74f6a62d5306 > \"$out/compose-lifecycle.txt\" 2>&1\nprintf 'PASS: focused race and real three-profile Compose lifecycle\\n'\n\n",
+      "record": "certificate-fix-build-r4.json",
+      "sha256": "bc1dc7906de06550028e89e666ab5107b909fad27a4640a5e28c6b88e9a2c5b9",
+      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-build-r4.sh",
+      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-r4\nbin=/home/wyium/foc-host-20261014/certificate-fix-bin\ncache=/home/wyium/fc-operations-20261012-01a13082\nmkdir -p \"$src\" \"$out\" \"$bin\"\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\ndocker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -v \"$src:/src\" -v \"$bin:/out\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm bash -ec 'gofmt -w internal/certmanager/manager.go internal/certmanager/probe_test.go internal/operator/doctor.go internal/operator/install_readiness.go internal/operator/certificate_status_test.go; go test -race -count=1 -p=1 -v ./internal/certmanager ./internal/operator > /out/focused-race.txt 2>&1; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/frontiercloud ./cmd/frontiercloud; CGO_ENABLED=0 go build -p=1 -trimpath -ldflags=\"-s -w\" -o /out/fc ./cmd/fc; CGO_ENABLED=0 go test -c -p=1 -o /out/certificate.test ./internal/certmanager'\ncp \"$bin/focused-race.txt\" \"$out/focused-race.txt\"\ncat > \"$bin/Dockerfile\" <<'DOCKER'\nFROM fc-album-candidate:20261015-r4\nCOPY frontiercloud /app/frontiercloud\nCOPY fc /app/operator/fc\nCOPY static /app/static\nDOCKER\nmkdir -p \"$bin/static\"\ncp -a \"$src/static/.\" \"$bin/static/\"\ndocker build --memory=1g --cpuset-cpus=0,1 -t frontiercloud-go-web:6588b7403db2bef9025046cb0d4b74f6a62d5306 \"$bin\" > \"$out/build.txt\" 2>&1\ndocker tag fc-album-edge-candidate:20261015-r4 frontiercloud-go-nginx:6588b7403db2bef9025046cb0d4b74f6a62d5306\nwork=$(mktemp -d /tmp/fc-certificate-XXXXXXXX)\nidentity=fc-certificate-$(cat /proc/sys/kernel/random/uuid)\nprintf '%s\\n' \"$work\" > \"$out/native-workspace.txt\"\ncp \"$bin/certificate.test\" \"$work/certificate.test\"\nchmod 755 \"$work/certificate.test\"\npython3 tests/storage_certificate_containers.py run \"$work\" \"$identity\" 6588b7403db2bef9025046cb0d4b74f6a62d5306 > \"$out/compose-lifecycle.txt\" 2>&1\ngit add --all\ngit -c user.name=Codex -c user.email=codex@openai.com commit --allow-empty -m \"Review-fix acceptance snapshot\" >/dev/null\nbash scripts/test-ci-source.sh > \"$out/source-ci-final.txt\" 2>&1\ndocker run --rm --cpus=2 --memory=3g -e GOMAXPROCS=2 -v \"$src:/src:ro\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm go test -race -count=1 -p=1 ./cmd/fc ./cmd/frontiercloud ./internal/certificate > \"$out/cli-race.txt\" 2>&1\nprintf 'PASS: reviewed state fix, lifecycle, sustained concurrency, source CI and CLI race\\n' \n\n",
       "exit_code": 0,
-      "completed_at": "2026-10-15T13:10:40.037844+00:00"
+      "completed_at": "2026-10-15T13:30:01.456940+00:00"
     },
     {
-      "record": "certificate-fix-source-check-r2.json",
-      "sha256": "b52c17344f4fc2abbd5623a1733117c6e3e3758a7d1fc999bf8472ad4744f786",
-      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-source-check-r2.sh",
-      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-final\ncache=/home/wyium/fc-operations-20261012-01a13082\nmkdir -p \"$out\"\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\nif [ ! -d .git ]; then git init -b dev >/dev/null; fi\ngit add --all\ngit -c user.name=Codex -c user.email=codex@openai.com commit --allow-empty -m \"Private certificate fix acceptance snapshot\" >/dev/null\nnpm ci --ignore-scripts --no-audit --no-fund > \"$out/npm.txt\" 2>&1\nbash scripts/test-ci-source.sh > \"$out/source-ci.txt\" 2>&1\ndocker run --rm --cpus=2 --memory=3g --memory-swap=3g -e GOMAXPROCS=2 -e GOMEMLIMIT=512MiB -e GOGC=25 -v \"$src:/src:ro\" -v \"$cache/buildcache:/root/.cache/go-build\" -v \"$cache/gomod:/go/pkg/mod\" -w /src golang:1.26.8-bookworm go test -race -count=1 -p=1 ./cmd/fc ./cmd/frontiercloud ./internal/certificate > \"$out/cli-race.txt\" 2>&1\nprintf 'PASS: source CI and CLI/certificate protocol race\\n'\n",
+      "record": "certificate-fix-preview-r4.json",
+      "sha256": "453d2590059a42d2b85cd98bcdad05c28266006bf95378927e8fb0df5b6fc6ef",
+      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-preview-r4.sh",
+      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nbin=/home/wyium/foc-host-20261014/certificate-fix-bin\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-final\ndocker tag frontiercloud-go-web:6588b7403db2bef9025046cb0d4b74f6a62d5306 fc-certificate-candidate:20261015-r4\ncat > \"$bin/Dockerfile.edge\" <<'DOCKER'\nFROM fc-album-edge-candidate:20261015-r4\nCOPY static /app/static\nDOCKER\ndocker build --memory=512m --cpuset-cpus=0 -f \"$bin/Dockerfile.edge\" -t fc-certificate-edge-candidate:20261015-r4 \"$bin\" > \"$out/preview-build.txt\" 2>&1\npreview=/home/wyium/fc-music-preview-20261014\ncat > \"$preview/album-loading-20261015/override.yaml\" <<'YAML'\nservices:\n  web:\n    image: fc-certificate-candidate:20261015-r4\n  nginx:\n    image: fc-certificate-edge-candidate:20261015-r4\nYAML\ndocker compose -p fc-music-preview -f \"$preview/compose.yaml\" -f \"$preview/cover-grid.override.yaml\" -f \"$preview/album-loading-20261015/override.yaml\" up -d --no-build --pull never --no-deps --wait web nginx\npython3 - <<'PY'\nimport urllib.request,hashlib\nfrom pathlib import Path\nurl='http://127.0.0.1:18080/static/js/nodes.js'\nwith urllib.request.urlopen(url,timeout=15) as response: raw=response.read()\nexpected=Path('/home/wyium/foc-host-20261014/certificate-fix-source/static/js/nodes.js').read_bytes()\nassert raw==expected\nprint('PASS: development preview serves exact new certificate UI labels',hashlib.sha256(raw).hexdigest())\nPY\n",
       "exit_code": 0,
-      "completed_at": "2026-10-15T13:12:39.661780+00:00"
-    },
-    {
-      "record": "certificate-fix-concurrency-final.json",
-      "sha256": "4b2f3e5d3e770974b4d10bf9326eb3c1e0feb1e7ed9abdb04877a17b91e16742",
-      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-concurrency-final.sh",
-      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-final\ntar -xf /home/wyium/foc-host-20261014/source.tar -C \"$src\"\ncd \"$src\"\ngit add --all\ngit -c user.name=Codex -c user.email=codex@openai.com commit --allow-empty -m \"Final sustained concurrency acceptance snapshot\" >/dev/null\nbash scripts/test-ci-source.sh > \"$out/source-ci-final.txt\" 2>&1\nwork=$(mktemp -d /tmp/fc-certificate-XXXXXXXX)\nidentity=fc-certificate-$(cat /proc/sys/kernel/random/uuid)\nprintf '%s\\n' \"$work\" > \"$out/native-workspace-final.txt\"\ncp /home/wyium/foc-host-20261014/certificate-fix-bin/certificate.test \"$work/certificate.test\"\nchmod 755 \"$work/certificate.test\"\npython3 tests/storage_certificate_containers.py run \"$work\" \"$identity\" 6588b7403db2bef9025046cb0d4b74f6a62d5306 > \"$out/compose-lifecycle-final.txt\" 2>&1\nprintf 'PASS: sustained concurrency and full certificate lifecycle all profiles\\n'\n",
-      "exit_code": 0,
-      "completed_at": "2026-10-15T13:16:45.548969+00:00"
-    },
-    {
-      "record": "certificate-fix-preview.json",
-      "sha256": "15574fdfa2a3509de0401e3c6461cabb4060784d8ebad87a69a3f247e1790408",
-      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-preview.sh",
-      "bash": "set -euo pipefail\nexec 9>/var/lock/frontiercloud-development-acceptance.lock\nflock 9\nsrc=/home/wyium/foc-host-20261014/certificate-fix-source\nbin=/home/wyium/foc-host-20261014/certificate-fix-bin\nout=/home/wyium/foc-host-20261014/certificate-fix-evidence-final\ndocker tag frontiercloud-go-web:6588b7403db2bef9025046cb0d4b74f6a62d5306 fc-certificate-candidate:20261015-r3\ncat > \"$bin/Dockerfile.edge\" <<'DOCKER'\nFROM fc-album-edge-candidate:20261015-r4\nCOPY static /app/static\nDOCKER\ndocker build --memory=512m --cpuset-cpus=0 -f \"$bin/Dockerfile.edge\" -t fc-certificate-edge-candidate:20261015-r3 \"$bin\" > \"$out/preview-build.txt\" 2>&1\npreview=/home/wyium/fc-music-preview-20261014\ncat > \"$preview/album-loading-20261015/override.yaml\" <<'YAML'\nservices:\n  web:\n    image: fc-certificate-candidate:20261015-r3\n  nginx:\n    image: fc-certificate-edge-candidate:20261015-r3\nYAML\ndocker compose -p fc-music-preview -f \"$preview/compose.yaml\" -f \"$preview/cover-grid.override.yaml\" -f \"$preview/album-loading-20261015/override.yaml\" up -d --no-build --pull never --no-deps --wait web nginx\npython3 - <<'PY'\nimport urllib.request,hashlib\nfrom pathlib import Path\nurl='http://192.168.6.201/static/js/nodes.js'\nwith urllib.request.urlopen(url,timeout=15) as response: raw=response.read()\nexpected=Path('/home/wyium/foc-host-20261014/certificate-fix-source/static/js/nodes.js').read_bytes()\nassert raw==expected\nprint('PASS: development preview serves exact new certificate UI labels',hashlib.sha256(raw).hexdigest())\nPY\n",
-      "exit_code": 1,
-      "completed_at": "2026-10-15T13:12:41.506081+00:00"
-    },
-    {
-      "record": "certificate-fix-preview-verify.json",
-      "sha256": "9dba4be4d251a620185fad0c5b879dded814e2ff694dbc438431290c7f1c88a1",
-      "invocation": "sudo -S -p '' bash /home/wyium/foc-host-20261014/certificate-fix-preview-verify.sh",
-      "bash": "set -euo pipefail\ndocker port fc-music-preview-nginx-1\npython3 - <<'PY'\nimport urllib.request,hashlib\nfrom pathlib import Path\nwith urllib.request.urlopen('http://127.0.0.1:18080/static/js/nodes.js',timeout=15) as response: raw=response.read()\nexpected=Path('/home/wyium/foc-host-20261014/certificate-fix-source/static/js/nodes.js').read_bytes()\nassert raw==expected\nprint('PASS: development preview serves exact new certificate UI labels',hashlib.sha256(raw).hexdigest())\nPY\n",
-      "exit_code": 0,
-      "completed_at": "2026-10-15T13:12:59.715339+00:00"
+      "completed_at": "2026-10-15T13:30:03.254504+00:00"
     }
   ],
-  "preview_note": "Compose update succeeded. Its first verification incorrectly used port 80; the follow-up verified exact nodes.js bytes at the existing loopback port 18080."
+  "preview_note": "The current review-fix candidate was deployed through the existing development Compose project and verified at loopback port 18080."
 }
