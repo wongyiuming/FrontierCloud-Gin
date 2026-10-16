@@ -24,6 +24,8 @@ const cryptoPreparedCatalogs = new WeakSet();
 const metadataTracks = new WeakSet();
 const metadataPromises = new WeakMap();
 const visibleMetadataTracks = new Set();
+const visibleArtworkTracks = new Set();
+const playerThumbnailPromises = new WeakMap();
 const playlistMetadataRetries = new WeakMap();
 let playlistMetadataObserver = null, playlistMetadataTimer = null, playlistMetadataRunning = false;
 let cryptoCatalogSequence = 0;
@@ -1207,7 +1209,7 @@ function renderPlaylist() {
         .map((item, index) => ({item, index}));
     listContainer.innerHTML = matches.map(({item, index}) => `
         <li class="media-item ${index === currentIndex ? 'active' : ''}" data-index="${index}" data-media-id="${escapeHTML(item.media_id)}">
-            <img src="${escapeHTML(item.cover)}" alt="cover">
+            <img ${usesPlayerThumbnail(item) ? '' : `src="${escapeHTML(item.cover)}"`} alt="cover" width="50" height="50" loading="lazy" decoding="async" fetchpriority="low">
             <div class="media-info">
                 <div class="media-title" title="${escapeHTML(item.title)}">${escapeHTML(middleEllipsis(item.title, 40))}</div>
                 <div class="media-artist">${escapeHTML(item.artist)}</div>
@@ -1217,13 +1219,54 @@ function renderPlaylist() {
     observePlaylistMetadata(listContainer);
 }
 
+function usesPlayerThumbnail(media) {
+    return typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
+        && typeof window.FrontierMusicMetadata?.thumbnail === 'function'
+        && typeof window.IntersectionObserver === 'function'
+        && /^(blob:|\/api\/v1\/media\/cover\?)/.test(media.cover || '');
+}
+
+async function paintPlayerThumbnail(media, image) {
+    if (!image || !usesPlayerThumbnail(media)) return;
+    const source = media.cover;
+    let request = playerThumbnailPromises.get(media);
+    if (!request || request.source !== source) {
+        request = {source, promise: waitForPlayerBuffer().then(() => {
+            if (!visibleArtworkTracks.has(media)) throw new Error('Artwork left the visible queue');
+            return window.FrontierMusicMetadata.thumbnail(source);
+        })};
+        playerThumbnailPromises.set(media, request);
+    }
+    try {
+        const thumbnail = await request.promise;
+        if (media.cover === source && currentMediaList.includes(media)) image.src = thumbnail;
+    } catch (_) {
+        if (playerThumbnailPromises.get(media) === request) playerThumbnailPromises.delete(media);
+        if (media.cover === source && visibleArtworkTracks.has(media)) image.src = source;
+    }
+}
+
+function waitForPlayerBuffer() {
+    if (typeof PLAYER_KIND === 'undefined' || PLAYER_KIND !== 'audio') return Promise.resolve();
+    const deadline = Date.now() + 3000;
+    return new Promise(resolve => {
+        const check = () => {
+            if ((art?.video?.readyState >= 3 && (art.currentTime > 0 || art.video.paused)) || Date.now() >= deadline) resolve();
+            else setTimeout(check, 100);
+        };
+        check();
+    });
+}
+
 function updateMetadataRow(media) {
     const index = currentMediaList.indexOf(media);
     if (index < 0) return;
     const row = document.querySelector(`.media-item[data-index="${index}"]`);
     if (row) {
         const image = row.querySelector('img');
-        if (image && image.getAttribute('src') !== media.cover) image.src = media.cover;
+        if (usesPlayerThumbnail(media)) {
+            if (visibleArtworkTracks.has(media)) void paintPlayerThumbnail(media, image);
+        } else if (image && image.getAttribute('src') !== media.cover) image.src = media.cover;
         const title = row.querySelector('.media-title');
         if (title) { title.textContent = middleEllipsis(media.title, 40); title.title = media.title; }
         const artist = row.querySelector('.media-artist');
@@ -1266,10 +1309,17 @@ function schedulePlaylistMetadata(delay = 0) {
 function observePlaylistMetadata(list) {
     playlistMetadataObserver?.disconnect();
     visibleMetadataTracks.clear();
+    visibleArtworkTracks.clear();
     if (typeof window.IntersectionObserver !== 'function') return;
     playlistMetadataObserver = new window.IntersectionObserver(entries => {
         for (const entry of entries) {
             const media = currentMediaList[Number(entry.target.dataset.index)];
+            if (media) {
+                if (entry.isIntersecting) {
+                    visibleArtworkTracks.add(media);
+                    void paintPlayerThumbnail(media, entry.target.querySelector?.('img'));
+                } else visibleArtworkTracks.delete(media);
+            }
             if (!media?.encryption || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
             if (entry.isIntersecting) visibleMetadataTracks.add(media);
             else visibleMetadataTracks.delete(media);
@@ -1291,7 +1341,10 @@ function loadSelectedMetadata(media, priority = true) {
     if (!media?.encryption || !window.FrontierMusicMetadata) return Promise.resolve(true);
     if (metadataTracks.has(media)) return metadataPromises.get(media) || Promise.resolve(true);
     metadataTracks.add(media);
-    const pending = window.FrontierMusicMetadata.metadata(media, {priority}).then(tags => {
+    const read = () => window.FrontierMusicMetadata.metadata(media, {priority});
+    const operation = typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
+        ? waitForPlayerBuffer().then(read) : read();
+    const pending = operation.then(tags => {
         for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) media[field] = tags[field];
         if (!currentMediaList.includes(media)) return true;
         updateMetadataRow(media);
@@ -1379,6 +1432,7 @@ window.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('pagehide', event => {
     playlistMetadataObserver?.disconnect();
     visibleMetadataTracks.clear();
+    visibleArtworkTracks.clear();
     clearTimeout(playlistMetadataTimer); playlistMetadataTimer = null;
     if (playbackReporter) clearInterval(playbackReporter);
     stopLyricClock();

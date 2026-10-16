@@ -1,7 +1,8 @@
 (() => {
     'use strict';
     const TAG_LIMIT = 8 * 1024 * 1024, IMAGE_LIMIT = 4 * 1024 * 1024, IMAGE_BUDGET = 32 * 1024 * 1024;
-    const cache = new Map(), pictures = new Map();
+    const cache = new Map(), pictures = new Map(), pictureBlobs = new Map();
+    const thumbnails = new Map();
     let imageBytes = 0, active = 0;
     const queue = [];
     const ascii = bytes => String.fromCharCode(...bytes);
@@ -138,7 +139,8 @@
             const digest = await crypto.subtle.digest('SHA-256', image.bytes);
             const identity = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
             if (!pictures.has(identity) && imageBytes + image.bytes.length <= IMAGE_BUDGET) {
-                pictures.set(identity, URL.createObjectURL(new Blob([image.bytes], {type: image.mime}))); imageBytes += image.bytes.length;
+                const blob = new Blob([image.bytes], {type: image.mime}), url = URL.createObjectURL(blob);
+                pictures.set(identity, url); pictureBlobs.set(url, blob); imageBytes += image.bytes.length;
             }
             result.cover = pictures.get(identity); delete result.picture;
         }
@@ -165,10 +167,62 @@
             } catch (_) { /* Metadata failure keeps existing display and playback. */ }
         }));
     }
+    // Only the audio player's small queue artwork opts into this browser-side view.
+    // Originals and encrypted source bytes are never rewritten or uploaded.
+    function thumbnail(source) {
+        const url = new URL(source, window.location.href);
+        if (url.origin !== window.location.origin || !['blob:', 'http:', 'https:'].includes(url.protocol)) {
+            return Promise.reject(new Error('Unsupported artwork source'));
+        }
+        if (thumbnails.has(source)) return thumbnails.get(source);
+        if (thumbnails.size >= 128 || typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') {
+            return Promise.resolve(source);
+        }
+        const pending = limited(async () => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+            let bitmap;
+            try {
+                let original = pictureBlobs.get(source);
+                if (!original) {
+                    if (url.protocol === 'blob:') throw new Error('Unknown artwork blob');
+                    const response = await fetch(url.href, {signal: controller.signal, credentials: 'same-origin', priority: 'low'});
+                    if (!response.ok) throw new Error('Artwork unavailable');
+                    const reader = response.body.getReader(), chunks = [];
+                    let length = 0, complete = false;
+                    try {
+                        while (true) {
+                            const {value, done} = await reader.read();
+                            if (done) { complete = true; break; }
+                            length += value.byteLength;
+                            if (length > IMAGE_LIMIT) throw new Error('Artwork exceeds budget');
+                            chunks.push(value);
+                        }
+                    } finally {
+                        if (!complete) await reader.cancel().catch(() => {});
+                        reader.releaseLock();
+                    }
+                    original = new Blob(chunks);
+                }
+                bitmap = await createImageBitmap(original);
+                const scale = Math.min(1, 96 / Math.max(bitmap.width, bitmap.height));
+                const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * scale)), Math.max(1, Math.round(bitmap.height * scale)));
+                canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                const blob = await canvas.convertToBlob({type: 'image/webp', quality: 0.85});
+                if (blob.size > 64 * 1024) throw new Error('Thumbnail exceeds budget');
+                return URL.createObjectURL(blob);
+            } finally { clearTimeout(timeout); bitmap?.close(); }
+        });
+        thumbnails.set(source, pending);
+        pending.catch(() => { if (thumbnails.get(source) === pending) thumbnails.delete(source); });
+        return pending;
+    }
     window.addEventListener('pagehide', event => {
         if (event.persisted) return;
         for (const url of pictures.values()) URL.revokeObjectURL(url);
-        pictures.clear(); cache.clear(); imageBytes = 0;
+        pictures.clear(); pictureBlobs.clear(); cache.clear(); imageBytes = 0;
+        for (const pending of thumbnails.values()) pending.then(url => URL.revokeObjectURL(url), () => {});
+        thumbnails.clear();
     });
-    window.FrontierMusicMetadata = {metadata, decorate, parse};
+    window.FrontierMusicMetadata = {metadata, decorate, parse, thumbnail};
 })();

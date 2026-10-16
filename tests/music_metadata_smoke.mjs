@@ -68,4 +68,25 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
     context.fetch=async (_url,options)=>({status:206,headers:{get:()=>`bytes ${options.headers.Range.slice(6)}/256`},bytes:new Uint8Array(options.headers.Range==='bytes=0-9'?10:128)});
     assert.deepEqual(Object.keys(await api.metadata(entry)),[],'timed-out metadata must remain retryable');
 }
-console.log('music-metadata-smoke-ok: ID3 versions, Unicode, image signatures, bounded fallback and slow Range retry');
+{
+    context.window.location = {href: 'https://media.test/album', origin: 'https://media.test'};
+    let reads = 0, closes = 0, dimensions;
+    context.fetch = async () => { reads++; return new Response(Uint8Array.from(image)); };
+    context.createImageBitmap = async () => ({width: 1000, height: 500, close() { closes++; }});
+    context.OffscreenCanvas = class {
+        constructor(width, height) { this.width = width; this.height = height; dimensions = [width, height]; }
+        getContext() { return {drawImage() {}}; }
+        async convertToBlob(options) { assert.equal(options.type, 'image/webp'); return new Blob(['thumbnail'], {type: options.type}); }
+    };
+    const [one, two] = await Promise.all([api.thumbnail('/api/v1/media/cover?one'), api.thumbnail('/api/v1/media/cover?one')]);
+    assert.equal(one, two); assert.equal(reads, 1, 'concurrent thumbnail views share one read');
+    assert.deepEqual(dimensions, [96, 48], 'queue artwork preserves aspect ratio without upscaling');
+    assert.equal(closes, 1, 'decoded originals are released after rendering');
+    assert.equal((await (await fetch(one)).blob()).type, 'image/webp');
+    await assert.rejects(api.thumbnail('https://foreign.test/cover'), /Unsupported artwork source/);
+    context.fetch = async () => new Response(new Uint8Array(4 * 1024 * 1024 + 1));
+    await assert.rejects(api.thumbnail('/api/v1/media/cover?oversize'), /exceeds budget/);
+    context.fetch = async () => new Response(Uint8Array.from(image));
+    assert.ok((await api.thumbnail('/api/v1/media/cover?oversize')).startsWith('blob:'), 'failed thumbnails remain retryable');
+}
+console.log('music-metadata-smoke-ok: ID3, bounded retry and isolated small-artwork rendering');

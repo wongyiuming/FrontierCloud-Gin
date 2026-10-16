@@ -124,9 +124,15 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
             page.wait_for_function('() => typeof currentMediaList !== "undefined" && currentMediaList.length === 3 && art', timeout=45000)
             page.wait_for_function('() => [...document.querySelectorAll(".media-item img")].length === 3 && [...document.querySelectorAll(".media-item img")].every(i=>i.src.startsWith("blob:") && i.naturalWidth===64)', timeout=60000)
             images = page.locator('.media-item img').evaluate_all("""async images=>Promise.all(images.map(async image=>{
-                const bytes=await queueBlobs.get(image.src).arrayBuffer();return {width:image.naturalWidth,height:image.naturalHeight,
+                const blob=queueBlobs.get(image.src);const bytes=await blob.arrayBuffer();return {width:image.naturalWidth,height:image.naturalHeight,type:blob.type,
                 sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('')};}))""")
-            assert [image['sha256'] for image in images] == [track['picture_sha256'] for track in tracks], images
+            assert all(image['type'] == 'image/webp' for image in images), images
+            assert len({image['sha256'] for image in images}) == 3, images
+            original_hashes = page.evaluate("""async()=>Promise.all(currentMediaList.map(async media=>{
+                const bytes=await queueBlobs.get(media.cover).arrayBuffer();
+                return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');}))""")
+            assert original_hashes == [track['picture_sha256'] for track in tracks], original_hashes
+            proof['original_picture_hashes'] = original_hashes
             proof['pictures'] = images
             proof['own_original_pictures_verified'] = True
             entries = page.evaluate('currentMediaList.map(t=>({path:t.media_path,encryption:!!t.encryption,delivery:t.delivery_mode,site:t.site_type}))')
