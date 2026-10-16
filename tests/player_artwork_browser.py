@@ -70,6 +70,18 @@ def run(args):
             assert errors == [], errors
             proof['page_errors'] = errors
             context.close()
+            legacy = browser.new_context(viewport={'width': 1360, 'height': 900})
+            legacy.add_init_script('window.OffscreenCanvas=undefined')
+            page = legacy.new_page()
+            page.goto(plain_url, wait_until='domcontentloaded')
+            page.wait_for_function('()=>typeof currentMediaList!=="undefined"&&currentMediaList.length&&art', timeout=45000)
+            proof['legacy_original_source'] = page.evaluate('''()=>({supported:FrontierMusicMetadata.canThumbnail(),
+                source:document.querySelector('.media-item img').getAttribute('src'),original:currentMediaList[0].cover})''')
+            original = proof['legacy_original_source']
+            assert not original['supported'] and original['source'] == original['original'], original
+            page.wait_for_function('()=>document.querySelector(".media-item img")?.naturalWidth===500', timeout=45000)
+            page.evaluate('art.pause()')
+            legacy.close()
             proof['medians'] = {mode: statistics.median(s['first_play_seconds'] for s in proof['samples'] if s['mode'] == mode)
                 for mode in ('before', 'after')}
             proof['passed'] = True

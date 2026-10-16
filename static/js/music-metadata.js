@@ -3,6 +3,7 @@
     const TAG_LIMIT = 8 * 1024 * 1024, IMAGE_LIMIT = 4 * 1024 * 1024, IMAGE_BUDGET = 32 * 1024 * 1024;
     const cache = new Map(), pictures = new Map(), pictureBlobs = new Map();
     const thumbnails = new Map();
+    let thumbnailTail = Promise.resolve(), thumbnailCapability;
     let imageBytes = 0, active = 0;
     const queue = [];
     const ascii = bytes => String.fromCharCode(...bytes);
@@ -169,16 +170,27 @@
     }
     // Only the audio player's small queue artwork opts into this browser-side view.
     // Originals and encrypted source bytes are never rewritten or uploaded.
+    function canThumbnail() {
+        if (thumbnailCapability === undefined) {
+            try {
+                const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1) : null;
+                thumbnailCapability = typeof createImageBitmap === 'function'
+                    && typeof canvas?.convertToBlob === 'function' && Boolean(canvas.getContext('2d'));
+            } catch (_) { thumbnailCapability = false; }
+        }
+        return thumbnailCapability;
+    }
     function thumbnail(source) {
         const url = new URL(source, window.location.href);
         if (url.origin !== window.location.origin || !['blob:', 'http:', 'https:'].includes(url.protocol)) {
             return Promise.reject(new Error('Unsupported artwork source'));
         }
         if (thumbnails.has(source)) return thumbnails.get(source);
-        if (thumbnails.size >= 128 || typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') {
+        if (thumbnails.size >= 128 || !canThumbnail()) {
             return Promise.resolve(source);
         }
-        const pending = limited(async () => {
+        // A separate serial channel cannot consume either encrypted metadata slot.
+        const pending = thumbnailTail.then(async () => {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
             let bitmap;
@@ -213,6 +225,7 @@
                 return URL.createObjectURL(blob);
             } finally { clearTimeout(timeout); bitmap?.close(); }
         });
+        thumbnailTail = pending.catch(() => {});
         thumbnails.set(source, pending);
         pending.catch(() => { if (thumbnails.get(source) === pending) thumbnails.delete(source); });
         return pending;
@@ -224,5 +237,5 @@
         for (const pending of thumbnails.values()) pending.then(url => URL.revokeObjectURL(url), () => {});
         thumbnails.clear();
     });
-    window.FrontierMusicMetadata = {metadata, decorate, parse, thumbnail};
+    window.FrontierMusicMetadata = {metadata, decorate, parse, thumbnail, canThumbnail};
 })();

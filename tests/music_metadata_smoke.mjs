@@ -88,5 +88,34 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
     await assert.rejects(api.thumbnail('/api/v1/media/cover?oversize'), /exceeds budget/);
     context.fetch = async () => new Response(Uint8Array.from(image));
     assert.ok((await api.thumbnail('/api/v1/media/cover?oversize')).startsWith('blob:'), 'failed thumbnails remain retryable');
+    let thumbnailReads = 0, metadataReads = 0;
+    const releases = [];
+    context.fetch = async (url, options) => {
+        if (String(url).includes('/api/v1/media/cover?reserved')) {
+            thumbnailReads++;
+            return new Promise(resolve => releases.push(() => resolve(new Response(Uint8Array.from(image)))));
+        }
+        metadataReads++;
+        const range = options.headers.Range;
+        return {status: 206, headers: {get: () => `bytes ${range.slice(6)}/256`}, bytes: new Uint8Array(range === 'bytes=0-9' ? 10 : 128)};
+    };
+    const first = api.thumbnail('/api/v1/media/cover?reserved-one');
+    const second = api.thumbnail('/api/v1/media/cover?reserved-two');
+    await new Promise(setImmediate);
+    assert.equal(thumbnailReads, 1, 'thumbnail reads have exactly one independent active slot');
+    const selected = api.metadata({media_path: 'music/reserved-selection.mp3', encryption: {plaintext_size: 256}}, {priority: true});
+    await new Promise(setImmediate);
+    assert.equal(metadataReads, 2, 'a slow thumbnail must not consume selected metadata capacity');
+    await selected;
+    releases.shift()(); await first; await new Promise(setImmediate);
+    assert.equal(thumbnailReads, 2);
+    releases.shift()(); await second;
+}
+for (const canvas of [undefined, class {getContext() { return {}; }}, class {getContext() { return null; } convertToBlob() {}}]) {
+    const legacy = {window: {addEventListener() {}, location: {href: 'https://media.test/', origin: 'https://media.test'}},
+        URL, Blob, OffscreenCanvas: canvas, createImageBitmap: () => {}, TextDecoder, Uint8Array, DataView};
+    vm.runInNewContext(fs.readFileSync(new URL('../static/js/music-metadata.js', import.meta.url), 'utf8'), legacy);
+    assert.equal(legacy.window.FrontierMusicMetadata.canThumbnail(), false, 'missing canvas/encoder/2D context is detected before hiding artwork');
+    assert.equal(await legacy.window.FrontierMusicMetadata.thumbnail('/api/v1/media/cover?legacy'), '/api/v1/media/cover?legacy');
 }
 console.log('music-metadata-smoke-ok: ID3, bounded retry and isolated small-artwork rendering');

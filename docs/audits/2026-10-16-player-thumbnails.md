@@ -24,7 +24,7 @@ The player view was 96 by 96 WebP, 3,518 bytes. The three distinct 64 pixel test
 covers were not upscaled; their original PNG hashes were independently checked
 alongside three distinct WebP views.
 
-Cold-start comparison used new browser contexts and the same application/media.
+Initial source `afad559` cold-start comparison used new browser contexts and the same application/media.
 The baseline replaced only the two browser scripts with release `b7be3fd` bytes
 in the test browser. No server route or application source was substituted.
 Neither run used artificial network throttling. Measured seconds from navigation
@@ -73,3 +73,28 @@ compatibility component requires a separate owner decision.
 Raw browser evidence and actual SSH/script inputs are retained privately under
 `player-thumbnails-delivery-20261016` on the operator workstation. Production
 upgrades are a later, separately recorded `foc` phase.
+
+## Review follow-up
+
+Two P2 findings were accepted: missing thumbnail capabilities could delay the
+legacy original source, and two slow thumbnails could occupy both tag-reading
+slots. The player now checks bitmap/encoder/2D-canvas capabilities before
+suppressing the original source. Thumbnail rendering uses its own serial channel
+and cannot take either encrypted-metadata slot. Unit cases hold two thumbnail
+requests while requiring selected metadata to finish; a real Chromium case
+disables OffscreenCanvas and checks the original source and 500-pixel image.
+Development source checks, encrypted MSE cases and the fresh native Relay fleet
+and isolated RN checks were repeated after these changes. Initial timing samples above remain attributed
+to their original source rather than being relabeled as post-review results.
+
+Post-review RN first-play samples were 3.514/2.838, 3.258/2.894 and
+2.807/3.075 seconds (before/after); medians were 3.258/2.894 seconds. The
+development medians were 0.395/0.392 seconds. These remain small, variable
+samples. Original dimensions/hashes and the 3,518-byte player view were unchanged.
+
+An independent persistent-profile browser restart check confirmed versioned
+logos were disk-cache hits with zero response wire bytes. The encrypted music
+still requested ciphertext after browser restart, matching the worker-memory
+cache contract. A two-second, read-only source-audio sample at 60 seconds in the
+E-AC-3 concert measured mean -22.5 dB and peak -2.6 dB using the development
+host's existing test tools; no production tool was installed.

@@ -241,4 +241,12 @@ for (const failure of ['network', 'status', 'truncated']) {
     await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(reads, 1, 'restoring the helper permits a later visible-row read');
 }
+{
+    const p = playerContext(async () => new Response('unused'));
+    p.context.PLAYER_KIND = 'audio';
+    p.context.window.IntersectionObserver = class {observe() {} disconnect() {}};
+    p.context.window.FrontierMusicMetadata = {thumbnail() { throw new Error('unsupported renderer must not be queued'); }, canThumbnail: () => false};
+    p.run("currentMediaList[0].cover='/api/v1/media/cover?legacy'; document.getElementById('mediaList').querySelectorAll=()=>[]; renderPlaylist()");
+    assert.match(p.elements.get('mediaList').innerHTML, /src="\/api\/v1\/media\/cover\?legacy"/, 'unsupported thumbnail browsers retain the original source immediately');
+}
 console.log('player-cache-smoke-ok');

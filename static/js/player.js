@@ -1222,6 +1222,7 @@ function renderPlaylist() {
 function usesPlayerThumbnail(media) {
     return typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
         && typeof window.FrontierMusicMetadata?.thumbnail === 'function'
+        && window.FrontierMusicMetadata.canThumbnail?.() === true
         && typeof window.IntersectionObserver === 'function'
         && /^(blob:|\/api\/v1\/media\/cover\?)/.test(media.cover || '');
 }

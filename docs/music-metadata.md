@@ -47,6 +47,9 @@ No server thumbnail conversion, source replacement, plaintext upload, key
 persistence or server-side compression is introduced. At most 128 page-local
 thumbnail blobs (64 KiB each) are admitted; unsupported browsers, exhausted
 admission or rendering failures retain the original picture. Exit revokes blobs.
+Capability checks keep the original image source on browsers without a 2D
+OffscreenCanvas encoder/bitmap decoder. Thumbnail work has its own serial
+channel, preserving both encrypted-metadata slots during slow image reads.
 Only visible queue rows request thumbnail work. Encrypted tag and small-artwork
 jobs give initial audio buffering up to three seconds before starting; stalled or
 autoplay-blocked playback cannot indefinitely suppress artwork. This reduces
