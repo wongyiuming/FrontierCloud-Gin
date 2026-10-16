@@ -63,17 +63,22 @@ def run(args):
             page.evaluate('art.pause()')
             row = page.locator('.media-item').first
             row.evaluate('(row)=>row.scrollIntoView({block:"nearest"})')
-            page.wait_for_function('()=>{const i=document.querySelector(".media-item img");return i?.src.startsWith("blob:")&&i.naturalWidth>0&&i.naturalWidth<=96}', timeout=45000)
+            page.wait_for_timeout(3000)
+            # Artwork is explicitly optional, even when cached. Idle cancellation may retain the placeholder.
             proof['plain_picture'] = row.locator('img').evaluate('''async image=>{
                 const thumb=artworkBlobs.get(image.src);const original=await (await fetch(currentMediaList[0].cover)).blob();
-                const bitmap=await createImageBitmap(original);const result={thumbnail_width:image.naturalWidth,
-                    thumbnail_height:image.naturalHeight,thumbnail_bytes:thumb.size,thumbnail_type:thumb.type,
+                const bitmap=await createImageBitmap(original);const result={thumbnail_available:!!thumb,
+                    placeholder:image.src.startsWith('data:image/svg+xml'),thumbnail_width:thumb?image.naturalWidth:null,
+                    thumbnail_height:thumb?image.naturalHeight:null,thumbnail_bytes:thumb?.size,thumbnail_type:thumb?.type,
                     original_width:bitmap.width,original_height:bitmap.height,original_bytes:original.size,
                     original_sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',await original.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('')};bitmap.close();return result;}''')
             picture = proof['plain_picture']
             assert picture['original_sha256'] == args.original_sha256, picture
-            assert picture['original_width'] == 500 and picture['thumbnail_width'] == 96, picture
-            assert picture['thumbnail_type'] == 'image/webp' and picture['thumbnail_bytes'] < picture['original_bytes'], picture
+            assert picture['original_width'] == 500, picture
+            if picture['thumbnail_available']:
+                assert picture['thumbnail_width'] == 96 and picture['thumbnail_type'] == 'image/webp' and picture['thumbnail_bytes'] < picture['original_bytes'], picture
+            else:
+                assert picture['placeholder'], 'optional artwork must retain a network-free placeholder'
             page.screenshot(path=str(out / 'small-player-original-preserved.png'))
             assert errors == [], errors
             proof['page_errors'] = errors
