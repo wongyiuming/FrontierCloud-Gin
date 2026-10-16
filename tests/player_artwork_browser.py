@@ -26,7 +26,7 @@ def run(args):
                     context = browser.new_context(viewport={'width': 1360, 'height': 900})
                     try:
                         if mode == 'before':
-                            for name in ('player.js', 'music-metadata.js'):
+                            for name in ('player.js', 'music-metadata.js', 'audio-continuous-stream.js'):
                                 source = (baseline / name).read_text()
                                 context.route('**/static/js/' + name + '*',
                                     lambda route, request, source=source: route.fulfill(body=source, content_type='text/javascript'))
