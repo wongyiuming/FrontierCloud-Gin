@@ -45,16 +45,26 @@ physical pixels on the longest edge without upscaling, encoded as WebP at 0.85
 quality. Original cover URLs/blobs remain intact for large views and Media Session.
 No server thumbnail conversion, source replacement, plaintext upload, key
 persistence or server-side compression is introduced. At most 128 page-local
-thumbnail blobs (64 KiB each) are admitted; unsupported browsers, exhausted
-admission or rendering failures retain the original picture. Exit revokes blobs.
-Capability checks keep the original image source on browsers without a 2D
-OffscreenCanvas encoder/bitmap decoder. Thumbnail work has its own serial
-channel, preserving both encrypted-metadata slots during slow image reads.
-Only visible queue rows request thumbnail work. Encrypted tag and small-artwork
-jobs give initial audio buffering up to three seconds before starting; stalled or
-autoplay-blocked playback cannot indefinitely suppress artwork. This reduces
-startup contention, but a cold encrypted tag read still authenticates and fetches
-whole AES-GCM chunks: client resizing alone does not reduce those network bytes.
+thumbnail blobs (64 KiB each) are admitted. The owner requires these small views
+to be strictly best effort: unsupported browsers, exhausted admission, cold HTTP
+cache, idle starvation and rendering failures retain a network-free music-note
+placeholder. They never trigger an original-image fallback download. Large
+original views and Media Session keep their existing original sources.
+Thumbnail work has its own serial channel, preserving both encrypted-metadata
+slots. It reuses a page-local decrypted Blob, or reads only the same-origin
+browser HTTP cache (`only-if-cached`); a cache miss cannot start a network fetch.
+Only visible queue rows request work. Both audio-player tag reads and thumbnails
+require a native browser idle callback with at least eight milliseconds available,
+and either explicitly paused playback or at least twelve seconds buffered ahead
+(a completely buffered final segment also qualifies). There is no forced start
+after a buffering deadline. Missing idle support leaves placeholders/filenames.
+Falling below that playback-buffer threshold, waiting for media, seeking, switching tracks, backgrounding or leaving the page
+cancels artwork work and in-flight tag Range requests. Thumbnail jobs have a
+two-second total lifetime including queue waiting, and recheck visibility and
+playback admission before decoding. Exit revokes blobs. Native bitmap decoding
+already in progress cannot be interrupted; cancellation discards its result and
+closes the bitmap. A cold encrypted tag read still authenticates and fetches
+whole AES-GCM chunks after admission: resizing alone does not reduce those bytes.
 Existing file-ID, visibility, replacement and authorization checks apply to every Range.
 Metadata failures retain filename/default art and do not block playback. Already
 uploaded encrypted files require no re-upload or database migration.

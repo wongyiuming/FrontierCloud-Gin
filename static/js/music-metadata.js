@@ -98,37 +98,42 @@
             Promise.resolve().then(job.work).then(job.resolve, job.reject).finally(() => { active--; pump(); });
         }
     }
-    async function range(url, start, end, size) {
+    async function range(url, start, end, size, signal) {
         const controller = new AbortController();
+        const abort = () => controller.abort();
+        if (signal?.aborted) controller.abort();
+        signal?.addEventListener('abort', abort, {once: true});
         const timeout = setTimeout(() => controller.abort(), 15000);
         try {
-            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: {Range: `bytes=${start}-${end}`}});
+            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', priority: 'low', signal: controller.signal, headers: {Range: `bytes=${start}-${end}`}});
             if (response.status !== 206 || response.headers.get('Content-Range') !== `bytes ${start}-${end}/${size}`) {
                 await response.body?.cancel(); throw new Error('音乐标签分段读取失败');
             }
             return await window.FrontierCryptoCommon.boundedBytes(response, end - start + 1);
         } finally {
             clearTimeout(timeout);
+            signal?.removeEventListener('abort', abort);
         }
     }
-    async function load(entry) {
+    async function load(entry, signal) {
+        signal?.throwIfAborted();
         if (!window.FrontierMediaCrypto || !window.FrontierCryptoCommon) throw new Error('浏览器解密组件未加载');
         window.FrontierCryptoCommon.validate(entry.encryption);
         const size = entry.encryption.plaintext_size;
         if (size < 10) return {};
         const source = {...entry};
         await window.FrontierMediaCrypto.prepareCatalog([source]);
-        const header = await range(source.url, 0, 9, size);
+        const header = await range(source.url, 0, 9, size, signal);
         let result = {};
         if (ascii(header.subarray(0, 3)) === 'ID3') {
             const length = syncSafe(header.subarray(6, 10));
             if (length > 0 && length <= TAG_LIMIT && length <= size - 10) {
-                const body = await range(source.url, 10, length + 9, size);
+                const body = await range(source.url, 10, length + 9, size, signal);
                 const bytes = new Uint8Array(length + 10); bytes.set(header); bytes.set(body, 10); result = parse(bytes);
             }
         }
         if (size >= 128 && (!result.title || !result.artist || !result.album)) {
-            const tail = await range(source.url, size - 128, size - 1, size);
+            const tail = await range(source.url, size - 128, size - 1, size, signal);
             if (ascii(tail.subarray(0, 3)) === 'TAG') {
                 result.title ||= text(tail.subarray(3, 33), 0, 0);
                 result.artist ||= text(tail.subarray(33, 63), 0, 0);
@@ -147,13 +152,13 @@
         }
         return result;
     }
-    function metadata(entry, {priority = false} = {}) {
+    function metadata(entry, {priority = false, signal} = {}) {
         if (!entry?.encryption || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
         // File ID, descriptor and logical identity prevent reuse after replacement.
         const key = JSON.stringify([entry.media_path || entry.path, entry.resource_id || entry.media_id, entry.encryption]);
         if (!cache.has(key)) {
             if (cache.size >= 128) cache.delete(cache.keys().next().value);
-            const promise = limited(() => load(entry), priority).catch(error => { cache.delete(key); throw error; });
+            const promise = limited(() => load(entry, signal), priority).catch(error => { cache.delete(key); throw error; });
             cache.set(key, promise);
         }
         return cache.get(key);
@@ -180,25 +185,51 @@
         }
         return thumbnailCapability;
     }
-    function thumbnail(source) {
+    function thumbnail(source, {signal, admit = () => true} = {}) {
         const url = new URL(source, window.location.href);
         if (url.origin !== window.location.origin || !['blob:', 'http:', 'https:'].includes(url.protocol)) {
             return Promise.reject(new Error('Unsupported artwork source'));
         }
         if (thumbnails.has(source)) return thumbnails.get(source);
-        if (thumbnails.size >= 128 || !canThumbnail()) {
-            return Promise.resolve(source);
+        if (thumbnails.size >= 128 || !canThumbnail() || typeof window.requestIdleCallback !== 'function') {
+            return Promise.resolve(null);
         }
         // A separate serial channel cannot consume either encrypted metadata slot.
-        const pending = thumbnailTail.then(async () => {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000);
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        if (signal?.aborted) controller.abort();
+        signal?.addEventListener('abort', abort, {once: true});
+        // Includes queue age: old work expires while waiting, not after all predecessors finish.
+        const timeout = setTimeout(abort, 2000);
+        let rejectCancelled;
+        const cancelled = new Promise((_resolve, reject) => {
+            rejectCancelled = () => reject(new Error('Artwork cancelled'));
+            controller.signal.addEventListener('abort', rejectCancelled, {once: true});
+            if (controller.signal.aborted) rejectCancelled();
+        });
+        const work = thumbnailTail.then(async () => {
             let bitmap;
             try {
+                controller.signal.throwIfAborted();
+                if (!admit()) return null;
+                // No deadline may force artwork onto a busy main thread.
+                await new Promise((resolve, reject) => {
+                    const cancelled = () => { window.cancelIdleCallback(id); reject(new Error('Artwork cancelled')); };
+                    const id = window.requestIdleCallback(deadline => {
+                        controller.signal.removeEventListener('abort', cancelled);
+                        if (deadline.timeRemaining() < 8) reject(new Error('No artwork idle budget'));
+                        else resolve();
+                    });
+                    controller.signal.addEventListener('abort', cancelled, {once: true});
+                    if (controller.signal.aborted) cancelled();
+                });
+                controller.signal.throwIfAborted();
+                if (!admit()) return null;
                 let original = pictureBlobs.get(source);
                 if (!original) {
                     if (url.protocol === 'blob:') throw new Error('Unknown artwork blob');
-                    const response = await fetch(url.href, {signal: controller.signal, credentials: 'same-origin', priority: 'low'});
+                    // A cold cache skips the picture; it must never download an original for this tiny view.
+                    const response = await fetch(url.href, {signal: controller.signal, credentials: 'same-origin', priority: 'low', mode: 'same-origin', cache: 'only-if-cached'});
                     if (!response.ok) throw new Error('Artwork unavailable');
                     const reader = response.body.getReader(), chunks = [];
                     let length = 0, complete = false;
@@ -217,17 +248,26 @@
                     original = new Blob(chunks);
                 }
                 bitmap = await createImageBitmap(original);
+                controller.signal.throwIfAborted();
                 const scale = Math.min(1, 96 / Math.max(bitmap.width, bitmap.height));
                 const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * scale)), Math.max(1, Math.round(bitmap.height * scale)));
                 canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
                 const blob = await canvas.convertToBlob({type: 'image/webp', quality: 0.85});
+                controller.signal.throwIfAborted();
                 if (blob.size > 64 * 1024) throw new Error('Thumbnail exceeds budget');
                 return URL.createObjectURL(blob);
-            } finally { clearTimeout(timeout); bitmap?.close(); }
+            } finally { bitmap?.close(); }
         });
-        thumbnailTail = pending.catch(() => {});
+        thumbnailTail = work.catch(() => {});
+        const pending = Promise.race([work, cancelled]);
+        const cleanup = () => {
+            clearTimeout(timeout); signal?.removeEventListener('abort', abort);
+            controller.signal.removeEventListener('abort', rejectCancelled);
+        };
+        pending.then(cleanup, cleanup);
         thumbnails.set(source, pending);
-        pending.catch(() => { if (thumbnails.get(source) === pending) thumbnails.delete(source); });
+        const forget = () => { if (thumbnails.get(source) === pending) thumbnails.delete(source); };
+        pending.then(value => { if (!value) forget(); }, forget);
         return pending;
     }
     window.addEventListener('pagehide', event => {

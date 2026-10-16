@@ -3,8 +3,9 @@
 The audio player's 50 CSS pixel queue artwork now uses a browser-generated WebP
 view, at most 96 pixels on its longest edge without upscaling. The existing
 original cover URL/blob remains unchanged for directory cards and Media Session.
-Only visible queue rows request thumbnail work. Encrypted metadata and artwork
-give initial audio buffering up to three seconds before starting. Browser Canvas
+Only visible queue rows request thumbnail work. The final owner requirement makes
+small artwork optional: cached sources only, native idle time, sufficient playback
+buffer and no original-download fallback. Browser Canvas
 is the only rendering implementation; no package, decoder, server transformer,
 runtime dependency, database migration or media rewrite is introduced.
 
@@ -74,7 +75,7 @@ Raw browser evidence and actual SSH/script inputs are retained privately under
 `player-thumbnails-delivery-20261016` on the operator workstation. Production
 upgrades are a later, separately recorded `foc` phase.
 
-## Review follow-up
+## Earlier review follow-up (source 78a0784)
 
 Two P2 findings were accepted: missing thumbnail capabilities could delay the
 legacy original source, and two slow thumbnails could occupy both tag-reading
@@ -98,3 +99,31 @@ still requested ciphertext after browser restart, matching the worker-memory
 cache contract. A two-second, read-only source-audio sample at 60 seconds in the
 E-AC-3 concert measured mean -22.5 dB and peak -2.6 dB using the development
 host's existing test tools; no production tool was installed.
+
+## Playback-first revision
+
+The owner subsequently required small covers to be expendable. This supersedes
+the original-image fallback and three-second forced start described for earlier
+sources above. Audio queue rows now immediately show a local SVG placeholder.
+They can use an existing decrypted Blob or a same-origin HTTP cache hit, but
+never fetch an original over the network to fill this small view. Other large
+cover surfaces retain their original sources and quality.
+
+Artwork and audio-player tag reads require a browser idle callback with at least
+eight milliseconds remaining and twelve seconds buffered ahead, or a fully
+buffered final segment. Explicitly paused playback also permits idle work.
+Buffering, seeking, track changes and backgrounding cancel work; tag Range
+requests receive the cancellation signal. Thumbnail lifetime is two seconds
+including queue age, not fifteen seconds for each predecessor. Admission and
+row visibility are rechecked after idle waiting. Unsupported APIs, cache misses,
+failures and idle starvation keep the placeholder without playback recovery or
+original-image retries. In-progress native bitmap decoding cannot be forcibly
+interrupted; its result is discarded and bitmap closed after cancellation.
+
+Regression cases cover low-buffer refusal, queued cancellation before a stalled
+predecessor completes, total queue lifetime, cache-only requests, missing encoder,
+decoder failure and no idle callback execution. Real encrypted MSE playback and
+manual switching must continue in all three browser artwork failure modes.
+No codec library, framework, server transformation or persistent plaintext cache
+is introduced. Latest-source measurements and input records remain separate from
+the historical samples above.

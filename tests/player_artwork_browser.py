@@ -53,8 +53,16 @@ def run(args):
             page.goto(plain_url, wait_until='domcontentloaded')
             page.wait_for_function('()=>typeof currentMediaList!=="undefined"&&currentMediaList.length&&art', timeout=45000)
             page.evaluate('art.pause()')
+            page.wait_for_timeout(1500)
+            proof['cold_plain_placeholder'] = page.locator('.media-item img').first.get_attribute('src')
+            assert proof['cold_plain_placeholder'].startswith('data:image/svg+xml'), proof
+            # Simulate viewing an original elsewhere, then reuse its ordinary HTTP cache in the small player.
+            page.evaluate('async()=>{await (await fetch(currentMediaList[0].cover)).arrayBuffer()}')
+            page.reload(wait_until='domcontentloaded')
+            page.wait_for_function('()=>typeof art!=="undefined"&&art', timeout=45000)
+            page.evaluate('art.pause()')
             row = page.locator('.media-item').first
-            row.scroll_into_view_if_needed()
+            row.evaluate('(row)=>row.scrollIntoView({block:"nearest"})')
             page.wait_for_function('()=>{const i=document.querySelector(".media-item img");return i?.src.startsWith("blob:")&&i.naturalWidth>0&&i.naturalWidth<=96}', timeout=45000)
             proof['plain_picture'] = row.locator('img').evaluate('''async image=>{
                 const thumb=artworkBlobs.get(image.src);const original=await (await fetch(currentMediaList[0].cover)).blob();
@@ -75,13 +83,28 @@ def run(args):
             page = legacy.new_page()
             page.goto(plain_url, wait_until='domcontentloaded')
             page.wait_for_function('()=>typeof currentMediaList!=="undefined"&&currentMediaList.length&&art', timeout=45000)
-            proof['legacy_original_source'] = page.evaluate('''()=>({supported:FrontierMusicMetadata.canThumbnail(),
+            proof['legacy_placeholder'] = page.evaluate('''()=>({supported:FrontierMusicMetadata.canThumbnail(),
                 source:document.querySelector('.media-item img').getAttribute('src'),original:currentMediaList[0].cover})''')
-            original = proof['legacy_original_source']
-            assert not original['supported'] and original['source'] == original['original'], original
-            page.wait_for_function('()=>document.querySelector(".media-item img")?.naturalWidth===500', timeout=45000)
+            original = proof['legacy_placeholder']
+            assert not original['supported'] and original['source'].startswith('data:image/svg+xml'), original
             page.evaluate('art.pause()')
             legacy.close()
+            proof['artwork_failure_playback'] = []
+            for failure, script in (
+                ('no-canvas', 'window.OffscreenCanvas=undefined'),
+                ('decode-failure', 'window.createImageBitmap=async()=>{throw new Error("artwork decode failure")}'),
+                ('no-idle-time', 'window.requestIdleCallback=()=>1;window.cancelIdleCallback=()=>{}'),
+            ):
+                isolated = browser.new_context(viewport={'width': 1360, 'height': 900})
+                isolated.add_init_script(script)
+                check = isolated.new_page()
+                check.goto(url, wait_until='domcontentloaded')
+                check.wait_for_function('()=>typeof art!=="undefined"&&art?.currentTime>1&&frontierCloudContinuousAudio.status().active', timeout=45000)
+                check.evaluate('selectMedia(1)')
+                check.wait_for_function('()=>currentIndex===1&&art.currentTime>1&&frontierCloudContinuousAudio.status().active', timeout=45000)
+                proof['artwork_failure_playback'].append({'failure': failure, 'manual_switch_played': True,
+                    'state': check.evaluate('({index:currentIndex,time:art.currentTime,paused:art.video.paused,error:art.video.error?.code||null})')})
+                isolated.close()
             proof['medians'] = {mode: statistics.median(s['first_play_seconds'] for s in proof['samples'] if s['mode'] == mode)
                 for mode in ('before', 'after')}
             proof['passed'] = True

@@ -70,8 +70,16 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
 }
 {
     context.window.location = {href: 'https://media.test/album', origin: 'https://media.test'};
+    context.window.requestIdleCallback = callback => setImmediate(() => callback({timeRemaining: () => 20}));
+    context.window.cancelIdleCallback = clearImmediate;
+    context.setTimeout = setTimeout; context.clearTimeout = clearTimeout;
     let reads = 0, closes = 0, dimensions;
-    context.fetch = async () => { reads++; return new Response(Uint8Array.from(image)); };
+    context.fetch = async (_url, options) => {
+        reads++;
+        assert.equal(options.cache, 'only-if-cached', 'small artwork cannot initiate an original network download');
+        assert.equal(options.mode, 'same-origin'); assert.equal(options.priority, 'low');
+        return new Response(Uint8Array.from(image));
+    };
     context.createImageBitmap = async () => ({width: 1000, height: 500, close() { closes++; }});
     context.OffscreenCanvas = class {
         constructor(width, height) { this.width = width; this.height = height; dimensions = [width, height]; }
@@ -83,6 +91,21 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
     assert.deepEqual(dimensions, [96, 48], 'queue artwork preserves aspect ratio without upscaling');
     assert.equal(closes, 1, 'decoded originals are released after rendering');
     assert.equal((await (await fetch(one)).blob()).type, 'image/webp');
+    assert.equal(await api.thumbnail('/api/v1/media/cover?deferred', {admit: () => false}), null);
+    assert.ok((await api.thumbnail('/api/v1/media/cover?deferred')).startsWith('blob:'), 'deferred admission is retryable when playback has spare buffer');
+    context.fetch = async () => new Response('', {status: 504});
+    await assert.rejects(api.thumbnail('/api/v1/media/cover?cold-cache'), /Artwork unavailable/);
+    const controller = new AbortController();
+    let idle, idleCancelled = false;
+    context.window.requestIdleCallback = callback => {idle = callback; return 1;};
+    context.window.cancelIdleCallback = () => {idleCancelled = true;};
+    const cancelled = api.thumbnail('/api/v1/media/cover?cancelled', {signal: controller.signal});
+    await new Promise(setImmediate);
+    controller.abort();
+    await assert.rejects(cancelled, /Artwork cancelled/);
+    assert.equal(idleCancelled, true, 'buffering cancellation removes the queued idle task');
+    context.window.requestIdleCallback = callback => setImmediate(() => callback({timeRemaining: () => 20}));
+    context.window.cancelIdleCallback = clearImmediate;
     await assert.rejects(api.thumbnail('https://foreign.test/cover'), /Unsupported artwork source/);
     context.fetch = async () => new Response(new Uint8Array(4 * 1024 * 1024 + 1));
     await assert.rejects(api.thumbnail('/api/v1/media/cover?oversize'), /exceeds budget/);
@@ -101,21 +124,32 @@ assert.equal(Object.keys(await api.metadata({media_path: 'music/plain.mp3'})).le
     };
     const first = api.thumbnail('/api/v1/media/cover?reserved-one');
     const second = api.thumbnail('/api/v1/media/cover?reserved-two');
-    await new Promise(setImmediate);
+    const queuedController = new AbortController();
+    const abandoned = api.thumbnail('/api/v1/media/cover?reserved-abandoned', {signal: queuedController.signal});
+    await new Promise(resolve => setTimeout(resolve, 10));
     assert.equal(thumbnailReads, 1, 'thumbnail reads have exactly one independent active slot');
+    queuedController.abort();
+    await assert.rejects(abandoned, /Artwork cancelled/, 'queued cancellation settles before the active predecessor finishes');
     const selected = api.metadata({media_path: 'music/reserved-selection.mp3', encryption: {plaintext_size: 256}}, {priority: true});
     await new Promise(setImmediate);
     assert.equal(metadataReads, 2, 'a slow thumbnail must not consume selected metadata capacity');
     await selected;
-    releases.shift()(); await first; await new Promise(setImmediate);
+    releases.shift()(); await first; await new Promise(resolve => setTimeout(resolve, 10));
     assert.equal(thumbnailReads, 2);
     releases.shift()(); await second;
+    const deadlines = [];
+    context.setTimeout = (callback, delay) => {assert.equal(delay, 2000); deadlines.push(callback); return deadlines.length;};
+    context.clearTimeout = () => {};
+    const stale = api.thumbnail('/api/v1/media/cover?expired-queue');
+    deadlines[0]();
+    await assert.rejects(stale, /Artwork cancelled/, 'the total lifetime includes queue waiting time');
+    context.setTimeout = setTimeout; context.clearTimeout = clearTimeout;
 }
 for (const canvas of [undefined, class {getContext() { return {}; }}, class {getContext() { return null; } convertToBlob() {}}]) {
     const legacy = {window: {addEventListener() {}, location: {href: 'https://media.test/', origin: 'https://media.test'}},
         URL, Blob, OffscreenCanvas: canvas, createImageBitmap: () => {}, TextDecoder, Uint8Array, DataView};
     vm.runInNewContext(fs.readFileSync(new URL('../static/js/music-metadata.js', import.meta.url), 'utf8'), legacy);
-    assert.equal(legacy.window.FrontierMusicMetadata.canThumbnail(), false, 'missing canvas/encoder/2D context is detected before hiding artwork');
-    assert.equal(await legacy.window.FrontierMusicMetadata.thumbnail('/api/v1/media/cover?legacy'), '/api/v1/media/cover?legacy');
+    assert.equal(legacy.window.FrontierMusicMetadata.canThumbnail(), false, 'missing canvas/encoder/2D context skips optional artwork');
+    assert.equal(await legacy.window.FrontierMusicMetadata.thumbnail('/api/v1/media/cover?legacy'), null);
 }
 console.log('music-metadata-smoke-ok: ID3, bounded retry and isolated small-artwork rendering');
