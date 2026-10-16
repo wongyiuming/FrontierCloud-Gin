@@ -1228,7 +1228,7 @@ function renderPlaylist() {
 
 function usesPlayerThumbnail(media) {
     return typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
-        && /^(blob:|\/api\/v1\/media\/cover\?)/.test(media.cover || '');
+        && Boolean(media);
 }
 
 function cancelPlayerArtwork() {
