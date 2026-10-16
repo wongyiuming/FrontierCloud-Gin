@@ -42,6 +42,7 @@ let legacyApplyCalls = 0;
 let selectedIndex = null;
 let querySelectorCalls = 0;
 const metadataSelections = [];
+const artworkActivationOrder = [];
 const windowObject = {
     setTimeout() { return 1; },
     clearTimeout() {},
@@ -54,7 +55,8 @@ const context = {
     checkAndPreloadNext() {},
     applyMediaCatalog() { legacyApplyCalls += 1; },
     renderPlaylist() {},
-    loadSelectedMetadata(media) { metadataSelections.push(media); },
+    cancelPlayerArtwork() { artworkActivationOrder.push('cancel'); },
+    loadSelectedMetadata(media) { artworkActivationOrder.push('metadata'); metadataSelections.push(media); },
     selectMedia(index) { selectedIndex = index; },
     FrontierMediaPlayer: BasePlayer,
     FrontierAudioPlayer: AudioPlayer,
@@ -351,6 +353,7 @@ Object.assign(context, {
     art: {video: {currentTime: 11}, playing: false},
 });
 metadataSelections.length = 0;
+artworkActivationOrder.length = 0;
 windowObject.__activateBusinessTrack(0);
 const boundary = Object.create(windowObject.__ContinuousAudioSession.prototype);
 const firstSegment = {index: 0, start: 0, end: 10};
@@ -361,5 +364,7 @@ windowObject.__setContinuousSessionForTest(boundary);
 boundary.syncTrackFromVideo();
 assert.deepEqual(metadataSelections, context.currentMediaList,
     'both manual activation and automatic MSE boundary crossing must load the active encrypted track tags');
+assert.deepEqual(artworkActivationOrder, ['cancel', 'metadata', 'cancel', 'metadata'],
+    'automatic boundaries must cancel old artwork before scheduling the new track metadata');
 
 console.log('audio-continuous-stream-smoke-ok');

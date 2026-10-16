@@ -241,4 +241,40 @@ for (const failure of ['network', 'status', 'truncated']) {
     await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(reads, 1, 'restoring the helper permits a later visible-row read');
 }
+{
+    const p = playerContext(async () => new Response('unused'));
+    p.context.PLAYER_KIND = 'audio';
+    p.context.window.IntersectionObserver = class {observe() {} disconnect() {}};
+    p.context.window.FrontierMusicMetadata = {thumbnail() { throw new Error('unsupported renderer must not be queued'); }, canThumbnail: () => false};
+    p.run("currentMediaList[0].cover='/api/v1/media/cover?legacy'; document.getElementById('mediaList').querySelectorAll=()=>[]; renderPlaylist()");
+    assert.match(p.elements.get('mediaList').innerHTML, /src="data:image\/svg\+xml/, 'unsupported thumbnail browsers use a network-free placeholder');
+    assert.doesNotMatch(p.elements.get('mediaList').innerHTML, /src="\/api\/v1\/media\/cover/, 'no original fallback download');
+}
+{
+    const p = playerContext(async () => {throw new Error('thumbnail must not fetch media');});
+    p.context.PLAYER_KIND = 'audio';
+    p.context.window.requestIdleCallback = callback => setImmediate(() => callback({timeRemaining: () => 20}));
+    p.context.window.cancelIdleCallback = clearImmediate;
+    p.run("art.video={paused:false,seeking:false,readyState:3,currentTime:5,duration:100,buffered:{length:1,start:()=>0,end:()=>10}}; currentMediaList[0].cover='/api/v1/media/cover?low'; visibleArtworkTracks.add(currentMediaList[0])");
+    let calls = 0, signal;
+    p.context.image = {src: 'placeholder'};
+    p.context.window.FrontierMusicMetadata = {canThumbnail: () => true, thumbnail(_source, options) {
+        calls++; signal = options.signal;
+        return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled'))));
+    }};
+    await p.run('paintPlayerThumbnail(currentMediaList[0],image)');
+    assert.equal(calls, 0, 'five seconds of buffer is reserved for playback, not pictures');
+    p.run('art.video.buffered.end=()=>30; void paintPlayerThumbnail(currentMediaList[0],image)');
+    assert.equal(calls, 1);
+    p.run('art.video.buffered.end=()=>10; pumpPlayerArtwork()'); await flush();
+    assert.equal(signal.aborted, true); assert.equal(p.context.image.src, 'placeholder');
+    assert.equal(p.run('art.url'), '/a'); assert.equal(p.run('art.currentTime'), 5);
+    p.context.window.FrontierMusicMetadata.thumbnail = async () => {throw new Error('cache miss');};
+    p.run('art.video.buffered.end=()=>30');
+    await p.run('paintPlayerThumbnail(currentMediaList[0],image)');
+    assert.equal(p.context.image.src, 'placeholder', 'cache miss does not load an original');
+    assert.equal(p.requests.length, 0);
+    p.run('document.hidden=true');
+    assert.equal(p.run('playerArtworkReady()'), false, 'background pages do no optional artwork work');
+}
 console.log('player-cache-smoke-ok');

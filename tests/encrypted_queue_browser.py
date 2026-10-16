@@ -58,13 +58,15 @@ def run(args):
     key = Path(fixture['admin_key_file']).read_text().strip() if fixture else os.environ['ADMIN_KEY']
     tracks = fixture_tracks(args.audio)
     folder = 'music/Encrypted-queue-' + uuid.uuid4().hex
-    proof = {'passed': False, 'fixture_directory': folder, 'relay_verified': False}
+    proof = {'passed': False, 'fixture_directory': folder, 'relay_verified': False, 'artwork_starved': args.starve_artwork}
     with sync_playwright() as runtime:
         rules = ','.join('MAP ' + host + ' ' + ip for host, ip in fixture.get('hosts', {}).items())
         browser = runtime.chromium.launch(executable_path=os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE'], headless=True,
             args=['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--no-proxy-server']
                  + (['--host-resolver-rules=' + rules, '--ignore-certificate-errors'] if rules else []))
         context = browser.new_context(ignore_https_errors=bool(fixture), viewport={'width': 1400, 'height': 1100})
+        if args.starve_artwork:
+            context.add_init_script('window.requestIdleCallback=()=>1;window.cancelIdleCallback=()=>{}')
         context.add_init_script("""window.queueBlobs=new Map();const queueCreateURL=URL.createObjectURL.bind(URL);
 URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blob);return url;};""")
         worker_requests = []
@@ -122,13 +124,19 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
             url = base + '/api/v1/media/music/category?' + urllib.parse.urlencode({'path': folder})
             page.goto(url, wait_until='domcontentloaded')
             page.wait_for_function('() => typeof currentMediaList !== "undefined" && currentMediaList.length === 3 && art', timeout=45000)
-            page.wait_for_function('() => [...document.querySelectorAll(".media-item img")].length === 3 && [...document.querySelectorAll(".media-item img")].every(i=>i.src.startsWith("blob:") && i.naturalWidth===64)', timeout=60000)
+            page.wait_for_function('() => art.currentTime>0.1 && frontierCloudContinuousAudio.status().active && document.querySelectorAll(".media-item img").length===3', timeout=45000)
+            page.wait_for_timeout(2000)
             images = page.locator('.media-item img').evaluate_all("""async images=>Promise.all(images.map(async image=>{
-                const bytes=await queueBlobs.get(image.src).arrayBuffer();return {width:image.naturalWidth,height:image.naturalHeight,
+                const blob=queueBlobs.get(image.src);if(!blob)return {placeholder:image.src.startsWith('data:image/svg+xml')};
+                const bytes=await blob.arrayBuffer();return {width:image.naturalWidth,height:image.naturalHeight,type:blob.type,
                 sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('')};}))""")
-            assert [image['sha256'] for image in images] == [track['picture_sha256'] for track in tracks], images
+            displayed = [image for image in images if not image.get('placeholder')]
+            assert all(image.get('placeholder') or (image.get('type') == 'image/webp' and image['width'] == 64) for image in images), images
+            assert len({image['sha256'] for image in displayed}) == len(displayed), images
+            proof['displayed_picture_count'] = len(displayed)
+            if args.starve_artwork:
+                assert len(displayed) == 0, images
             proof['pictures'] = images
-            proof['own_original_pictures_verified'] = True
             entries = page.evaluate('currentMediaList.map(t=>({path:t.media_path,encryption:!!t.encryption,delivery:t.delivery_mode,site:t.site_type}))')
             assert all(entry['encryption'] for entry in entries), entries
             if args.site == 'relay':
@@ -141,21 +149,33 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
                 page.locator(f'.media-item[data-index="{index}"]').click()
                 page.wait_for_function('index => currentIndex===index && art.currentTime>0.1 && frontierCloudContinuousAudio.status().active && !frontierCloudContinuousAudio.status().pipeline_error', arg=index, timeout=45000)
                 state = page.evaluate('({status:frontierCloudContinuousAudio.status(),title:art.title,track:currentMediaList[currentIndex].title})')
-                assert state['track'] == 'Queue track ' + str(index + 1), state
+                assert state['title'] == state['track'], state
                 proof['manual'].append(state)
             proof['manual_mse_verified'] = True
             page.evaluate('window.queueVideo=art.video; window.queueSource=art.url')
             proof['automatic'] = []
             for index in (1, 2):
                 page.wait_for_function('() => frontierCloudContinuousAudio.status().active_segment?.end !== null', timeout=45000)
-                page.evaluate('art.currentTime=art.duration-0.8')
+                page.evaluate('art.currentTime=art.duration-2')
+                page.wait_for_function('()=>!art.video.seeking', timeout=45000)
+                assert page.evaluate('currentIndex') == index - 1, 'seek must settle before observing the automatic artwork cancellation'
+                page.evaluate('window.previousArtworkSignal=playerArtworkController.signal')
                 page.wait_for_function('index => currentIndex===index && art.currentTime>0.1', arg=index, timeout=45000)
                 assert page.evaluate('art.video===queueVideo && art.url===queueSource'), 'automatic transition recreated MSE'
+                assert page.evaluate('previousArtworkSignal.aborted && previousArtworkSignal!==playerArtworkController.signal'), 'automatic transition retained previous artwork work'
                 proof['automatic'].append(page.evaluate('frontierCloudContinuousAudio.status()'))
             proof['automatic_mse_verified'] = True
             # Repeated virtual tag reads exercise the real worker, not mocked metadata.
             page.evaluate('art.pause()')
             page.wait_for_timeout(1000)
+            # Explicit original-byte verification is separate from optional UI admission and happens after playback checks.
+            original_hashes = page.evaluate("""async()=>Promise.all(currentMediaList.map(async media=>{
+                const tags=await FrontierMusicMetadata.metadata(media);const bytes=await queueBlobs.get(tags.cover).arrayBuffer();
+                return {title:tags.title,sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('')};}))""")
+            assert [item['sha256'] for item in original_hashes] == [track['picture_sha256'] for track in tracks], original_hashes
+            assert [item['title'] for item in original_hashes] == ['Queue track ' + str(i + 1) for i in range(3)], original_hashes
+            proof['original_picture_hashes'] = original_hashes
+            proof['own_original_pictures_verified'] = True
             assert worker_requests, 'network observation must see the initial ciphertext reads'
             before_cache = len(worker_requests)
             cache = page.evaluate("""async()=>{const entry={...currentMediaList[0]};await FrontierMediaCrypto.prepareCatalog([entry]);
@@ -174,7 +194,7 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
             before_keys = len(key_requests)
             revisit = context.new_page()
             revisit.goto(url, wait_until='domcontentloaded')
-            revisit.wait_for_function('() => [...document.querySelectorAll(".media-item img")].length===3 && [...document.querySelectorAll(".media-item img")].every(i=>i.naturalWidth===64)', timeout=45000)
+            revisit.wait_for_function('() => typeof art!=="undefined" && art?.currentTime>0.1 && frontierCloudContinuousAudio.status().active', timeout=45000)
             revisit.evaluate('art.pause()')
             assert len(key_requests) > before_keys, 'a new page must obtain its own authorization'
             assert len(worker_requests) == before_cache, 'page navigation should reuse cached ciphertext while obtaining fresh keys'
@@ -237,4 +257,5 @@ if __name__ == '__main__':
     parser.add_argument('--site', choices=('primary', 'relay'), default='relay')
     parser.add_argument('--audio', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--starve-artwork', action='store_true', help='No idle execution: all UI thumbnails must remain optional while manual and automatic playback pass')
     run(parser.parse_args())

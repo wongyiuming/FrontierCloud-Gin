@@ -140,6 +140,7 @@
         const media = currentMediaList?.[index];
         if (!media || !art) return;
 
+        cancelPlayerArtwork();
         accountPlaybackTime();
         void reportValidPlayback();
         currentIndex = index;
