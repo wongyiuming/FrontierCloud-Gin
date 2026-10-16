@@ -127,3 +127,11 @@ manual switching must continue in all three browser artwork failure modes.
 No codec library, framework, server transformation or persistent plaintext cache
 is introduced. Latest-source measurements and input records remain separate from
 the historical samples above.
+
+Continuous MSE business activation also rotates the artwork controller before
+loading the next track's tags. Browser acceptance checks the old signal is
+aborted at each automatic boundary while retaining the same media element and
+MSE source. Queue image assertions permit placeholders; original tag/image
+verification is explicit and runs after mandatory manual/automatic playback
+checks. A no-idle variant requires zero displayed thumbnails while still passing
+those playback checks, then independently verifies the original decrypted bytes.
