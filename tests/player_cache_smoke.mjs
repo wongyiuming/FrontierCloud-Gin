@@ -228,4 +228,17 @@ for (const failure of ['network', 'status', 'truncated']) {
     assert.equal(p.run('currentMediaList[499].cover'), 'blob:own-499');
     assert.equal(scheduled.length, 3, 'the other 497 tracks remain unread');
 }
+{
+    const p = playerContext(async () => new Response('unused'));
+    let timers = 0;
+    p.context.setTimeout = (fn, delay) => { timers++; return setTimeout(fn, delay); };
+    p.run('currentMediaList[0].encryption={version:1}; visibleMetadataTracks.add(currentMediaList[0]); schedulePlaylistMetadata()');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(timers, 1, 'a missing metadata script must not spin a zero-delay timer loop');
+    let reads = 0;
+    p.context.window.FrontierMusicMetadata = {metadata() { reads++; return Promise.resolve({}); }};
+    p.run('schedulePlaylistMetadata()');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(reads, 1, 'restoring the helper permits a later visible-row read');
+}
 console.log('player-cache-smoke-ok');

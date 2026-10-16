@@ -35,6 +35,7 @@ let mismatchedEnvelope = false;
 let sessionLifetime = 899;
 let handshakeDelay = 0;
 let sessionStatus = 0;
+let keyStatus = 0;
 let cipherStatus = 0;
 let worker;
 let common;
@@ -118,6 +119,7 @@ async function backendFetch(input, init = {}) {
         return Response.json({encryption: meta, key_envelope: await envelope(active, record), preparation_token: 'signed-descriptor'});
     }
     if (url.pathname.endsWith('/key')) {
+        if (keyStatus) return Response.json({detail: 'current object access denied'}, {status: keyStatus});
         advance(keyDelay);
         const record = pathRecords.get(body.file_path);
         if (!record) return Response.json({detail: 'missing'}, {status: 404});
@@ -365,7 +367,8 @@ assert.equal(cipherRequests.length, 3, 'HEAD and invalid Range never consume cip
 response = await workerFetch(catalog[1].url);
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), secondBytes);
 assert.equal(calls.filter(call => call.url.endsWith('/session')).length, 1, 'playback across files reuses the same session');
-assert.equal(calls.filter(call => call.url.endsWith('/key')).length, 2, 'multiple requests for one file reuse its temporary envelope');
+assert.equal(calls.filter(call => call.url.endsWith('/key')).length, 3,
+    'cached ciphertext requires a fresh key authorization while uncached reads retain normal envelope reuse');
 
 const originalDeadline = vm.runInContext('[...grants.values()][0].deadline', worker);
 assert.equal(originalDeadline, performance.timeOrigin + 899000, 'grant lifetime starts before the handshake POST');
@@ -642,6 +645,44 @@ const originalOrigin = performance.timeOrigin;
 performance.timeOrigin = NaN;
 assert.throws(() => common.monotonicNow(), /单调时钟不可用/, 'clock failure has no wall-clock fallback');
 performance.timeOrigin = originalOrigin;
+const guardedBytes = new TextEncoder().encode('cache authorization must stay current');
+const guarded = await prepare(guardedBytes, 'music/cache-guard.mp3', 'https://cloud.example/relay/cache-guard');
+const guardedCatalog = [{media_path: 'music/cache-guard.mp3', encryption: guarded.meta}];
+await page.FrontierMediaCrypto.prepareCatalog(guardedCatalog);
+response = await workerFetch(guardedCatalog[0].url);
+assert.deepEqual(new Uint8Array(await response.arrayBuffer()), guardedBytes);
+const beforeDeniedCache = cipherRequests.length;
+keyStatus = 404;
+response = await workerFetch(guardedCatalog[0].url);
+await assert.rejects(response.arrayBuffer(), /current object access denied/,
+    'a live cached envelope and warm ciphertext must not bypass hidden/deleted object authorization');
+assert.equal(cipherRequests.length, beforeDeniedCache);
+keyStatus = 0;
+page.FrontierMediaCrypto.resetFault('music/cache-guard.mp3');
+response = await workerFetch(guardedCatalog[0].url);
+assert.deepEqual(new Uint8Array(await response.arrayBuffer()), guardedBytes);
+await prepare(new TextEncoder().encode('different object'), 'music/cache-guard.mp3', guarded.source);
+response = await workerFetch(guardedCatalog[0].url);
+await assert.rejects(response.arrayBuffer(), /文件已替换/,
+    'same-path replacement is rejected immediately even before the old envelope expires');
+
+const legacy = await prepare(guardedBytes, 'music/old-page.mp3', 'https://cloud.example/relay/old-page');
+const legacyCatalog = [{media_path: 'music/old-page.mp3', encryption: legacy.meta}];
+await page.FrontierMediaCrypto.prepareCatalog(legacyCatalog);
+response = await workerFetch(legacyCatalog[0].url);
+await response.arrayBuffer();
+const currentPageMessage = pageMessage;
+pageMessage = event => {
+    const port = event.ports[0], send = port.postMessage.bind(port);
+    port.postMessage = value => { const previous = {...value}; delete previous.revalidated; send(previous); };
+    currentPageMessage(event);
+};
+const beforeLegacy = cipherRequests.length;
+response = await workerFetch(legacyCatalog[0].url);
+assert.deepEqual(new Uint8Array(await response.arrayBuffer()), guardedBytes);
+assert.equal(cipherRequests.length, beforeLegacy + 1,
+    'a page without fresh-authorization acknowledgement must use normal source reads');
+pageMessage = currentPageMessage;
 vm.runInContext(`cipherChunks.clear(); cipherBytes = 0;
     for (let i = 0; i < 5; i++) rememberCipherChunk('bounded-' + i, new Uint8Array(8 * 1024 * 1024));`, worker);
 assert.equal(vm.runInContext('cipherBytes', worker), 32 * 1024 * 1024);

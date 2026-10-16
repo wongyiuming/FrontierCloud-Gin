@@ -52,7 +52,10 @@ service worker keeps at most 32 MiB of authenticated ciphertext chunks in memory
 with a five-minute reuse window and least-recently-used eviction. Browser page
 changes may reuse these encrypted bytes while the worker survives. Every read
 still requires the current page capability/grant and verifies AES-GCM with its
-authorized key. Replacement descriptors have distinct cache identities. Worker
+authorized key. Every cached chunk first obtains a fresh server key decision,
+so an earlier valid key cannot bypass a hidden/deleted/replaced source. Old
+pages that cannot acknowledge this revalidation use normal source reads.
+Replacement descriptors have distinct cache identities. Worker
 restart discards this cache; no plaintext picture or key is persisted to disk.
 
 Cover URLs identify the current managed music path and resource ID through

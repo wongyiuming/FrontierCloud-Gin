@@ -29,7 +29,7 @@ recompressed or uploaded after decryption. Server decryption remains prohibited.
   repeat the complete native matrix or migration acceptance.
 - The same three-track MSE and picture test passed on the independent RN HTTPS
   staging site. Its Standalone role is recorded separately from the native
-  Relay test. A new page obtained three fresh key grants and issued zero new
+  Relay test. A new page obtained eleven fresh key grants and issued zero new
   ciphertext requests while restoring all three covers.
 - A separate original JPEG remained 500 by 500 pixels with SHA-256
   `c0e26653bf5b8a0f6cf3fb80797cb26f40cb3bcdbd7af61eebc86c035661c7b0`.
@@ -44,15 +44,27 @@ Observed Chromium HTTP cache traffic on RN:
 | Plain album artwork | 60,596 | 61,118 | 0 | 304 |
 
 The encrypted-byte cache is worker memory, bounded to 32 MiB with a five-minute
-reuse window and LRU eviction. It requires valid page grants and fresh AES-GCM
-verification; it persists neither plaintext covers nor keys. Worker termination
+reuse window and LRU eviction. Every cached chunk requires a fresh server key
+decision with the expected file ID and fresh AES-GCM verification. A warm-cache
+hidden-folder read delivered zero plaintext bytes on both the native Relay and
+RN tests; unhide plus explicit retry restored a real 206 Range read. Same-path
+replacement and legacy-page fallback also have executable regressions. The
+cache persists neither plaintext covers nor keys. Worker termination
 loses that cache. Versioned logos and plain artwork retain their HTTP caching
 rules. No database generation or media format changes are required.
 
 RN staging was stopped after acceptance, with its Compose/data retained and
 host ports 80/443 released. The existing production containers' IDs, image IDs
 and start times matched before/after; staging idle CPU samples were
-0.69%, 0.55%, 0.68%, 0.68%, 0.45%.
+0.82%, 0.98%, 0.97%, 1.34%, 0.61%.
+
+The standard native-matrix entrypoint forwards
+`FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER=1` to select the focused browser gate.
+It writes `encrypted-queue-fixture.json` in the owned temporary fleet directory;
+`tests/encrypted_queue_browser.py --fleet ... --audio ... --output ...` supplies
+the isolated Chromium result. The audio input must contain real decodable MP3
+frames, rather than the tiny tag-only artwork speed fixture. A missing metadata
+script stops background scheduling instead of creating a zero-delay timer loop.
 
 Private input transcripts, screenshots, raw acceptance JSON and file hashes are
 retained under the operator's local `encrypted-queue-delivery-20261016` evidence

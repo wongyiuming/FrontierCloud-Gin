@@ -93,7 +93,7 @@ self.addEventListener('message', event => {
     }
 });
 
-async function requestGrant(token, filePath, expectedFileId = '', fallbackClientId = '') {
+async function requestGrant(token, filePath, expectedFileId = '', fallbackClientId = '', revalidate = false) {
     const capability = capabilities.get(token);
     const client = await self.clients.get(capability?.clientId || fallbackClientId);
     if (!client) {
@@ -118,11 +118,11 @@ async function requestGrant(token, filePath, expectedFileId = '', fallbackClient
             }
             else resolve(event.data);
         };
-        client.postMessage({type: 'fc-crypto-grant', token, file_path: filePath, file_id: expectedFileId}, [channel.port2]);
+        client.postMessage({type: 'fc-crypto-grant', token, file_path: filePath, file_id: expectedFileId, revalidate}, [channel.port2]);
     });
 }
 
-async function getGrant(token, filePath, expectedFileId = '', fallbackClientId = '') {
+async function getGrant(token, filePath, expectedFileId = '', fallbackClientId = '', revalidate = false) {
     const identity = token + ':' + filePath + ':' + expectedFileId;
     const cached = grants.get(identity);
     if (cached?.failed) {
@@ -130,9 +130,10 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
         error.status = 422;
         throw error;
     }
-    if (cached && cached.deadline > common.monotonicNow() + 10000) return cached;
-    if (pendingGrants.has(identity)) return pendingGrants.get(identity);
-    const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId).then(grant => {
+    if (!revalidate && cached && cached.deadline > common.monotonicNow() + 10000) return cached;
+    const pendingIdentity = identity + (revalidate ? ':revalidate' : '');
+    if (pendingGrants.has(pendingIdentity)) return pendingGrants.get(pendingIdentity);
+    const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId, revalidate).then(grant => {
         common.validate(grant.encryption);
         if (!(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
             || grant.deadline <= common.monotonicNow() || grant.deadline > common.monotonicNow() + 900000) {
@@ -146,16 +147,33 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
         if (!capabilities.has(token) && fallbackClientId) capabilities.set(token, {clientId: fallbackClientId});
         grants.set(identity, grant);
         return grant;
-    }).finally(() => pendingGrants.delete(identity));
-    pendingGrants.set(identity, pending);
+    }).finally(() => pendingGrants.delete(pendingIdentity));
+    pendingGrants.set(pendingIdentity, pending);
     return pending;
 }
 
-async function readChunk(grant, index, signal) {
+async function readChunk(grant, index, signal, revalidate) {
     const expected = common.cipherRange(grant.encryption, index);
     if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
     const cacheKey = cipherChunkKey(grant.encryption, index);
     let ciphertext = cachedCipherChunk(cacheKey);
+    if (ciphertext) {
+        // A valid cached key does not prove the source is still visible. The
+        // page must obtain a fresh server decision before cached bytes are used.
+        try {
+            const fresh = await revalidate();
+            if (!fresh.revalidated) {
+                // Old pages do not acknowledge this protocol; retain their
+                // normal authenticated source reads instead of trusting a key cache.
+                forgetCipherChunk(cacheKey); ciphertext = null;
+            } else {
+                if (cipherChunkKey(fresh.encryption, index) !== cacheKey) {
+                    const error = new Error('播放文件已变化，请重新选择'); error.status = 409; throw error;
+                }
+                Object.assign(grant, fresh);
+            }
+        } catch (error) { forgetCipherChunk(cacheKey); throw error; }
+    }
     if (!ciphertext) {
         const response = await fetch(grant.source_url, {
             headers: {Range: `bytes=${expected.start}-${expected.end}`},
@@ -221,7 +239,8 @@ async function servePlaintext(request, token, filePath, download, expectedFileId
                         throw new Error('播放文件已变化，请重新选择');
                     Object.assign(grant, refreshed);
                 }
-                const plaintext = await readChunk(grant, index, controller.signal);
+                const plaintext = await readChunk(grant, index, controller.signal,
+                    () => getGrant(token, filePath, grant.encryption.file_id, fallbackClientId, true));
                 const chunkStart = index * common.CHUNK_SIZE;
                 output.enqueue(plaintext.subarray(Math.max(0, selected.start - chunkStart),
                     Math.min(plaintext.length, selected.end - chunkStart + 1)));

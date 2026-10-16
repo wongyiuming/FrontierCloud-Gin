@@ -1238,7 +1238,8 @@ function schedulePlaylistMetadata(delay = 0) {
     }
     playlistMetadataTimer = setTimeout(() => {
         playlistMetadataTimer = null;
-        if (playlistMetadataRunning || document.hidden) return;
+        if (playlistMetadataRunning || document.hidden
+            || typeof window.FrontierMusicMetadata?.metadata !== 'function') return;
         const now = Date.now();
         const media = currentMediaList.find(item => {
             const retry = playlistMetadataRetries.get(item);

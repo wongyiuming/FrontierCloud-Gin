@@ -181,6 +181,33 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
             proof['cross_page_cache'] = {'fresh_key_requests': len(key_requests) - before_keys,
                                          'ciphertext_requests': len(worker_requests) - before_cache}
             revisit.close()
+            admin = context.new_page()
+            admin.goto(base + '/api/v1/media/admin/', wait_until='networkidle')
+            hidden_path = folder + '/' + tracks[0]['name']
+            hidden_applied = False
+            try:
+                admin.evaluate("""async path=>await api('/api/v1/media/admin/hide',{
+                    method:'POST',headers:requestHeaders(),body:JSON.stringify({paths:[path],hidden:true})})""", folder)
+                hidden_applied = True
+                denied = page.evaluate("""async()=>{
+                    try {const response=await fetch(currentMediaList[0].url,{headers:{Range:'bytes=0-31'}});
+                        const {value}=await response.body.getReader().read();return {delivered:value?.byteLength||0,rejected:false};
+                    } catch(error) {return {delivered:0,rejected:true};}
+                }""")
+                assert denied == {'delivered': 0, 'rejected': True}, denied
+                proof['warm_cache_hidden_source_denied'] = denied
+            finally:
+                if hidden_applied:
+                    admin.evaluate("""async path=>await api('/api/v1/media/admin/hide',{
+                        method:'POST',headers:requestHeaders(),body:JSON.stringify({paths:[path],hidden:false})})""", folder)
+                admin.close()
+            page.evaluate('path=>FrontierMediaCrypto.resetFault(path)', hidden_path)
+            recovered = page.evaluate("""async()=>{
+                const r=await fetch(currentMediaList[0].url,{headers:{Range:'bytes=0-31'}});
+                return {status:r.status,bytes:(await r.arrayBuffer()).byteLength};}
+            """)
+            assert recovered == {'status': 206, 'bytes': 32}, recovered
+            proof['explicit_retry_after_unhide'] = recovered
             proof['passed'] = True
         except Exception as error:
             proof['error'] = str(error)
