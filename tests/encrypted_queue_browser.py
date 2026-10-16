@@ -156,8 +156,10 @@ URL.createObjectURL=blob=>{const url=queueCreateURL(blob);queueBlobs.set(url,blo
             proof['automatic'] = []
             for index in (1, 2):
                 page.wait_for_function('() => frontierCloudContinuousAudio.status().active_segment?.end !== null', timeout=45000)
+                page.evaluate('art.currentTime=art.duration-2')
+                page.wait_for_function('()=>!art.video.seeking', timeout=45000)
+                assert page.evaluate('currentIndex') == index - 1, 'seek must settle before observing the automatic artwork cancellation'
                 page.evaluate('window.previousArtworkSignal=playerArtworkController.signal')
-                page.evaluate('art.currentTime=art.duration-0.8')
                 page.wait_for_function('index => currentIndex===index && art.currentTime>0.1', arg=index, timeout=45000)
                 assert page.evaluate('art.video===queueVideo && art.url===queueSource'), 'automatic transition recreated MSE'
                 assert page.evaluate('previousArtworkSignal.aborted && previousArtworkSignal!==playerArtworkController.signal'), 'automatic transition retained previous artwork work'
