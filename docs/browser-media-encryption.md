@@ -121,7 +121,13 @@ The server checks the complete selection in metadata batches before choosing
 the download path; all-plaintext selections retain the existing uncapped ZIP
 path, including directories larger than that browser limit. Invalid metadata
 or a later encrypted entry cannot trigger plaintext fallback.
-Plaintext is not cached by the worker. Renames preserve file
+Plaintext is not cached by the worker. Authenticated ciphertext chunks may be
+reused from a worker-memory cache bounded to 32 MiB and five minutes, with LRU
+eviction. This cache contains no keys, plaintext, credentials or signed URLs.
+It does not bypass page capabilities, current grants or per-read AES-GCM
+verification. A changed encryption descriptor cannot reuse an earlier object's
+entry. Page exit still revokes that page's grants; worker restart loses the
+ciphertext cache. Renames preserve file
 identity and descriptors; delete/recovery journals and backup validation include
 the metadata. Admin trees and search results carry the same descriptor, so
 encrypted media and lyrics retain their status after rename.

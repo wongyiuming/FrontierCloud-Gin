@@ -349,6 +349,10 @@ assert.equal(response.headers.get('Content-Range'), `bytes 1048541-1048619/${byt
 assert.equal(response.headers.get('Content-Length'), '79');
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes.subarray(1048541, 1048620));
 assert.equal(cipherRequests.length, 2, 'a cross-chunk seek only fetches its two covering chunks');
+response = await workerFetch(catalog[0].url, {headers: {Range: 'bytes=0-31'}});
+assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes.subarray(0, 32));
+assert.equal(cipherRequests.length, 2, 'a repeated tag read reuses authenticated ciphertext without another network read');
+assert.ok(vm.runInContext('cipherBytes <= CIPHER_CACHE_BYTES', worker));
 response = await workerFetch(catalog[0].url, {headers: {Range: 'bytes=-17'}});
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes.slice(-17));
 assert.equal(cipherRequests.length, 3, 'suffix Range fetches the final chunk only');
@@ -603,6 +607,7 @@ cipherStatus = 0;
 page.FrontierMediaCrypto.resetFault('music/a.mp3');
 
 replacement.ciphertext[0] ^= 1;
+advance(300001);
 response = await workerFetch(fresh[0].url);
 await assert.rejects(response.arrayBuffer(), 'tampered ciphertext cannot return plaintext');
 assert(page.FrontierMediaCrypto.failureFor(fresh[0].url), 'tag failures propagate to the playback retry guard');
@@ -637,4 +642,14 @@ const originalOrigin = performance.timeOrigin;
 performance.timeOrigin = NaN;
 assert.throws(() => common.monotonicNow(), /单调时钟不可用/, 'clock failure has no wall-clock fallback');
 performance.timeOrigin = originalOrigin;
+vm.runInContext(`cipherChunks.clear(); cipherBytes = 0;
+    for (let i = 0; i < 5; i++) rememberCipherChunk('bounded-' + i, new Uint8Array(8 * 1024 * 1024));`, worker);
+assert.equal(vm.runInContext('cipherBytes', worker), 32 * 1024 * 1024);
+assert.equal(vm.runInContext("cipherChunks.has('bounded-0')", worker), false, 'oldest ciphertext is evicted at the byte budget');
+vm.runInContext("cachedCipherChunk('bounded-1'); rememberCipherChunk('bounded-5', new Uint8Array(8 * 1024 * 1024))", worker);
+assert.equal(vm.runInContext("cipherChunks.has('bounded-1') && !cipherChunks.has('bounded-2')", worker), true,
+    'cache hits protect recently used ciphertext from eviction');
+advance(300001);
+assert.equal(vm.runInContext("cachedCipherChunk('bounded-1')", worker), null, 'expired ciphertext must be fetched again');
+assert.equal(vm.runInContext('cipherBytes', worker), 0);
 console.log('media-crypto-smoke-ok (' + directory + ')');

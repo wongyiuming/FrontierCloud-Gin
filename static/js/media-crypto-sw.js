@@ -7,6 +7,39 @@ const grants = new Map();
 const pendingGrants = new Map();
 const zipPlans = new Map();
 const PREFIX = '/__fc_media/';
+// Only authenticated ciphertext is retained, never keys or plaintext. Fresh
+// page capabilities and grants remain mandatory before every cache lookup.
+const cipherChunks = new Map();
+const CIPHER_CACHE_BYTES = 32 * 1024 * 1024, CIPHER_CACHE_MS = 5 * 60 * 1000;
+let cipherBytes = 0;
+
+function forgetCipherChunk(key) {
+    const cached = cipherChunks.get(key);
+    if (cached) { cipherBytes -= cached.bytes.byteLength; cipherChunks.delete(key); }
+}
+
+function cipherChunkKey(metadata, index) {
+    return JSON.stringify([metadata.version, metadata.algorithm, metadata.file_id,
+        metadata.nonce_prefix, metadata.plaintext_size, metadata.ciphertext_size, metadata.chunk_size, index]);
+}
+
+function cachedCipherChunk(key) {
+    const now = common.monotonicNow();
+    for (const [id, cached] of cipherChunks) if (cached.expires <= now) forgetCipherChunk(id);
+    const cached = cipherChunks.get(key);
+    if (!cached) return null;
+    cipherChunks.delete(key); cipherChunks.set(key, cached);
+    return cached.bytes;
+}
+
+function rememberCipherChunk(key, bytes) {
+    if (bytes.byteLength > CIPHER_CACHE_BYTES) return;
+    forgetCipherChunk(key);
+    while (cipherChunks.size && cipherBytes + bytes.byteLength > CIPHER_CACHE_BYTES)
+        forgetCipherChunk(cipherChunks.keys().next().value);
+    cipherChunks.set(key, {bytes, expires: common.monotonicNow() + CIPHER_CACHE_MS});
+    cipherBytes += bytes.byteLength;
+}
 
 function revokeCapability(token) {
     capabilities.delete(token);
@@ -120,29 +153,37 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
 
 async function readChunk(grant, index, signal) {
     const expected = common.cipherRange(grant.encryption, index);
-    const response = await fetch(grant.source_url, {
-        headers: {Range: `bytes=${expected.start}-${expected.end}`},
-        credentials: 'same-origin', cache: 'no-store', signal,
-    });
-    const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
-    const exactRange = response.status === 206 && contentRange
-        && Number(contentRange[1]) === expected.start && Number(contentRange[2]) === expected.end
-        && Number(contentRange[3]) === grant.encryption.ciphertext_size;
-    const completeSmallObject = response.status === 200 && expected.start === 0
-        && expected.size === grant.encryption.ciphertext_size;
-    if (!exactRange && !completeSmallObject) {
-        await response.body?.cancel().catch(() => {});
-        const error = new Error('存储节点未返回所需的加密分块');
-        if (response.status >= 400 && response.status < 500) error.status = response.status;
-        else if (response.status < 400) { error.fatal = true; error.status = 409; }
-        throw error;
+    if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
+    const cacheKey = cipherChunkKey(grant.encryption, index);
+    let ciphertext = cachedCipherChunk(cacheKey);
+    if (!ciphertext) {
+        const response = await fetch(grant.source_url, {
+            headers: {Range: `bytes=${expected.start}-${expected.end}`},
+            credentials: 'same-origin', cache: 'no-store', signal,
+        });
+        const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
+        const exactRange = response.status === 206 && contentRange
+            && Number(contentRange[1]) === expected.start && Number(contentRange[2]) === expected.end
+            && Number(contentRange[3]) === grant.encryption.ciphertext_size;
+        const completeSmallObject = response.status === 200 && expected.start === 0
+            && expected.size === grant.encryption.ciphertext_size;
+        if (!exactRange && !completeSmallObject) {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('存储节点未返回所需的加密分块');
+            if (response.status >= 400 && response.status < 500) error.status = response.status;
+            else if (response.status < 400) { error.fatal = true; error.status = 409; }
+            throw error;
+        }
+        ciphertext = await common.boundedBytes(response, expected.size);
     }
-    const ciphertext = await common.boundedBytes(response, expected.size);
     // AES-GCM verifies each entire chunk before any of its bytes are delivered.
     try {
-        return new Uint8Array(await crypto.subtle.decrypt(
+        const plaintext = new Uint8Array(await crypto.subtle.decrypt(
             common.parameters(grant.encryption, index), grant.key, ciphertext));
+        if (!signal?.aborted) rememberCipherChunk(cacheKey, ciphertext);
+        return plaintext;
     } catch (error) {
+        forgetCipherChunk(cacheKey);
         error.fatal = true;
         throw error;
     }

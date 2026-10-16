@@ -83,8 +83,12 @@
         }
         return result;
     }
-    function limited(work) {
-        return new Promise((resolve, reject) => { queue.push({work, resolve, reject}); pump(); });
+    function limited(work, priority = false) {
+        return new Promise((resolve, reject) => {
+            const job = {work, resolve, reject};
+            if (priority) queue.unshift(job); else queue.push(job);
+            pump();
+        });
     }
     function pump() {
         while (active < 2 && queue.length) {
@@ -140,13 +144,13 @@
         }
         return result;
     }
-    function metadata(entry) {
+    function metadata(entry, {priority = false} = {}) {
         if (!entry?.encryption || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
         // File ID, descriptor and logical identity prevent reuse after replacement.
         const key = JSON.stringify([entry.media_path || entry.path, entry.resource_id || entry.media_id, entry.encryption]);
         if (!cache.has(key)) {
             if (cache.size >= 128) cache.delete(cache.keys().next().value);
-            const promise = limited(() => load(entry)).catch(error => { cache.delete(key); throw error; });
+            const promise = limited(() => load(entry), priority).catch(error => { cache.delete(key); throw error; });
             cache.set(key, promise);
         }
         return cache.get(key);

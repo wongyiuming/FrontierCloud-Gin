@@ -41,6 +41,7 @@ class AudioPlayer extends BasePlayer {}
 let legacyApplyCalls = 0;
 let selectedIndex = null;
 let querySelectorCalls = 0;
+const metadataSelections = [];
 const windowObject = {
     setTimeout() { return 1; },
     clearTimeout() {},
@@ -53,6 +54,7 @@ const context = {
     checkAndPreloadNext() {},
     applyMediaCatalog() { legacyApplyCalls += 1; },
     renderPlaylist() {},
+    loadSelectedMetadata(media) { metadataSelections.push(media); },
     selectMedia(index) { selectedIndex = index; },
     FrontierMediaPlayer: BasePlayer,
     FrontierAudioPlayer: AudioPlayer,
@@ -80,6 +82,7 @@ vm.createContext(context);
 const instrumented = source.replace(
     'window.frontierCloudContinuousAudio = {',
     'window.__estimateMp3Duration = estimateMp3Duration;\n'
+        + '    window.__activateBusinessTrack = activateBusinessTrack;\n'
         + '    window.__presentationDuration = presentationDuration;\n'
         + '    window.__latchPresentationDuration = latchPresentationDuration;\n'
         + '    window.__seekRangePlan = seekRangePlan;\n'
@@ -339,5 +342,24 @@ assert.equal(selectedIndex, 1, 'auto-next must skip incompatible audio and selec
 const videoWindow = {};
 vm.runInNewContext(source, {PLAYER_KIND: 'video', window: videoWindow});
 assert.equal(videoWindow.frontierCloudContinuousAudio, undefined, 'video pages must not install audio continuity');
+
+Object.assign(context, {
+    accountPlaybackTime() {}, reportValidPlayback() {}, resetPlaybackAccounting() {},
+    showSynchronizedLyrics() {}, loadInlineLyrics() {}, updateMediaSession() {},
+    middleEllipsis: text => text,
+    currentMediaList: [{title: 'First', encryption: {version: 1}}, {title: 'Second', encryption: {version: 1}}],
+    art: {video: {currentTime: 11}, playing: false},
+});
+metadataSelections.length = 0;
+windowObject.__activateBusinessTrack(0);
+const boundary = Object.create(windowObject.__ContinuousAudioSession.prototype);
+const firstSegment = {index: 0, start: 0, end: 10};
+Object.assign(boundary, {closed: false, generation: 12, activeSegment: firstSegment,
+    segments: [firstSegment, {index: 1, start: 10, end: 20}],
+    ensureLookahead: async () => {}, pruneBeforeActive: async () => {}});
+windowObject.__setContinuousSessionForTest(boundary);
+boundary.syncTrackFromVideo();
+assert.deepEqual(metadataSelections, context.currentMediaList,
+    'both manual activation and automatic MSE boundary crossing must load the active encrypted track tags');
 
 console.log('audio-continuous-stream-smoke-ok');

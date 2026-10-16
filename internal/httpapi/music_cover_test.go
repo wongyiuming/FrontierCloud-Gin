@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,6 +48,20 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 	if cover.Code != 200 || cover.Header().Get("Content-Type") != "image/jpeg" || !bytes.Equal(cover.Body.Bytes(), jpeg) {
 		t.Fatal(cover.Code, cover.Header())
 	}
+	etag := cover.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("original artwork needs a stable conditional cache validator")
+	}
+	conditional := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", track.Cover, nil)
+		r.Header.Set("If-None-Match", etag)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		return w
+	}
+	if cached := conditional(); cached.Code != 304 || cached.Body.Len() != 0 {
+		t.Fatal("unchanged original artwork was transferred again", cached.Code)
+	}
 	w = request(router, "GET", "/api/v1/media/catalog/categories?media_type=music", "")
 	var categories struct{ Entries []media.CategoryArtwork }
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &categories) != nil {
@@ -80,6 +95,9 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 	}
 	if cover = request(router, "GET", track.Cover, ""); cover.Code != 404 {
 		t.Fatal("cached cover survived deletion", cover.Code)
+	}
+	if cached := conditional(); cached.Code != 404 {
+		t.Fatal("conditional cache bypassed source deletion", cached.Code)
 	}
 }
 

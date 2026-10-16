@@ -2,9 +2,12 @@ package httpapi
 
 import (
 	"bytes"
-	"github.com/gin-gonic/gin"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func (p *Public) musicCover(c *gin.Context) {
@@ -15,5 +18,6 @@ func (p *Public) musicCover(c *gin.Context) {
 	}
 	c.Header("Content-Type", tags.MIME)
 	c.Header("Cache-Control", "private, max-age=300")
+	c.Header("ETag", fmt.Sprintf(`"cover-%x"`, sha256.Sum256(tags.Picture)))
 	http.ServeContent(c.Writer, c.Request, "cover", time.Time{}, bytes.NewReader(tags.Picture))
 }
