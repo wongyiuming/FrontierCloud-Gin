@@ -17,8 +17,14 @@ playback behavior.
 Encrypted MP3 metadata is derived in the authorized browser through the existing
 service-worker Range adapter. The Master and storage nodes never decrypt it.
 ID3 tag reads are bounded to 8 MiB, pictures to 4 MiB, and at most two metadata
-jobs run concurrently. The player reads only the selected track's tags, rather
-than scanning the entire encrypted playlist. Covers are deduplicated by SHA-256 in a page-local 32 MiB
+jobs run concurrently. Selection and MSE automatic transitions request the active
+track's tags with priority. An IntersectionObserver also schedules one visible
+queue track at a time, leaving another metadata slot for selection. Scrolling
+away discards unstarted work; opening an album never queues its entire catalog.
+Transient visible-row failures have at most three automatic attempts, separated
+by ten seconds; selecting a track remains an explicit retry. Completed metadata
+patches that row without replacing the queue or resetting its scroll position.
+Covers are deduplicated by SHA-256 in a page-local 32 MiB
 blob pool and revoked on page exit; decrypted tags/covers never enter session
 storage, uploads, SQL, or a server-side cache. Directory listings contain only
 an artwork endpoint URL per album; they do not embed track descriptors. The
@@ -38,6 +44,19 @@ is introduced.
 Existing file-ID, visibility, replacement and authorization checks apply to every Range.
 Metadata failures retain filename/default art and do not block playback. Already
 uploaded encrypted files require no re-upload or database migration.
+
+Original-image reuse has three scopes. Versioned brand logos retain their
+one-year immutable browser cache. Plain artwork retains its five-minute private
+HTTP cache and a SHA-256 ETag permits a bodyless 304 after revalidation. The
+service worker keeps at most 32 MiB of authenticated ciphertext chunks in memory,
+with a five-minute reuse window and least-recently-used eviction. Browser page
+changes may reuse these encrypted bytes while the worker survives. Every read
+still requires the current page capability/grant and verifies AES-GCM with its
+authorized key. Every cached chunk first obtains a fresh server key decision,
+so an earlier valid key cannot bypass a hidden/deleted/replaced source. Old
+pages that cannot acknowledge this revalidation use normal source reads.
+Replacement descriptors have distinct cache identities. Worker
+restart discards this cache; no plaintext picture or key is persisted to disk.
 
 Cover URLs identify the current managed music path and resource ID through
 `/api/v1/media/cover`. Tracks without their own artwork may share another

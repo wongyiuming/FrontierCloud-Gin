@@ -197,4 +197,48 @@ for (const failure of ['network', 'status', 'truncated']) {
     assert.equal(attempts, 2, 'a failed selected-track read must be retryable');
     assert.equal(p.run('currentMediaList[0].title'), 'Recovered');
 }
+{
+    const p = playerContext(async () => new Response('unused'));
+    let observer;
+    const scheduled = [], releases = [];
+    const rows = Array.from({length: 500}, (_, index) => ({dataset: {index: String(index)}}));
+    p.context.window.IntersectionObserver = class {
+        constructor(callback) { observer = callback; }
+        observe() {}
+        disconnect() {}
+    };
+    p.context.window.FrontierMusicMetadata = {metadata(entry, options) {
+        scheduled.push({id: entry.media_id, priority: options.priority});
+        return new Promise(resolve => releases.push(() => resolve({cover: 'blob:own-' + entry.media_id})));
+    }};
+    p.elements.set('mediaList', {querySelectorAll: () => rows});
+    p.run(`currentMediaList = Array.from({length:500},(_,i)=>({media_id:String(i),media_path:'music/'+i+'.mp3',encryption:{version:1}})); renderPlaylist()`);
+    observer(rows.slice(0, 3).map(target => ({target, isIntersecting: true})));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(scheduled, [{id: '0', priority: false}]);
+    p.run('loadSelectedMetadata(currentMediaList[400])');
+    assert.deepEqual(scheduled[1], {id: '400', priority: true}, 'selection must have a slot while visible artwork is pending');
+    observer(rows.slice(0, 3).map(target => ({target, isIntersecting: false})));
+    observer([{target: rows[499], isIntersecting: true}]);
+    releases[0](); releases[1]();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(scheduled.map(item => item.id), ['0', '400', '499'], 'scrolling must discard queued offscreen rows');
+    releases[2]();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(p.run('currentMediaList[499].cover'), 'blob:own-499');
+    assert.equal(scheduled.length, 3, 'the other 497 tracks remain unread');
+}
+{
+    const p = playerContext(async () => new Response('unused'));
+    let timers = 0;
+    p.context.setTimeout = (fn, delay) => { timers++; return setTimeout(fn, delay); };
+    p.run('currentMediaList[0].encryption={version:1}; visibleMetadataTracks.add(currentMediaList[0]); schedulePlaylistMetadata()');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(timers, 1, 'a missing metadata script must not spin a zero-delay timer loop');
+    let reads = 0;
+    p.context.window.FrontierMusicMetadata = {metadata() { reads++; return Promise.resolve({}); }};
+    p.run('schedulePlaylistMetadata()');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(reads, 1, 'restoring the helper permits a later visible-row read');
+}
 console.log('player-cache-smoke-ok');

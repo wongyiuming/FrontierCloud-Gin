@@ -143,6 +143,7 @@
         accountPlaybackTime();
         void reportValidPlayback();
         currentIndex = index;
+        loadSelectedMetadata(media);
         resetPlaybackAccounting(media);
         setPlaylistActive(index);
 

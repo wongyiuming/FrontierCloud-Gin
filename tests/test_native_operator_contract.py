@@ -26,6 +26,10 @@ class NativeOperatorTests(unittest.TestCase):
         self.assertNotIn("UPDATER_PROJECT", source)
         self.assertNotIn("updater-control", source)
 
+    def test_encrypted_queue_browser_gate_reaches_native_driver(self):
+        source = (ROOT / "scripts/test-native-matrix.sh").read_text(encoding="utf-8")
+        self.assertIn('-e FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER="${FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER:-}"', source)
+
     def test_chaos_resource_driver_uses_native_tree_contract(self):
         source = (ROOT / "scripts/ops/dev_chaos.py").read_text(encoding="utf-8")
         function = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "resources")

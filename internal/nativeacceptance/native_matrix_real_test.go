@@ -607,6 +607,11 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		time.Sleep(time.Second)
 	}
 	t.Log("real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed", kind, "2 Direct / 2 Relay")
+	if os.Getenv("FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER") == "1" {
+		fleetEncryptedQueueBrowserGate(t, ctx, e, sites)
+		fleetIdleCPU(t, ctx, e, sites)
+		return
+	}
 	// Diagnostics are sequential and cannot replace media or heartbeat health.
 	for i, follower := range sites[1:] {
 		facts := perform(master, "GET", "/nodes/"+relations[i]+"/certificate", nil)

@@ -22,6 +22,10 @@ const PRELOAD_MAX_BYTES = 128 * 1024 * 1024;
 const PRELOAD_START_SECONDS = 5;
 const cryptoPreparedCatalogs = new WeakSet();
 const metadataTracks = new WeakSet();
+const metadataPromises = new WeakMap();
+const visibleMetadataTracks = new Set();
+const playlistMetadataRetries = new WeakMap();
+let playlistMetadataObserver = null, playlistMetadataTimer = null, playlistMetadataRunning = false;
 let cryptoCatalogSequence = 0;
 
 
@@ -1210,26 +1214,95 @@ function renderPlaylist() {
             </div>
         </li>
     `).join('');
+    observePlaylistMetadata(listContainer);
 }
+
+function updateMetadataRow(media) {
+    const index = currentMediaList.indexOf(media);
+    if (index < 0) return;
+    const row = document.querySelector(`.media-item[data-index="${index}"]`);
+    if (row) {
+        const image = row.querySelector('img');
+        if (image && image.getAttribute('src') !== media.cover) image.src = media.cover;
+        const title = row.querySelector('.media-title');
+        if (title) { title.textContent = middleEllipsis(media.title, 40); title.title = media.title; }
+        const artist = row.querySelector('.media-artist');
+        if (artist) artist.textContent = media.artist;
+    }
+}
+
+function schedulePlaylistMetadata(delay = 0) {
+    if (playlistMetadataTimer !== null) {
+        if (delay) return;
+        clearTimeout(playlistMetadataTimer);
+    }
+    playlistMetadataTimer = setTimeout(() => {
+        playlistMetadataTimer = null;
+        if (playlistMetadataRunning || document.hidden
+            || typeof window.FrontierMusicMetadata?.metadata !== 'function') return;
+        const now = Date.now();
+        const media = currentMediaList.find(item => {
+            const retry = playlistMetadataRetries.get(item);
+            return visibleMetadataTracks.has(item) && !metadataTracks.has(item)
+                && (!retry || (retry.at <= now && retry.count < 3));
+        });
+        if (!media) {
+            const waits = [...visibleMetadataTracks].map(item => playlistMetadataRetries.get(item))
+                .filter(retry => retry && retry.count < 3 && retry.at > now);
+            if (waits.length) schedulePlaylistMetadata(Math.min(...waits.map(retry => retry.at - now)));
+            return;
+        }
+        // One background read leaves the second metadata slot for selection.
+        playlistMetadataRunning = true;
+        Promise.resolve(loadSelectedMetadata(media, false)).then(ok => {
+            if (!ok) {
+                const count = (playlistMetadataRetries.get(media)?.count || 0) + 1;
+                playlistMetadataRetries.set(media, {count, at: Date.now() + 10000});
+            }
+        }).finally(() => { playlistMetadataRunning = false; schedulePlaylistMetadata(); });
+    }, delay);
+}
+
+function observePlaylistMetadata(list) {
+    playlistMetadataObserver?.disconnect();
+    visibleMetadataTracks.clear();
+    if (typeof window.IntersectionObserver !== 'function') return;
+    playlistMetadataObserver = new window.IntersectionObserver(entries => {
+        for (const entry of entries) {
+            const media = currentMediaList[Number(entry.target.dataset.index)];
+            if (!media?.encryption || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
+            if (entry.isIntersecting) visibleMetadataTracks.add(media);
+            else visibleMetadataTracks.delete(media);
+        }
+        schedulePlaylistMetadata();
+    });
+    for (const row of list.querySelectorAll('.media-item')) playlistMetadataObserver.observe(row);
+}
+
+document.addEventListener?.('visibilitychange', () => {
+    if (!document.hidden) schedulePlaylistMetadata();
+});
 
 function mediaIdentity(item) {
     return item?.resource_id || item?.media_id || item?.media_path || '';
 }
 
-function loadSelectedMetadata(media) {
-    if (!media?.encryption || !window.FrontierMusicMetadata || metadataTracks.has(media)) return;
+function loadSelectedMetadata(media, priority = true) {
+    if (!media?.encryption || !window.FrontierMusicMetadata) return Promise.resolve(true);
+    if (metadataTracks.has(media)) return metadataPromises.get(media) || Promise.resolve(true);
     metadataTracks.add(media);
-    // Only the selected track is read; opening a large album must not enqueue
-    // its entire encrypted catalog behind the next selection's metadata.
-    void window.FrontierMusicMetadata.metadata(media).then(tags => {
+    const pending = window.FrontierMusicMetadata.metadata(media, {priority}).then(tags => {
         for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) media[field] = tags[field];
-        if (!currentMediaList.includes(media)) return;
-        renderPlaylist();
+        if (!currentMediaList.includes(media)) return true;
+        updateMetadataRow(media);
         if (currentMediaList[currentIndex] === media) {
             if (art) art.title = middleEllipsis(media.title, 54);
             updateMediaSession(media);
         }
-    }).catch(() => { metadataTracks.delete(media); });
+        return true;
+    }).catch(() => { metadataTracks.delete(media); return false; });
+    metadataPromises.set(media, pending);
+    return pending;
 }
 
 function applyMediaCatalog(entries) {
@@ -1304,6 +1377,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('pagehide', event => {
+    playlistMetadataObserver?.disconnect();
+    visibleMetadataTracks.clear();
+    clearTimeout(playlistMetadataTimer); playlistMetadataTimer = null;
     if (playbackReporter) clearInterval(playbackReporter);
     stopLyricClock();
     accountPlaybackTime();
@@ -1315,6 +1391,10 @@ window.addEventListener('pagehide', event => {
 });
 
 window.addEventListener('pageshow', event => {
+    if (event.persisted) {
+        const list = document.getElementById('mediaList');
+        if (list) observePlaylistMetadata(list);
+    }
     if (event.persisted && art) {
         playbackReporter = setInterval(reportValidPlayback, 1000);
         if (art.playing) startLyricClock();
