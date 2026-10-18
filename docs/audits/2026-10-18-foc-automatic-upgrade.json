@@ -139,7 +139,9 @@
     "review2-fix-race.txt": "8d394733954545898d5961244c9d245473299d5847b88dbcbc07e26ef8bf9b76",
     "source-ci-review2-fix.txt": "614eddc7e90f7254fe7808c3027e15a457c0e3ecbc3d5a845ca9e2452cd105d3",
     "automatic-cli-sqlite-offline-resume.json": "5c6d99ff86a6c0067618b5ae06f59754cdc8c3569b2a6c068c79bc593ad445da",
-    "authenticated-input-offline-resume.json": "7a6d4a4c436e3125d56ac21b39c8d2828aee93f7a16022f874be9137f3da8be3"
+    "authenticated-input-offline-resume.json": "7a6d4a4c436e3125d56ac21b39c8d2828aee93f7a16022f874be9137f3da8be3",
+    "automatic-cli-sqlite-isolated-resume.json": "c5d43637a550faf4df756dfcebf80c2f00debde841758a43cfc5a37c8f5728d8",
+    "authenticated-input-isolated-resume.json": "05a74c6a1f9e8986111bae91a8afa77e4970023ba880f2620611ae79e664637a"
   },
   "review_followup": {
     "finding": "PR28 P1: a global operator refresh must preserve another registered deployment pending on an earlier database generation",
@@ -168,7 +170,7 @@
       "full Go suite, focused race and bounded source CI",
       "real child process dispatch for open/resume/recover-state without injected revision",
       "all locally openable phases reach consent with no Docker executable available",
-      "actual native SQLite preparation and parameterless retry with HTTPS/HTTP proxies pointing to an unavailable endpoint; opened, verified original state archive, native media Range and identity preserved"
+      "Actual native SQLite preparation and parameterless retry with unavailable proxy settings passed local opening, identity and Range checks; those settings alone did not establish network isolation. See the verification erratum."
     ],
     "offline_retry_input": [
       "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
@@ -247,7 +249,7 @@
           "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp/offline-resume-state.tar"
         ]
       ],
-      "release_network_blocked_for_retry": true,
+      "release_network_blocked_for_retry": false,
       "media_excluded": true,
       "identity_and_range_preserved": true,
       "post_business_cpu_samples": [
@@ -256,7 +258,90 @@
         0.52,
         0.38,
         0.41
-      ]
+      ],
+      "original_reported_release_network_blocked_for_retry": true
     }
+  },
+  "verification_erratum": {
+    "recorded_at": "2026-10-18T04:02:31.626744+00:00",
+    "original_limitation": "The release verifier deliberately sets Transport.Proxy=nil, so unavailable HTTP(S)_PROXY values did not prove GitHub/GHCR loss. The original result remains useful for prepared local opening but its network-isolation claim is withdrawn.",
+    "replacement": "The CLI executes in a fresh Linux network namespace with no routes. A separate same-kind namespace TCP probe to the documentation-only 203.0.113.1 address returns ENETUNREACH. Docker remains available over its existing Unix socket; the daemon and actual business containers retain their original networking.",
+    "actual_input": [
+      "unshare",
+      "--net",
+      "--",
+      "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+      "--directory",
+      "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8",
+      "upgrade"
+    ],
+    "confirmation": "y",
+    "result": {
+      "scope": "parameterless CLI upgrade with real public release evidence and native Compose",
+      "public_installation_proof": false,
+      "synthetic_revision": "0000000000000000000000000000000000000000",
+      "fixture_directory": "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8",
+      "database": "sqlite",
+      "status": "passed",
+      "no_production_operation": true,
+      "input_argv": [
+        "unshare",
+        "--net",
+        "--",
+        "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+        "--directory",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8",
+        "upgrade"
+      ],
+      "confirmation": "y",
+      "from_revision": "bb1b1430b4a7066b9c706e53757331e78cb5595d",
+      "target_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
+      "phase": "opened",
+      "state_backup_sha256": "9f275f7891ee8df6347bc2189e29c52b628be854d349454d2e917d21dba7a38d",
+      "preparation_inputs": [
+        [
+          "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+          "--directory",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8",
+          "upgrade",
+          "plan",
+          "--revision",
+          "d573851dccd1a64c93c0bf5f2bdc3b4745d05114"
+        ],
+        [
+          "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+          "--directory",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8",
+          "upgrade",
+          "apply",
+          "--plan",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8/offline-resume-plan.json",
+          "--approve-plan-sha256",
+          "cc3ca196ec06a8d61a225b77edb9ade3a742d388ea928d0f613d367f1afd320e",
+          "--confirm-node-id",
+          "d1f57e4da6db7ab0bd3b833aedc8b5d6",
+          "--backup-output",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-d2db85447f1e4765-x2bxrzy8/offline-resume-state.tar"
+        ]
+      ],
+      "release_network_blocked_for_retry": true,
+      "release_network_isolation": "fresh Linux network namespace with no routes",
+      "media_excluded": true,
+      "identity_and_range_preserved": true,
+      "post_business_cpu_samples": [
+        0.37,
+        0.45,
+        0.46,
+        0.44,
+        0.5
+      ]
+    },
+    "test_driver_sha256": "4f56e847049c9a3b97aed5518863cd21c9b09779540d686b8cbfb175ed7fc354",
+    "runtime_code_changed": false,
+    "new_production_operation": false,
+    "limitations": [
+      "The candidate backend is fixture-linked to the already-current published d573851 tool revision, exercising local prepared opening rather than tool refresh.",
+      "Cross-generation numbers in separate routing tests remain simulated; this native SQLite case stays generation 7."
+    ]
   }
 }

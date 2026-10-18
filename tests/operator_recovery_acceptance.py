@@ -332,7 +332,7 @@ def run(args):
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
         if args.automatic_upgrade:
             inputs = [str(args.binary), '--directory', str(directory), 'upgrade']
-            retry_environment = dict(os.environ)
+            execution_inputs = inputs
             preparation_inputs = []
             if args.prepared_resume_target:
                 plan_inputs = [str(args.binary), '--directory', str(directory), 'upgrade', 'plan',
@@ -347,12 +347,16 @@ def run(args):
                 prepared = json.loads(command(apply_inputs, timeout=800))
                 assert prepared['phase'] == 'prepared_fenced'
                 preparation_inputs = [plan_inputs, apply_inputs]
-                # The actual local opening must succeed with GitHub/GHCR
-                # inaccessible, while every native runtime gate still runs.
-                retry_environment.update(HTTPS_PROXY='http://127.0.0.1:1', HTTP_PROXY='http://127.0.0.1:1',
-                                         https_proxy='http://127.0.0.1:1', http_proxy='http://127.0.0.1:1',
-                                         NO_PROXY='localhost,127.0.0.1', no_proxy='localhost,127.0.0.1')
-            completed = subprocess.run(inputs, input=b'y\n', capture_output=True, timeout=800, env=retry_environment)
+                # Verifiers deliberately ignore environment proxies. A fresh
+                # network namespace actually isolates the CLI from GitHub/GHCR;
+                # Docker remains reachable through its existing Unix socket.
+                routes = command(['unshare', '--net', '--', 'cat', '/proc/net/route']).decode().splitlines()
+                assert all(not line.strip() or line.lstrip().startswith('Iface') for line in routes), 'new network namespace unexpectedly has routes'
+                command(['unshare', '--net', '--', 'python3', '-c',
+                         'import errno,socket; s=socket.socket(); s.settimeout(1); '
+                         'assert s.connect_ex(("203.0.113.1",443))==errno.ENETUNREACH'])
+                execution_inputs = ['unshare', '--net', '--', *inputs]
+            completed = subprocess.run(execution_inputs, input=b'y\n', capture_output=True, timeout=800)
             transcript = directory / 'automatic-upgrade.log'
             transcript.write_bytes(completed.stdout + completed.stderr)
             os.chmod(transcript, 0o600)
@@ -378,10 +382,11 @@ def run(args):
             assert not any(item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
                            for item in archive['manifest']['files'])
             result.update(status='passed', scope='parameterless CLI upgrade with real public release evidence and native Compose',
-                          no_production_operation=True, input_argv=inputs, confirmation='y',
+                          no_production_operation=True, input_argv=execution_inputs, confirmation='y',
                           from_revision=source_revision, target_revision=receipt['revision'],
                           phase=journal['phase'], state_backup_sha256=journal['backup_sha256'],
                           preparation_inputs=preparation_inputs, release_network_blocked_for_retry=bool(args.prepared_resume_target),
+                          release_network_isolation='fresh Linux network namespace with no routes' if args.prepared_resume_target else None,
                           media_excluded=True, identity_and_range_preserved=True,
                           post_business_cpu_samples=idle_cpu(upgraded_web))
             success = True
