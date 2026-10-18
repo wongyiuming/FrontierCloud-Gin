@@ -125,6 +125,21 @@ func (r *RegistryClient) ProveOperator(ctx context.Context, target, architecture
 	return r.prove(ctx, target, "web", architecture, true)
 }
 
+// DiscoverOperator resolves the trusted moving alias only for discovery. Every
+// subsequent check, installer and business operation uses its exact revision.
+func (r *RegistryClient) DiscoverOperator(ctx context.Context, architecture string) (ImageProof, error) {
+	return r.prove(ctx, "latest", "web", architecture, true)
+}
+
+// ProveUpgradeCandidate verifies both components before refreshing an old tool.
+// A newer generation may be inspected here but only its refreshed tool can apply it.
+func (r *RegistryClient) ProveUpgradeCandidate(ctx context.Context, target, component, architecture string) (ImageProof, error) {
+	if !ValidSHA(target) {
+		return ImageProof{}, ErrImageIntegrity
+	}
+	return r.prove(ctx, target, component, architecture, true)
+}
+
 func (r *RegistryClient) prove(ctx context.Context, target, component, architecture string, operatorOnly bool) (ImageProof, error) {
 	var proof ImageProof
 	repository, err := ImageRepository(component)

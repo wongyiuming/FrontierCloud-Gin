@@ -257,6 +257,12 @@ def run(args):
     (directory / '.env').write_text(f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\nDB_TYPE={args.database}\nMYSQL_DATABASE={prefix.replace("-", "_")}\n')
     web_image = json.loads(command(['docker', 'image', 'inspect', args.image]))[0]['Id']
     edge_image = json.loads(command(['docker', 'image', 'inspect', args.edge_image]))[0]['Id']
+    source_revision = REVISION
+    if args.automatic_upgrade:
+        labels = json.loads(command(['docker', 'image', 'inspect', args.image]))[0]['Config']['Labels']
+        source_revision = labels['frontiercloud.revision']
+        assert len(source_revision) == 40 and all(c in '0123456789abcdef' for c in source_revision)
+        assert '@sha256:' in args.image and '@sha256:' in args.edge_image
     raw = command(['docker', 'compose', '--project-directory', str(directory), '-f',
                    str(directory / 'docker-compose.yaml'),
                    *(['-f', str(directory / 'docker-compose.gin-mysql.yaml')] if args.database == 'mysql' else []),
@@ -266,9 +272,9 @@ def run(args):
     for name, service in configuration['services'].items():
         image = service['image']
         if 'frontiercloud-gin-web' in image:
-            image = web_image
+            image = args.image if args.automatic_upgrade else web_image
         elif 'frontiercloud-gin-nginx' in image:
-            image = edge_image
+            image = args.edge_image if args.automatic_upgrade else edge_image
         else:
             try:
                 command(['docker', 'image', 'inspect', image])
@@ -286,14 +292,25 @@ def run(args):
             overrides[name]['environment'] = {'PUBLIC_BIND_ADDRESS': '0.0.0.0'}
         if name == 'web':
             overrides[name].update(cpus=1, mem_limit='512m', memswap_limit='512m')
+    if args.automatic_upgrade:
+        # The shipping CLI owns an images-only lock. Keep fixture limits and
+        # loopback settings in its selected Compose file across image switches.
+        for name, override in overrides.items():
+            for key, value in override.items():
+                if key == 'environment':
+                    configuration['services'][name].setdefault(key, {}).update(value)
+                elif key != 'image':
+                    configuration['services'][name][key] = value
+            overrides[name] = {'image': override['image']}
+        (directory / 'docker-compose.yaml').write_text(json.dumps(configuration))
     (directory / '.fc-images.json').write_text(json.dumps({'services': overrides}))
     receipt = {'configuration_version': 1, 'role': 'master', 'project': project,
-               'database': args.database, 'revision': REVISION, 'reviewed_source_sha': REVISION,
+               'database': args.database, 'revision': source_revision, 'reviewed_source_sha': REVISION,
                'created_at': '2026-10-12T00:00:00Z', 'selection_sha256': fingerprint(configuration),
                'images': {}, 'service_images': {name: value['image'] for name, value in overrides.items()},
                'compose_files': ['docker-compose.yaml'] + (['docker-compose.gin-mysql.yaml'] if args.database == 'mysql' else []), 'state': 'ready'}
     (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
-    if args.state_restore:
+    if args.state_restore or args.automatic_upgrade:
         effective = json.loads(compose(directory, 'config', '--format', 'json'))
         receipt['selection_sha256'] = fingerprint(effective)
         (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
@@ -313,6 +330,41 @@ def run(args):
         media_id = probe(request, payload)
         assert admin_probe(directory, 'set')['priority'] == 77
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
+        if args.automatic_upgrade:
+            inputs = [str(args.binary), '--directory', str(directory), 'upgrade']
+            completed = subprocess.run(inputs, input=b'y\n', capture_output=True, timeout=800)
+            transcript = directory / 'automatic-upgrade.log'
+            transcript.write_bytes(completed.stdout + completed.stderr)
+            os.chmod(transcript, 0o600)
+            if completed.returncode:
+                raise AssertionError('automatic upgrade failed; private transcript retained at ' + str(transcript))
+            receipt = json.loads((directory / '.fc-deployment.json').read_text())
+            journal = json.loads((directory / '.fc-upgrade.json').read_text())
+            assert receipt['revision'] != source_revision and receipt['state'] == 'ready'
+            assert journal['phase'] == 'opened' and journal['business_verified']
+            assert journal['plan']['recovery_scope'] == 'upgrade-state'
+            wait_ready(base)
+            after = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
+            assert after['node_id'] == before_fact['node_id']
+            assert probe(request, payload) == media_id
+            assert admin_probe(directory, 'verify')['priority'] == 77
+            upgraded_web = compose(directory, 'ps', '--quiet', 'web').decode().strip()
+            actual = json.loads(command(['docker', 'inspect', upgraded_web]))[0]
+            assert actual['Image'] != web_image and actual['HostConfig']['NanoCpus'] == 1000000000
+            assert actual['HostConfig']['Memory'] == 512 * 1024 * 1024
+            archive = json.loads(command([str(args.binary), 'backup', 'verify', '--file', journal['backup_file'],
+                                          '--sha256', journal['backup_sha256']], timeout=700))
+            assert archive['integrity_verified'] and archive['manifest']['scope'] == 'upgrade-state'
+            assert not any(item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
+                           for item in archive['manifest']['files'])
+            result.update(status='passed', scope='parameterless CLI upgrade with real public release evidence and native Compose',
+                          no_production_operation=True, input_argv=inputs, confirmation='y',
+                          from_revision=source_revision, target_revision=receipt['revision'],
+                          phase=journal['phase'], state_backup_sha256=journal['backup_sha256'],
+                          media_excluded=True, identity_and_range_preserved=True,
+                          post_business_cpu_samples=idle_cpu(upgraded_web))
+            success = True
+            return result
         if args.upgrade_test_binary:
             # This adapter exercises actual native processes, Compose, archives
             # and writes. Only public-release proof is mapped to private image
@@ -524,6 +576,7 @@ if __name__ == '__main__':
     parser.add_argument('--upgrade-failure', action='store_true', help='inject failure at target preparation after real native backup')
     parser.add_argument('--upgrade-recover', action='store_true', help='restore failed database state in original business mounts and reopen source')
     parser.add_argument('--simple-upgrade', action='store_true', help='exercise the single-consent native upgrade entry')
+    parser.add_argument('--automatic-upgrade', action='store_true', help='exercise parameterless CLI against real public release evidence')
     parser.add_argument('--state-restore', action='store_true', help='restore an ordinary default state backup after database loss')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -536,6 +589,8 @@ if __name__ == '__main__':
         parser.error('--upgrade-recover requires --upgrade-failure')
     if options.simple_upgrade and (options.upgrade_test_binary is None or options.upgrade_failure):
         parser.error('--simple-upgrade requires the native upgrade adapter without --upgrade-failure')
+    if options.automatic_upgrade and (options.upgrade_test_binary is not None or options.state_restore):
+        parser.error('--automatic-upgrade is an independent real-public CLI scenario')
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')

@@ -73,8 +73,8 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	flags.SetOutput(diagnostic)
 	yes := flags.Bool("yes", false, "approve the displayed upgrade without interactive input")
 	external := flags.Bool("confirm-external-writers-stopped", false, "confirm external MySQL writers are stopped for --yes")
-	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || !release.ValidSHA(revision) {
-		fmt.Fprintln(diagnostic, "foc upgrade --revision FULL_PUBLISHED_MAIN_SHA [--yes]")
+	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || revision != "" && !release.ValidSHA(revision) {
+		fmt.Fprintln(diagnostic, "foc upgrade [--revision FULL_PUBLISHED_MAIN_SHA] [--yes]")
 		return 2
 	}
 	d, r, e := operator.Open(directory)
@@ -95,6 +95,34 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	}
 	registry := release.NewRegistryClient()
 	defer registry.Close()
+	if revision == "" {
+		revision, e = d.PendingUpgradeTarget(r)
+		if e != nil {
+			fmt.Fprintln(diagnostic, e)
+			return 2
+		}
+	}
+	revision, e = selectUpgradeRelease(ctx, revision, r.Revision, operator.Architecture(string(raw)), verifier, registry, diagnostic)
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	handled, code, e := refreshUpgradeOperator(ctx, Revision, revision, verifier, func() error {
+		if _, err := fmt.Fprintln(diagnostic, "Refreshing operator automatically; business deployment remains unchanged."); err != nil {
+			return err
+		}
+		_, err := d.SelfUpdate(ctx, revision, operator.Architecture(string(raw)), verifier, registry)
+		return err
+	}, func() int {
+		return continueWithUpdatedOperator(ctx, directory, revision, args, input, out, diagnostic, structured)
+	})
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	if handled {
+		return code
+	}
 	result, e := d.Upgrade(ctx, r, revision, operator.Architecture(string(raw)), verifier, registry, func(p operator.UpgradePreview) (operator.UpgradeConsent, error) {
 		return upgradeConsent(ctx, input, diagnostic, *yes, *external, p)
 	})

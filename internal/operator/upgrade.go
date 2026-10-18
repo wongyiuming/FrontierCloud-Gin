@@ -109,7 +109,10 @@ func (d *Deployment) upgradeFact(ctx context.Context, r Receipt) (RuntimeFact, e
 
 func (d *Deployment) targetImages(ctx context.Context, r Receipt, target, arch string, evidence Evidence, images Images) (string, map[string]release.ImageProof, map[string]string, error) {
 	proof, e := evidence.Artifact(ctx, target)
-	if e != nil || proof["publishable"] != true || proof["sha"] != target || !release.ValidSHA(fmtString(proof["ci_sha"])) {
+	if e != nil {
+		return "", nil, nil, release.SafeVerificationFailure(e)
+	}
+	if proof["publishable"] != true || proof["sha"] != target || !release.ValidSHA(fmtString(proof["ci_sha"])) {
 		return "", nil, nil, errors.New("target lacks reviewed main release and exact-source CI proof")
 	}
 	components := map[string]release.ImageProof{}

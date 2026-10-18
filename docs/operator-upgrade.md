@@ -13,7 +13,24 @@ procedure; an environment edit is not a database or disk migration.
 
 ## One-command upgrade
 
-Run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA` from any host directory.
+Run `foc upgrade` from any host directory. No revision, plan file, hash or NodeID
+is required. It selects the newest successfully published main release, proves
+the merged source tree and exact-source CI, and pins its immutable revision.
+When main is still building or publication failed, it explains that state and
+uses the last verified published alias; it never falls back after a network,
+permission or integrity failure. It refuses an implicit downgrade. An unfinished
+upgrade always keeps its recorded target, even when a newer release appears.
+
+If necessary, the command refreshes its host backend with the existing bounded
+Compose installer and continues automatically using the same pinned revision.
+A newer installed tool is retained. Tool installation failure stops before the
+business upgrade; a failed business upgrade retains its journal and recovery
+point. There is still one business-upgrade confirmation. Existing tools released
+before this entry was added need one explicit verified `foc self-update --revision
+FULL_PUBLISHED_MAIN_SHA` to obtain it; this cannot retroactively alter old binaries.
+
+To deliberately select an exact release, use
+`foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.
 The tool verifies the selected public release and deployment, displays version,
 database generation and state-backup capacity, and asks for one confirmation.
 After the capacity scan, it refreshes the release plan before requesting consent,
@@ -22,7 +39,20 @@ It manages the private plan and recovery archive in the registered deployment
 directory, invokes the existing apply checks, and opens only after preparation
 and managed read verification succeed. No plan filename, hash or NodeID needs
 to be copied by the operator. Existing Compose selection and media mounts remain
-bound to the receipt; tool refresh remains `foc self-update`.
+bound to the receipt. `foc self-update` remains available for tool-only refresh.
+
+Release readiness is reported separately from registry access:
+
+| Stage | Meaning |
+| --- | --- |
+| `main_ci_waiting` / `main_ci_running` / `main_ci_failed` | Exact main CI is absent, pending or failed |
+| `image_publication_waiting` | Main CI passed; publisher has not started |
+| `image_build_running` | A component compile job is running |
+| `image_publish_running` | A component image publisher is running |
+| `image_alias_promotion_running` | Verified default aliases are being promoted |
+| `image_build_or_publication_running` | Publisher active; no specific running job observed |
+| `image_publication_failed` | Newest exact publisher attempt did not succeed |
+| Publication succeeded but image verification failed | Successful publication does not prove that an image remains accessible; underlying missing, network, permission, platform or integrity error is retained |
 
 For MySQL, the interactive confirmation explicitly attests that external writers
 are stopped. Noninteractive use requires `--yes` and, for MySQL, the separate

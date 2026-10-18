@@ -210,6 +210,8 @@ type pull struct {
 	} `json:"head"`
 }
 type run struct {
+	ID         int64   `json:"id"`
+	Attempt    int64   `json:"run_attempt"`
 	Branch     string  `json:"head_branch"`
 	Event      string  `json:"event"`
 	SHA        string  `json:"head_sha"`

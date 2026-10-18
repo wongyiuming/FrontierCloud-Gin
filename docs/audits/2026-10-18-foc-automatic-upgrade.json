@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "accepted_at": "2026-10-18T02:57:15.982672+00:00",
+  "candidate_base_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
+  "development_host": "192.168.6.201",
+  "production_changed": false,
+  "canonical_branches_only": [
+    "dev",
+    "main"
+  ],
+  "scope": "parameterless host foc upgrade, published release readiness and automatic Compose tool refresh",
+  "actual_cli_input": [
+    "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+    "--directory",
+    "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-0bc832817cf04c7a-y3jxmcn0",
+    "upgrade"
+  ],
+  "confirmation": "y",
+  "cli_fixture_note": "The directory selects one disposable deployment on the shared development host. No revision, plan, hash, NodeID or recovery filename was supplied. The candidate backend is fixture-linked with the already-current published tool revision to exercise the no-refresh branch. Global discovery is unchanged.",
+  "actual_cli_result": {
+    "from_revision": "bb1b1430b4a7066b9c706e53757331e78cb5595d",
+    "target_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
+    "phase": "opened",
+    "state_backup_sha256": "386e25f2c86e3f2e655c3d1a46849cb2e266b8dd80767467a3acd976b23ac163",
+    "media_excluded": true,
+    "identity_and_range_preserved": true,
+    "post_business_cpu_samples": [
+      0.43,
+      0.38,
+      0.34,
+      0.49,
+      0.49
+    ]
+  },
+  "release_api_authenticated": true,
+  "public_registry_anonymous": true,
+  "new_credentials_created": false,
+  "credential_written_to_disk": false,
+  "unmerged_candidate_claimed_public": false,
+  "automatic_tool_refresh": {
+    "test": "TestNativeSelfUpdateDiagnostics",
+    "real_compose_installer": true,
+    "real_global_backend_continuation": true,
+    "publication_evidence_injected": true,
+    "public_image_revision": "c438232d16a8c95baa94fa81289e9afed980c881",
+    "business_receipt_unchanged": true,
+    "ownership_lock_failures_and_retry": true
+  },
+  "native_single_consent_upgrade_matrix": {
+    "sqlite": {
+      "passed": true,
+      "publication_evidence_injected": true,
+      "schema_generation": "7 -> 7",
+      "media_excluded": true,
+      "actual_image_switch_and_range": true
+    },
+    "mysql": {
+      "passed": true,
+      "publication_evidence_injected": true,
+      "schema_generation": "7 -> 7",
+      "media_excluded": true,
+      "actual_image_switch_and_range": true
+    }
+  },
+  "executed_checks": [
+    "bounded complete source CI",
+    "complete go test ./...",
+    "go test -race -count=1 ./cmd/fc ./internal/release ./internal/operator",
+    "main CI/publisher absence, running, failed and successful states",
+    "actual compile/publish/alias job classification",
+    "explicit target cannot be substituted; missing/network/permission/integrity errors remain distinct",
+    "no implicit tool or business downgrade",
+    "pending-target retention and corrupt-journal refusal",
+    "real child process target/flags/stdin/exit code",
+    "real-public parameterless SQLite CLI upgrade with one confirmation",
+    "real SQLite/MySQL native single-consent upgrade and recovery",
+    "real Compose tool installation and managed-backend continuation"
+  ],
+  "limitations": [
+    "Native SQLite/MySQL matrix uses explicitly injected publication proof for local candidate images.",
+    "The real-public CLI scenario upgrades a disposable node from bb1b143 to d573851; it is not public publication evidence for this candidate.",
+    "Tool installer and business upgrade are separate native acceptance scenarios; selection and automatic orchestration also have focused regression coverage.",
+    "RN staging remains stopped. No production or live browser acceptance is claimed for this CLI-only change.",
+    "Pre-feature tools require one explicit verified refresh to obtain the new parameterless entry."
+  ],
+  "acceptance_failures_retained": [
+    "Windows archive CRLF in Bash: normalized according to existing .gitattributes.",
+    "Initial fixture fingerprint omitted its resource overrides: fixture now renders the selected configuration.",
+    "Fixture resource overrides in the images-only lock were rejected on switch: overrides now persist in the fixture Compose file.",
+    "GitHub anonymous rate limit surfaced with retry_after_seconds=997; final public API acceptance used existing ephemeral repository authentication."
+  ],
+  "source_inputs_sha256": {
+    "cmd/fc/main.go": "1bacfef525bdeda44b5c37b7e4ac483f277d6a59b312f12796ece1278610d3db",
+    "cmd/fc/self_update_native_test.go": "0e2e5d50a0775cb3d3e0ff4268582a441ceef7f80f4606838a52658c9b8718e4",
+    "cmd/fc/upgrade_automatic.go": "621200330952b613e9d13c3fee71009475258203d94bf6fa4b9555cd368cefc1",
+    "cmd/fc/upgrade_automatic_live_test.go": "eb1c2af21c468d363cfbd4f0fc5d1533f746db461a9517e386165fa73b87ac02",
+    "cmd/fc/upgrade_automatic_test.go": "18661e93fe88398c8966d53a14c16fd447712fc64e564df159b06362b61e6130",
+    "cmd/fc/upgrade_simple.go": "9b5b2eea08cbe8f2693e406487ae47181ee8a105f0c867ec1298be9ce442921c",
+    "docs/operator-manual.md": "d57928aeb8b61463c68859a8798858b7e0c7a560958494eccb81ee480247d3a7",
+    "docs/operator-upgrade.md": "3c1ebee9556624174aae32d5bce429efce0f654a4f08ffcb51ae2e00c79b3091",
+    "internal/operator/upgrade.go": "f550690aa0f1c61b743036ba2b6747bd4364b0e3a5a54f3f8a5bcdaa0a8e226a",
+    "internal/operator/upgrade_pending.go": "9229acde83e25eafb3255322acbcd30c8026dec5c42061adc502bc1190b68897",
+    "internal/operator/upgrade_pending_test.go": "853dda05581ac47ab6e0242f6675f18559b89eb912681034072b00fddded0fe5",
+    "internal/release/image_proof.go": "7c1ce068aa6ecc4e62fe699eb9fdbe5c318c730a8945c84530e12990f022c8fe",
+    "internal/release/publication.go": "d8990b7fe5cb95c97d4b30138e2f53915e7e7c139c7162718da1dbd479ea5836",
+    "internal/release/publication_jobs_test.go": "05dbb2ce3ed77ca5a5d2e62cc475980c145e6b9b1f983813875d2a1b185ff9c6",
+    "internal/release/publication_test.go": "2ea196a57011138ebab3e89625e077a6d8fd470cda620c63faff6ba681011303",
+    "internal/release/verification.go": "aaa350b77e8bd1f52a8ed10a0a88c7f1d3a3c498803ab72e89dbfb4bd7517432",
+    "tests/operator_recovery_acceptance.py": "71187ec07166a4ad3363903eada7cb76a1c95a2d7f25d99f10d1162f962304bd"
+  },
+  "evidence_sha256": {
+    "final-go.txt": "fd3b4848a037c6076fe484ffefb1cc2abed721aa8a67705dff21a007d134b4f9",
+    "final-race.txt": "29a66f45fdef9f1e879d1b2aa2557e5d4598bd742b6289c3ec04527797aa7a40",
+    "source-ci-final.txt": "29f062dad1c0380dc8c036a6b250233ce3bc58d443e45c8f2b565680a7b8d39c",
+    "automatic-installer.txt": "5b1cd898e6eb8f9ca606fc4d6063ef9e67c7e984dd2c751cd0493b05cbd63446",
+    "automatic-cli-sqlite.json": "4efb46e15f8a70089eb86a0ff727f335c70efcff8502cf09fa6b628183d88527",
+    "native-sqlite.json": "822a0e5082a9615f7f40ff219eba868032db3d8c3578e2dda8324fd89ee88f80",
+    "native-mysql.json": "aef6f4dd0d3aa290026493d49eab7b601f2cbc2bd32e71f6177c7468a4f813f6",
+    "public-discovery.txt": "bbc7dd13f3760a86c4a3d531c56530f5de55f7d559a307d9bb2dc5fc1922b752",
+    "authenticated-input.json": "c54a139c353fc8a85aabdb1ca287199cbd60877d92b619f6f7a9c93e305d3dd9"
+  }
+}
