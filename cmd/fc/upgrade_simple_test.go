@@ -3,14 +3,54 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 )
+
+func TestPreparedParameterlessRetryReachesConsentWithoutDockerOrReleaseNetwork(t *testing.T) {
+	// With no executable search path, a regression to docker info fails before
+	// consent; the prepared opening path must not perform that discovery.
+	t.Setenv("PATH", t.TempDir())
+	for _, phase := range []string{"prepared_fenced", "activating_fenced", "verified_fenced", "opening", "opened"} {
+		t.Run(phase, func(t *testing.T) {
+			directory := t.TempDir()
+			write := func(name string, value any) {
+				raw, err := json.Marshal(value)
+				if err == nil {
+					err = os.WriteFile(filepath.Join(directory, name), raw, 0600)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			target := strings.Repeat("b", 40)
+			write(operator.ReceiptFile, operator.Receipt{Version: 1, Role: "master", Database: "sqlite", Project: "fixture", Revision: target, State: "upgrade_fenced", Files: []string{"docker-compose.yaml"}})
+			plan := operator.UpgradePlan{Version: 1, Target: target, Generation: 7, RecoveryScope: "upgrade-state"}
+			raw, err := json.Marshal(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash := sha256.Sum256(raw)
+			plan.SHA256 = hex.EncodeToString(hash[:])
+			write(operator.UpgradeJournal, operator.UpgradeState{Version: 1, Phase: phase, Plan: plan})
+			var out, diagnostic bytes.Buffer
+			code := simpleUpgradeCommand(context.Background(), directory, "", []string{"upgrade"}, strings.NewReader("n\n"), &out, &diagnostic, false)
+			if code != 2 || !strings.Contains(diagnostic.String(), "Continue recorded phase: "+phase) || !strings.Contains(diagnostic.String(), "upgrade cancelled") || out.Len() != 0 {
+				t.Fatal(code, out.String(), diagnostic.String())
+			}
+		})
+	}
+}
 
 func TestSimpleUpgradeConsentAndMySQLAttestation(t *testing.T) {
 	for _, db := range []string{"sqlite", "mysql"} {

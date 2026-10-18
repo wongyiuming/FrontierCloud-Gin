@@ -17,7 +17,7 @@ func TestNewGlobalToolRoutesAnotherDeploymentsOldPendingUpgrade(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("native development host")
 	}
-	for _, kind := range []string{"resume", "explicit-conflict", "missing-backend", "wrong-generation", "symlink-backend", "opened", "same-generation"} {
+	for _, kind := range []string{"resume", "staged-open", "staged-resume", "staged-recover-state", "explicit-conflict", "missing-backend", "wrong-generation", "symlink-backend", "opened", "same-generation"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			home := filepath.Join(root, "operator")
@@ -84,20 +84,28 @@ func TestNewGlobalToolRoutesAnotherDeploymentsOldPendingUpgrade(t *testing.T) {
 				generation = 7
 			}
 			var out, diagnostic bytes.Buffer
-			handled, code := dispatchRetainedUpgrade(context.Background(), deployment, requested, []string{"upgrade"}, strings.NewReader("y\n"), &out, &diagnostic, true, generation, home)
+			args := []string{"upgrade"}
+			if strings.HasPrefix(kind, "staged-") {
+				args = append(args, strings.TrimPrefix(kind, "staged-"), "--approve-plan-sha256", strings.Repeat("d", 64), "--confirm-node-id", "fixture-node")
+			}
+			handled, code := dispatchRetainedUpgrade(context.Background(), deployment, requested, args, strings.NewReader("y\n"), &out, &diagnostic, true, generation, home)
 			if kind == "opened" || kind == "same-generation" {
 				if handled {
 					t.Fatal("unnecessary retained dispatch", diagnostic.String())
 				}
 				return
 			}
-			if kind != "resume" {
+			if kind != "resume" && !strings.HasPrefix(kind, "staged-") {
 				if !handled || code != 2 || out.Len() != 0 {
 					t.Fatal(kind, handled, code, out.String(), diagnostic.String())
 				}
 				return
 			}
-			if !handled || code != 0 || !strings.Contains(out.String(), "--revision\n"+target+"\n--json\nupgrade\nretained=7") {
+			if strings.HasPrefix(kind, "staged-") {
+				if !handled || code != 0 || strings.Contains(out.String(), "--revision") || !strings.Contains(out.String(), "upgrade\n"+strings.TrimPrefix(kind, "staged-")+"\n--approve-plan-sha256\n"+strings.Repeat("d", 64)+"\n--confirm-node-id\nfixture-node\nretained=7") {
+					t.Fatal(handled, code, out.String(), diagnostic.String())
+				}
+			} else if !handled || code != 0 || !strings.Contains(out.String(), "--revision\n"+target+"\n--json\nupgrade\nretained=7") {
 				t.Fatal(handled, code, out.String(), diagnostic.String())
 			}
 			raw, err := os.ReadFile(global)

@@ -54,3 +54,23 @@ func (d *Deployment) PendingUpgradeTarget(r Receipt) (string, error) {
 	}
 	return "", nil
 }
+
+// PendingUpgradeLocalOpen identifies phases whose original local opening gates
+// already contain the release proof. It does not authorize or open the runtime.
+func (d *Deployment) PendingUpgradeLocalOpen(r Receipt) (bool, error) {
+	s, err := d.upgradeState()
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if s.Phase == "opened" && r.State != "upgrade_fenced" {
+		return false, nil
+	}
+	switch s.Phase {
+	case "prepared_fenced", "activating_fenced", "verified_fenced", "opening", "opened":
+		return true, nil
+	}
+	return false, nil
+}

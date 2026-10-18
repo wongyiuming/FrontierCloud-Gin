@@ -37,6 +37,13 @@ original journal and cannot refresh or downgrade the newer global tool while
 finishing the pending operation. Missing or mismatched retained executables stop
 without changing the pending deployment. These small recovery executables are
 retained by generation, not by release; do not remove them during pending work.
+Staged recovery commands retain their original arguments; only the simple
+`upgrade` continuation receives the recorded target revision automatically.
+
+For an already prepared or opening upgrade, a parameterless retry goes directly
+to its journal-bound local consent and opening checks. GitHub and registry
+discovery are not required to finish those locally proven phases. Earlier
+preparation phases still require their original release proof and image checks.
 
 To deliberately select an exact release, use
 `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.

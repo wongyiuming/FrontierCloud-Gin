@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "accepted_at": "2026-10-18T03:21:30.401070+00:00",
+  "accepted_at": "2026-10-18T03:40:17.544496+00:00",
   "candidate_base_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
   "development_host": "192.168.6.201",
   "production_changed": false,
@@ -102,13 +102,13 @@
     "cmd/fc/upgrade_automatic.go": "db8d73fe1d150c72441fa6343735777cb4ce0068cf199449507c9d16faae34f5",
     "cmd/fc/upgrade_automatic_live_test.go": "eb1c2af21c468d363cfbd4f0fc5d1533f746db461a9517e386165fa73b87ac02",
     "cmd/fc/upgrade_automatic_test.go": "18661e93fe88398c8966d53a14c16fd447712fc64e564df159b06362b61e6130",
-    "cmd/fc/upgrade_retained.go": "ab45cbe91dccfeac250be8c8c1c8f0c86736808ed8e7c8559bb63e0efd4fb837",
-    "cmd/fc/upgrade_retained_test.go": "b2004272fff07aa5443429b9a645097da26ac6571df40e41aba8e2b0d98222bb",
-    "cmd/fc/upgrade_simple.go": "1dff67a6bd753f7470483d64c6a97c985e70226f22b457b24c58ce97c0acdeec",
+    "cmd/fc/upgrade_retained.go": "8714cc76e64480e465c044527d471e1f4003a373b7462d8a9e907188c8d92522",
+    "cmd/fc/upgrade_retained_test.go": "79b9e9c46ce9db48180b9a77bae7e023e679ce74b6358f7b5e163433335b3c4d",
+    "cmd/fc/upgrade_simple.go": "364a09d04ccfea9e76fe5e6ff12e71d6d8e6ab218cd92e60081fba43d43ae8a9",
     "docs/operator-manual.md": "d57928aeb8b61463c68859a8798858b7e0c7a560958494eccb81ee480247d3a7",
-    "docs/operator-upgrade.md": "208ded68faa2993e45dc689505bca6b486507c47ee80405adfcc6c62b414c55c",
+    "docs/operator-upgrade.md": "cb99123495a2d990012edbf24bef74993e5386e8c00476e89bc16e71cf7634c7",
     "internal/operator/upgrade.go": "f550690aa0f1c61b743036ba2b6747bd4364b0e3a5a54f3f8a5bcdaa0a8e226a",
-    "internal/operator/upgrade_pending.go": "abb7d997d452e403ab51ef1e41d1f6fb47362eab999a7141e16764e618d53ba1",
+    "internal/operator/upgrade_pending.go": "a9432eb2391e24a0339847435cab8fe64ce50274145c987dcd4ccc81b6e3fa1c",
     "internal/operator/upgrade_pending_test.go": "853dda05581ac47ab6e0242f6675f18559b89eb912681034072b00fddded0fe5",
     "internal/release/image_proof.go": "7c1ce068aa6ecc4e62fe699eb9fdbe5c318c730a8945c84530e12990f022c8fe",
     "internal/release/publication.go": "d8990b7fe5cb95c97d4b30138e2f53915e7e7c139c7162718da1dbd479ea5836",
@@ -116,8 +116,9 @@
     "internal/release/publication_test.go": "2ea196a57011138ebab3e89625e077a6d8fd470cda620c63faff6ba681011303",
     "internal/release/verification.go": "aaa350b77e8bd1f52a8ed10a0a88c7f1d3a3c498803ab72e89dbfb4bd7517432",
     "scripts/install-foc.sh": "b21105161d21f5fea8e49308b19d3a53da9f3d6e638c7cdaffbaeadaeaac1eaf",
-    "tests/operator_recovery_acceptance.py": "71187ec07166a4ad3363903eada7cb76a1c95a2d7f25d99f10d1162f962304bd",
-    "tests/test_foc_host.py": "e8f2b072a08c265f5d94213a2bb762757723059b3ad81238e9c2f59bc7b71e29"
+    "tests/operator_recovery_acceptance.py": "52bcfeffa0969714d94742c81cf8e8aa7e53e4aafc9137fa9445b048d8a18cf9",
+    "tests/test_foc_host.py": "e8f2b072a08c265f5d94213a2bb762757723059b3ad81238e9c2f59bc7b71e29",
+    "cmd/fc/upgrade_simple_test.go": "4ed629d80b31668d90b2b383f42bd64c2122bbec3457e82f3d27c505f5ed4686"
   },
   "evidence_sha256": {
     "final-go.txt": "fd3b4848a037c6076fe484ffefb1cc2abed721aa8a67705dff21a007d134b4f9",
@@ -133,7 +134,12 @@
     "review-fix-go.txt": "2f97d2be7aba0c6adb7abe5b9bb5ec3e480b038ab8239f8dea98cac4303f346b",
     "source-ci-review-fix.txt": "9ba94ddf499d986335ebe84d45ce990c38e1e2a15b01dc703d1de7f9d693a17f",
     "retained-installer.txt": "2528fe05661a3b0f7620abb81fea9b47bb0bae5e992dd44d6c4c0a3c8c1b1efa",
-    "retained-compose.txt": "2856af3cbb3b284177233568b7b153d40eda9b0b41db339426d25f3e0e7a77bd"
+    "retained-compose.txt": "2856af3cbb3b284177233568b7b153d40eda9b0b41db339426d25f3e0e7a77bd",
+    "review2-fix-go.txt": "f4dd5e566d1a406f524b12d186c82a58121f7517d9e81f0b83f7dcaab902afd9",
+    "review2-fix-race.txt": "8d394733954545898d5961244c9d245473299d5847b88dbcbc07e26ef8bf9b76",
+    "source-ci-review2-fix.txt": "614eddc7e90f7254fe7808c3027e15a457c0e3ecbc3d5a845ca9e2452cd105d3",
+    "automatic-cli-sqlite-offline-resume.json": "5c6d99ff86a6c0067618b5ae06f59754cdc8c3569b2a6c068c79bc593ad445da",
+    "authenticated-input-offline-resume.json": "7a6d4a4c436e3125d56ac21b39c8d2828aee93f7a16022f874be9137f3da8be3"
   },
   "review_followup": {
     "finding": "PR28 P1: a global operator refresh must preserve another registered deployment pending on an earlier database generation",
@@ -151,5 +157,106 @@
       "There is no generation 8 database asset in this release. Cross-generation routing and multi-generation installation cases simulate generation numbers, while the real Compose case retains actual generation 7 binaries.",
       "The local candidate image is private development evidence, not published release proof."
     ]
+  },
+  "review_followup_2": {
+    "finding": "Preserve revision-free staged recovery commands; avoid remote release dependencies when finishing already-prepared local opening",
+    "fixes": [
+      "Only simple upgrade receives an automatically pinned revision; staged command arguments are preserved.",
+      "Prepared/activating/verified/opening and opened-but-fenced phases reach original local consent/open gates before Docker architecture, GitHub, registry or self-update discovery."
+    ],
+    "executed": [
+      "full Go suite, focused race and bounded source CI",
+      "real child process dispatch for open/resume/recover-state without injected revision",
+      "all locally openable phases reach consent with no Docker executable available",
+      "actual native SQLite preparation and parameterless retry with HTTPS/HTTP proxies pointing to an unavailable endpoint; opened, verified original state archive, native media Range and identity preserved"
+    ],
+    "offline_retry_input": [
+      "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+      "--directory",
+      "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+      "upgrade"
+    ],
+    "fixture_preparation_inputs": [
+      [
+        "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+        "--directory",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+        "upgrade",
+        "plan",
+        "--revision",
+        "d573851dccd1a64c93c0bf5f2bdc3b4745d05114"
+      ],
+      [
+        "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+        "--directory",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+        "upgrade",
+        "apply",
+        "--plan",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp/offline-resume-plan.json",
+        "--approve-plan-sha256",
+        "bb853578c2c83fcb253f9f6052c77c411d91dee797fe2db42ddfc8f8c31b0910",
+        "--confirm-node-id",
+        "60f8b3bb915a5d2d9a81d74d5ae244a4",
+        "--backup-output",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp/offline-resume-state.tar"
+      ]
+    ],
+    "result": {
+      "scope": "parameterless CLI upgrade with real public release evidence and native Compose",
+      "public_installation_proof": false,
+      "synthetic_revision": "0000000000000000000000000000000000000000",
+      "fixture_directory": "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+      "database": "sqlite",
+      "status": "passed",
+      "no_production_operation": true,
+      "input_argv": [
+        "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+        "--directory",
+        "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+        "upgrade"
+      ],
+      "confirmation": "y",
+      "from_revision": "bb1b1430b4a7066b9c706e53757331e78cb5595d",
+      "target_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
+      "phase": "opened",
+      "state_backup_sha256": "d884460ec35d6f4b16e3ad3db6300120f4523c23cb022a0bc5f0a50868948f1c",
+      "preparation_inputs": [
+        [
+          "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+          "--directory",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+          "upgrade",
+          "plan",
+          "--revision",
+          "d573851dccd1a64c93c0bf5f2bdc3b4745d05114"
+        ],
+        [
+          "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
+          "--directory",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp",
+          "upgrade",
+          "apply",
+          "--plan",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp/offline-resume-plan.json",
+          "--approve-plan-sha256",
+          "bb853578c2c83fcb253f9f6052c77c411d91dee797fe2db42ddfc8f8c31b0910",
+          "--confirm-node-id",
+          "60f8b3bb915a5d2d9a81d74d5ae244a4",
+          "--backup-output",
+          "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-4df40b9a130447da-861w3kdp/offline-resume-state.tar"
+        ]
+      ],
+      "release_network_blocked_for_retry": true,
+      "media_excluded": true,
+      "identity_and_range_preserved": true,
+      "post_business_cpu_samples": [
+        0.38,
+        0.37,
+        0.52,
+        0.38,
+        0.41
+      ]
+    }
   }
 }

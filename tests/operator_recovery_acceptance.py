@@ -332,7 +332,27 @@ def run(args):
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
         if args.automatic_upgrade:
             inputs = [str(args.binary), '--directory', str(directory), 'upgrade']
-            completed = subprocess.run(inputs, input=b'y\n', capture_output=True, timeout=800)
+            retry_environment = dict(os.environ)
+            preparation_inputs = []
+            if args.prepared_resume_target:
+                plan_inputs = [str(args.binary), '--directory', str(directory), 'upgrade', 'plan',
+                               '--revision', args.prepared_resume_target]
+                plan = json.loads(command(plan_inputs, timeout=300))
+                plan_path = directory / 'offline-resume-plan.json'
+                plan_path.write_text(json.dumps(plan))
+                os.chmod(plan_path, 0o600)
+                apply_inputs = [str(args.binary), '--directory', str(directory), 'upgrade', 'apply',
+                                '--plan', str(plan_path), '--approve-plan-sha256', plan['plan_sha256'],
+                                '--confirm-node-id', plan['node_id'], '--backup-output', str(directory / 'offline-resume-state.tar')]
+                prepared = json.loads(command(apply_inputs, timeout=800))
+                assert prepared['phase'] == 'prepared_fenced'
+                preparation_inputs = [plan_inputs, apply_inputs]
+                # The actual local opening must succeed with GitHub/GHCR
+                # inaccessible, while every native runtime gate still runs.
+                retry_environment.update(HTTPS_PROXY='http://127.0.0.1:1', HTTP_PROXY='http://127.0.0.1:1',
+                                         https_proxy='http://127.0.0.1:1', http_proxy='http://127.0.0.1:1',
+                                         NO_PROXY='localhost,127.0.0.1', no_proxy='localhost,127.0.0.1')
+            completed = subprocess.run(inputs, input=b'y\n', capture_output=True, timeout=800, env=retry_environment)
             transcript = directory / 'automatic-upgrade.log'
             transcript.write_bytes(completed.stdout + completed.stderr)
             os.chmod(transcript, 0o600)
@@ -361,6 +381,7 @@ def run(args):
                           no_production_operation=True, input_argv=inputs, confirmation='y',
                           from_revision=source_revision, target_revision=receipt['revision'],
                           phase=journal['phase'], state_backup_sha256=journal['backup_sha256'],
+                          preparation_inputs=preparation_inputs, release_network_blocked_for_retry=bool(args.prepared_resume_target),
                           media_excluded=True, identity_and_range_preserved=True,
                           post_business_cpu_samples=idle_cpu(upgraded_web))
             success = True
@@ -577,6 +598,7 @@ if __name__ == '__main__':
     parser.add_argument('--upgrade-recover', action='store_true', help='restore failed database state in original business mounts and reopen source')
     parser.add_argument('--simple-upgrade', action='store_true', help='exercise the single-consent native upgrade entry')
     parser.add_argument('--automatic-upgrade', action='store_true', help='exercise parameterless CLI against real public release evidence')
+    parser.add_argument('--prepared-resume-target', help='prepare this public target, then exercise parameterless local opening with release networking blocked')
     parser.add_argument('--state-restore', action='store_true', help='restore an ordinary default state backup after database loss')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -591,6 +613,9 @@ if __name__ == '__main__':
         parser.error('--simple-upgrade requires the native upgrade adapter without --upgrade-failure')
     if options.automatic_upgrade and (options.upgrade_test_binary is not None or options.state_restore):
         parser.error('--automatic-upgrade is an independent real-public CLI scenario')
+    if options.prepared_resume_target and (not options.automatic_upgrade or options.database != 'sqlite'
+            or len(options.prepared_resume_target) != 40 or any(c not in '0123456789abcdef' for c in options.prepared_resume_target)):
+        parser.error('--prepared-resume-target requires an exact public SHA and the SQLite automatic CLI fixture')
     options.workspace.mkdir(parents=True, exist_ok=True)
     evidence = run(options)
     options.output.write_text(json.dumps(evidence, indent=2) + '\n')

@@ -84,6 +84,51 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 		return 2
 	}
 	d.Runner = dockerRunner{d.Directory}
+	perform := func(arch string, evidence operator.Evidence, images operator.Images) int {
+		result, e := d.Upgrade(ctx, r, revision, arch, evidence, images, func(p operator.UpgradePreview) (operator.UpgradeConsent, error) {
+			return upgradeConsent(ctx, input, diagnostic, *yes, *external, p)
+		})
+		if e != nil {
+			fmt.Fprintln(diagnostic, e)
+			if result.Phase != "" {
+				fmt.Fprintf(diagnostic, "Recorded upgrade phase: %s; inspect foc status and the retained journal.\n", result.Phase)
+			}
+			return 2
+		}
+		if structured {
+			e = writeOperatorOutput(out, true, result)
+		} else {
+			_, e = fmt.Fprintf(out, "%s: %s; database generation %d\n", result.Phase, result.Revision, result.Generation)
+			if e == nil && result.BackupFile != "" {
+				_, e = fmt.Fprintf(out, "Verified state recovery point: %s\n", result.BackupFile)
+			}
+		}
+		if e != nil {
+			fmt.Fprintln(diagnostic, "upgrade result output failed; inspect foc status and the retained upgrade journal")
+			return 2
+		}
+		return 0
+	}
+	pending, e := d.PendingUpgradeTarget(r)
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	if pending != "" {
+		if revision != "" && revision != pending {
+			fmt.Fprintln(diagnostic, "unfinished upgrade has a different target; preserve its journal")
+			return 2
+		}
+		revision = pending
+		local, err := d.PendingUpgradeLocalOpen(r)
+		if err != nil {
+			fmt.Fprintln(diagnostic, err)
+			return 2
+		}
+		if local {
+			return perform("", nil, nil)
+		}
+	}
 	raw, e := d.Runner.Run(ctx, "docker", "info", "--format", "{{.Architecture}}")
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)
@@ -96,13 +141,7 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	}
 	registry := release.NewRegistryClient()
 	defer registry.Close()
-	if revision == "" {
-		revision, e = d.PendingUpgradeTarget(r)
-		if e != nil {
-			fmt.Fprintln(diagnostic, e)
-			return 2
-		}
-	}
+
 	revision, e = selectUpgradeRelease(ctx, revision, r.Revision, operator.Architecture(string(raw)), verifier, registry, diagnostic)
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)
@@ -132,27 +171,5 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	if handled {
 		return code
 	}
-	result, e := d.Upgrade(ctx, r, revision, operator.Architecture(string(raw)), verifier, registry, func(p operator.UpgradePreview) (operator.UpgradeConsent, error) {
-		return upgradeConsent(ctx, input, diagnostic, *yes, *external, p)
-	})
-	if e != nil {
-		fmt.Fprintln(diagnostic, e)
-		if result.Phase != "" {
-			fmt.Fprintf(diagnostic, "Recorded upgrade phase: %s; inspect foc status and the retained journal.\n", result.Phase)
-		}
-		return 2
-	}
-	if structured {
-		e = writeOperatorOutput(out, true, result)
-	} else {
-		_, e = fmt.Fprintf(out, "%s: %s; database generation %d\n", result.Phase, result.Revision, result.Generation)
-		if e == nil && result.BackupFile != "" {
-			_, e = fmt.Fprintf(out, "Verified state recovery point: %s\n", result.BackupFile)
-		}
-	}
-	if e != nil {
-		fmt.Fprintln(diagnostic, "upgrade result output failed; inspect foc status and the retained upgrade journal")
-		return 2
-	}
-	return 0
+	return perform(operator.Architecture(string(raw)), verifier, registry)
 }

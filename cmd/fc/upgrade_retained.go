@@ -66,7 +66,13 @@ func dispatchRetainedUpgrade(ctx context.Context, directory, revision string, ar
 		fmt.Fprintln(diagnostic, "retained operator version cannot be verified")
 		return true, 2
 	}
-	childArgs := []string{"--directory", d.Directory, "--revision", target}
+	childArgs := []string{"--directory", d.Directory}
+	if len(args) == 1 || len(args) > 1 && strings.HasPrefix(args[1], "-") {
+		childArgs = append(childArgs, "--revision", target)
+	} else if revision != "" {
+		// Preserve explicit input; staged recovery commands enforce their own flags.
+		childArgs = append(childArgs, "--revision", revision)
+	}
 	if structured {
 		childArgs = append(childArgs, "--json")
 	}
