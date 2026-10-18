@@ -36,11 +36,13 @@ database generation and Web release contract. Tag text alone is not proof.
 The `publish-latest` job validates both successful exact component publication
 jobs in the current workflow attempt, rechecks reviewed main proof and public
 image bytes, then promotes those verified manifests to fresh-install aliases.
-It never builds or runs candidate code. Existing installations require an explicit
-published target revision and do not re-resolve `latest` on restart.
+It never builds or runs candidate code. `foc upgrade` may select a verified
+published release automatically, then pins its exact revision and digests.
+An explicit revision is optional; restart never re-resolves `latest`.
 
 The one-time PR #5 bootstrap authorization remains historical policy; it cannot
-authorize a later PR. Preproduction/CD is retired; publishing images does not
+authorize a later PR. External CD is retired; isolated staging is manual.
+Publishing images does not
 authorize source promotion, production deployment or database migration.
 
 ## Development and production
@@ -50,7 +52,7 @@ explicitly selected for isolated acceptance; production upgrades use public imag
 without host compilation. [Operator upgrades](operator-upgrade.md) keep original
 identity/configuration, verify backups and prepare behind a closed fence before
 separately opening services. [Installation](operator-manual.md) documents initial
-selection. [Staging status](staging-cd.md) records the unavailable staging gate.
+selection. [Staging status](staging-cd.md) records the temporary RN staging constraints.
 
 Historical public image and deployment evidence under `docs/audits` remains
 unchanged; it does not describe the current component set.

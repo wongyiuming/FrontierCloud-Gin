@@ -1,6 +1,12 @@
 # Shared database schema
 
-Schema generation 6 has one logical model and two reviewed physical snapshots:
+The current schema generation is 7 (`migrations/schema.go`). Both backends
+embed their `0007-schema.json` snapshot. The operator archive/upgrade path accepts
+source generation 6 or 7; the lower-level release-preparation command also has
+explicit 4/5-to-7 migration logic. That does not make those generations supported
+by `foc upgrade`. See [upgrade boundaries](../docs/operator-upgrade.md).
+
+Historical generation 6 has one logical model and two physical snapshots:
 
 - `mysql/0006-schema.json`: existing InnoDB DDL, including binary media paths,
   generated active-ban uniqueness, indexes, and preference constraints.
@@ -40,16 +46,18 @@ is reset or scaled. The historical generation-2/3 snapshots remain immutable.
 Older generation-3 binaries refuse a generation-4 database. Back up the database
 before first activation; code rollback does not reverse the database migration.
 
-## Native validation
+## Resource migration generations and native validation
 
 Generation 4 -> 5 adds the durable Storage resource migration ledger: tasks,
 immediate-parent ownership units, source versions and disk-checksum checkpoints,
 capacity reservations, independent draining causes, scope locks, fenced runner
 epochs, Storage publication/deletion journals and read leases. It does not change
 existing media IDs, owners, paths, priorities, encryption descriptors or keys.
-Runtime execution and retirement integration are still in progress; adding these
-tables does not enable a public migration operation. Master Local is outside the
-initial Storage-to-Storage execution scope.
+Current runtime execution, the independent migration Admin module and safe
+retirement are implemented separately from these schema assets; table creation
+alone is not feature or acceptance proof. Master Local remains outside the
+Storage-to-Storage execution scope. See [migration](../docs/resource-migration-planning.md)
+and [retirement](../docs/node-safe-retirement.md).
 
 SQLite rolls additive DDL and the journal/marker update back together. MySQL DDL
 commits independently, so table creation is replayable and the generation remains
@@ -79,6 +87,15 @@ the generation-6 journal/marker commit. Both failure windows are tested outside
 hosted CI. Pre-existing generation-5 peer journals have no inferred binding:
 authenticated re-registration from the original Master plan is required before
 data actions are admitted. Unknown state remains fenced.
+
+Generation 6 -> 7 adds `migration_plan_headers`, `migration_plan_bindings` and
+`migration_plan_paths`. Plan observations and admitted object bindings are paged
+durably instead of requiring one large in-memory plan. A page is not an ownership
+unit: copying remains bounded while cutover still commits a complete immediate
+parent. Preview creation does not drain nodes, reserve capacity or change owners.
+Historical task representations remain readable; SQL snapshots, journal identity
+and forward-only generation checks remain authoritative. See the
+[paged planning contract](../docs/resource-migration-planning.md).
 
 Gin/Go implements business repositories, independent migration/health commands,
 and both database dialects. Default deployment is Gin + SQLite; the optional

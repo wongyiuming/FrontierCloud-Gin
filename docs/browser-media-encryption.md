@@ -190,9 +190,9 @@ business backup must restore and prove the original premaster before starting
 its browser key service. An existing Standalone promoted to Master continues
 using its existing verified premaster.
 
-Schema generation 3 stores the descriptors and is forward-only from generation
-2. The first schema-3 runtime switch requires operator maintenance, independent
-backups and stopping database/filesystem writers. See
-[release migration boundaries](master-self-release.md#browser-encryption-and-schema-generation-3)
-and [abandoned-upload recovery](upload-lifecycle.md). Production Master upgrades
-remain manual.
+Encryption descriptors were introduced by schema generation 3; the current
+runtime is generation 7. This historical introduction does not grant a current
+2/3-to-7 operator upgrade. See [schema history](../migrations/README.md),
+[supported upgrades](operator-upgrade.md) and [abandoned-upload recovery](upload-lifecycle.md).
+First activation still requires independent backups and stopped database/file
+writers. Production upgrades remain explicit host-side operator actions.

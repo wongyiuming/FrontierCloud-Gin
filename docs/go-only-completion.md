@@ -8,7 +8,8 @@ Compose overlay; it does not migrate existing data. Python deployment is
 prohibited. The retired application tree app/, main.py, updater/server.py and
 updater/release_evidence.py, including illustrative code, are removed. The unused
 Python migration package marker is removed; Go migration code and schema assets
-are preserved. Production build context excludes tests, scripts and their dependencies.
+are preserved. Production runtime excludes Python tests/drivers and their dependencies;
+the allowlisted POSIX foc launcher/installer scripts remain in its operator bundle.
 Tests/scripts may use Python to drive real Gin or inspect native contracts.
 
 Preserving existing serialized keys, tokens, password hashes, media IDs,
@@ -56,14 +57,13 @@ bash scripts/test-native-api.sh
 bash scripts/test-go-deployment.sh
 bash scripts/test-go-business.sh
 bash scripts/test-native-default.sh
-bash tests/operator_recovery_acceptance.py
 bash scripts/test-native-matrix.sh
 python3 tests/operator_recovery_acceptance.py --help
 ```
 
 Fleet acceptance uses exactly five native nodes: one Master, two Direct, two
-Relay, repeated with SQLite and MySQL Master selection. Follower database choices
-alternate, so both drivers participate in each fleet. Fixtures use private CA
+Relay, repeated with SQLite and MySQL Master selection. All storage appliances
+use embedded SQLite; MySQL is a Master/business deployment alternative. Fixtures use private CA
 HTTPS, exact private source artifacts, disposable namespaces and independent
 data. They never reuse or stop a deployed node and never globally prune Docker.
 The release matrix retains manual upgrades and explicit recovery, business/data
@@ -80,12 +80,12 @@ no acceptance tests. See [image delivery](public-image-delivery.md).
 ## Documentation and release scope
 
 Wiki guidance is maintained in the separate
-[GitHub Wiki](https://github.com/wongyiuming/FrontierCloud/wiki); docs/wiki is
+[GitHub Wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki); docs/wiki is
 untracked/ignored. The prior reconstruction evidence is retained as an explicitly
 [historical audit](audits/go-reconstruction-through-2026-10-05.md), not current
 operator instructions.
 
-No branch consolidation or production deployment is implied by this policy.
-gin_dev-to-gin_main and dev-to-main remain authorized provenance pairs pending
-a separate owner decision. A local/private test artifact is not published CI
+Only same-repository dev-to-main promotion is current. Old gin_dev/gin_main
+names describe inherited history, not additional supported branches. No new
+branch or production deployment is implied by this policy. A local/private test artifact is not published CI
 proof or authorization to replace production.

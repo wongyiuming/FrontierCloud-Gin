@@ -218,7 +218,7 @@ status/history/upgrade/rollback API, polling UI or upgrade module. Default busin
 Compose launches no updater and mounts no Docker/control socket or legacy updater
 maintenance volume. Manual site maintenance works independently; its GUI cannot
 reopen the native offline migration fence. Reviewed releases are deployed by the
-operator with Compose after compatible database backup/migration checks. The update controller implementation, image and retired CD entry points are removed. Only explicit host-side operator commands manage upgrades. See
+operator through host-side foc/Compose after compatible state-backup/migration checks. The update controller implementation, image and retired CD entry points are removed. Only explicit host-side operator commands manage upgrades. See
 [operator release procedure](docs/master-self-release.md).
 
 Application upgrade recovery and ordinary operator backups default to state-only
@@ -229,8 +229,10 @@ select a full media archive. These recovery points cannot claim fresh-machine
 business restoration; explicit complete disaster-recovery archives and sets
 retain a separate opt-in contract. See [upgrade recovery scope](docs/operator-upgrade.md).
 
-The normal `foc upgrade --revision SHA` entry owns its plan and recovery paths.
-One explicit confirmation approves preparation and subsequent verified opening;
+The normal `foc upgrade` entry selects a verified published main release,
+refreshes the operator when needed, and owns its plan and recovery paths.
+Explicit `--revision SHA` remains optional. One confirmation approves preparation
+and subsequent verified opening;
 the existing identity, provenance, capacity, freeze and image checks still apply.
 Recorded resumable stages reuse their original recovery point. Failed phases and
 database restoration remain explicit and never authorize automatic reopening.
@@ -277,7 +279,7 @@ summaries, errors, credentials, pairing envelopes and signed URLs.
 
 Only Gin/Go may serve business APIs or provide operator CLI commands. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
-No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or scripts are packaged into the production Web build context.
+No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or Python drivers are packaged into the production Web runtime. Allowlisted POSIX foc launcher/installer scripts remain part of its operator bundle.
 
 Karaoke password work has one non-queuing slot. Atomic Redis admission budgets
 apply before captcha/password validation and cannot be bypassed by correct
@@ -296,7 +298,9 @@ exceptions and manual DNS/no-mail tasks. These changes are not a penetration-tes
 certification. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
-Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. Fresh-install alias promotion waits for both public images. Deployers pin manifest digests and validate runtime/schema/source/platform before use; only confirmed absent versions/platforms permit bounded immutable-source compilation. Auth/network/proof failures stop, rather than fall back.
+Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. Fresh-install alias promotion waits for verified public component publication. Deployers pin manifest digests and validate runtime/schema/source/platform before use.
+Production pull/proof failures stop and never compile. Explicit immutable-source
+development builds are separate from installation and upgrade.
 
 Wiki operations guidance is maintained in the separate GitHub Wiki repository. Do not track docs/wiki in this repository.
 
@@ -321,14 +325,16 @@ This explicitly authorized candidate snapshot is not immutable-main code. Its
 publisher is the only package writer; it reads no signing secret or Environment
 and cannot deploy. Only the first matching run/latest owner retry may claim
 that label. No future PR inherits this exception. PR #5 required actual staging
-acceptance before merge. Current promotions follow the retired-staging exception
-below; that historical requirement is not an unavailable live merge gate.
+acceptance before merge. Current promotions follow the staging rules below;
+the historical bootstrap does not provide a current live merge gate.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
 The owner retired RN preproduction and its external CD on 2026-10-11.
-There is no staging notification or update receiver, and no replacement
-preproduction environment has been provisioned. No live staging proof can be claimed.
+There is no staging notification or update receiver. On 2026-10-15 the owner
+reauthorized an isolated, manually started RN staging project; it must normally
+remain stopped and release port 80 for production Relay certificate validation.
+Do not infer live staging proof from that authorization or retained files.
 Exact-source development-host acceptance, successful source CI, automatic review
 and owner authorization remain required; document the missing staging gate.
 The exception does not by itself authorize a merge or production upgrade.
@@ -345,8 +351,8 @@ A regression may not be weakened merely to accommodate a new feature. Architectu
 
 ## 14. Storage appliance deployment
 
-`DEPLOYMENT_MODE=only_stroge` runs a single resident Go HTTPS/file/control
-container. Initializers exit; no Nginx, Redis, MySQL, updater, coturn, Admin GUI
+`DEPLOYMENT_MODE=only_stroge` runs a resident Go HTTPS/file/control container
+and a separate bounded Go certificate controller. Initializers exit; no Nginx, Redis, MySQL, updater, coturn, Admin GUI
 or player is deployed on storage. SQL payload backups are files, not online
 replicas or SQL BLOB copies. Master controls transport and allocations.
 Business public HTTP is fixed at 80 and HTTPS at 443. HTTP_PORT and HTTPS_PORT
@@ -375,15 +381,16 @@ workers. Reports retain the existing maximum eight observed addresses.
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
 The owner explicitly authorized a limited global-operator exception: the one-shot
-`compose.foc.yaml` installer and the same bounded `foc-host-init` stage in normal
-Compose startup may write `/usr/local/bin/foc`, a private backend
+`compose.foc.yaml` installer may write `/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
-Normal startup registers automatic discovery; first use verifies the marked
-standard project's running public images and provenance before recording its
-receipt and immutable image lock. This installation completion writes only
+The current default Compose files do not contain `foc-host-init`; normal
+startup alone does not install the global entry. Automatic registration support
+exists for a separately marked standard project but is not connected to those
+defaults. With that required installer/marker, first use verifies running public
+images and provenance before recording its receipt and immutable image lock. This installation completion writes only
 operator metadata, never business data, DDL, permissions or service state.
 Unrelated Compose projects are not adopted. Host installation state is excluded
 from business recovery archives and is reproducible from the published bundle.
@@ -429,9 +436,10 @@ independent business deployment or another business authority. Do not globally
 rewrite persisted roles or reinitialize an owned disk to rename the product.
 See [storage appliance operations](docs/storage-appliance.md).
 
-RN's preproduction and external CD are decommissioned at the owner's request
-on 2026-10-11. Production storage retains its own identity and high-port HTTPS.
-A future isolated preproduction IP does not inherit the retired deployment.
+RN's old preproduction and external CD were decommissioned on 2026-10-11.
+The separately authorized temporary RN staging project must use independent
+state and normally remain stopped. Production storage retains its own identity
+and high-port HTTPS. See [staging constraints](docs/staging-cd.md).
 
 ## Fresh-start configuration baseline
 

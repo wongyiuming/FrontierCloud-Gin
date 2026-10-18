@@ -1,16 +1,17 @@
 # FrontierCloud operator manual
 
 For daily operation of an already registered host, start with the separate
-[foc quick guide](foc-quickstart.md). It distinguishes the two-command update
+[foc quick guide](foc-quickstart.md). It distinguishes the one-command update
 path from first installation, optional audits and controlled recovery.
 
 ## Global host command
 
 The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
-provides the bounded automatic installation and verified registration protocol.
-Normal Compose hookup follows as a separate release so its installer image can
-be pinned to an already published, externally verified immutable digest. Until
-that hookup is published, use the existing verified bootstrap below.
+provides a bounded Compose installer and verified registration protocol.
+The default business/storage YAML currently has no `foc-host-init` service:
+ordinary `docker compose up` does not install this global entry. Use the explicit
+installer below for a compatible existing deployment with a verified receipt.
+Marked-project automatic registration code is not proof of default integration.
 
 The first invocation completes metadata-only registration of a marked standard
 Compose project: it verifies the actual running public image configuration
@@ -51,7 +52,7 @@ present. An interrupted install retains its candidate launcher identity so a
 retry can safely finish; a stale lock from an uncatchable kill requires inspection.
 
 From any working directory, `foc` defaults to status; `foc status`, `foc logs`,
-`foc upgrade plan --revision SHA` and other existing commands use the recorded
+`foc upgrade` and other existing commands use the recorded
 deployment. Discovery combines registered directories and all Compose container
 working-directory labels, including stopped containers, deduplicating canonical
 paths with native receipts. Multiple deployments require explicit selection:
@@ -152,8 +153,8 @@ environment examples and this manual. Download the small
 entry file and run `sh get-fc.sh frontiercloud` on a Linux Docker host. It pulls
 one published main Web image and copies its bundle without starting a service.
 No full source checkout, Git, Go, Node or Python is required. The destination
-must not exist. An old release without this bundle fails explicitly; this
-feature becomes publicly available only after reviewed main publication.
+must not exist. An old release without this bundle fails explicitly;
+the source checkout itself is not proof of bundle publication.
 
 For Master HTTPS, create `frontiercloud/.env` with:
 
@@ -212,8 +213,8 @@ revision unchanged. Known causes include registry/network failures, image
 storage/unpack failures, ownership/path refusals and active installation locks.
 Arbitrary stderr, credentials and signed URLs are never copied into reports.
 Cancellation, deadlines and diagnostic-output overflow have separate categories.
-A successful self-update changes the tool only; check `foc version` before the
-separate business upgrade. Retrying never force-replaces a foreign command or
+A successful explicit self-update changes the tool only. Normal `foc upgrade`
+performs any required tool refresh and continues automatically. Retrying never force-replaces a foreign command or
 removes an unknown installation lock.
 
 ## Daily checks
@@ -350,7 +351,7 @@ verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 
-This development runtime uses database generation 7. Its additive migrations
+The current runtime uses database generation 7. Its additive migrations
 preserve existing business data and record durable resource migration facts and
 peer object bindings, plus bounded paged plan records. Older binaries reject newer
 database generations. Recovery archives preserve their source generation;
@@ -358,8 +359,9 @@ restoration uses the matching source images. The operator supports the explicitl
 implemented 6-to-7 upgrade in addition to same-generation upgrades. See the
 [schema contract](../migrations/README.md) before selecting target images.
 
-The development `fc upgrade plan`, `apply` and `open` commands now provide an
-explicit target/review/NodeID workflow. `apply` preserves a verified consistent
+Normal `foc upgrade` selects the verified release, refreshes the operator when
+needed, manages its private plan and asks for one confirmation. The detailed
+`upgrade plan`, `apply` and `open` commands remain available for staged work. `apply` preserves a verified consistent
 recovery archive and prepares the target under the native maintenance fence;
 `open` separately verifies the running target before allowing traffic. Follow
 the [approved upgrade procedure](operator-upgrade.md) for exact commands and
@@ -368,8 +370,8 @@ recovery receipts and coordinated-set markers. Private Compose acceptance is doc
 public release evidence.
 
 Keep the current receipt/digests and an independently verified consistent
-recovery point. Explicitly select the reviewed published target main SHA and
-check schema compatibility before changing any service. Code rollback does not
+recovery point. Let `foc upgrade` verify the published target, or deliberately
+select one with `--revision`; check schema compatibility before changing services. Code rollback does not
 reverse DDL. Cross-generation rollback requires the matching backup and images,
 with an explicit disposition of writes since that backup. Preserve a failed
 installation's data/diagnostics and maintenance fence; do not automatically
@@ -383,8 +385,9 @@ persistent implementation now includes [plan/start](resource-migration-planning.
 durable tasks, reservations, source drains and runner fences, transactional
 whole-parent ownership cutover, source cleanup and
 [independent safe retirement](node-safe-retirement.md). Both GUI and CLI call the
-same authenticated Master services. This is development code; publication and
-native fleet/browser acceptance remain separate gates recorded in the audit.
+same authenticated Master services. Node resource migration is an independent
+Admin module beside Nodes; retirement stays in expanded node details.
+Publication and native fleet/browser acceptance have separate dated evidence.
 Master Local is rejected as a migration endpoint. Planning never reserves capacity.
 Cancelling a task retains capacity until safe
 staging cleanup, and does not move committed data back or release another drain.
@@ -405,10 +408,10 @@ database after installation is refused by the receipt binding; restore the
 recorded selection or perform a verified takeover/migration.
 
 
-### Development retirement observation
+### Retirement observation
 
-On the current dev implementation, an active downstream Storage member card in
-Master's existing Nodes module offers a read-only retirement check. It requires the
+An active downstream Storage member card in
+Master's Nodes module offers a read-only retirement check. It requires the
 established Admin session, HTTPS and CSRF protection, and calls
 `POST /api/v1/media/admin/nodes/<relationship-id>/retire/check` with the exact
 `member_id`. Only one observation runs per process. The page displays bounded
@@ -427,7 +430,7 @@ is recorded separately from package tests.
 
 ### CLI retirement preflight
 
-The dev operator client uses the same Admin API and retirement service as the
+The operator client uses the same Admin API and retirement service as the
 node card. Run `fc node retire check NODE_ID --master https://master.example
 --credential-stdin --json`, piping an existing Admin or temporary credential into
 standard input. Do not place the credential in an argument, URL or environment
@@ -457,7 +460,7 @@ See [safe retirement](node-safe-retirement.md) for the complete retry contract.
 
 ### Existing migration task controls
 
-The dev Master Nodes module lists queue/attention items oldest first in pages
+The independent Node resource migration module lists queue/attention items oldest first in pages
 of 16; a separate history view includes terminal tasks. Checkpoint details separately
 page through up to 16 objects (48 KiB encoded object-data budget), with aggregate
 object/unit states, verified bytes and authoritative committed bytes. Target
@@ -517,7 +520,7 @@ after the exact source/target and reviewed plan have been confirmed.
 
 ### Explicit task-owned drain release
 
-After a task is completed or cancelled, the Nodes task card offers a separate
+After a task is completed or cancelled, the migration task card offers a separate
 release action requiring typed source NodeID confirmation. The matching CLI is
 `fc node migrate release-drain TASK_ID`, with the normal Master/authentication
 options and `--task-revision`, `--confirm-source-id`, `--confirm-target-id`.

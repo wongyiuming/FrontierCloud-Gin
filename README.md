@@ -23,19 +23,21 @@ require exact-source proof. Bootstrap history alone is not release proof.
 - [Abandoned-upload recovery](docs/upload-lifecycle.md): expiry triggers physical
   reconciliation, never blind deletion; live streams and complete files are protected.
 - Asynchronous bounded Backup artifacts, node health/control, Admin audit facts, and reviewed operator-managed releases.
+- Compact node summaries and an independent Storage-to-Storage migration module;
+  migration bytes never relay through Master and retirement remains separate.
 
 ## Quick start
 
 Already have a registered global `foc` deployment? Use the separate
-[daily foc guide](docs/foc-quickstart.md) for status and the two-command update
+[daily foc guide](docs/foc-quickstart.md) for status and the one-command `foc upgrade`
 path; installation and advanced recovery remain in the complete manual.
 
 For the guarded installation path without a source checkout, use the public
 [operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
 one published main release, configure the domain and run `./fc doctor` followed
 by `./fc install master` (or `storage`). Its receipt pins all component digests
-and rejects existing state. Bundle availability requires this change's normal
-reviewed main publication; no publication is claimed by the source checkout.
+and rejects existing state. Installing the global host entry is a separate
+Compose step; the default business/storage YAML does not yet include it.
 
 For a fresh HTTPS node, point public DNS at this host and create `.env` with
 only these two values (replace the example hostname):
@@ -106,9 +108,10 @@ before touching an existing owned disk.
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
-Online upgrade and rollback controls have been removed from AdminGUI and the
-business API. Deploy reviewed releases through Compose after a database backup
-and compatibility check; see [operator release procedure](docs/master-self-release.md).
+On registered hosts, `foc upgrade` selects a verified published release, refreshes
+the tool when needed, captures state recovery material and verifies the deployment
+before opening. Run it independently on each host. AdminGUI has no upgrade or
+rollback API. See [operator release procedure](docs/master-self-release.md).
 
 The [public security baseline](docs/public-security-baseline.md) documents
 nonce-based CSP, TLS/HTTP/2, crawler privacy, real reporting contacts and
@@ -123,6 +126,7 @@ The three top-level documents have separate jobs:
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — authority, storage, mutation, playback, security, and release invariants that implementation must preserve.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — repository topology, change discipline, required checks, and promotion procedure.
 
+Start with the [current capability and boundary overview](docs/current-capabilities.md).
 Operational and subsystem detail belongs in the separate GitHub Wiki (not tracked in this repository):
 
 - [Wiki home](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Home)
@@ -150,9 +154,11 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md) b
 
 Maintainers use the separate [image delivery](docs/public-image-delivery.md)
 and [staging status](docs/staging-cd.md) for publication permissions,
-exact-source CI and the retired staging boundary. RN preproduction and its external
-CD receiver were retired on 2026-10-11; no live preproduction deployment is
-currently available. Production upgrades remain separate operator actions.
+exact-source CI and the staging boundary. The external CD receiver remains
+retired. Isolated RN staging was reauthorized on 2026-10-15 and must normally be
+stopped so production Relay can temporarily use port 80 for certificate renewal.
+An authorization or retained Compose file is not evidence of a running staging
+environment or successful acceptance. Production upgrades remain separate actions.
 
 See [validation scopes and promotion](docs/validation-and-promotion.md) for the
 distinction between source CI, executable regression and production deployment.

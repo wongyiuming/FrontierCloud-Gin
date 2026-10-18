@@ -66,7 +66,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 - Frontend code MUST remain HTML, CSS and native JavaScript across public pages, players and Admin GUI. Do not introduce frontend frameworks, framework-based components or rendering engines in place of native browser APIs. Follow the [frontend baseline](ARCHITECTURE.md#frontend-baseline--html-css-and-native-javascript) when adding dependencies or redesigning UI; build/test tooling is not permission to change the shipped frontend stack.
 - A cluster has one business Master. storage nodes are resource nodes, not independent business authorities.
-- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception permits the one-shot `compose.foc.yaml` installer and normal Compose `foc-host-init` stage to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
+- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception permits the one-shot `compose.foc.yaml` installer to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
 - Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to storage nodes.
 - One managed media object is complete and belongs to exactly one storage member. Do not split one logical object across storage members.
 - Compute Worker is retired. Do not add worker slots, compute scheduling, worker UI, or worker product configuration back without an explicit architecture decision.
@@ -95,9 +95,9 @@ There is no signing secret, Environment or deployment job. Plan/publication
 remain three minutes, compilation ten minutes per component. Relabel-triggered
 duplicate runs and future PRs cannot use it. PR #5 required staging acceptance
 before merge even though it had to exist before that first publication. Current
-promotions follow the explicit retired-staging exception above: development-host
-acceptance and exact-source CI remain required, and the unavailable staging gate
-must be reported.
+promotions follow the staging rules above: development-host acceptance and
+exact-source CI remain required. Report whether isolated RN staging actually ran;
+the retired external CD and historical bootstrap are not current acceptance.
 
 Only exact publish jobs and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
 compile jobs do not. Public packages must grant `FrontierCloud-Gin`
