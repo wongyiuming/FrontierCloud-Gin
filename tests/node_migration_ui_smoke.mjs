@@ -39,7 +39,9 @@ const context = vm.createContext({document, window: {confirm: () => confirm, pro
         throw new Error(`unexpected API ${path}`);
     },
 });
-const source = fs.readFileSync('static/js/nodes.js', 'utf8');
+assert(!fs.readFileSync('static/js/nodes.js', 'utf8').includes('/migration-plans'));
+assert(!fs.readFileSync('static/js/nodes.js', 'utf8').includes('/nodes/migrations'));
+const source = fs.readFileSync('static/js/node-migrations.js', 'utf8');
 vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'window.testMigrationPanel = migrationPanel; window.testMigrationPlanPanel = migrationPlanPanel;})();'), context);
 const all = element => [element, ...element.children.flatMap(all)];
 const text = element => all(element).map(item => item.textContent || '').join('\n');
@@ -52,7 +54,7 @@ assert(!button(panel, '恢复'));
 const before = calls.filter(call => call.options.method === 'POST').length;
 await button(panel, '取消任务').onclick();
 assert.equal(calls.filter(call => call.options.method === 'POST').length, before);
-assert.match(text(document.getElementById('nodeRelationships')), /target_unavailable/);
+assert.match(text(document.getElementById('migrationContent')), /target_unavailable/);
 await button(panel, '重试').onclick();
 const request = calls.find(call => call.options.method === 'POST');
 assert.match(request.path, /\/migrations\/[a-f0-9]{32}\/control$/);
@@ -60,7 +62,7 @@ const payload = JSON.parse(request.options.body);
 assert.equal(payload.action, 'retry'); assert.equal(payload.revision, 7);
 assert.equal(payload.confirm_source_id, task.source_id); assert.equal(payload.confirm_target_id, task.target_id);
 assert.equal(request.options.headers['X-CSRF-Token'], 'fixture');
-const rendered = document.getElementById('nodeRelationships');
+const rendered = document.getElementById('migrationContent');
 assert.match(text(rendered), /对象 published/);
 assert.match(text(rendered), /归属单元 pending/);
 assert.equal(all(rendered).filter(item => item.textContent?.startsWith('<img')).length, 1);

@@ -66,6 +66,7 @@
 .admin-console > .admin-module[data-admin-module="security"] { order: 50; }
 .admin-console > .admin-module[data-admin-module="network"] { order: 60; }
 .admin-console > .admin-module[data-admin-module="nodes"] { order: 70; }
+.admin-console > .admin-module[data-admin-module="migrations"] { order: 75; }
 .admin-console > .admin-module[data-admin-module="site"] { order: 80; }
 .admin-console > .admin-module[data-admin-module="key"] { order: 100; }
 .admin-console > .admin-module[data-admin-module="brand"] { order: 110; }

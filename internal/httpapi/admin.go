@@ -241,7 +241,7 @@ func (a *Admin) page(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	for marker, asset := range map[string]string{"ADMIN_CSS_URL": "css/admin.css", "ADMIN_JS_URL": "js/admin.js", "NODES_JS_URL": "js/nodes.js"} {
+	for marker, asset := range map[string]string{"ADMIN_CSS_URL": "css/admin.css", "ADMIN_JS_URL": "js/admin.js", "NODES_JS_URL": "js/nodes.js", "MIGRATIONS_JS_URL": "js/node-migrations.js"} {
 		url, err := a.asset(asset)
 		if err != nil {
 			internalError(c, err)
@@ -250,7 +250,7 @@ func (a *Admin) page(c *gin.Context) {
 		content = strings.ReplaceAll(content, "{{"+marker+"}}", url)
 	}
 	var styles, scripts strings.Builder
-	for _, asset := range []string{"css/admin-system-modules.css", "css/directory-admin.css", "css/upload-site-types.css"} {
+	for _, asset := range []string{"css/admin-system-modules.css", "css/nodes-observability.css", "css/directory-admin.css", "css/upload-site-types.css"} {
 		url, err := a.asset(asset)
 		if err != nil {
 			internalError(c, err)

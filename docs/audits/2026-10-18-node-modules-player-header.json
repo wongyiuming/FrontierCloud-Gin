@@ -1,0 +1,91 @@
+{
+  "accepted_at": "2026-10-18T03:52:39.369954+00:00",
+  "base": "f963939cedcb4d0b673766b31b4e8fb2f7d58526",
+  "development_host": "192.168.6.201",
+  "production_business_changed": false,
+  "scope": "development UI acceptance; PR28 production operator bootstrap is separately recorded",
+  "changes": [
+    "Independent migration module with isolated polling, errors, queue, plan and original task controls",
+    "Node management uses lazy compact summaries, explicit accessible expansion and per-node session expansion retained across refresh",
+    "Long album header wraps without shrinking font or losing return-to-category link",
+    "Admin module order updated intentionally; node CSS and new JS receive content-based asset versions"
+  ],
+  "executed": [
+    "complete bounded source CI: 221 tests with two platform/external skips and existing JavaScript smoke checks",
+    "complete Go suite",
+    "real Chromium deterministic API fixture: original planning pagination and typed confirmation, task retry/pause/resume/cancel, retirement controls and CSRF; new default collapse, refresh persistence, role and error isolation checks",
+    "real Chromium shipped player header geometry in desktop, phone, narrow phone, landscape and video cases; same 16px title",
+    "real Chromium Admin navigation/focus: 28 cases, maximum alignment error 0",
+    "native development HTTPS: actual Admin node and migration queue read, default compact summary and refresh persistence; trusted development CA without certificate bypass"
+  ],
+  "limits": [
+    "No native node-to-node migration was started in this UI-only change; transfer, ownership and lifecycle APIs are unchanged. Task-control browser interaction uses deterministic replies.",
+    "Native long-header test injects the reported name into the development player DOM; it does not rename managed media.",
+    "The user Windows Chrome automation connection was unavailable; no current-user Chrome interaction is claimed.",
+    "RN staging remains stopped. Development validation is used under the current staging exception."
+  ],
+  "source_sha256": {
+    "static/js/node-migrations.js": "9cb919b637776875d4ca89a3f337727b332ad1e41585fb6d152071820eeaa67c",
+    "tests/player_header_browser.py": "abbdd60077b219b7e4ee5815172018f3727615b97fc14229f70b3d720b28e8fc",
+    "ARCHITECTURE.md": "151b486cbf82e7a2c6028bbea44c0c1de51f83fd09fa65b62a17ee4dc6d150c8",
+    "docs/resource-migration-planning.md": "06b10368f4245562d043891de63f960578e8f29a771b13e74dd5f8e6741c1ff6",
+    "internal/httpapi/admin.go": "856fa5327857363ff7dd728eba6ff842ff356f40dccd3156bf98085add075e47",
+    "static/css/admin-system-modules.css": "0882fddf307479ed510a2acc06bb69240ab1df0ed3a0349b015b4b15aa6c9d80",
+    "static/css/nodes-observability.css": "7090314e68daeb8fda6b1c7b1141f43286ef6bb84ae0789f5bca7626ae094b36",
+    "static/css/player.css": "e4fbc886b605411e8cd954f919ed282ac9af3578438e3e97b5e094cfffc146c2",
+    "static/js/admin-focus.js": "df7a07cecf16bf6973e8b1c79f87781c0bbe4d5a6a9ef64c7378d45e293471b3",
+    "static/js/nodes.js": "11050005e5cb1a218b2f8b321265848fea3f28b7edc4bd8d05ad3cfa5600caec",
+    "static/media/admin.html": "7ae3638c32f69fb549bdad23753e549772fe9f727c6e5a40784fc665da103d61",
+    "tests/admin_focus_browser.py": "9f230465bae0acbf8f1d3b3c5712418c9c834d3f43648d725d285106789057d6",
+    "tests/admin_priority_browser.py": "7eff3a6aa7a6f53bf2f6fd24bdf8c0762857a8029dba4b29fb25337edbbc306c",
+    "tests/admin_ui_smoke.mjs": "f128dd6a8e9d46799546324090c6b7875702b6093601a798202e3b1200069c80",
+    "tests/browser_security_smoke.py": "3a6a973038a63d403baf28b3cca5b0234bba5fdc93c93760dd85903ec80fa8d6",
+    "tests/browser_ui_regression.py": "e8d5d3754207fc191a275b595bb6682190e1a4851a09165365fefe93f676ae59",
+    "tests/node_migration_native_browser.py": "6c9ae27cc0f9c8681b45dd5d98648e41fcae2639f98bf985fa5e046b6a5e8acf",
+    "tests/node_migration_ui_smoke.mjs": "97db5a87918d618fc36fe2254a66b617d432ade34e80a9172403f23319f00ce4",
+    "tests/node_operations_browser.py": "fcff5aeab09a63204b83c684ddb6ed8efc39ee30e13d5bd053365b470596ca23",
+    "tests/test_admin_module_order.py": "84f010e6ed56367cc5cddf558c9268ca588dcc19f0bdba03529e3be26e501627",
+    "tests/test_security_ui.py": "787eb76d1a6b366d4a96358fc45eb03dd20dc26849c56ebb894e4e257431aa41"
+  },
+  "evidence_sha256": {
+    "admin-focus": "6d42df56cf937478fcc00b342c200fbeb000018c173ed2e15995b842afc46d83",
+    "admin-focus.json": "6d42df56cf937478fcc00b342c200fbeb000018c173ed2e15995b842afc46d83",
+    "admin-focus.txt": "71208e1d87c63fe86de8670834ae930b1efc96bddcf55a9b576a8a4214d19627",
+    "cpu.json": "0ecd641b750022e2bb470005fef887f8a08c8c2f54d01c9e3108cff86f9627ed",
+    "go.txt": "4d03741a431311456803aa3d1af74c1084de4adbf754c21338a34e33472b62c2",
+    "native-migration-module.png": "8cb9b39009fcbcfd8acf7f18b496b415089c17b60813b0fd7c8332f791004159",
+    "native-node-summary-expanded.png": "fb1fbefaeddd9be57fd643f200fe811386dd46c2cd917fe0f671f086f65fcdaf",
+    "native-node-summary.png": "6dbe8964698411de9f7b5392cbf41921c1bbcbd8fedea0562d178e9e0e5d7967",
+    "native-player-long-header.png": "fa1bb856632ba92817d670ad575287d176fcf2df51b5e78e81232e3f99a81e97",
+    "native-ui.json": "039909e309aef7bcf50789ec890810f07e86c9eb447b4f92f578c16b1de3c42c",
+    "native-ui.txt": "adcd23c485cbf9c8f91772b1968082a008c421c0b078cb53bd2365adb49b8590",
+    "node-browser.txt": "6f957c13fff9dbfa132ba771f8637a963eb27d35c6b2711ea72cfb3a540427bc",
+    "player-before.css": "37b789b35a4642b14b0380841559a4d5efe2d71fe90283193acb5cf8df3f4cc4",
+    "player-header.txt": "b8604ab3105f2e4ffbc21afa708ab492b5778080851dccec4fd125ef217a02ce",
+    "preview-build.txt": "726fe814bdb91496c2994f1af4d8e1dc29fb6c9324d9d69af4db8255ea1d81c2",
+    "preview-routes-build.txt": "9589ba00ac4adad031b79dc3e03ab9e76bbaea1f5874e1c740ab3badbdf67ee1",
+    "source-ci.txt": "64182500b3b5bfab6ab6fa9163ff182afe963496fb8ca79c8446d847e51cfb7c",
+    "node-operations\\evidence.json": "a9dc644a07df000a4ed054aef6ab66a2ede934dd0cbaa08851ea4f75137ee347",
+    "node-operations\\node-local-certificate-follower-card.png": "c7ae4b5f7f4252af074f12c0e2e06d60970c5ff7690165aa1b1c69b9e0f3bce5",
+    "node-operations\\node-local-certificate-follower.png": "debb85b3d3c5a68001ab13ce5c67ef542b949d39b592951e5b9a2844031954d3",
+    "node-operations\\node-local-certificate-master.png": "f17ecd55573142dec7707a92ce7dbc8a94392f1af883f32ac58803e711de570b",
+    "node-operations\\node-operations.png": "46887d739f9c7a6adf14ea4cc171d9530686b0f087e3d2edcb52118e84164095",
+    "player-header\\audio-1360.png": "72d58147c7f3abc2c7f51b1d94f387ad93587bb45ffcca45ccc64eb09b9f10a1",
+    "player-header\\audio-320.png": "f1526ab1eaaa6cdb377f1df51c5bb049f0d3feff78780231e30ebdedbc86bcbc",
+    "player-header\\audio-390.png": "aee7bb54b726adbababd462c72f93637c39ebc62c50aa768f195e68ec3bc1654",
+    "player-header\\audio-844.png": "6c7c3bffa021abcf4a44d3b232f142c798e6628022bd900165c47bf5c7075d11",
+    "player-header\\result.json": "190c4811960e23c6ea1714be7a83fe4ae8745a4a4abe23be68a2294274a6c095",
+    "player-header\\video-1360.png": "7a7e5c752788114bbe24a85678e47ab7465726e81992184b2a4dcc3a3a2545d1"
+  },
+  "resource_limits": {
+    "web_cpu_limit": 1,
+    "web_memory_bytes": 536870912,
+    "five_idle_cpu_samples": [
+      0.02,
+      0.03,
+      0.03,
+      0.04,
+      0.02
+    ]
+  }
+}

@@ -188,11 +188,16 @@ The Admin console order is an intentional product contract and is tested in both
 5. IP security
 6. WebRTC network relations
 7. Nodes
-8. Site access state
-9. Admin Key
-10. Brand Logo
+8. Node resource migration (independent module and polling, adjacent to Nodes)
+9. Site access state
+10. Admin Key
+11. Brand Logo
 
 Dynamic modules must join this same final DOM/visual order. Reordering code must be idempotent; DOM mutation observers must not create self-triggering reorder loops.
+
+Node management initially shows compact node summaries. Resource, certificate,
+backup and retirement details require explicit expansion; refresh preserves each
+node's manual expansion state for the current page session.
 
 ## 11. Release topology
 

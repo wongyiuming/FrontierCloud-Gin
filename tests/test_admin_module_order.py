@@ -15,6 +15,7 @@ EXPECTED_ORDER = [
     ("security", 50),
     ("network", 60),
     ("nodes", 70),
+    ("migrations", 75),
     ("site", 80),
     ("key", 100),
     ("brand", 110),
@@ -35,7 +36,7 @@ class AdminModuleOrderTests(unittest.TestCase):
         names = [name for name, _order in EXPECTED_ORDER]
         self.assertEqual(names[0:3], ["media", "priority", "lyrics"])
         self.assertEqual(names[4:6], ["security", "network"])
-        self.assertEqual(names[6:8], ["nodes", "site"])
+        self.assertEqual(names[6:9], ["nodes", "migrations", "site"])
         self.assertEqual(names[-1], "brand")
 
     def test_static_and_runtime_modules_use_the_order_contract_names(self):
@@ -43,7 +44,7 @@ class AdminModuleOrderTests(unittest.TestCase):
         maintenance = (ROOT / "static/js/maintenance-admin.js").read_text(encoding="utf-8")
         brand = (ROOT / "static/js/brand-admin.js").read_text(encoding="utf-8")
 
-        for module in ("media", "priority", "lyrics", "users", "security", "network", "nodes", "key"):
+        for module in ("media", "priority", "lyrics", "users", "security", "network", "nodes", "migrations", "key"):
             self.assertIn(f'data-admin-module="{module}"', html)
         self.assertIn("panel.dataset.adminModule = 'site'", maintenance)
         self.assertIn("panel.dataset.adminModule = 'brand'", brand)
