@@ -16,8 +16,9 @@ def inspect_workflow(text: str, name: str) -> list[str]:
     if len(jobs) != 2:
         return findings + [f"{name}: jobs block missing"]
     artifact = name == 'publish-images.yml'
-    bootstrap = name == 'bootstrap-images.yml'
-    compilation = artifact or bootstrap
+    compilation = artifact
+    if name == 'bootstrap-images.yml':
+        findings.append(f'{name}: retired PR5 bootstrap must not be reintroduced')
     if re.search(r'permissions:\s*write-all', text):
         findings.append(f"{name}: broad write-all permissions are forbidden")
     if re.search(r'packages:\s*write', jobs[0]) or (not compilation and re.search(r'packages:\s*write', jobs[1])):
@@ -34,20 +35,6 @@ def inspect_workflow(text: str, name: str) -> list[str]:
         forbidden = re.compile(r'test-[\w-]+\.sh|\bgo\s+test\b|federation_stack|browser_ui_regression|docker\s+compose\s+up|self-hosted|\bnohup\b')
         if forbidden.search(jobs[1]):
             findings.append(f"{name}: compilation workflow must not run acceptance/background work")
-    if bootstrap:
-        for contract in ('pull_request:', 'types: [labeled]', 'branches: [main]',
-                         'permissions: {}', 'github.event.pull_request.number == 5',
-                         "github.actor == 'wongyiuming'", "github.event.sender.login == 'wongyiuming'",
-                         'github.event.pull_request.head.repo.full_name == github.repository',
-                         "github.event.pull_request.head.ref == 'dev'", "github.event.pull_request.base.ref == 'main'",
-                         "github.event.label.name == format('bootstrap:{0}', github.event.pull_request.head.sha)",
-                         'github.workflow_sha', 'persist-credentials: false', 'scripts/bootstrap_native_publish.py'):
-            if contract not in text:
-                findings.append(f"{name}: owner-authorized PR5 exact-SHA bootstrap gate missing")
-        if re.search(r'(?m)^  (?:push|pull_request_target|workflow_dispatch|workflow_run|schedule):', text):
-            findings.append(f"{name}: bootstrap must use only the explicit PR label event")
-        if re.search(r'\bsecrets\.|(?m:^    environment:)', text):
-            findings.append(f"{name}: bootstrap must not access deployment secrets or Environments")
     if artifact:
         if 'branches: [main]' not in text or "github.event.workflow_run.head_branch == 'main'" not in text:
             findings.append(f"{name}: production images require reviewed main source CI")
@@ -65,8 +52,6 @@ def inspect_workflow(text: str, name: str) -> list[str]:
     if compilation and re.search(r'(?m)^    packages:\s*write\s*$', text):
         findings.append(f'{name}: package write must be scoped inside trusted job permissions')
     blocks = re.split(r"(?m)^  ([a-zA-Z0-9_-]+):\s*$", jobs[1])
-    if bootstrap and blocks[1::2] != ['plan', 'compile', 'publish']:
-        findings.append(f"{name}: bootstrap permits only plan, compile and publish jobs")
     for index in range(1, len(blocks), 2):
         job, block = blocks[index:index + 2]
         if artifact and job not in {'plan', 'compile', 'publish', 'publish-latest'}:
@@ -91,7 +76,7 @@ def inspect_workflow(text: str, name: str) -> list[str]:
             if re.search(r'\bsecrets\.', block):
                 findings.append(f"{name}/{job}: publication may not access deployment secrets")
             if writer_job:
-                helper = 'scripts/bootstrap_native_publish.py' if bootstrap else ('scripts/trusted_latest_publish.py' if job == 'publish-latest' else 'scripts/trusted_native_publish.py')
+                helper = 'scripts/trusted_latest_publish.py' if job == 'publish-latest' else 'scripts/trusted_native_publish.py'
                 for contract in ('github.workflow_sha', 'GITHUB_TOKEN: ${{ github.token }}',
                                  'persist-credentials: false', helper):
                     if contract not in block:

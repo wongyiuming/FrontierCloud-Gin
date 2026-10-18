@@ -1,6 +1,9 @@
 # Offline legacy Master admission (same MySQL)
 
-> Policy update (2026-10-07): only Gin/Go is deployable, with SQLite or MySQL. Python sources and old Python/mixed-runtime commands below describe historical migration/audit evidence, not supported deployment or current acceptance. Current tests target Gin; the development fleet is five native nodes and hosted CI is capped at three minutes. See [current validation](https://github.com/wongyiuming/FrontierCloud/wiki/Engineering-and-CI).
+> Offline migration only. The supported runtime is Go with SQLite or MySQL;
+> legacy Python and mixed-runtime evidence does not authorize a current deployment.
+> Use the exact tool generation and verified offline recovery material. This is
+> separate from ordinary foc upgrades; see [current validation](validation-and-promotion.md).
 
 
 This is an operator-only first-stage migration, **not** ordinary release

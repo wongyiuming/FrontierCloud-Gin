@@ -19,43 +19,15 @@ class CIBudgetTests(unittest.TestCase):
     def test_all_actual_workflows_fit_budget(self):
         self.assertEqual(check_workflows(Path(__file__).resolve().parents[1] / ".github/workflows"), [])
 
-    def test_bootstrap_is_owner_authorized_pr5_only_and_cannot_deploy(self):
-        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/bootstrap-images.yml').read_text()
-        self.assertEqual(inspect_workflow(workflow, 'bootstrap-images.yml'), [])
-        for before, after in (
-            ('types: [labeled]', 'types: [opened, synchronize]'),
-            ('branches: [main]', 'branches: [dev]'),
-            ('github.event.pull_request.number == 5', 'github.event.pull_request.number > 0'),
-            ("github.actor == 'wongyiuming'", "github.actor != ''"),
-            ("github.event.sender.login == 'wongyiuming'", 'true'),
-            ('github.event.pull_request.head.repo.full_name == github.repository', 'true'),
-            ("github.event.label.name == format('bootstrap:{0}', github.event.pull_request.head.sha)", 'true'),
-            ('pull_request:', 'pull_request_target:'),
-            ('github.workflow_sha', 'github.event.pull_request.head.sha'),
-            ('needs: [plan, compile]', 'needs: [plan]'),
-            ('needs: [plan]', ''),
-            ('      packages: write\n', ''),
-        ):
-            with self.subTest(before=before):
-                self.assertTrue(inspect_workflow(workflow.replace(before, after), 'bootstrap-images.yml'))
-        for unsafe in ('    environment: staging-cd-main',
-                       '    env: {KEY: "${{ secrets.STAGING_CD_SECRET }}"}',
-                       '    env: {KEY: "${{ secrets.OTHER_SECRET }}"}',
-                       '    run: docker load candidate.tar',
-                       '    permissions:\n      contents: write',
-                       '    run: go test ./...',
-                       '    run: bash scripts/test-native-api.sh'):
-            self.assertTrue(inspect_workflow(workflow.replace('  publish:\n', '  publish:\n' + unsafe + '\n'),
-                                            'bootstrap-images.yml'))
-        for job in ('plan', 'compile'):
-            self.assertTrue(inspect_workflow(workflow.replace('  ' + job + ':\n',
-                '  ' + job + ':\n    permissions:\n      packages: write\n'), 'bootstrap-images.yml'))
-        self.assertTrue(inspect_workflow(workflow + '\n  deploy:\n    timeout-minutes: 3\n', 'bootstrap-images.yml'))
-        self.assertTrue(inspect_workflow(workflow.replace('  pull_request:\n', '  push:\n  pull_request:\n'),
-                                        'bootstrap-images.yml'))
+    def test_retired_bootstrap_cannot_regain_publication_exception(self):
+        root = Path(__file__).resolve().parents[1]
+        for name in ('.github/workflows/bootstrap-images.yml', 'scripts/bootstrap_native_publish.py'):
+            self.assertFalse((root / name).exists(), name)
+        workflow = (root / '.github/workflows/publish-images.yml').read_text()
+        self.assertTrue(inspect_workflow(workflow, 'bootstrap-images.yml'))
 
     def test_compile_exception_does_not_grant_other_writers_or_long_publish_jobs(self):
-        for name in ('publish-images.yml', 'bootstrap-images.yml'):
+        for name in ('publish-images.yml',):
             workflow = (Path(__file__).resolve().parents[1] / '.github/workflows' / name).read_text()
             self.assertTrue(inspect_workflow(workflow.replace('      packages: write',
                 '      packages: write\n      contents: write'), name))

@@ -1,8 +1,8 @@
 # Daily foc operation
 
-For a host with global `foc` already installed and its deployment registered.
-Log in and run commands directly; no version-directory change or agent shell is
-needed. Use `foc`; Bash already has an unrelated `fc` builtin.
+For a Linux Docker host with global `foc` installed and a registered deployment.
+Run from any directory; no version-directory change or container shell is needed.
+Use `foc`, preserving Bash's existing `fc` builtin.
 
 ## Check status
 
@@ -10,73 +10,64 @@ needed. Use `foc`; Bash already has an unrelated `fc` builtin.
 foc status
 ```
 
-`foc version` reports the tool version; `foc status` reports the deployment
-version. With one registered deployment it is selected automatically. If several
-exist, resolve the ambiguity explicitly with `foc --directory /absolute/path status`.
+`foc version` reports the tool version; `foc status` reports the deployment version.
+Multiple deployments require `foc --directory /absolute/deployment status`.
 
-## Update an existing deployment: two commands
-
-Choose a successful run of
-[Publish native images](https://github.com/wongyiuming/FrontierCloud-Gin/actions/workflows/publish-images.yml)
-and copy its associated full 40-character main commit SHA. A merged PR or passing
-source CI alone does not prove public images are available. Replace `RELEASE_SHA`
-with that same published SHA in both commands:
+## Update this node
 
 ```sh
-foc self-update --revision RELEASE_SHA
-foc upgrade --revision RELEASE_SHA
+foc upgrade
 ```
 
-The first updates the tool; the second updates this host's deployment. Check the
-shown target, database generation and state-backup capacity, then answer `y`.
-These remain two commands; the tool does not automatically select the latest
-release. An already authorized noninteractive run may add `--yes` to the second.
+Check the displayed target, database-generation transition and state-backup
+capacity, then enter `y`. The tool selects a reviewed main release with successful
+CI and public publication, refreshes its backend when needed, and manages the
+plan, approval digest, NodeID and recovery path. No copied revision or file is
+required. Run independently on Master, Direct and Relay; there is no fleet rollout.
 
-No manually supplied plan file, approval hash, NodeID, backup path or image digest
-is required for a normal upgrade. The tool verifies public release provenance and
-pinned images, generates the plan, fences writes, backs up state, prepares the
-target, verifies managed reads and opens service. Upgrade-state backups exclude
-media, lyrics and recordings; retain the existing business mounts.
+If newest main is still in CI, compilation or publication, the command explains
+the stage and tries the last verified published release. If already installed,
+it reports no upgrade. Network, permission, provenance and integrity failures
+stop; they are not treated as an unpublished version. Implicit downgrade is refused.
 
-Noninteractive MySQL upgrades additionally require
-`--confirm-external-writers-stopped`, and external writers really must be stopped.
-All three current production nodes use SQLite.
+The operation verifies images, fences writes, captures state recovery material,
+prepares the target, verifies managed reads and opens service. Archives exclude
+media, lyrics and recording content: retain the original business mounts.
+Code rollback does not reverse DDL. MySQL confirmation also requires that external
+writers really have stopped.
 
-Run the pair separately on each host. There is no fleet-wide update command.
-A compatible installed tool may update the deployment alone; updating the tool
-first provides a consistent routine.
+After interruption, repeat the command to inspect and continue its original
+resumable target. Failed fenced operations require [controlled recovery](operator-upgrade.md),
+not forced opening or automatic database restoration.
 
-The [six actual PR22 mutation inputs](audits/2026-10-15-foc-update-inputs.txt)
-and [complete input inventory](audits/2026-10-15-foc-production-inputs.json)
-were extracted from submitted invocation records, without embedding outputs.
-The additional 22 read-only checks are audit work, not 22 required upgrade steps.
-Historical input evidence is not a source of future release identifiers.
-
-## Optional or recovery inputs
+## Optional inputs
 
 | Input | Purpose |
 | --- | --- |
-| `upgrade plan/apply/resume/open`, approval SHA and NodeID | Deliberately split stages or recover a recorded interruption; ordinary `upgrade` manages these. |
-| `backup verify --file ... --sha256 ...` | Additional archive audit, with parameters extracted from the result; not a normal upgrade prerequisite. |
-| `--json` | Machine-readable reporting; not required to upgrade. |
-| Repeated `status`, `diagnose`, `version` | Operational checks, not extra upgrade stages. |
+| `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA` | Deliberately select an exact published release. |
+| `foc self-update --revision FULL_PUBLISHED_MAIN_SHA` | Tool-only refresh; unnecessary before ordinary upgrade. |
+| `foc diagnose` / `foc logs` | Sanitized diagnostics and bounded logs. |
+| `foc restart` | Restart pinned images without resolving latest. |
+| `upgrade plan/apply/resume/open` | Deliberately staged operation or recovery, not daily parameter copying. |
 
-## Understand abnormal status
+Older tools lacking parameterless upgrade need one explicit verified self-update
+to acquire it. Noninteractive upgrade may use `--yes`; MySQL additionally needs
+`--confirm-external-writers-stopped`, which cannot substitute for stopping writers.
 
-Read the check item, not only the exit code. `certificate=blocked` is a failure.
-`business_read=unverified` in read-only status means that command did not play or
-read actual media; it may return exit code 3. Certificate blockage returns 2.
-The upgrade result separately records `managed_read_verified` for actual reads.
+## Status and limits
 
-On failure, retain generated plans, logs and recovery material. `upgrade open`
-is not a general bypass for warnings. Do not recreate volumes or overwrite new
-business writes with an old database.
+Read-only `status` leaves `business_read=unverified` and may return exit code 3;
+it has not read actual media and is not reporting playback failure. Blocking
+checks return 2. Upgrade-managed read verification is recorded separately.
 
-## Current limits
+Default business and storage Compose include mandatory global foc installation.
+On a fresh Linux host, normal Compose startup installs the command; first use
+verifies and registers the running deployment. The independently pinned bootstrap
+backend can be older than the application; `foc upgrade` refreshes it when needed.
+Older deployments without that stage use the separate
+[Compose installer](operator-manual.md#global-host-command).
 
-- First installation remains separate: see [Compose installation and global entry](operator-manual.md#global-host-command). An arbitrary new host does not already have `foc`.
-- Upgrade updates component images within the existing Compose selection. New services, mounts or environment settings require a separate release-configuration procedure; these two commands cannot deploy every possible project change.
-- Its value is enforcing release proof, write fencing, state backup, identity/generation checks and managed reads. It has not eliminated version selection or replaced every Docker operation with fewer commands.
-
-See the [operator manual](operator-manual.md) and
-[upgrade/recovery contract](operator-upgrade.md) for recovery, migration and retirement.
+Upgrade changes images within the recorded Compose selection. New services,
+mounts, environment configuration, host relocation and database conversion need
+separate procedures. The tool centralizes release proof, fencing, state recovery
+and verified opening; it does not cover arbitrary deployment changes.

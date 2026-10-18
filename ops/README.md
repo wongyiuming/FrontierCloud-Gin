@@ -19,4 +19,5 @@ longer distributed. `dev_control.py` direct invocation fails explicitly. On a
 host that still has these units installed, disable/remove those units during
 its separately reviewed development-host retirement; deleting repository files
 does not uninstall existing systemd units. Upgrade current deployments with
-the explicit `fc upgrade plan/apply/open` workflow.
+the `foc upgrade` workflow on each registered host; staged commands remain
+available for controlled recovery. See [daily operation](../docs/foc-quickstart.md).

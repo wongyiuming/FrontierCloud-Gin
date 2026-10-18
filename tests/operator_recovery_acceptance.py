@@ -243,7 +243,7 @@ def run(args):
     if '\n  foc-host-init:\n' in legacy:
         before, after = legacy.split('\n  foc-host-init:\n', 1)
         legacy = before + '\n  secrets-init:\n' + after.split('\n  secrets-init:\n', 1)[1]
-        legacy = legacy.replace('    depends_on:\n      foc-host-init: {condition: service_completed_successfully}\n', '', 1)
+        legacy = legacy.replace('    depends_on:\n      foc-host-init: {condition: service_completed_successfully}\n', '')
         compose_file.write_text(legacy)
     if args.database == 'mysql':
         shutil.copyfile(source / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')

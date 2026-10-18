@@ -3,7 +3,10 @@
 Scope: inspected release `c35501f18497cec2a1a3a7f5785d733e8e976dfc`
 and development `836599f7fa4f5d38034a0999eee9db05f9cc2a8f` before changing
 the certificate architecture. This document records findings and the accepted
-replacement contract, not completion or test evidence.
+replacement contract, not completion or test evidence. Its descriptions of the
+starting implementation and RN retirement are dated historical findings. Current
+operations are in [Automatic node TLS](storage-certificate-control.md),
+[migration](automatic-tls-migration.md) and [staging status](staging-cd.md).
 
 ## Actual starting implementation
 

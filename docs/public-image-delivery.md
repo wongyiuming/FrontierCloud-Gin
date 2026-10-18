@@ -4,6 +4,9 @@ Public releases comprise `ghcr.io/wongyiuming/frontiercloud-gin-web` and
 `ghcr.io/wongyiuming/frontiercloud-gin-nginx`, built from the same explicit main
 commit. Web contains the native application, `fc` and certificate controller.
 No update-daemon image is built, published or required by installation or upgrade.
+Default Compose installs global foc from a separately pinned, already published
+Web bundle. This bootstrap image is intentionally independent of the selected
+application release and is not silently replaced during business upgrades.
 
 ## Reviewed source and CI
 
@@ -36,11 +39,13 @@ database generation and Web release contract. Tag text alone is not proof.
 The `publish-latest` job validates both successful exact component publication
 jobs in the current workflow attempt, rechecks reviewed main proof and public
 image bytes, then promotes those verified manifests to fresh-install aliases.
-It never builds or runs candidate code. Existing installations require an explicit
-published target revision and do not re-resolve `latest` on restart.
+It never builds or runs candidate code. `foc upgrade` may select a verified
+published release automatically, then pins its exact revision and digests.
+An explicit revision is optional; restart never re-resolves `latest`.
 
-The one-time PR #5 bootstrap authorization remains historical policy; it cannot
-authorize a later PR. Preproduction/CD is retired; publishing images does not
+The PR5-only bootstrap workflow and driver are removed; their historical
+authorization cannot authorize a new publication. External CD is retired; isolated staging is manual.
+Publishing images does not
 authorize source promotion, production deployment or database migration.
 
 ## Development and production
@@ -50,7 +55,7 @@ explicitly selected for isolated acceptance; production upgrades use public imag
 without host compilation. [Operator upgrades](operator-upgrade.md) keep original
 identity/configuration, verify backups and prepare behind a closed fence before
 separately opening services. [Installation](operator-manual.md) documents initial
-selection. [Staging status](staging-cd.md) records the unavailable staging gate.
+selection. [Staging status](staging-cd.md) records the temporary RN staging constraints.
 
 Historical public image and deployment evidence under `docs/audits` remains
 unchanged; it does not describe the current component set.

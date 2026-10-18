@@ -1,6 +1,6 @@
 # Safe node retirement
 
-The development Nodes module and `fc node retire` use the same Master service.
+The expanded Nodes details and `foc node retire` use the same Master service.
 Retirement applies to one exact downstream Storage NodeID. It retains the node
 identity, database, audit history, containers and volumes. It never uninstalls a
 node, wipes storage, reassigns a backup or rotates the local identity.
@@ -8,7 +8,7 @@ node, wipes storage, reassigns a backup or rotates the local identity.
 ## Operator workflow
 
 1. Complete or cancel migrations through their ordinary task controls. Resolve
-   uploads, recordings, worker jobs, reservations and active read dependencies.
+   uploads, recordings, migration workers, reservations and active read dependencies.
 2. Run the node card's read-only retirement check, or:
 
    ```text

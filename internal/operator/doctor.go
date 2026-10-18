@@ -145,7 +145,10 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 		}
 	}
 	seen := map[string]bool{}
-	for _, s := range cfg.Services {
+	for name, s := range cfg.Services {
+		if focHostInstaller(name, s) {
+			continue
+		}
 		for _, m := range s.Volumes {
 			if m.Type != "bind" || seen[m.Source] {
 				continue

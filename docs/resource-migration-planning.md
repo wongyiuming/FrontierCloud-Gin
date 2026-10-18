@@ -1,7 +1,7 @@
 # Authenticated resource migration planning
 
-The Master exposes planning in the existing Nodes module and through the same
-Admin HTTPS API used by `fc`. A plan observes managed source bytes and target
+The Master exposes planning in the independent Node resource migration module
+beside Nodes, and through the same Admin HTTPS API used by `foc` (`./fc` in a bundle). A plan observes managed source bytes and target
 filesystems before an administrator explicitly starts a durable migration task.
 Both peers must explicitly advertise `resource-migration-direct-v1`. A peer without
 that declaration produces a blocking plan; legacy capability fallback never
@@ -265,7 +265,7 @@ same-length byte changes before start, lost cancellation receipts and targets
 that never admitted copying. Separate TLS/Redis and compiled-CLI tests exercise
 the Admin boundary and use the resulting plan to copy and read actual bytes.
 Test execution evidence belongs in the audit logs. DOM smoke tests protect the
-Nodes integration and safe text rendering; they are not browser or five-node
+migration-module integration and safe text rendering; they are not browser or five-node
 acceptance evidence. All original SQLite/MySQL, Direct/Relay, browser playback,
 fault-window and one-CPU/512-MiB acceptance gates remain necessary before the
 capability is advertised.

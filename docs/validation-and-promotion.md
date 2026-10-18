@@ -25,7 +25,7 @@ Required scopes are:
 
 | Entry point | Scope |
 |---|---|
-| scripts/test-ci-source.sh | Lightweight policy/source checks and five JS smoke scripts; <= 3 minutes |
+| scripts/test-ci-source.sh | Lightweight policy/source checks and the JS smoke entry points listed by the script; <= 3 minutes |
 | scripts/test-native-api.sh | Python black-box driver against actual Gin binaries, both stores; must execute GinHTTPTests |
 | scripts/test-go-business.sh | Actual MySQL/Redis business, auth/API, observation, native drain, Nginx and Go race checks |
 | scripts/test-go-deployment.sh | Actual Compose selection, commands, permissions and immutable image identity |
@@ -69,11 +69,12 @@ events and rejects missing/skipped mandatory `--require package::TestName` gates
 The five former module-level audio-profile tests were absent from unittest
 execution despite existing in tests/. They now run as unittest methods with
 their original assertions. Those five rows are reviewed separately from the
-four adapted cache contracts. This repair has 95 discoverable unittest cases:
+four adapted cache contracts. The dated 2026-10-08 repair had 95 discoverable unittest cases:
 89 lightweight passes and six real-binary HTTP cases, which run separately for
 each database. No module-level pytest functions remain in the selected suite.
-The current native inventory has 147 Go test files / 317 top-level Test functions;
-use the inventory script to refresh these definition counts after changes.
+That repair recorded 147 Go test files / 317 top-level Test functions. These
+are historical counts; run the inventory script for the current source rather
+than treating old totals as current coverage.
 
 The catalog-cache hit/invalidation guarantee is restored by native cache tests
 and black-box Gin visibility checks. Account admission, captcha response secrecy
@@ -109,12 +110,14 @@ configuration only; production users/configuration are never weakened for tests.
    Hosted tests remain lightweight with three-minute parallel jobs. Main-only
    trusted publication builds Web and Nginx after successful reviewed source CI,
    with bounded compilation and separate credential-isolated publishing.
-4. Preproduction is decommissioned. Record that missing gate explicitly; do not
-   claim live CD or staging acceptance. When authorized, open only dev -> main,
+4. External CD is retired. Isolated RN staging may run under its separate
+   authorization and must normally remain stopped. Record actual staging runs
+   or the missing gate explicitly. When authorized, open only dev -> main,
    require exact-source review and tree equality, and obtain merge authorization.
-5. Production requires separate authorization. Use `fc upgrade plan`, `apply`
-   and `open` from the retained deployment configuration. The operator verifies
-   public digests, identity, backup and schema preparation before explicit opening.
+5. Production requires separate authorization. On each registered host use
+   `foc upgrade`; it manages version selection, tool refresh, plan and recovery
+   paths. The operator verifies public digests, identity, state backup and schema
+   preparation before verified opening. Staged commands remain available.
    Production never builds an absent image or performs implicit DDL rollback.
 6. Verify HTTPS, relationships and representative managed reads, retain recovery
    evidence, then fast-forward `dev` to the release merge without rewriting history.

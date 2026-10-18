@@ -48,8 +48,9 @@ retains its lightweight source-only budget. This fixture uses loopback HTTP and
 does not expose insecure Admin outside the development host. No public ACME is
 needed for this UI test.
 
-First release needs generation-4 image proofs and an operator-managed Compose
-transition. There is no Admin upgrade API. Historical generation-3 updater tooling
+The priority-range change was introduced in generation 4; the current schema
+is generation 7. Its original first activation required matching generation-4
+proofs and an operator-managed transition. There is no Admin upgrade API. Historical generation-3 updater tooling
 must not mislabel the new images as schema 3 or bypass proof checks. Back up the database,
 close the maintenance fence, start reviewed generation-4 containers and verify
 the migration before reopening service. Old binaries refuse the new database;

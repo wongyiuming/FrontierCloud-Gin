@@ -78,6 +78,7 @@ func (r *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 type fakeImages struct {
 	calls   []string
 	failure string
+	pinned  map[string]string
 }
 
 func (i *fakeImages) Prove(_ context.Context, target, component, arch string) (release.ImageProof, error) {
@@ -88,7 +89,11 @@ func (i *fakeImages) Prove(_ context.Context, target, component, arch string) (r
 	if target == "latest" {
 		target = strings.Repeat("a", 40)
 	}
-	return release.ImageProof{Image: "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64), Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, nil
+	image := "ghcr.io/wongyiuming/frontiercloud-gin-" + component + "@sha256:" + strings.Repeat("c", 64)
+	if pinned := i.pinned[target+":"+component]; pinned != "" {
+		image = pinned
+	}
+	return release.ImageProof{Image: image, Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, nil
 }
 
 type fakeEvidence struct{ valid bool }

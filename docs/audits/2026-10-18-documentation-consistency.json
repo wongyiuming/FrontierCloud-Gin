@@ -1,0 +1,263 @@
+{
+  "source_commit": "1ce61b545727a19059a7ba82eb8bd45a9c93aa14",
+  "tracked_files_inventoried": 1694,
+  "current_repo_markdown_files_checked": 45,
+  "current_repo_markdown_local_link_errors": [],
+  "historical_evidence_links": 19,
+  "current_wiki_pages_checked": 16,
+  "wiki_link_errors": [],
+  "wiki_original_snapshot_checks": [
+    {
+      "page": "Home",
+      "git_blob_sha256": "e090199add6c3a616d2b3c8c51a9d96f3a8d04e9c536ec5420734e1d22756779",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Operator-Upgrades",
+      "git_blob_sha256": "635b9f038e0714522703daf6e14e7ea6ab5e3a157ad4b0e3b6950eb463d8fd20",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Deployment-and-Configuration",
+      "git_blob_sha256": "a2adb011e95f582d106d47a89c56201b299972b9d245ed1986e303ac1ac46f1c",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Operations-and-Troubleshooting",
+      "git_blob_sha256": "9b16f41af50e31a9c784757eb2bb2e4cf7044fe614678fa43d96c7c5c25188b5",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Cluster-and-Resource-Model",
+      "git_blob_sha256": "639593ea7e4e034965ee70f97138da7926d8b149378025cf6a08a4630748b1d7",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Media-and-Storage",
+      "git_blob_sha256": "b599dd1f8bf2ca3d0afcc9a2ef27eaa77a92e6385f362a2587b4dafe0aa1ddbb",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Playback-Continuity",
+      "git_blob_sha256": "587e40d406bf98828f3842af2290332473e14e64f3e4aba31fc9cbac1e31d31e",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Command-Reference",
+      "git_blob_sha256": "22fed4e6868c100bd072b01f414a44249699b875b7d90fd9d34a3e53b12f32cc",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Release-and-Database-Migrations",
+      "git_blob_sha256": "02a688057c26c496843230455be85a17d8e9319b8ed53fc0cc9734768d41aa0a",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Engineering-and-CI",
+      "git_blob_sha256": "5431e44f586271030dcad3256d14af27be326bca87b416770e162c7ed092d505",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Runtime-Image-Delivery",
+      "git_blob_sha256": "573c78b6740e5aba99a558a50feedecad91c1a4e761db047d04560906be17947",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Staging-CD",
+      "git_blob_sha256": "12595f4ba1f67be29ef4abfd67e989e3aba9d862375b84a92a5996ccb5127aff",
+      "original_text_preserved": true
+    },
+    {
+      "page": "Architecture",
+      "git_blob_sha256": "483d252a644b364048d64759b54e650c67a9e57d2075bbbe13c1bdb9e4cad04b",
+      "original_text_preserved": true
+    }
+  ],
+  "existing_audit_files_changed": [],
+  "source_runtime_files_changed": [],
+  "checked_at": "2026-10-18T13:00:55.091285+08:00",
+  "checks": [
+    {
+      "entry": "scripts/check_ci_budget.py",
+      "exit_code": 0,
+      "output": "CI budget passed: test jobs <=3 minutes; isolated gated compilation <=10; no hosted acceptance",
+      "errors": ""
+    },
+    {
+      "entry": "scripts/check_cpu_boundary.py",
+      "exit_code": 0,
+      "output": "One-core product-runtime boundary passed",
+      "errors": ""
+    },
+    {
+      "entry": "scripts/check_release_policy.py",
+      "exit_code": 0,
+      "output": "Native policy passed: reviewed provenance, three-minute test CI and separate bounded compilation",
+      "errors": ".........\n----------------------------------------------------------------------\nRan 9 tests in 0.054s\n\nOK"
+    },
+    {
+      "entry": "scripts/check_english_comments.py",
+      "exit_code": 0,
+      "output": "English comment check passed",
+      "errors": ""
+    },
+    {
+      "entry": "scripts/check_ci_assets.py",
+      "exit_code": 0,
+      "output": "Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external",
+      "errors": ""
+    }
+  ],
+  "python_source_tests": {
+    "discovered_and_run": 221,
+    "passed": 191,
+    "skipped": [
+      {
+        "test": "test_committed_archive_contains_every_local_web_copy_source (test_build_archive_inputs.ArchivedBuildInputs.test_committed_archive_contains_every_local_web_copy_source)",
+        "reason": "requires source checkout and Bash"
+      },
+      {
+        "test": "test_auto_discovery_does_not_register_existing_nonready_receipts (test_foc_host.HostEntryTests.test_auto_discovery_does_not_register_existing_nonready_receipts)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_auto_registry_ignores_unrelated_compose_deployments (test_foc_host.HostEntryTests.test_auto_registry_ignores_unrelated_compose_deployments)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_automatic_compose_install_needs_no_receipt_or_manual_registration (test_foc_host.HostEntryTests.test_automatic_compose_install_needs_no_receipt_or_manual_registration)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_automatic_startup_retains_different_backend_at_same_generation (test_foc_host.HostEntryTests.test_automatic_startup_retains_different_backend_at_same_generation)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_compose_parent_views_exclude_runtime_socket_roots (test_foc_host.HostEntryTests.test_compose_parent_views_exclude_runtime_socket_roots)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_default_status_deduplicates_labels_and_registry (test_foc_host.HostEntryTests.test_default_status_deduplicates_labels_and_registry)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_direct_host_installer_is_refused (test_foc_host.HostEntryTests.test_direct_host_installer_is_refused)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_discovery_failure_never_selects_registered_deployment (test_foc_host.HostEntryTests.test_discovery_failure_never_selects_registered_deployment)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_empty_explicit_selection_refuses (test_foc_host.HostEntryTests.test_empty_explicit_selection_refuses)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_explicit_selection_preserves_arguments_without_discovery (test_foc_host.HostEntryTests.test_explicit_selection_preserves_arguments_without_discovery)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_global_options_without_command_default_to_status (test_foc_host.HostEntryTests.test_global_options_without_command_default_to_status)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_help_needs_no_deployment_or_docker (test_foc_host.HostEntryTests.test_help_needs_no_deployment_or_docker)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_host_symlink_parent_refused (test_foc_host.HostEntryTests.test_host_symlink_parent_refused)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_independent_commands_work_during_docker_outage (test_foc_host.HostEntryTests.test_independent_commands_work_during_docker_outage)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_installer_refuses_unmanaged_command_and_preserves_bytes (test_foc_host.HostEntryTests.test_installer_refuses_unmanaged_command_and_preserves_bytes)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_interrupted_first_install_and_publication_are_retryable (test_foc_host.HostEntryTests.test_interrupted_first_install_and_publication_are_retryable)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_managed_marker_does_not_allow_changed_command_replacement (test_foc_host.HostEntryTests.test_managed_marker_does_not_allow_changed_command_replacement)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_missing_registered_receipt_fails_closed (test_foc_host.HostEntryTests.test_missing_registered_receipt_fails_closed)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_multiple_deployments_refuse_before_backend (test_foc_host.HostEntryTests.test_multiple_deployments_refuse_before_backend)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_refresh_refuses_symlinked_retained_backend_directory (test_foc_host.HostEntryTests.test_refresh_refuses_symlinked_retained_backend_directory)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_refresh_retains_one_backend_per_generation_for_other_pending_nodes (test_foc_host.HostEntryTests.test_refresh_retains_one_backend_per_generation_for_other_pending_nodes)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_restore_activation_and_open_discover_local_deployment (test_foc_host.HostEntryTests.test_restore_activation_and_open_discover_local_deployment)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_sanitized_environment_bypasses_user_registry_for_explicit_commands (test_foc_host.HostEntryTests.test_sanitized_environment_bypasses_user_registry_for_explicit_commands)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_sanitized_environment_still_discovers_system_registry (test_foc_host.HostEntryTests.test_sanitized_environment_still_discovers_system_registry)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_unrelated_and_symlinked_receipts_are_not_selected (test_foc_host.HostEntryTests.test_unrelated_and_symlinked_receipts_are_not_selected)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_user_registration_survives_container_removal (test_foc_host.HostEntryTests.test_user_registration_survives_container_removal)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "test_version_works_without_docker (test_foc_host.HostEntryTests.test_version_works_without_docker)",
+        "reason": "POSIX shell required"
+      },
+      {
+        "test": "setUpClass (test_gin_http.GinHTTPTests)",
+        "reason": "development-host native binary fixture required"
+      },
+      {
+        "test": "test_real_json_escaping_timings_and_query_redaction (test_nginx_access_log_contract.NginxAccessLogRuntime.test_real_json_escaping_timings_and_query_redaction)",
+        "reason": "real Nginx log fixture runs only on the development host"
+      }
+    ],
+    "failures": [],
+    "errors": [],
+    "success": true
+  },
+  "runtime_acceptance": {
+    "go_race": "not_run_documentation_only",
+    "database": "not_run_documentation_only",
+    "browser": "not_run_documentation_only",
+    "development_deployment": "not_run",
+    "production": "not_accessed"
+  },
+  "publication": {
+    "repository_push": false,
+    "wiki_push": false,
+    "production_changed": false
+  },
+  "repository_diff_check": {
+    "exit_code": 0,
+    "errors": ""
+  },
+  "wiki_diff_check": {
+    "exit_code": 0,
+    "errors": ""
+  },
+  "valid_for_documentation_scope": true,
+  "wiki_source_commit": "5424069cbf2e5ca8f355e7383462fd4741beafa3",
+  "untracked_markdown_english_policy": "passed"
+}
