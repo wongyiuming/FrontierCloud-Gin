@@ -280,3 +280,7 @@ control observation begins with a 50-ms wait and backs off to 100/200/250 ms
 while pending, instead of imposing two fixed 250-ms delays on every small file.
 Long-running jobs retain the 250-ms polling ceiling. Traffic admission and
 durable verification/publication facts remain required before ownership commit.
+
+## Admin entry
+
+Use the independent **Node resource migration** module for plans, the persistent queue, history, checkpoints and task controls. Pairing, capacity, certificates and safe retirement remain in **Node management**, where node summaries are initially compact and details open only on request. Each module has its own refresh and errors; moving this presentation does not change the authenticated API, direct peer transfer or ownership transaction.

@@ -98,7 +98,7 @@ with sync_playwright() as driver:
     page.locator('[data-module-target="priority"]').click()
     open_scope(page, 'music/drag')
     assert names(page) == public_order
-    expected_modules = ['media','priority','lyrics','users','security','network','nodes','site','key','brand']
+    expected_modules = ['media','priority','lyrics','users','security','network','nodes','migrations','site','key','brand']
     assert page.locator('.admin-console > .admin-module').evaluate_all('(modules)=>modules.map(module=>module.dataset.adminModule)') == expected_modules
     assert page.locator('#adminModuleLinks button').evaluate_all('(buttons)=>buttons.map(button=>button.dataset.moduleTarget)') == expected_modules
     proof.append('mouse-drag-equal-priority-and-99-neighbour')

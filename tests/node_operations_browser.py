@@ -36,6 +36,7 @@ def run(output):
     window.requestHeaders=()=>({'X-CSRF-Token':'browser-fixture'});
     window.api=async (path,options={})=>{
       calls.push({path,options});
+      if(window.failMigrationList && path.includes('/nodes/migrations?')) throw Error('migration queue unavailable');
       if(path.endsWith('/retire/check')) return {observation_complete:true,expected_items:0,
         master:{database_clear:true,blockers:[]},peer:{database_clear:true,blockers:[]},
         concerns:clearRetirement?[]:[{code:'backup_retention_required',count:1,samples:['<img src=x onerror=alert(1)>']}]};
@@ -71,11 +72,23 @@ def run(output):
         page.goto('https://node-ui.fixture.invalid/')
         page.evaluate('() => {' + fixture + '}')
         page.add_script_tag(content=(source / 'static/js/nodes.js').read_text())
+        page.add_script_tag(content=(source / 'static/js/node-migrations.js').read_text())
         original_order = page.locator('[data-admin-module]').evaluate_all('(x)=>x.map(e=>e.dataset.adminModule)')
         page.locator('#nodesRefresh').click()
-        expect(page.locator('#nodeRelationships')).to_contain_text('target_unavailable')
+        expect(page.locator('#nodeRelationships')).not_to_contain_text('target_unavailable')
+        assert not page.evaluate("calls.some(x=>x.path.includes('/nodes/migrations'))")
+        page.locator('#migrationsRefresh').click()
+        expect(page.locator('#migrationContent')).to_contain_text('target_unavailable')
+        expect(page.locator('#nodesPanel')).not_to_contain_text('生成只读迁移计划')
         expect(page.locator('.node-card-title strong').filter(has_text='auto')).to_have_count(0)
         expect(page.locator('#nodeRelationships')).not_to_contain_text('Automatic')
+        expect(page.locator('#nodeRelationships .node-card-grid')).to_have_count(0)
+        toggles = page.locator('#nodeRelationships .node-details-toggle')
+        for index in range(toggles.count()):
+            expect(toggles.nth(index)).to_have_attribute('aria-expanded', 'false')
+            toggles.nth(index).click()
+        page.locator('#nodesRefresh').click()
+        expect(page.locator('#nodeRelationships .node-details-toggle[aria-expanded="false"]')).to_have_count(0)
         local_card = page.locator('.node-card').filter(has=page.locator('.node-card-title strong', has_text='Master Local'))
         expect(local_card.locator('.node-card-grid')).to_contain_text('本机证书')
         expect(local_card.locator('.node-card-grid > .node-resource-panel')).to_have_count(4)
@@ -128,6 +141,14 @@ def run(output):
         assert json.loads(start['options']['body']) == {'review_sha256': 'a' * 64,
             'confirm_source_id': '2' * 32, 'confirm_target_id': '3' * 32}
         assert not errors, errors
+        page.evaluate('failMigrationList=true')
+        page.locator('#migrationsRefresh').click()
+        expect(page.locator('#migrationOperationStatus')).to_have_text('migration queue unavailable')
+        before = page.evaluate('calls.length')
+        page.locator('#nodesRefresh').click()
+        expect(page.locator('#nodeOperationStatus')).to_have_text('已刷新')
+        assert not page.evaluate('(n)=>calls.slice(n).some(x=>x.path.includes("/nodes/migrations"))', before)
+        page.evaluate('failMigrationList=false')
         for stylesheet in ('admin.css', 'nodes-observability.css'):
             page.add_style_tag(content=(source / 'static/css' / stylesheet).read_text())
         page.locator('#nodesPanel').evaluate("""panel => {
@@ -142,12 +163,16 @@ def run(output):
         page.locator('#nodesPanel').screenshot(path=str(output / 'node-operations.png'))
         page.evaluate("() => { nodes.role='Follower'; nodes.storage_pool={members:[]}; }")
         page.locator('#nodesRefresh').evaluate('button => button.click()')
+        page.locator('#nodeRelationships .node-details-toggle').click()
         expect(page.locator('#nodeRelationships .node-card-grid')).to_contain_text('本机证书')
         expect(page.locator('#nodeRelationships .node-card')).to_have_count(1)
+        page.locator('#migrationsRefresh').evaluate('button => button.click()')
+        expect(page.locator('#migrationContent')).to_contain_text('请在主节点管理资源迁移')
         page.locator('#nodeRelationships .node-card').screenshot(path=str(output / 'node-local-certificate-follower-card.png'))
         page.locator('#nodesPanel').screenshot(path=str(output / 'node-local-certificate-follower.png'))
         (output / 'evidence.json').write_text(json.dumps({'real_chromium': True, 'backend': 'deterministic fixture',
-            'unmodified_node_module': True, 'plan_paging_and_typed_confirmation': True,
+            'unmodified_node_module': True, 'independent_migration_errors': True, 'master_role_required': True,
+            'plan_paging_and_typed_confirmation': True,
             'task_controls': True, 'backup_blocks_retirement': True, 'retirement_confirmation_and_history': True,
             'csrf_headers': True, 'html_injection_rejected': True, 'module_order_preserved': True}, indent=2) + '\n')
         browser.close()

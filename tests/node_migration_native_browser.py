@@ -159,7 +159,10 @@ def run(fixture, key, result):
                 panel.locator('.module-heading').click()
             result['stage'] = 'native_nodes_refresh'
             panel.locator('#nodesRefresh').click()
-            card = panel.locator('article.node-config-box').filter(has_text=fixture['task_id'])
+            migration_panel = page.locator('#migrationsPanel')
+            migration_panel.locator('.module-heading').click()
+            migration_panel.locator('#migrationsRefresh').click()
+            card = migration_panel.locator('article.node-config-box').filter(has_text=fixture['task_id'])
             result['stage'] = 'native_task_card'
             expect(card).to_have_count(1)
             result['stage'] = 'native_task_state'
@@ -177,8 +180,11 @@ def run(fixture, key, result):
             if task != {'id': fixture['task_id'], 'state': expected_state, 'source': fixture['source_id'], 'target': fixture['target_id']}:
                 raise RuntimeError('native task checkpoint differs')
             result['stage'] = 'native_retirement_ui'
+            panel.locator('.module-heading').click()
+            panel.locator('#nodesRefresh').click()
             source = panel.locator('article.node-card').filter(has=page.get_by_text(fixture['source_id'], exact=True))
             expect(source).to_have_count(1)
+            source.locator('.node-details-toggle[aria-expanded="false"]').click()
             with page.expect_response(lambda response: urlsplit(response.url).path.endswith('/retire/check')) as observation:
                 source.get_by_role('button', name='执行只读退役检查', exact=True).click()
             response = observation.value

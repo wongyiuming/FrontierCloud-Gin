@@ -134,6 +134,7 @@ def main():
                 route.continue_()
         page.route('**/api/v1/media/admin/nodes**', certificate_route)
         page.locator('#nodesPanel .module-heading').click()
+        page.locator('#nodesPanel .node-details-toggle').click()
         panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
         panel.get_by_role('button', name='查询证书', exact=True).click()
         panel.get_by_text('80 端口被占用', exact=False).wait_for(state='visible')
@@ -150,6 +151,7 @@ def main():
         relation['summary'] = {}
         page.reload()
         page.locator('#nodesPanel .module-heading').click()
+        page.locator('#nodesPanel .node-details-toggle').click()
         panel = page.locator('.node-resource-panel').filter(has_text='存储节点证书')
         assert panel.get_by_role('button', name='查询证书', exact=True).is_disabled()
         assert panel.get_by_role('button', name='下载证书及私钥', exact=True).is_disabled()
