@@ -82,3 +82,4 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; c
     .frontier-covers .card-title { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { .card { will-change: auto; } * { transition: none !important; } }
+html { overscroll-behavior-x: none; }
