@@ -21,7 +21,6 @@ class RequiredFocComposeTests(unittest.TestCase):
                 for forbidden in ('profiles:', 'docker.sock', 'privileged:', 'pid: host', 'env_file:', '${'):
                     self.assertNotIn(forbidden, installer)
                 for name in ('secrets-init', 'media-init', 'certificate-init'):
-                    initializer = text.split('  ' + name + ':\n', 1)[1].split('\n  ', 1)[0]
                     # Inspect the complete indented service, stopping only at a sibling.
                     initializer = re.split(r'\n  [a-z][a-z-]*:', text.split('  ' + name + ':\n', 1)[1], 1)[0]
                     self.assertIn('foc-host-init: {condition: service_completed_successfully}', initializer)

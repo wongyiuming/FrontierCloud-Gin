@@ -18,11 +18,11 @@ import (
 )
 
 type composeRegistrationSpec struct {
-	Directory     string            `json:"directory"`
-	Role          string            `json:"role"`
-	Database      string            `json:"database"`
-	ConfigDigests map[string]string `json:"config_digests"`
-	InstallerRevision string `json:"installer_revision"`
+	Directory         string            `json:"directory"`
+	Role              string            `json:"role"`
+	Database          string            `json:"database"`
+	ConfigDigests     map[string]string `json:"config_digests"`
+	InstallerRevision string            `json:"installer_revision"`
 }
 
 type rawComposeRegistrationRunner struct{ directory string }
@@ -51,7 +51,7 @@ func (r rawComposeRegistrationRunner) Run(ctx context.Context, name string, args
 }
 
 type privateRegistrationImages struct {
-	digests map[string]string
+	digests           map[string]string
 	installerRevision string
 }
 

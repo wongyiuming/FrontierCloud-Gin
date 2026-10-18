@@ -1,6 +1,6 @@
 # Current capabilities and limits
 
-Checked against source `1ce61b5`. This describes implementation, not a fresh
+This page tracks the current source. It describes implementation, not a fresh
 production inspection or a new execution of every acceptance gate.
 
 | Feature | Current behavior | Limit |
