@@ -185,6 +185,9 @@ func TestOperatorInstallComposeAcceptance(t *testing.T) {
 		t.Fatal(e)
 	}
 	images := &fakeImages{}
+	if installer, ok := cfg.Services["foc-host-init"]; ok {
+		images.pinned = map[string]string{installer.Environment["FOC_OPERATOR_REVISION"] + ":web": installer.Image}
+	}
 	result := map[string]any{"actual_compose": true, "production_publication_verified": false, "publication_proof_injected": true, "image_resolution_injected": true, "host_compilers_on_path": false, "case": spec.Case, "profile": spec.Profile, "database": spec.Database}
 	defer func() {
 		if runner.started {

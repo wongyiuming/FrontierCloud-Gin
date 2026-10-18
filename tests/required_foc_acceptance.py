@@ -109,6 +109,11 @@ def main():
                             'older_bootstrap_did_not_downgrade': True, 'public_candidate_proof_claimed': False})
     compose(case, 'docker-compose.yaml', 'stop')
 
+    candidate_alias = 'ghcr.io/wongyiuming/frontiercloud-gin-web:' + args.revision
+    # Only this private Engine supplies the candidate alias; its release proof
+    # remains injected by the compiled test and is never claimed as publication.
+    engine('image', 'tag', args.image, candidate_alias)
+
     for profile, database in (('business', 'sqlite'), ('business', 'mysql'), ('direct', 'sqlite'), ('relay', 'sqlite')):
         name = profile + '-' + database
         print('START', name, flush=True)
@@ -130,7 +135,7 @@ def main():
         for service, spec in cfg['services'].items():
             image = spec['image']
             if service != 'foc-host-init' and 'frontiercloud-gin-web' in image:
-                spec['image'] = args.image
+                spec['image'] = candidate_alias
             elif 'frontiercloud-gin-nginx' in image:
                 spec['image'] = args.edge_image
         agent = cfg['services']['certificate-agent']
@@ -158,6 +163,7 @@ def main():
         engine(*command, 'up', '-d', '--pull', 'never', 'certificate-agent')
         wait_file(control / 'ca-ready')
         engine(*command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
+        wait_file(control / 'issued-and-serving')
         spec = {'directory': str(directory), 'role': 'master' if profile == 'business' else 'storage', 'database': database,
                 'installer_revision': BOOTSTRAP_REVISION, 'config_digests': {'web': image_id(args.image), 'nginx': image_id(args.edge_image), 'installer': image_id(BOOTSTRAP_IMAGE)}}
         specfile = directory / 'registration-spec.json'

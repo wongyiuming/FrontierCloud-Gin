@@ -241,6 +241,16 @@ def private_install(args, work, path_env, name, role, database, profile, case, w
     actual, mappings = {}, {}
     for name, service in cfg['services'].items():
         image = service['image']
+        if name == 'foc-host-init':
+            # Keep the independent published bootstrap, including its declared
+            # revision. Substituting the candidate would fail its version guard.
+            try:
+                call(['docker', 'image', 'inspect', image])
+            except RuntimeError:
+                call(['docker', 'pull', image])
+            actual[name] = image
+            mappings[image] = image
+            continue
         component = 'web' if 'frontiercloud-gin-web' in image else 'nginx' if 'frontiercloud-gin-nginx' in image else ''
         if component:
             concrete = web if component == 'web' else edge
