@@ -220,6 +220,35 @@ class HostEntryTests(unittest.TestCase):
         self.assertEqual(self.install().returncode, 2)
         self.assertEqual(self.global_entry.read_text(), 'administrator-replacement')
 
+    def test_refresh_retains_one_backend_per_generation_for_other_pending_nodes(self):
+        self.installer_fixture()
+        self.assertEqual(self.install().returncode, 0)
+        pending = self.root / 'other-node-pending.json'
+        pending.write_text('{"phase":"prepared_fenced","schema_generation":7}')
+        original = pending.read_bytes()
+        bundle = self.root / 'bundle'
+        for generation, revision in ((8, 'b' * 40), (9, 'c' * 40)):
+            (bundle / 'fc').write_text('#!/bin/sh\nif [ "${1:-}" = operator-generation ]; then echo ' + str(generation) + '; else echo ' + revision + '; fi\n')
+            self.install_env['FOC_OPERATOR_REVISION'] = revision
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        retained = self.home / 'backends/g7/fc'
+        self.assertEqual(subprocess.check_output([str(retained), 'operator-generation'], text=True).strip(), '7')
+        self.assertEqual(subprocess.check_output([str(retained), 'version'], text=True).strip(), 'a' * 40)
+        self.assertEqual(subprocess.check_output([str(self.home / 'backends/g8/fc'), 'version'], text=True).strip(), 'b' * 40)
+        self.assertEqual(subprocess.check_output([str(self.home / 'fc'), 'version'], text=True).strip(), 'c' * 40)
+        self.assertEqual(pending.read_bytes(), original)
+
+    def test_refresh_refuses_symlinked_retained_backend_directory(self):
+        self.installer_fixture()
+        self.assertEqual(self.install().returncode, 0)
+        other = self.root / 'unrelated-backends'
+        other.mkdir()
+        (self.home / 'backends').symlink_to(other, target_is_directory=True)
+        self.assertEqual(self.install().returncode, 2)
+        self.assertEqual(subprocess.check_output([str(self.home / 'fc'), 'version'], text=True).strip(), 'a' * 40)
+        self.assertEqual(list(other.iterdir()), [])
+
     def test_interrupted_first_install_and_publication_are_retryable(self):
         self.installer_fixture()
         real_mv = shutil.which('mv')

@@ -28,7 +28,7 @@ func run(args []string) (exitCode int) {
 	role := flags.String("role", "master", "doctor role: master or storage")
 	database := flags.String("database", "sqlite", "master database: sqlite or mysql")
 	structured := flags.Bool("json", false, "structured report")
-	revision := flags.String("revision", "", "explicit published main revision; install alone may discover latest")
+	revision := flags.String("revision", "", "published main revision; install and upgrade discover the latest published release by default")
 	ordered, err := globalArguments(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -71,6 +71,9 @@ func run(args []string) (exitCode int) {
 		return recoveryCommand(ctx, *directory, args)
 	}
 	if args[0] == "upgrade" {
+		if handled, code := dispatchRetainedUpgrade(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured, migrations.Generation, "/usr/local/lib/frontiercloud/foc"); handled {
+			return code
+		}
 		if len(args) == 1 || strings.HasPrefix(args[1], "-") {
 			return simpleUpgradeCommand(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured)
 		}

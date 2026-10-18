@@ -6,14 +6,47 @@ Docker socket access to Web, a business upgrade API, or a fleet rollout.
 
 The deployment must already have an immutable `.fc-deployment.json` receipt,
 its recorded project/mount/database/role selection, and a running native release
-with `operator-status`. Download the operator bundle for the selected release;
-keep the installed deployment's Compose files and configuration. This entry
+with `operator-status`. Keep the installed deployment's Compose files and
+configuration. This entry
 updates component images only. Configuration changes require their own reviewed
 procedure; an environment edit is not a database or disk migration.
 
 ## One-command upgrade
 
-Run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA` from any host directory.
+Run `foc upgrade` from any host directory. No revision, plan file, hash or NodeID
+is required. It selects the newest successfully published main release, proves
+the merged source tree and exact-source CI, and pins its immutable revision.
+When main is still building or publication failed, it explains that state and
+uses the last verified published alias; it never falls back after a network,
+permission or integrity failure. It refuses an implicit downgrade. An unfinished
+upgrade always keeps its recorded target, even when a newer release appears.
+
+If necessary, the command refreshes its host backend with the existing bounded
+Compose installer and continues automatically using the same pinned revision.
+A newer installed tool is retained. Tool installation failure stops before the
+business upgrade; a failed business upgrade retains its journal and recovery
+point. There is still one business-upgrade confirmation. Existing tools released
+before this entry was added need one explicit verified `foc self-update --revision
+FULL_PUBLISHED_MAIN_SHA` to obtain it; this cannot retroactively alter old binaries.
+
+The Compose installer retains one owned backend per observed database generation
+before replacing the global executable. If another deployment has an unfinished
+upgrade for an older generation, `foc upgrade` automatically delegates that
+recorded target to its matching retained backend. That backend verifies the full
+original journal and cannot refresh or downgrade the newer global tool while
+finishing the pending operation. Missing or mismatched retained executables stop
+without changing the pending deployment. These small recovery executables are
+retained by generation, not by release; do not remove them during pending work.
+Staged recovery commands retain their original arguments; only the simple
+`upgrade` continuation receives the recorded target revision automatically.
+
+For an already prepared or opening upgrade, a parameterless retry goes directly
+to its journal-bound local consent and opening checks. GitHub and registry
+discovery are not required to finish those locally proven phases. Earlier
+preparation phases still require their original release proof and image checks.
+
+To deliberately select an exact release, use
+`foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.
 The tool verifies the selected public release and deployment, displays version,
 database generation and state-backup capacity, and asks for one confirmation.
 After the capacity scan, it refreshes the release plan before requesting consent,
@@ -22,7 +55,20 @@ It manages the private plan and recovery archive in the registered deployment
 directory, invokes the existing apply checks, and opens only after preparation
 and managed read verification succeed. No plan filename, hash or NodeID needs
 to be copied by the operator. Existing Compose selection and media mounts remain
-bound to the receipt; tool refresh remains `foc self-update`.
+bound to the receipt. `foc self-update` remains available for tool-only refresh.
+
+Release readiness is reported separately from registry access:
+
+| Stage | Meaning |
+| --- | --- |
+| `main_ci_waiting` / `main_ci_running` / `main_ci_failed` | Exact main CI is absent, pending or failed |
+| `image_publication_waiting` | Main CI passed; publisher has not started |
+| `image_build_running` | A component compile job is running |
+| `image_publish_running` | A component image publisher is running |
+| `image_alias_promotion_running` | Verified default aliases are being promoted |
+| `image_build_or_publication_running` | Publisher active; no specific running job observed |
+| `image_publication_failed` | Newest exact publisher attempt did not succeed |
+| Publication succeeded but image verification failed | Successful publication does not prove that an image remains accessible; underlying missing, network, permission, platform or integrity error is retained |
 
 For MySQL, the interactive confirmation explicitly attests that external writers
 are stopped. Noninteractive use requires `--yes` and, for MySQL, the separate

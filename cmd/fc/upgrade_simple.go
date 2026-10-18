@@ -11,6 +11,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func upgradeConsent(ctx context.Context, input io.Reader, output io.Writer, yes, external bool, p operator.UpgradePreview) (operator.UpgradeConsent, error) {
@@ -73,8 +74,8 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	flags.SetOutput(diagnostic)
 	yes := flags.Bool("yes", false, "approve the displayed upgrade without interactive input")
 	external := flags.Bool("confirm-external-writers-stopped", false, "confirm external MySQL writers are stopped for --yes")
-	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || !release.ValidSHA(revision) {
-		fmt.Fprintln(diagnostic, "foc upgrade --revision FULL_PUBLISHED_MAIN_SHA [--yes]")
+	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || revision != "" && !release.ValidSHA(revision) {
+		fmt.Fprintln(diagnostic, "foc upgrade [--revision FULL_PUBLISHED_MAIN_SHA] [--yes]")
 		return 2
 	}
 	d, r, e := operator.Open(directory)
@@ -83,6 +84,51 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 		return 2
 	}
 	d.Runner = dockerRunner{d.Directory}
+	perform := func(arch string, evidence operator.Evidence, images operator.Images) int {
+		result, e := d.Upgrade(ctx, r, revision, arch, evidence, images, func(p operator.UpgradePreview) (operator.UpgradeConsent, error) {
+			return upgradeConsent(ctx, input, diagnostic, *yes, *external, p)
+		})
+		if e != nil {
+			fmt.Fprintln(diagnostic, e)
+			if result.Phase != "" {
+				fmt.Fprintf(diagnostic, "Recorded upgrade phase: %s; inspect foc status and the retained journal.\n", result.Phase)
+			}
+			return 2
+		}
+		if structured {
+			e = writeOperatorOutput(out, true, result)
+		} else {
+			_, e = fmt.Fprintf(out, "%s: %s; database generation %d\n", result.Phase, result.Revision, result.Generation)
+			if e == nil && result.BackupFile != "" {
+				_, e = fmt.Fprintf(out, "Verified state recovery point: %s\n", result.BackupFile)
+			}
+		}
+		if e != nil {
+			fmt.Fprintln(diagnostic, "upgrade result output failed; inspect foc status and the retained upgrade journal")
+			return 2
+		}
+		return 0
+	}
+	pending, e := d.PendingUpgradeTarget(r)
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	if pending != "" {
+		if revision != "" && revision != pending {
+			fmt.Fprintln(diagnostic, "unfinished upgrade has a different target; preserve its journal")
+			return 2
+		}
+		revision = pending
+		local, err := d.PendingUpgradeLocalOpen(r)
+		if err != nil {
+			fmt.Fprintln(diagnostic, err)
+			return 2
+		}
+		if local {
+			return perform("", nil, nil)
+		}
+	}
 	raw, e := d.Runner.Run(ctx, "docker", "info", "--format", "{{.Architecture}}")
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)
@@ -95,27 +141,35 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 	}
 	registry := release.NewRegistryClient()
 	defer registry.Close()
-	result, e := d.Upgrade(ctx, r, revision, operator.Architecture(string(raw)), verifier, registry, func(p operator.UpgradePreview) (operator.UpgradeConsent, error) {
-		return upgradeConsent(ctx, input, diagnostic, *yes, *external, p)
-	})
+
+	revision, e = selectUpgradeRelease(ctx, revision, r.Revision, operator.Architecture(string(raw)), verifier, registry, diagnostic)
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)
-		if result.Phase != "" {
-			fmt.Fprintf(diagnostic, "Recorded upgrade phase: %s; inspect foc status and the retained journal.\n", result.Phase)
-		}
 		return 2
 	}
-	if structured {
-		e = writeOperatorOutput(out, true, result)
-	} else {
-		_, e = fmt.Fprintf(out, "%s: %s; database generation %d\n", result.Phase, result.Revision, result.Generation)
-		if e == nil && result.BackupFile != "" {
-			_, e = fmt.Fprintf(out, "Verified state recovery point: %s\n", result.BackupFile)
-		}
+	retained, e := retainedUpgradeMode(d, r, revision, migrations.Generation)
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	handled, code := false, 0
+	if !retained {
+		handled, code, e = refreshUpgradeOperator(ctx, Revision, revision, verifier, func() error {
+			if _, err := fmt.Fprintln(diagnostic, "Refreshing operator automatically; business deployment remains unchanged."); err != nil {
+				return err
+			}
+			_, err := d.SelfUpdate(ctx, revision, operator.Architecture(string(raw)), verifier, registry)
+			return err
+		}, func() int {
+			return continueWithUpdatedOperator(ctx, directory, revision, args, input, out, diagnostic, structured)
+		})
 	}
 	if e != nil {
-		fmt.Fprintln(diagnostic, "upgrade result output failed; inspect foc status and the retained upgrade journal")
+		fmt.Fprintln(diagnostic, e)
 		return 2
 	}
-	return 0
+	if handled {
+		return code
+	}
+	return perform(operator.Architecture(string(raw)), verifier, registry)
 }

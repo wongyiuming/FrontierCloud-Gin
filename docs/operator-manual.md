@@ -79,7 +79,10 @@ Tool refresh can verify a newer image generation; business upgrade still require
 the refreshed tool's supported migration assets and an approved upgrade plan.
 Tool refresh refuses images from an older database generation.
 
-For a normal application upgrade, run `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.
+For a normal application upgrade, run `foc upgrade`. It chooses and verifies the
+latest successfully published release, automatically refreshes an older operator
+when needed, and continues with the pinned version. To select an exact published
+release deliberately, use `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.
 It displays the release, database-generation transition and capacity, requests one
 confirmation, and manages its plan, NodeID approval and private state archive.
 Preparation and opening use the same verified gates as the detailed commands.

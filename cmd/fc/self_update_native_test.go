@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -17,6 +18,18 @@ import (
 // Publication evidence is fixed only in this disposable-daemon test. Image
 // proof, cold pulls, the shipping runner, Compose and host guards remain real.
 type nativeSelfUpdateEvidence struct{}
+
+type nativeAutomaticUpdateEvidence struct{ nativeSelfUpdateEvidence }
+
+func (nativeAutomaticUpdateEvidence) MainHead(context.Context) (string, error) {
+	return "", release.ErrManifest
+}
+func (nativeAutomaticUpdateEvidence) Publication(context.Context, string) (release.PublicationState, error) {
+	return release.PublicationState{}, release.ErrManifest
+}
+func (nativeAutomaticUpdateEvidence) Relation(context.Context, string, string) (string, error) {
+	return "ahead", nil
+}
 
 func (nativeSelfUpdateEvidence) Artifact(_ context.Context, target string) (map[string]any, error) {
 	return map[string]any{"publishable": true, "sha": target, "ci_sha": target}, nil
@@ -57,6 +70,14 @@ func TestNativeSelfUpdateDiagnostics(t *testing.T) {
 		}
 	}
 	checkVersion()
+	var continued, diagnostic bytes.Buffer
+	handled, code, err := refreshUpgradeOperator(ctx, strings.Repeat("a", 40), target, nativeAutomaticUpdateEvidence{}, apply, func() int {
+		return continueWithUpdatedOperator(ctx, directory, target, []string{"version"}, strings.NewReader(""), &continued, &diagnostic, false)
+	})
+	if err != nil || !handled || code != 0 || strings.TrimSpace(continued.String()) != target {
+		t.Fatal("automatic Compose refresh and real backend continuation", handled, code, err, diagnostic.String())
+	}
+	t.Log("PASS: automatic refresh invokes actual Compose installer and continues the exact installed backend")
 	launcher, err := os.ReadFile("/usr/local/lib/frontiercloud/foc/launcher.current")
 	if err != nil {
 		t.Fatal(err)
