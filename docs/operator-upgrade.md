@@ -6,8 +6,8 @@ Docker socket access to Web, a business upgrade API, or a fleet rollout.
 
 The deployment must already have an immutable `.fc-deployment.json` receipt,
 its recorded project/mount/database/role selection, and a running native release
-with `operator-status`. Download the operator bundle for the selected release;
-keep the installed deployment's Compose files and configuration. This entry
+with `operator-status`. Keep the installed deployment's Compose files and
+configuration. This entry
 updates component images only. Configuration changes require their own reviewed
 procedure; an environment edit is not a database or disk migration.
 
@@ -28,6 +28,15 @@ business upgrade; a failed business upgrade retains its journal and recovery
 point. There is still one business-upgrade confirmation. Existing tools released
 before this entry was added need one explicit verified `foc self-update --revision
 FULL_PUBLISHED_MAIN_SHA` to obtain it; this cannot retroactively alter old binaries.
+
+The Compose installer retains one owned backend per observed database generation
+before replacing the global executable. If another deployment has an unfinished
+upgrade for an older generation, `foc upgrade` automatically delegates that
+recorded target to its matching retained backend. That backend verifies the full
+original journal and cannot refresh or downgrade the newer global tool while
+finishing the pending operation. Missing or mismatched retained executables stop
+without changing the pending deployment. These small recovery executables are
+retained by generation, not by release; do not remove them during pending work.
 
 To deliberately select an exact release, use
 `foc upgrade --revision FULL_PUBLISHED_MAIN_SHA`.

@@ -71,6 +71,9 @@ func run(args []string) (exitCode int) {
 		return recoveryCommand(ctx, *directory, args)
 	}
 	if args[0] == "upgrade" {
+		if handled, code := dispatchRetainedUpgrade(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured, migrations.Generation, "/usr/local/lib/frontiercloud/foc"); handled {
+			return code
+		}
 		if len(args) == 1 || strings.HasPrefix(args[1], "-") {
 			return simpleUpgradeCommand(ctx, *directory, *revision, args, os.Stdin, os.Stdout, os.Stderr, *structured)
 		}

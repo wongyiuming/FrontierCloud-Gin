@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "accepted_at": "2026-10-18T02:57:15.982672+00:00",
+  "accepted_at": "2026-10-18T03:21:30.401070+00:00",
   "candidate_base_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
   "development_host": "192.168.6.201",
   "production_changed": false,
@@ -12,7 +12,7 @@
   "actual_cli_input": [
     "/home/wyium/foc-host-20261014/foc-automatic-source-20261018/.ci-out/fc",
     "--directory",
-    "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-0bc832817cf04c7a-y3jxmcn0",
+    "/home/wyium/foc-host-20261014/foc-automatic-native-fixtures/fc-ops-recovery-ed380abebc49414f-njdv2smu",
     "upgrade"
   ],
   "confirmation": "y",
@@ -21,15 +21,15 @@
     "from_revision": "bb1b1430b4a7066b9c706e53757331e78cb5595d",
     "target_revision": "d573851dccd1a64c93c0bf5f2bdc3b4745d05114",
     "phase": "opened",
-    "state_backup_sha256": "386e25f2c86e3f2e655c3d1a46849cb2e266b8dd80767467a3acd976b23ac163",
+    "state_backup_sha256": "238e2c485c5e0469c9d8483d48041c1af1ceb87ada5efc2c1d76b6792ad5dfeb",
     "media_excluded": true,
     "identity_and_range_preserved": true,
     "post_business_cpu_samples": [
+      0.4,
       0.43,
-      0.38,
-      0.34,
-      0.49,
-      0.49
+      0.43,
+      0.46,
+      0.56
     ]
   },
   "release_api_authenticated": true,
@@ -74,7 +74,14 @@
     "real child process target/flags/stdin/exit code",
     "real-public parameterless SQLite CLI upgrade with one confirmation",
     "real SQLite/MySQL native single-consent upgrade and recovery",
-    "real Compose tool installation and managed-backend continuation"
+    "real Compose tool installation and managed-backend continuation",
+    "complete Go test suite",
+    "race tests cmd/fc internal/release internal/operator",
+    "complete bounded source CI",
+    "27 actual POSIX host launcher/installer tests including simulated generation 7 -> 8 -> 9 retention and refusal of symlinked cache",
+    "real child-process generation 8 dispatch to generation 7 pending target, with exact arguments, environment, conflict/missing/wrong generation rejection and unchanged global binary",
+    "current private candidate image through actual bounded Compose installer in disposable Docker daemon: actual generation 7 executable retained and byte-matched",
+    "real-public parameterless CLI SQLite business upgrade rerun after fix"
   ],
   "limitations": [
     "Native SQLite/MySQL matrix uses explicitly injected publication proof for local candidate images.",
@@ -90,33 +97,59 @@
     "GitHub anonymous rate limit surfaced with retry_after_seconds=997; final public API acceptance used existing ephemeral repository authentication."
   ],
   "source_inputs_sha256": {
-    "cmd/fc/main.go": "1bacfef525bdeda44b5c37b7e4ac483f277d6a59b312f12796ece1278610d3db",
+    "cmd/fc/main.go": "cd9c5911b2e58959a6cb795f5b9b39ddcc88b01669dc16620025f48f8ce0a7f8",
     "cmd/fc/self_update_native_test.go": "0e2e5d50a0775cb3d3e0ff4268582a441ceef7f80f4606838a52658c9b8718e4",
-    "cmd/fc/upgrade_automatic.go": "621200330952b613e9d13c3fee71009475258203d94bf6fa4b9555cd368cefc1",
+    "cmd/fc/upgrade_automatic.go": "db8d73fe1d150c72441fa6343735777cb4ce0068cf199449507c9d16faae34f5",
     "cmd/fc/upgrade_automatic_live_test.go": "eb1c2af21c468d363cfbd4f0fc5d1533f746db461a9517e386165fa73b87ac02",
     "cmd/fc/upgrade_automatic_test.go": "18661e93fe88398c8966d53a14c16fd447712fc64e564df159b06362b61e6130",
-    "cmd/fc/upgrade_simple.go": "9b5b2eea08cbe8f2693e406487ae47181ee8a105f0c867ec1298be9ce442921c",
+    "cmd/fc/upgrade_retained.go": "ab45cbe91dccfeac250be8c8c1c8f0c86736808ed8e7c8559bb63e0efd4fb837",
+    "cmd/fc/upgrade_retained_test.go": "b2004272fff07aa5443429b9a645097da26ac6571df40e41aba8e2b0d98222bb",
+    "cmd/fc/upgrade_simple.go": "1dff67a6bd753f7470483d64c6a97c985e70226f22b457b24c58ce97c0acdeec",
     "docs/operator-manual.md": "d57928aeb8b61463c68859a8798858b7e0c7a560958494eccb81ee480247d3a7",
-    "docs/operator-upgrade.md": "3c1ebee9556624174aae32d5bce429efce0f654a4f08ffcb51ae2e00c79b3091",
+    "docs/operator-upgrade.md": "208ded68faa2993e45dc689505bca6b486507c47ee80405adfcc6c62b414c55c",
     "internal/operator/upgrade.go": "f550690aa0f1c61b743036ba2b6747bd4364b0e3a5a54f3f8a5bcdaa0a8e226a",
-    "internal/operator/upgrade_pending.go": "9229acde83e25eafb3255322acbcd30c8026dec5c42061adc502bc1190b68897",
+    "internal/operator/upgrade_pending.go": "abb7d997d452e403ab51ef1e41d1f6fb47362eab999a7141e16764e618d53ba1",
     "internal/operator/upgrade_pending_test.go": "853dda05581ac47ab6e0242f6675f18559b89eb912681034072b00fddded0fe5",
     "internal/release/image_proof.go": "7c1ce068aa6ecc4e62fe699eb9fdbe5c318c730a8945c84530e12990f022c8fe",
     "internal/release/publication.go": "d8990b7fe5cb95c97d4b30138e2f53915e7e7c139c7162718da1dbd479ea5836",
     "internal/release/publication_jobs_test.go": "05dbb2ce3ed77ca5a5d2e62cc475980c145e6b9b1f983813875d2a1b185ff9c6",
     "internal/release/publication_test.go": "2ea196a57011138ebab3e89625e077a6d8fd470cda620c63faff6ba681011303",
     "internal/release/verification.go": "aaa350b77e8bd1f52a8ed10a0a88c7f1d3a3c498803ab72e89dbfb4bd7517432",
-    "tests/operator_recovery_acceptance.py": "71187ec07166a4ad3363903eada7cb76a1c95a2d7f25d99f10d1162f962304bd"
+    "scripts/install-foc.sh": "b21105161d21f5fea8e49308b19d3a53da9f3d6e638c7cdaffbaeadaeaac1eaf",
+    "tests/operator_recovery_acceptance.py": "71187ec07166a4ad3363903eada7cb76a1c95a2d7f25d99f10d1162f962304bd",
+    "tests/test_foc_host.py": "e8f2b072a08c265f5d94213a2bb762757723059b3ad81238e9c2f59bc7b71e29"
   },
   "evidence_sha256": {
     "final-go.txt": "fd3b4848a037c6076fe484ffefb1cc2abed721aa8a67705dff21a007d134b4f9",
     "final-race.txt": "29a66f45fdef9f1e879d1b2aa2557e5d4598bd742b6289c3ec04527797aa7a40",
     "source-ci-final.txt": "29f062dad1c0380dc8c036a6b250233ce3bc58d443e45c8f2b565680a7b8d39c",
     "automatic-installer.txt": "5b1cd898e6eb8f9ca606fc4d6063ef9e67c7e984dd2c751cd0493b05cbd63446",
-    "automatic-cli-sqlite.json": "4efb46e15f8a70089eb86a0ff727f335c70efcff8502cf09fa6b628183d88527",
+    "automatic-cli-sqlite.json": "d1616170ff7b4c87772faa9cd306faecdf8413163f3b2da8a9f90e1014b4eadd",
     "native-sqlite.json": "822a0e5082a9615f7f40ff219eba868032db3d8c3578e2dda8324fd89ee88f80",
     "native-mysql.json": "aef6f4dd0d3aa290026493d49eab7b601f2cbc2bd32e71f6177c7468a4f813f6",
     "public-discovery.txt": "bbc7dd13f3760a86c4a3d531c56530f5de55f7d559a307d9bb2dc5fc1922b752",
-    "authenticated-input.json": "c54a139c353fc8a85aabdb1ca287199cbd60877d92b619f6f7a9c93e305d3dd9"
+    "authenticated-input.json": "c54a139c353fc8a85aabdb1ca287199cbd60877d92b619f6f7a9c93e305d3dd9",
+    "review-fix-race.txt": "79a4f1d37d64cb80ce2f5482e420ce3fe1871f046dd48c424e5a1363e9bcbb91",
+    "review-fix-go.txt": "2f97d2be7aba0c6adb7abe5b9bb5ec3e480b038ab8239f8dea98cac4303f346b",
+    "source-ci-review-fix.txt": "9ba94ddf499d986335ebe84d45ce990c38e1e2a15b01dc703d1de7f9d693a17f",
+    "retained-installer.txt": "2528fe05661a3b0f7620abb81fea9b47bb0bae5e992dd44d6c4c0a3c8c1b1efa",
+    "retained-compose.txt": "2856af3cbb3b284177233568b7b153d40eda9b0b41db339426d25f3e0e7a77bd"
+  },
+  "review_followup": {
+    "finding": "PR28 P1: a global operator refresh must preserve another registered deployment pending on an earlier database generation",
+    "implementation": "Retain one owned executable per observed generation atomically under the Compose installation lock. Before upgrade dispatch, route a pending journal to its matching retained generation; the original backend must verify the full journal before mutations. The retained continuation cannot refresh or downgrade the global backend.",
+    "executed": [
+      "complete Go test suite",
+      "race tests cmd/fc internal/release internal/operator",
+      "complete bounded source CI",
+      "27 actual POSIX host launcher/installer tests including simulated generation 7 -> 8 -> 9 retention and refusal of symlinked cache",
+      "real child-process generation 8 dispatch to generation 7 pending target, with exact arguments, environment, conflict/missing/wrong generation rejection and unchanged global binary",
+      "current private candidate image through actual bounded Compose installer in disposable Docker daemon: actual generation 7 executable retained and byte-matched",
+      "real-public parameterless CLI SQLite business upgrade rerun after fix"
+    ],
+    "limits": [
+      "There is no generation 8 database asset in this release. Cross-generation routing and multi-generation installation cases simulate generation numbers, while the real Compose case retains actual generation 7 binaries.",
+      "The local candidate image is private development evidence, not published release proof."
+    ]
   }
 }

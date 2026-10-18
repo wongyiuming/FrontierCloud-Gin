@@ -46,8 +46,10 @@ else
   fresh=true
 fi
 locked=false
+retained_temporary=
 cleanup() {
   rm -f "$home/fc.new.$$" "$home/marker.new.$$" "$home/identity.new.$$" /usr/local/bin/foc.new.$$ /etc/frontiercloud/foc-deployments.new.$$
+  if [ -n "$retained_temporary" ]; then rm -f "$retained_temporary"; fi
   if [ "$locked" = true ]; then rmdir "$home/.install-lock"; fi
   if [ "$fresh" = true ] && [ ! -e "$home/.managed" ] && [ -d "$home" ]; then rmdir "$home"; fi
 }
@@ -88,6 +90,25 @@ if [ "$automatic" = true ] && [ -f "$home/fc" ]; then
     printf 'Registered Compose deployment; retained the existing different foc backend. Use verified self-update to replace it.\n'
     exit 0
   fi
+fi
+# Retain one owned backend per generation before publishing another global
+# version. Pending plans on other deployments must remain executable.
+if [ -e "$home/fc" ] || [ -L "$home/fc" ]; then
+  [ -f "$home/fc" ] && [ ! -L "$home/fc" ] && [ -x "$home/fc" ] || { echo 'Unsafe existing foc backend' >&2; exit 2; }
+  previous_generation=$("$home/fc" operator-generation) || { echo 'Existing foc generation cannot be retained safely' >&2; exit 2; }
+  case "$previous_generation" in ''|0|0*|*[!0-9]*) echo 'Invalid retained foc generation' >&2; exit 2 ;; esac
+  [ "${#previous_generation}" -le 9 ] || exit 2
+  retained="$home/backends/g$previous_generation"
+  for directory in "$home/backends" "$retained"; do
+    [ ! -L "$directory" ] || { echo 'Unsafe retained foc directory' >&2; exit 2; }
+    if [ -e "$directory" ]; then [ -d "$directory" ] || exit 2; else mkdir "$directory"; fi
+  done
+  [ ! -L "$retained/fc" ] || { echo 'Unsafe retained foc backend' >&2; exit 2; }
+  if [ -e "$retained/fc" ]; then [ -f "$retained/fc" ] || exit 2; fi
+  retained_temporary="$retained/fc.new.$$"
+  install -m 755 "$home/fc" "$retained_temporary"
+  mv -f "$retained_temporary" "$retained/fc"
+  retained_temporary=
 fi
 install -m 755 "$source/fc" "$home/fc.new.$$"
 install -m 755 "$source/foc" /usr/local/bin/foc.new.$$

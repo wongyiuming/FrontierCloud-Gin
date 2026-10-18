@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -125,11 +126,25 @@ func continueAtOperatorPath(ctx context.Context, path, directory, target string,
 		childArgs = append(childArgs, "--json")
 	}
 	childArgs = append(childArgs, args...)
+	return runOperatorBackend(ctx, path, childArgs, input, out, diagnostic, nil)
+}
+
+func runOperatorBackend(ctx context.Context, path string, childArgs []string, input io.Reader, out, diagnostic io.Writer, environment map[string]string) int {
 	child := exec.CommandContext(ctx, path, childArgs...)
+	if environment != nil {
+		for _, entry := range os.Environ() {
+			if _, ok := environment[strings.SplitN(entry, "=", 2)[0]]; !ok {
+				child.Env = append(child.Env, entry)
+			}
+		}
+		for key, value := range environment {
+			child.Env = append(child.Env, key+"="+value)
+		}
+	}
 	child.Cancel = func() error { return child.Process.Signal(syscall.SIGTERM) }
 	child.WaitDelay = 5 * time.Second
 	child.Stdin, child.Stdout, child.Stderr = input, out, diagnostic
-	if err = child.Run(); err != nil {
+	if err := child.Run(); err != nil {
 		var failure *exec.ExitError
 		if errors.As(err, &failure) {
 			return failure.ExitCode()

@@ -11,6 +11,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func upgradeConsent(ctx context.Context, input io.Reader, output io.Writer, yes, external bool, p operator.UpgradePreview) (operator.UpgradeConsent, error) {
@@ -107,15 +108,23 @@ func simpleUpgradeCommand(ctx context.Context, directory, revision string, args 
 		fmt.Fprintln(diagnostic, e)
 		return 2
 	}
-	handled, code, e := refreshUpgradeOperator(ctx, Revision, revision, verifier, func() error {
-		if _, err := fmt.Fprintln(diagnostic, "Refreshing operator automatically; business deployment remains unchanged."); err != nil {
+	retained, e := retainedUpgradeMode(d, r, revision, migrations.Generation)
+	if e != nil {
+		fmt.Fprintln(diagnostic, e)
+		return 2
+	}
+	handled, code := false, 0
+	if !retained {
+		handled, code, e = refreshUpgradeOperator(ctx, Revision, revision, verifier, func() error {
+			if _, err := fmt.Fprintln(diagnostic, "Refreshing operator automatically; business deployment remains unchanged."); err != nil {
+				return err
+			}
+			_, err := d.SelfUpdate(ctx, revision, operator.Architecture(string(raw)), verifier, registry)
 			return err
-		}
-		_, err := d.SelfUpdate(ctx, revision, operator.Architecture(string(raw)), verifier, registry)
-		return err
-	}, func() int {
-		return continueWithUpdatedOperator(ctx, directory, revision, args, input, out, diagnostic, structured)
-	})
+		}, func() int {
+			return continueWithUpdatedOperator(ctx, directory, revision, args, input, out, diagnostic, structured)
+		})
+	}
 	if e != nil {
 		fmt.Fprintln(diagnostic, e)
 		return 2
