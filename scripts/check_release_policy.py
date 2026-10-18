@@ -20,8 +20,8 @@ release = read("internal/release/verification.go")
 workflow = read(".github/workflows/docker.yml")
 compose = read("docker-compose.yaml")
 web = read("Dockerfile")
-require('Policy{"main", "dev"}' in release and 'Policy{"gin_main", "gin_dev"}' in release,
-        "Release policy must retain both authorized provenance pairs")
+require('Policy{"main", "dev"}' in release and 'return p == DefaultPolicy()' in release and 'Policy{"gin_main", "gin_dev"}' not in release,
+        "Release policy must accept only same-repository dev to main")
 for token in ('p.MergeSHA == sha', 'p.Base.Ref == v.policy.Branch',
               'p.Head.Ref == v.policy.Source', 'p.Head.Repo.FullName == "wongyiuming/FrontierCloud-Gin"',
               'reviewed.Commit.Tree.SHA != tree', 'head_sha="+source',

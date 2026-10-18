@@ -534,7 +534,10 @@ func (d *Deployment) Empty(ctx context.Context, cfg Config) error {
 		}
 	}
 	seen := map[string]bool{}
-	for _, s := range cfg.Services {
+	for name, s := range cfg.Services {
+		if focHostInstaller(name, s) {
+			continue
+		}
 		for _, m := range s.Volumes {
 			if m.Type != "bind" || m.ReadOnly || seen[m.Source] {
 				continue
@@ -608,6 +611,14 @@ func (d *Deployment) Install(ctx context.Context, target, architecture string, e
 	sort.Strings(names)
 	for _, name := range names {
 		s := cfg.Services[name]
+		if focHostInstaller(name, s) {
+			installer, e := proveHostInstaller(ctx, s, architecture, evidence, images)
+			if e != nil {
+				return r, e
+			}
+			r.ServiceImages[name] = installer.Image
+			continue
+		}
 		component := ""
 		for _, c := range []string{"web", "nginx"} {
 			repo, _ := release.ImageRepository(c)

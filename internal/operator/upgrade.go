@@ -118,6 +118,12 @@ func (d *Deployment) targetImages(ctx context.Context, r Receipt, target, arch s
 	components := map[string]release.ImageProof{}
 	services := map[string]string{}
 	for name, old := range r.ServiceImages {
+		// The bootstrap installer is independently pinned by the Compose release.
+		// It must not be replaced with candidate host-executable bytes on upgrade.
+		if name == "foc-host-init" {
+			services[name] = old
+			continue
+		}
 		component := ""
 		for _, c := range []string{"web", "nginx"} {
 			repo, _ := release.ImageRepository(c)

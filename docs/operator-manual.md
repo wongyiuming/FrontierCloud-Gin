@@ -7,11 +7,14 @@ path from first installation, optional audits and controlled recovery.
 ## Global host command
 
 The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
-provides a bounded Compose installer and verified registration protocol.
-The default business/storage YAML currently has no `foc-host-init` service:
-ordinary `docker compose up` does not install this global entry. Use the explicit
-installer below for a compatible existing deployment with a verified receipt.
-Marked-project automatic registration code is not proof of default integration.
+provides required Compose installation and verified registration. Both default
+business and storage YAML include `foc-host-init`; normal `docker compose up`
+installs the global command before native application initialization. The service
+uses an independently published immutable Web bundle and exits. Existing different
+managed backends are retained; foreign commands and unsafe paths block startup.
+Its bootstrap backend may be older than the business image; normal upgrade
+refreshes it when necessary. Older Compose deployments with a valid receipt may
+use the explicit installer below without changing their business configuration.
 
 The first invocation completes metadata-only registration of a marked standard
 Compose project: it verifies the actual running public image configuration

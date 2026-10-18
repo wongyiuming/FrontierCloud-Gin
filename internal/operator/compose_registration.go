@@ -61,6 +61,28 @@ func focHostInstaller(name string, service Service) bool {
 	return len(expected) == 0
 }
 
+// Host-executable installer bytes have an independent published release pin.
+// Verify it before any install pull or initializer, without treating host paths
+// as empty business mounts or mixing it into the application's image revision.
+func proveHostInstaller(ctx context.Context, service Service, arch string, evidence Evidence, images Images) (release.ImageProof, error) {
+	revision := service.Environment["FOC_OPERATOR_REVISION"]
+	if !release.ValidSHA(revision) {
+		return release.ImageProof{}, release.ErrImageIntegrity
+	}
+	proof, err := evidence.Artifact(ctx, revision)
+	if err != nil || proof["publishable"] != true || proof["sha"] != revision || !release.ValidSHA(fmtString(proof["ci_sha"])) {
+		return release.ImageProof{}, release.ErrImageIntegrity
+	}
+	image, err := images.Prove(ctx, revision, "web", arch)
+	if err != nil {
+		return release.ImageProof{}, err
+	}
+	if image.Image != service.Image || image.Revision != revision || image.Platform != "linux/"+arch {
+		return release.ImageProof{}, release.ErrImageIntegrity
+	}
+	return image, nil
+}
+
 type registrationContainer struct {
 	ID       string `json:"ID"`
 	Service  string `json:"Service"`

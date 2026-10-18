@@ -318,15 +318,9 @@ No personal package PAT or publisher Environment is required; previously
 created unreferenced credentials/settings are not consumed or deployment triggers.
 No current publication workflow uses a staging signing key or notification
 Environment. External package permissions are not proved by source tests. The
-owner historically authorized one image-only bootstrap exception for PR #5: an
-owner-applied full-SHA label, fixed PR workflow snapshot, exact successful source
-CI and current refs gate bounded compilation and verified OCI publication.
-This explicitly authorized candidate snapshot is not immutable-main code. Its
-publisher is the only package writer; it reads no signing secret or Environment
-and cannot deploy. Only the first matching run/latest owner retry may claim
-that label. No future PR inherits this exception. PR #5 required actual staging
-acceptance before merge. Current promotions follow the staging rules below;
-the historical bootstrap does not provide a current live merge gate.
+historical PR5 bootstrap workflow and driver have been removed. No candidate
+label or first-activation exception bypasses current reviewed main publication.
+Historical release evidence remains dated under docs/audits.
 Delivery dependencies are allowed only in these isolated publication workflows;
 hosted test job chains and their three-minute limit remain unchanged.
 
@@ -380,17 +374,20 @@ workers. Reports retain the existing maximum eight observed addresses.
 
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
-The owner explicitly authorized a limited global-operator exception: the one-shot
-`compose.foc.yaml` installer may write `/usr/local/bin/foc`, a private backend
+The owner explicitly requires a limited global-operator installation: the one-shot
+`foc-host-init` service in default business and storage Compose, and the separate
+`compose.foc.yaml` installer for older deployments, may write `/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
-The current default Compose files do not contain `foc-host-init`; normal
-startup alone does not install the global entry. Automatic registration support
-exists for a separately marked standard project but is not connected to those
-defaults. With that required installer/marker, first use verifies running public
-images and provenance before recording its receipt and immutable image lock. This installation completion writes only
+Default Compose requires `foc-host-init` to complete successfully before
+application initializers run. It uses an independently published immutable Web
+bundle, without optional profiles or new operator settings. A foreign command,
+unsafe path or interrupted installation fails closed. Automatic startup retains
+an already installed different managed backend rather than downgrading it.
+First use verifies marked running public images and provenance before recording
+the deployment receipt and immutable image lock. This installation completion writes only
 operator metadata, never business data, DDL, permissions or service state.
 Unrelated Compose projects are not adopted. Host installation state is excluded
 from business recovery archives and is reproducible from the published bundle.

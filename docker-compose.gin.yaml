@@ -29,7 +29,37 @@ x-logging: &service-logging
   options: {max-size: "10m", max-file: "3"}
 
 services:
+  # Mandatory host entry; bootstrap from an independently published immutable bundle.
+  foc-host-init:
+    image: ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:8101bf3e423648ed4f1c2a29e671286a6391963ef562f55be4579476d45779de
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
+    command: ["auto"]
+    environment:
+      FOC_COMPOSE_INSTALL: "1"
+      FOC_AUTOMATIC_PROJECT: "1"
+      FOC_OPERATOR_REVISION: 1ce61b545727a19059a7ba82eb8bd45a9c93aa14
+    labels:
+      frontiercloud.foc-bootstrap: "1"
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    cpus: 0.10
+    mem_limit: 128m
+    memswap_limit: 128m
+    volumes:
+      - {type: bind, source: /usr, target: /host/usr, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: /etc, target: /host/etc, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: /usr/local/bin, target: /usr/local/bin, bind: {create_host_path: false}}
+      - {type: bind, source: /usr/local/lib/frontiercloud, target: /usr/local/lib/frontiercloud}
+      - {type: bind, source: /etc/frontiercloud, target: /etc/frontiercloud}
+
   secrets-init:
+    depends_on:
+      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:0"
     command: [init-secrets]
@@ -45,6 +75,8 @@ services:
     logging: *service-logging
 
   media-init:
+    depends_on:
+      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:0"
     command: [init-media]
@@ -59,6 +91,8 @@ services:
     logging: *service-logging
 
   certificate-init:
+    depends_on:
+      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:10001"
     command: [init-certificate]

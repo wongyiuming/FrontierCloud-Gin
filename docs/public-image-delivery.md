@@ -4,6 +4,9 @@ Public releases comprise `ghcr.io/wongyiuming/frontiercloud-gin-web` and
 `ghcr.io/wongyiuming/frontiercloud-gin-nginx`, built from the same explicit main
 commit. Web contains the native application, `fc` and certificate controller.
 No update-daemon image is built, published or required by installation or upgrade.
+Default Compose installs global foc from a separately pinned, already published
+Web bundle. This bootstrap image is intentionally independent of the selected
+application release and is not silently replaced during business upgrades.
 
 ## Reviewed source and CI
 
@@ -40,8 +43,8 @@ It never builds or runs candidate code. `foc upgrade` may select a verified
 published release automatically, then pins its exact revision and digests.
 An explicit revision is optional; restart never re-resolves `latest`.
 
-The one-time PR #5 bootstrap authorization remains historical policy; it cannot
-authorize a later PR. External CD is retired; isolated staging is manual.
+The PR5-only bootstrap workflow and driver are removed; their historical
+authorization cannot authorize a new publication. External CD is retired; isolated staging is manual.
 Publishing images does not
 authorize source promotion, production deployment or database migration.
 

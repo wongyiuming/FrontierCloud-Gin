@@ -66,7 +66,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 - Frontend code MUST remain HTML, CSS and native JavaScript across public pages, players and Admin GUI. Do not introduce frontend frameworks, framework-based components or rendering engines in place of native browser APIs. Follow the [frontend baseline](ARCHITECTURE.md#frontend-baseline--html-css-and-native-javascript) when adding dependencies or redesigning UI; build/test tooling is not permission to change the shipped frontend stack.
 - A cluster has one business Master. storage nodes are resource nodes, not independent business authorities.
-- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception permits the one-shot `compose.foc.yaml` installer to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
+- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception requires the one-shot default `foc-host-init` service and permits the separate `compose.foc.yaml` installer to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
 - Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to storage nodes.
 - One managed media object is complete and belongs to exactly one storage member. Do not split one logical object across storage members.
 - Compute Worker is retired. Do not add worker slots, compute scheduling, worker UI, or worker product configuration back without an explicit architecture decision.
@@ -85,19 +85,10 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 Hosted **test CI** is restricted to lightweight source/policy/JavaScript smoke checks and three-minute parallel jobs; scripts/check_ci_budget.py rejects heavyweight acceptance and serial test-job chains. Do not raise this budget or use background jobs to evade it. The normal delivery exception is the separate default-main `publish-images.yml`: a completed successful exact-source CI event gates its trusted plan, parallel compilation without package-write credentials (ten minutes per component job) and isolated trusted publication (three minutes per component job), followed by a three-minute verified main alias promotion. Only these explicit delivery dependencies are allowed, not serial test chains. No tests/fleet/databases/browser acceptance belong in compilation workflows. Normal credential-bearing jobs never execute candidate code. See [image delivery](docs/public-image-delivery.md).
 
-The following first-activation exception is historical and applies only to PR #5:
-`bootstrap-images.yml` for **PR #5 only**, triggered by an owner-applied
-`bootstrap:<full dev SHA>` label after development acceptance/source CI success.
-Its fixed PR workflow code is an explicitly authorized snapshot, not main code.
-The plan verifies current refs, source run/attempt and first authorization claim;
-read-only compilation exports OCI data to an isolated automatic-token publisher.
-There is no signing secret, Environment or deployment job. Plan/publication
-remain three minutes, compilation ten minutes per component. Relabel-triggered
-duplicate runs and future PRs cannot use it. PR #5 required staging acceptance
-before merge even though it had to exist before that first publication. Current
-promotions follow the staging rules above: development-host acceptance and
-exact-source CI remain required. Report whether isolated RN staging actually ran;
-the retired external CD and historical bootstrap are not current acceptance.
+The historical PR5-only `bootstrap-images.yml` workflow and its dedicated driver
+are removed. Historical authorization and acceptance remain evidence, never a
+current publication exception. Only the completed main-CI trusted publisher may
+publish product releases. Report actual temporary RN staging runs or skipped gates.
 
 Only exact publish jobs and main-only alias promotion receive automatic `GITHUB_TOKEN` `packages: write`; plan,
 compile jobs do not. Public packages must grant `FrontierCloud-Gin`

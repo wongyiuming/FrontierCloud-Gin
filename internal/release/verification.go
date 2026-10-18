@@ -26,7 +26,7 @@ var ErrManifest = errors.New("invalid release evidence")
 type Policy struct{ Branch, Source string }
 
 func DefaultPolicy() Policy  { return Policy{"main", "dev"} }
-func (p Policy) Valid() bool { return p == DefaultPolicy() || p == (Policy{"gin_main", "gin_dev"}) }
+func (p Policy) Valid() bool { return p == DefaultPolicy() }
 
 // Cache/backoff are per verifier, context-aware and serialized. Responses are
 // copied before they leave the cache; callers cannot mutate release evidence.

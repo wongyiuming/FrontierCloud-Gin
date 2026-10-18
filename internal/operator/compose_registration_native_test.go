@@ -22,6 +22,7 @@ type composeRegistrationSpec struct {
 	Role          string            `json:"role"`
 	Database      string            `json:"database"`
 	ConfigDigests map[string]string `json:"config_digests"`
+	InstallerRevision string `json:"installer_revision"`
 }
 
 type rawComposeRegistrationRunner struct{ directory string }
@@ -49,14 +50,21 @@ func (r rawComposeRegistrationRunner) Run(ctx context.Context, name string, args
 	return raw, nil
 }
 
-type privateRegistrationImages struct{ digests map[string]string }
+type privateRegistrationImages struct {
+	digests map[string]string
+	installerRevision string
+}
 
 func (i privateRegistrationImages) Prove(_ context.Context, target, component, arch string) (release.ImageProof, error) {
 	repository, e := release.ImageRepository(component)
 	if e != nil {
 		return release.ImageProof{}, e
 	}
-	return release.ImageProof{Image: repository + "@sha256:" + strings.Repeat("a", 64), ConfigDigest: i.digests[component], Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, nil
+	digest := i.digests[component]
+	if target == i.installerRevision && i.digests["installer"] != "" {
+		digest = i.digests["installer"]
+	}
+	return release.ImageProof{Image: repository + "@sha256:" + strings.Repeat("a", 64), ConfigDigest: digest, Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, nil
 }
 
 func TestNativeDefaultComposeRegistersGlobalFoc(t *testing.T) {
@@ -79,13 +87,15 @@ func TestNativeDefaultComposeRegistersGlobalFoc(t *testing.T) {
 	d.Runner = rawComposeRegistrationRunner{spec.Directory}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	r, e := d.RegisterCompose(ctx, "amd64", fakeEvidence{true}, privateRegistrationImages{spec.ConfigDigests})
+	r, e := d.RegisterCompose(ctx, "amd64", fakeEvidence{true}, privateRegistrationImages{spec.ConfigDigests, spec.InstallerRevision})
 	if e != nil {
 		t.Fatal("actual Compose registration", e)
 	}
 	// Only this fixture translates injected manifests to the actual local IDs.
 	for name, image := range r.ServiceImages {
-		if name == "nginx" {
+		if name == "foc-host-init" && spec.ConfigDigests["installer"] != "" {
+			image = spec.ConfigDigests["installer"]
+		} else if name == "nginx" {
 			image = spec.ConfigDigests["nginx"]
 		} else if strings.HasPrefix(image, "ghcr.io/wongyiuming/frontiercloud-gin-web@") {
 			image = spec.ConfigDigests["web"]

@@ -40,9 +40,11 @@ decoding without automatic repair of incompatible audio. Voice control has only
 been evaluated; it is not implemented.
 
 `fc` remains the operator bundle/backend name. The host-global launcher is `foc`
-to avoid replacing Bash's builtin. Default Compose does not contain `foc-host-init`:
-ordinary startup does not install the global entry. Registered deployments and
-the separate Compose installer remain supported; see [daily operation](foc-quickstart.md).
+to avoid replacing Bash's builtin. Default Compose requires `foc-host-init`
+before application initialization. First use verifies/registers the running
+deployment. A separately pinned published bootstrap backend may precede the
+application version; normal upgrade refreshes it when needed. Older deployments
+retain the separate Compose installer; see [daily operation](foc-quickstart.md).
 
 Persisted `Follower`, `only_stroge`, historical schema snapshots, recovery journals
 and absence regressions retain compatibility/recovery value. Old names alone

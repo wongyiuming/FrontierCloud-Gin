@@ -36,8 +36,8 @@ For the guarded installation path without a source checkout, use the public
 [operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
 one published main release, configure the domain and run `./fc doctor` followed
 by `./fc install master` (or `storage`). Its receipt pins all component digests
-and rejects existing state. Installing the global host entry is a separate
-Compose step; the default business/storage YAML does not yet include it.
+and rejects existing state. Default business and storage Compose also install
+the mandatory global `foc` entry before their application initializers run.
 
 For a fresh HTTPS node, point public DNS at this host and create `.env` with
 only these two values (replace the example hostname):
