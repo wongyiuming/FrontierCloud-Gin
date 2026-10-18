@@ -102,6 +102,8 @@ assert.equal(api.append_batch_bytes, 512 * 1024);
 assert.equal(api.append_max_wait_ms, 1000);
 assert.equal(api.first_append_bytes, 64 * 1024);
 assert.equal(api.max_buffer_ahead_seconds, 30);
+assert.equal(api.max_buffer_behind_seconds, 30);
+assert.doesNotMatch(source, /MAX_TRACK_BYTES|audio response exceeds byte guard/);
 assert.equal(api.supported(), true);
 assert.equal(api.compatible({type: 'audio', media_path: 'music/a/track.mp3'}), true);
 assert.equal(api.compatible({type: 'audio', media_path: 'music/a/track.flac'}), false);
@@ -184,12 +186,11 @@ const target = {
         operations.push(kind);
         setImmediate(() => {
             this.updating = false;
-            if (kind === 'remove') low = 316 - 0.08;
             for (const callback of [...(listeners.get('updateend') || [])]) callback();
         });
     },
     appendBuffer() { this.run('append'); },
-    remove() { this.run('remove'); },
+    remove(_start, end) { low = end; this.run('remove'); },
 };
 const serial = Object.create(windowObject.__ContinuousAudioSession.prototype);
 const active = {index: 1, start: 316, end: null};
@@ -205,6 +206,15 @@ await Promise.all([
 ]);
 assert.equal(operations.filter(v => v === 'append').length, 2);
 assert.equal(operations.filter(v => v === 'remove').length, 1, 'queued duplicate pruning must recheck ranges');
+assert.equal(low, 290, 'keep thirty seconds behind the playback clock');
+active.start = 0; // The same track can last hours: it must prune before any boundary.
+context.art.video.currentTime = 400;
+await serial.pruneBeforeActive();
+assert.equal(low, 370, 'played frames within a long active track must be released');
+assert.equal(active.start, 0, 'pruning must preserve the business timeline');
+context.art.video.currentTime = 402;
+await serial.pruneBeforeActive();
+assert.equal(low, 370, 'avoid frequent tiny SourceBuffer removals');
 
 // A slow Direct transfer must deliver partial batches while its next read is
 // pending, without consuming that read twice or changing byte order.
@@ -276,6 +286,44 @@ await large.candidate.appendTrack(0);
 assert.equal(large.batches[0].length, 65536);
 assert.ok(large.batches.every(bytes => bytes.length <= 512 * 1024), 'MSE append size must not depend on native fetch chunk size');
 assert.deepEqual(Buffer.concat(large.batches), Buffer.from(largeChunk));
+
+// Cross the former 128 MiB ceiling with both known and unknown response lengths.
+// Reuse one bounded network chunk and discard appended bytes in the test sink.
+for (const advertisedLength of [200 * 1024 * 1024, 0]) {
+    // The encrypted transport supplies authenticated plaintext chunks through
+    // this same reader contract; the continuous core must not bypass it.
+    if (!advertisedLength) context.currentMediaList[0].encryption = {version: 1};
+    const chunk = new Uint8Array(512 * 1024);
+    let reads = 0, delivered = 0, maxAppend = 0;
+    const long = transferCandidate({
+        read: async () => reads++ < 400 ? {done: false, value: chunk} : {done: true},
+        cancel: async () => {},
+    }, advertisedLength);
+    long.candidate.appendBytes = async bytes => {
+        delivered += bytes.byteLength;
+        maxAppend = Math.max(maxAppend, bytes.byteLength);
+    };
+    long.candidate.bufferedEnd = () => delivered / 32768;
+    await long.candidate.appendTrack(0);
+    assert.equal(delivered, 200 * 1024 * 1024);
+    assert.ok(maxAppend <= 512 * 1024);
+    assert.ok(long.candidate.segments[0].end > 0);
+    delete context.currentMediaList[0].encryption;
+}
+
+// Removing the total-file cap must not let a malformed body accumulate forever
+// in the browser's MPEG parser without producing any decodable audio.
+let malformedReads = 0, malformedCancelled = false;
+const malformed = transferCandidate({
+    read: async () => { malformedReads++; return {done: false, value: new Uint8Array(512 * 1024)}; },
+    cancel: async () => { malformedCancelled = true; },
+}, 0);
+malformed.candidate.bufferedEnd = () => 0;
+malformed.candidate.appendBytes = async () => {};
+await assert.rejects(malformed.candidate.appendTrack(0), /decoder made no progress/);
+assert.ok(malformedReads <= 33, 'stop a non-decoding stream after a bounded number of batches');
+assert.equal(malformedCancelled, true);
+assert.equal(malformed.candidate.segments[0].end, null);
 
 let errorRead = 0;
 const broken = transferCandidate({

@@ -60,9 +60,9 @@ The browser fetches each existing media URL and streams response bytes into the 
 - a continuous-media database table;
 - a server-side concatenation endpoint.
 
-The implementation keeps a bounded playback window with two logical tracks: the current compatible track and one look-ahead compatible track. Appends are backpressured to at most 30 seconds ahead of the media clock, and old SourceBuffer ranges are removed after playback has crossed into the new active track. A browser `QuotaExceededError` pauses the append pipeline until playback frees capacity, then retries the same bytes silently; it must never mark the track as interrupted or skip it.
+The implementation keeps a bounded playback window with two logical tracks: the current compatible track and one look-ahead compatible track. Appends are backpressured to at most 30 seconds ahead of the media clock. Played SourceBuffer ranges are removed within the active track as well as across boundaries, retaining 30 seconds behind the clock with removal steps of at least five seconds. A browser `QuotaExceededError` pauses the append pipeline until playback frees capacity, then retries the same bytes silently; it must never mark the track as interrupted or skip it.
 
-A per-track byte guard remains in place so one malformed or unexpectedly large response cannot cause unbounded JavaScript buffering work.
+There is no total-file size cap for continuous MP3 playback. File size is not a memory budget: the response reader, 64 KiB startup / 512 KiB regular append batches, playback backpressure and rolling removal bound live work independently of song length. Browser-owned network chunks are split into these batches; the player never materializes the whole track. A separate 16 MiB no-decoder-progress budget prevents a malformed endless body from accumulating in the MPEG parser; successful decoded progress resets this budget, so it is not a track-length cap. Safe-integer byte accounting remains enforced. Playback and Range requests keep using the existing browser-only authenticated decryption path; no server obtains plaintext or media keys.
 
 ## Playback performance invariants
 

@@ -96,6 +96,14 @@ wheel scroll remains available whenever large covers exceed the viewport.
 The existing list layout retains its information sidebar while Frontier UI hides those
 labels. No animation loop, frontend framework or rendering engine is introduced.
 
+On secondary public pages, a leftward swipe from the right edge returns to the
+server-rendered business parent, independent of browser history. Nested albums
+return to their parent directory, top-level categories return to the media home,
+and player pages return to their containing category. Interior cover paging,
+player controls and vertical scrolling retain their existing gestures. Horizontal
+trackpad scrolling uses the same parent only when a nested scroller cannot consume
+the gesture; a short navigation cooldown prevents inertia skipping another level.
+
 `scripts/ops/import_music.py` imports an artist/album/MP3 tree through normal
 Standalone Admin uploads. Its resumable manifest records source hashes and
 managed paths. A lost finalized-upload reply is reconciled only after downloading

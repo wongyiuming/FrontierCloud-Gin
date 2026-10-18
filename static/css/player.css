@@ -111,3 +111,4 @@ body { background-color: #0f0f0f; color: #fff; font-family: -apple-system, Blink
     .media-item { padding: 10px 12px; }
     .inline-lyrics { top: 2%; right: 2%; bottom: calc(25% + 32px); left: 2%; }
 }
+html { overscroll-behavior-x: none; }
