@@ -32,8 +32,29 @@ import (
 // HTTP routing, raw body HMAC and UseNumber decoding are real. The node
 // transport socket/private CA/hostname checks have separate real TLS tests.
 type clusterHTTP struct {
-	routers      map[string]*gin.Engine
-	peerReadHook func(string, any)
+	routers       map[string]*gin.Engine
+	peerReadHook  func(string, any)
+	mediaReadHook func(string)
+}
+
+func (t *clusterHTTP) MediaReadRange(ctx context.Context, origin, objectID, resourceID, owner, token string, size, start, end int64) ([]byte, error) {
+	router := t.routers[origin]
+	if router == nil {
+		return nil, errors.New("offline")
+	}
+	r := httptest.NewRequest("GET", origin+"/internal/v1/media/"+objectID, nil).WithContext(ctx)
+	r.Header.Set("X-Media-Capability", token)
+	r.Header.Set("Accept-Encoding", "identity")
+	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	if t.mediaReadHook != nil {
+		t.mediaReadHook(r.Header.Get("Range"))
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+	if w.Code != 206 || w.Header().Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", start, end, size) || w.Header().Get("X-Media-Object-ID") != objectID || w.Header().Get("X-Media-Resource-ID") != resourceID || w.Header().Get("X-Media-Owner-ID") != owner || int64(w.Body.Len()) != end-start+1 {
+		return nil, errors.New("metadata range mismatch")
+	}
+	return w.Body.Bytes(), nil
 }
 
 func (t *clusterHTTP) MediaRead(ctx context.Context, origin, objectID, resourceID, owner, token string, size int64) (io.ReadCloser, error) {

@@ -89,8 +89,56 @@ func TestPublicCryptoRoutesShipCompiledAssets(t *testing.T) {
 	}
 }
 
+func TestSharedLyricsRenderedAssetsAreVersionedAndOrdered(t *testing.T) {
+	router, _, _, public := publicFixture(t, false)
+	for _, asset := range []string{"css/lyrics-window.css", "js/lyrics-window.js"} {
+		raw, err := os.ReadFile(filepath.Join(public.settings.StaticRoot, filepath.FromSlash(asset)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := assetURL(asset, raw)
+		if public.assets[asset] != expected || !strings.Contains(expected, "?v=") {
+			t.Fatal("shared lyric asset did not bind its current bytes", asset, public.assets[asset])
+		}
+		response := request(router, http.MethodGet, expected, "")
+		if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), raw) {
+			t.Fatal("fingerprinted lyric URL did not serve original bytes", asset, response.Code)
+		}
+	}
+	for _, page := range []struct {
+		route, parent string
+		lyrics        bool
+	}{
+		{"/api/v1/media/music/category?path=music/artist", "js/player.js", true},
+		{"/karaoke/", "js/karaoke.js", true},
+		{"/api/v1/media/video/category?path=vido/director", "js/player.js", false},
+	} {
+		response := request(router, http.MethodGet, page.route, "")
+		if response.Code != http.StatusOK {
+			t.Fatal(page.route, response.Code)
+		}
+		content := response.Body.String()
+		for _, asset := range []string{"css/lyrics-window.css", "js/lyrics-window.js"} {
+			quoted := `"` + public.assets[asset] + `"`
+			want := 0
+			if page.lyrics {
+				want = 1
+			}
+			if strings.Count(content, quoted) != want || strings.Contains(content, `"/static/`+asset+`"`) {
+				t.Fatal("page retained a stale or duplicate shared lyric URL", page.route, asset)
+			}
+		}
+		if page.lyrics && strings.Index(content, public.assets[page.parent]) >= strings.Index(content, public.assets["js/lyrics-window.js"]) {
+			t.Fatal("shared lyric override loaded before its player", page.route)
+		}
+		if page.route == "/karaoke/" && (!strings.Contains(content, `src="`+public.assets["js/lyrics-window.js"]+`" defer`) || strings.Index(content, public.assets["js/lyrics-window.js"]) >= strings.Index(content, `"/static/js/karaoke-ui.js"`)) {
+			t.Fatal("Karaoke lyric defer/order contract changed")
+		}
+	}
+}
+
 func TestPublicStartupRequiresEachCompiledCryptoModule(t *testing.T) {
-	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/business-navigation.js"}
+	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/business-navigation.js", "js/lyrics-window.js", "css/lyrics-window.css"}
 	for _, missing := range required[10:] {
 		t.Run(filepath.Base(missing), func(t *testing.T) {
 			staticRoot := t.TempDir()

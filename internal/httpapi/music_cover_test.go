@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -41,9 +43,15 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	track := catalog.Entries[0]
-	if track.Title != "测试曲目" || track.Artist != "達明一派" || track.Album != "More" || track.Cover == "/favicon.ico" {
+	if track.Title == "测试曲目" || track.Artist == "達明一派" || track.Album != "" || track.Cover != "/favicon.ico" || !track.NativeMetadata {
 		t.Fatal(track)
 	}
+	metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode(), "")
+	var tags map[string]string
+	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["title"] != "测试曲目" || tags["artist"] != "達明一派" || tags["album"] != "More" || tags["cover"] == "" || metadata.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatal(metadata.Code, metadata.Body.String())
+	}
+	track.Cover = tags["cover"]
 	cover := request(router, "GET", track.Cover, "")
 	if cover.Code != 200 || cover.Header().Get("Content-Type") != "image/jpeg" || !bytes.Equal(cover.Body.Bytes(), jpeg) {
 		t.Fatal(cover.Code, cover.Header())
@@ -75,7 +83,7 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 			}
 			response := request(router, "GET", entry.ArtworkURL, "")
 			var artwork media.CategoryArtwork
-			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &artwork) != nil || artwork.Cover != track.Cover {
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &artwork) != nil || artwork.Cover != "" || len(artwork.MetadataTracks) != 1 || !artwork.MetadataTracks[0].NativeMetadata {
 				t.Fatal(response.Code, response.Body.String())
 			}
 			found = true
@@ -158,13 +166,58 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 				t.Fatal(w.Code, w.Body.String())
 			}
 			track := result.Entries[0]
-			if track.Artist != "達明一派" || track.Album != "More" || track.Cover == "/favicon.ico" {
+			if !track.NativeMetadata || track.Artist == "達明一派" || track.Cover != "/favicon.ico" {
 				t.Fatal(track)
 			}
+			metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode(), "")
+			var tags map[string]string
+			if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["artist"] != "達明一派" || tags["album"] != "More" {
+				t.Fatal(metadata.Code, metadata.Body.String())
+			}
+			track.Cover = tags["cover"]
 			cover := request(router, "GET", track.Cover, "")
 			if cover.Code != 200 || !bytes.Equal(cover.Body.Bytes(), jpeg) {
 				t.Fatal(site, cover.Code, cover.Body.String())
 			}
 		})
+	}
+	// A remote ID3v1-only track needs only its ten-byte prefix and final 128
+	// bytes. Cold catalog/artwork reads must not reach the peer media endpoint.
+	payload := make([]byte, 512)
+	copy(payload, "ID3")
+	copy(payload[384:], "TAG")
+	copy(payload[387:417], "Legacy title")
+	copy(payload[417:447], "Legacy artist")
+	copy(payload[447:477], "Legacy album")
+	ticket, err := public.media.ReserveMasterUpload(ctx, "legacy.mp3", "music/Legacy", "", "relay", int64(len(payload)), 255, store.AdminAudit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = public.media.UploadMasterBytes(ctx, ticket.ID, bytes.NewReader(payload), store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	ranges := []string{}
+	wire.mediaReadHook = func(value string) { ranges = append(ranges, value) }
+	for _, target := range []string{"/api/v1/media/catalog/media?media_type=music&path=music/Legacy&playback_session_id=cold", "/api/v1/media/catalog/artwork?path=music/Legacy"} {
+		if result := request(router, "GET", target, ""); result.Code != 200 {
+			t.Fatal(result.Code, result.Body.String())
+		}
+	}
+	if len(ranges) != 0 {
+		t.Fatal("cold directory read remote bytes", ranges)
+	}
+	metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {ticket.Path}, "resource_id": {ticket.MediaID}}.Encode(), "")
+	var tags map[string]string
+	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["title"] != "Legacy title" || tags["artist"] != "Legacy artist" || tags["album"] != "Legacy album" || strings.Join(ranges, ",") != "bytes=0-9,bytes=384-511" {
+		t.Fatal(metadata.Code, metadata.Body.String(), ranges)
+	}
+	for _, target := range []string{
+		"/api/v1/media/metadata?file_path=" + url.QueryEscape(ticket.Path) + "&resource_id=" + strings.Repeat("f", 64),
+		"/api/v1/media/metadata?file_path=music/elsewhere/wrong.mp3&resource_id=" + ticket.MediaID,
+		"/api/v1/media/metadata?file_path=" + url.QueryEscape(ticket.Path) + "&resource_id=invalid",
+	} {
+		if result := request(router, "GET", target, ""); result.Code != 404 {
+			t.Fatal("metadata ignored exact path/identity", target, result.Code)
+		}
 	}
 }

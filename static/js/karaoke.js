@@ -10,6 +10,7 @@ const elements = Object.fromEntries([
 ].map(id => [id, document.getElementById(id)]));
 
 const state = {
+  ready: false,
   phase: 'idle',
   context: null,
   lyrics: [],
@@ -229,6 +230,7 @@ async function finishRecording() {
 }
 
 async function startRecording() {
+  if (!state.ready) return;
   if (state.phase === 'initializing' || state.phase === 'recording') return;
   state.phase = 'initializing';
   elements.record.disabled = true;
@@ -692,7 +694,10 @@ window.addEventListener('pagehide', () => {
 });
 
 requestAnimationFrame(lyricClock);
-Promise.all([initialize(), refreshAccount()]).catch(error => {
+Promise.all([initialize(), refreshAccount()]).then(() => {
+  state.ready = true;
+  elements.record.disabled = false;
+}).catch(error => {
   setStatus(`卡拉OK页面初始化失败：${errorText(error)}`, true);
   elements.record.disabled = true;
 });

@@ -46,6 +46,7 @@ type Service struct {
 	tagsBytes        int
 	categoryCovers   map[string]directoryArtwork
 	coverGeneration  uint64
+	metadataSlots    chan struct{}
 }
 
 type Category struct {
@@ -53,16 +54,17 @@ type Category struct {
 	URL  string `json:"url"`
 }
 type Track struct {
-	MediaPath  string                `json:"media_path"`
-	Title      string                `json:"title"`
-	Artist     string                `json:"artist"`
-	Album      string                `json:"album,omitempty"`
-	Type       string                `json:"type"`
-	URL        string                `json:"url"`
-	Cover      string                `json:"cover"`
-	MediaID    string                `json:"media_id"`
-	ResourceID string                `json:"resource_id,omitempty"`
-	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
+	MediaPath      string                `json:"media_path"`
+	Title          string                `json:"title"`
+	Artist         string                `json:"artist"`
+	Album          string                `json:"album,omitempty"`
+	Type           string                `json:"type"`
+	URL            string                `json:"url"`
+	Cover          string                `json:"cover"`
+	MediaID        string                `json:"media_id"`
+	ResourceID     string                `json:"resource_id,omitempty"`
+	Encryption     *mediacrypto.Metadata `json:"encryption,omitempty"`
+	NativeMetadata bool                  `json:"native_metadata,omitempty"`
 	store.PlaybackStats
 	HasLyrics *bool  `json:"has_lyrics,omitempty"`
 	KaraokeID string `json:"karaoke_id"`

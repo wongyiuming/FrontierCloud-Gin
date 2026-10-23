@@ -5,6 +5,13 @@ cd "$(dirname "$0")/.."
 revision="${FRONTIERCLOUD_REVISION:-$(git rev-parse HEAD)}"
 if ! [[ "$revision" =~ ^[0-9a-f]{40}$ ]]; then exit 1; fi
 work=$(mktemp -d /tmp/fc-native-matrix-XXXXXXXX)
+if [[ "${FRONTIERCLOUD_TEST_MEDIA_BROWSER:-}" == 1 ]]; then
+  test -z "${FRONTIERCLOUD_TEST_NATIVE_MIGRATIONS:-}"
+  test -z "${FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER:-}"
+  test -z "${FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER:-}"
+  # The independent browser client watches both serial database handoffs.
+  printf 'FRONTIERCLOUD_NATIVE_MEDIA_WORKSPACE=%s\n' "$work"
+fi
 prefix="fc-matrix-$(cat /proc/sys/kernel/random/uuid)"
 image_prefix="${FRONTIERCLOUD_TEST_NATIVE_MATRIX_IMAGE_PREFIX:-$prefix}"
 if ! [[ "$image_prefix" =~ ^fc-matrix-[0-9a-f-]{36}$ ]]; then exit 1; fi
@@ -49,6 +56,7 @@ docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 -e GOFLAGS=-p=1 --name "$pr
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_PREFIX="$prefix" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER="${FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER:-}" \
   -e FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER="${FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER:-}" \
+  -e FRONTIERCLOUD_TEST_MEDIA_BROWSER="${FRONTIERCLOUD_TEST_MEDIA_BROWSER:-}" \
   -e FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE="${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE:-}" \
   -e FRONTIERCLOUD_TEST_NATIVE_MIGRATION_WAIT_CLEANUP="${FRONTIERCLOUD_TEST_NATIVE_MIGRATION_WAIT_CLEANUP:-}" \
   -e FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE="$native" \

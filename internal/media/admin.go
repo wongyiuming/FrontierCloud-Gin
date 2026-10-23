@@ -13,22 +13,24 @@ import (
 )
 
 type TreeItem struct {
-	Name          string                `json:"name"`
-	Path          string                `json:"path"`
-	Kind          string                `json:"kind"`
-	Size          *int64                `json:"size"`
-	Hidden        bool                  `json:"hidden"`
-	HiddenDirect  bool                  `json:"hidden_direct"`
-	Media         bool                  `json:"media"`
-	Hideable      bool                  `json:"hideable"`
-	MediaID       string                `json:"media_id,omitempty"`
-	MemberID      string                `json:"storage_member_id,omitempty"`
-	Transport     string                `json:"transport,omitempty"`
-	NodeHealth    string                `json:"node_health,omitempty"`
-	MutationState string                `json:"mutation_state,omitempty"`
-	MutationID    string                `json:"mutation_operation,omitempty"`
-	RenameTarget  string                `json:"rename_target,omitempty"`
-	Encryption    *mediacrypto.Metadata `json:"encryption,omitempty"`
+	Name                string                `json:"name"`
+	Path                string                `json:"path"`
+	Kind                string                `json:"kind"`
+	Size                *int64                `json:"size"`
+	Hidden              bool                  `json:"hidden"`
+	HiddenDirect        bool                  `json:"hidden_direct"`
+	Media               bool                  `json:"media"`
+	Hideable            bool                  `json:"hideable"`
+	MediaID             string                `json:"media_id,omitempty"`
+	MemberID            string                `json:"storage_member_id,omitempty"`
+	Transport           string                `json:"transport,omitempty"`
+	NodeHealth          string                `json:"node_health,omitempty"`
+	MutationState       string                `json:"mutation_state,omitempty"`
+	MutationID          string                `json:"mutation_operation,omitempty"`
+	RenameTarget        string                `json:"rename_target,omitempty"`
+	Encryption          *mediacrypto.Metadata `json:"encryption,omitempty"`
+	StorageAddress      *string               `json:"storage_address,omitempty"`
+	StorageAddressLocal bool                  `json:"storage_address_local,omitempty"`
 }
 type Tree struct {
 	Path  string     `json:"path"`
@@ -146,6 +148,9 @@ func (s *Service) Tree(ctx context.Context, name string) (Tree, error) {
 		result.Items = append(result.Items, TreeItem{Name: entry.Name(), Path: rel, Kind: kind, Size: size, Hidden: hidden(rel, h), HiddenDirect: h[rel], Media: media, Hideable: entry.IsDir() && parts[0] != "lyrics"})
 	}
 	if err := s.treeEncryption(ctx, result.Items); err != nil {
+		return Tree{}, err
+	}
+	if err := s.treeStorageAddresses(ctx, result.Items); err != nil {
 		return Tree{}, err
 	}
 	fold := cases.Fold()

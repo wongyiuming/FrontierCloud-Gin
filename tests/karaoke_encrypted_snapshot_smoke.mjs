@@ -79,4 +79,46 @@ assert.equal(calls.length, beforeFailure, 'encryption failure makes no ticket or
 vm.runInContext('state.sourceLyricsEncrypted=false;state.recordingSnapshot={encrypted:false,title:"Plain",lyrics:state.lyrics}', context);
 const plain = await context.addRecordingMetadata(audio);
 assert((await plain.text()).includes(lyrics[0].text), 'plain-source recordings retain their original footer behavior');
-console.log('karaoke-encrypted-snapshot-smoke-ok');
+// Execute the real startup with independently deferred media and account replies.
+const karaokeSource = fs.readFileSync('static/js/karaoke.js', 'utf8');
+const karaokeTemplate = fs.readFileSync('static/media/karaoke.html', 'utf8');
+assert.match(karaokeTemplate, /<button id="record"[^>]* disabled>/);
+for (const first of ['media', 'account', 'media-failure', 'account-failure']) {
+    const controls = new Map();
+    const control = id => {
+        if (!controls.has(id)) controls.set(id, {...node(), disabled: id === 'record'});
+        return controls.get(id);
+    };
+    let releaseMedia, releaseAccount, microphoneCalls = 0;
+    const mediaReply = new Promise(resolve => { releaseMedia = resolve; });
+    const accountReply = new Promise(resolve => { releaseAccount = resolve; });
+    const fixture = {console, Blob, TextEncoder, TextDecoder, Uint8Array, DataView, URLSearchParams, setTimeout, Response,
+        URL: {createObjectURL() {}, revokeObjectURL() {}}, location: {search: '?media=opaque-id', protocol: 'https:'},
+        document: {cookie: '', getElementById: control, createElement: () => node()},
+        navigator: {mediaDevices: {addEventListener() {}, getUserMedia() { microphoneCalls++; throw new Error('unexpected microphone'); }}},
+        AudioContext: class {}, MediaRecorder: class {}, requestAnimationFrame() {}, addEventListener() {}, Option: class {},
+        fetch: path => path.startsWith('/api/v1/karaoke/context?') ? mediaReply : accountReply,
+    };
+    fixture.window = fixture;
+    vm.createContext(fixture);
+    vm.runInContext(karaokeSource, fixture);
+    const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(setImmediate); };
+    assert.equal(vm.runInContext('state.ready', fixture), false);
+    await vm.runInContext('startRecording()', fixture);
+    assert.equal(microphoneCalls, 0, 'pre-ready calls cannot open the microphone');
+    const media = () => releaseMedia(Response.json({title: 'Ready track', type: 'audio', stream_url: '/stream', has_lyrics: false}));
+    const account = () => releaseAccount(Response.json({user: null}));
+    if (first === 'media') { media(); await flush(); assert.equal(control('record').disabled, true); account(); }
+    if (first === 'account') { account(); await flush(); assert.equal(control('record').disabled, true); media(); }
+    if (first === 'media-failure') { releaseMedia(new Response('', {status: 403})); account(); }
+    if (first === 'account-failure') { releaseAccount(new Response('', {status: 403})); media(); }
+    await flush();
+    const succeeded = first === 'media' || first === 'account';
+    assert.equal(vm.runInContext('state.ready', fixture), succeeded);
+    assert.equal(control('record').disabled, !succeeded, 'both successful initialization branches are required');
+    if (!succeeded) {
+        await vm.runInContext('startRecording()', fixture);
+        assert.equal(microphoneCalls, 0, 'a failed startup remains fenced');
+    }
+}
+console.log('karaoke-encrypted-snapshot-smoke-ok: opaque snapshot and media/account ready lifecycle');

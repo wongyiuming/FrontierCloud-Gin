@@ -126,6 +126,9 @@ func (s *Service) Search(ctx context.Context, query, scope string) (SearchResult
 	if err := s.treeEncryption(ctx, result.Items); err != nil {
 		return SearchResult{}, err
 	}
+	if err := s.treeStorageAddresses(ctx, result.Items); err != nil {
+		return SearchResult{}, err
+	}
 	return result, nil
 }
 

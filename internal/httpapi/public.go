@@ -50,7 +50,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		return nil, err
 	}
 	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}}
-	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/business-navigation.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
+	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/lyrics-window.js", "css/lyrics-window.css", "js/media-browser.js", "js/business-navigation.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
 		content, err := root.ReadFile(name)
 		if err != nil {
 			root.Close()
@@ -92,6 +92,7 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 	group.GET("/catalog/artwork", p.directoryArtwork)
 	group.GET("/catalog/media", p.catalog)
 	group.GET("/cover", p.musicCover)
+	group.GET("/metadata", p.musicMetadata)
 	group.GET("/music", func(c *gin.Context) { p.categoryPage(c, "music") })
 	group.GET("/video", func(c *gin.Context) { p.categoryPage(c, "video") })
 	group.GET("/music/category", func(c *gin.Context) { p.playerPage(c, "music") })
@@ -420,6 +421,9 @@ func (p *Public) template(c *gin.Context, name string) (string, error) {
 		return "", err
 	}
 	content := string(bytes)
+	for _, asset := range []string{"css/lyrics-window.css", "js/lyrics-window.js"} {
+		content = strings.ReplaceAll(content, `"/static/`+asset+`"`, `"`+p.assets[asset]+`"`)
+	}
 	cryptoScripts := `<script src="` + p.assets["js/compiled/media-crypto-common.js"] + `"></script>` + "\n" + `<script src="` + p.assets["js/compiled/media-crypto.js"] + `"></script>` + "\n"
 	content = strings.Replace(content, "<script", cryptoScripts+"<script", 1)
 	if name == "category.html" || name == "audio-player.html" || name == "video-player.html" {

@@ -77,3 +77,21 @@ func TestMusicTagsV24DataLengthIndicator(t *testing.T) {
 		t.Fatal("malformed data length accepted", tags)
 	}
 }
+
+func TestMusicTagsLegacySuffixOnlyFillsMissingFields(t *testing.T) {
+	tail := make([]byte, 128)
+	copy(tail, "TAG")
+	copy(tail[3:33], "Legacy title")
+	copy(tail[33:63], "Legacy artist")
+	copy(tail[63:93], "Legacy album")
+	picture := []byte("original picture")
+	tags := legacyMusicTags(MusicTags{Title: "ID3v2 title", Picture: picture, MIME: "image/jpeg"}, tail)
+	if tags.Title != "ID3v2 title" || tags.Artist != "Legacy artist" || tags.Album != "Legacy album" || !bytes.Equal(tags.Picture, picture) || tags.MIME != "image/jpeg" {
+		t.Fatal("suffix overwrote preferred ID3v2 metadata", tags)
+	}
+	for _, invalid := range [][]byte{nil, tail[:127], append([]byte("BAD"), tail[3:]...)} {
+		if got := legacyMusicTags(MusicTags{}, invalid); got.Title != "" || got.Artist != "" || got.Album != "" {
+			t.Fatal("invalid suffix accepted", got)
+		}
+	}
+}

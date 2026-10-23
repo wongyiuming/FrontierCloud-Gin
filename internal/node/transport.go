@@ -107,6 +107,41 @@ type MediaReadClient interface {
 	MediaRead(context.Context, string, string, string, string, string, int64) (io.ReadCloser, error)
 }
 
+type MediaRangeReadClient interface {
+	MediaReadRange(context.Context, string, string, string, string, string, int64, int64, int64) ([]byte, error)
+}
+
+func (t *Transport) MediaReadRange(ctx context.Context, origin, objectID, resourceID, owner, token string, size, start, end int64) ([]byte, error) {
+	origin, err := Endpoint(origin)
+	if err != nil {
+		return nil, err
+	}
+	if !resourceIdentifier.MatchString(objectID) || !resourceIdentifier.MatchString(resourceID) || !nodeIdentifier.MatchString(owner) || token == "" || len(token) > 4096 || start < 0 || end < start || end >= size || end-start+1 > 8<<20 {
+		return nil, ErrCapability
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", origin+"/internal/v1/media/"+objectID, nil)
+	if err != nil {
+		return nil, errors.New("invalid metadata range request")
+	}
+	req.Header.Set("X-Media-Capability", token)
+	req.Header.Set("Accept-Encoding", "identity")
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	resp, err := t.storage.Do(req)
+	if err != nil {
+		return nil, errors.New("verified metadata range unavailable")
+	}
+	defer resp.Body.Close()
+	length := end - start + 1
+	if resp.StatusCode != http.StatusPartialContent || len(resp.Header.Values("Content-Range")) != 1 || resp.Header.Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", start, end, size) || resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity" || len(resp.Header.Values("X-Media-Object-ID")) != 1 || len(resp.Header.Values("X-Media-Resource-ID")) != 1 || len(resp.Header.Values("X-Media-Owner-ID")) != 1 || resp.Header.Get("X-Media-Object-ID") != objectID || resp.Header.Get("X-Media-Resource-ID") != resourceID || resp.Header.Get("X-Media-Owner-ID") != owner || resp.ContentLength >= 0 && resp.ContentLength != length {
+		return nil, errors.New("metadata range placement or response mismatch")
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, length+1))
+	if err != nil || int64(len(raw)) != length {
+		return nil, errors.New("metadata range length mismatch")
+	}
+	return raw, nil
+}
+
 // MediaRead is data-plane streaming, never a JSON/control request. TLS, DNS,
 // redirect and proxy policy are identical to uploads, with caller cancellation.
 func (t *Transport) MediaRead(ctx context.Context, origin, objectID, resourceID, owner, token string, size int64) (io.ReadCloser, error) {

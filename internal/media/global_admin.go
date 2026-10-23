@@ -104,6 +104,9 @@ func (s *Service) globalTree(ctx context.Context, scope string) (Tree, error) {
 	if err := s.treeEncryption(ctx, result.Items); err != nil {
 		return Tree{}, err
 	}
+	if err := s.treeStorageAddresses(ctx, result.Items); err != nil {
+		return Tree{}, err
+	}
 	fold := cases.Fold()
 	sort.Slice(result.Items, func(i, j int) bool {
 		a, b := result.Items[i], result.Items[j]

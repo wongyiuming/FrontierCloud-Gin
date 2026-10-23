@@ -15,6 +15,7 @@ node tests/media_crypto_build_smoke.mjs
 node tests/media_crypto_smoke.mjs
 FC_CRYPTO_COMPILED=1 node tests/media_crypto_smoke.mjs
 node tests/admin_ui_smoke.mjs
+node tests/admin_media_address_smoke.mjs
 node tests/priority_conflict_smoke.mjs
 node tests/node_retirement_ui_smoke.mjs
 node tests/node_migration_ui_smoke.mjs
