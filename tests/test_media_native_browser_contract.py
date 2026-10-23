@@ -1,5 +1,6 @@
 """Pure admission/layout checks for the real browser driver, without Chromium."""
 import ast
+import copy
 import ipaddress
 import json
 import os
@@ -19,7 +20,7 @@ def definitions():
     # Extract the actual stdlib admission functions, keeping this source check
     # independent of test-only Playwright and all product application modules.
     tree = ast.parse(DRIVER.read_text(encoding='utf-8'))
-    names = {'regular', 'read_fixture', 'check_geometry', 'digest'}
+    names = {'regular', 'read_fixture', 'check_geometry', 'check_native_scroll_evidence', 'digest'}
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
     namespace = dict(Path=Path, stat=stat, json=json, re=re, ipaddress=ipaddress,
                      FORMAT='frontiercloud-gin-native-media-browser-v1',
@@ -113,6 +114,45 @@ class NativeMediaBrowserContractTests(unittest.TestCase):
             for keyword in call.keywords:
                 self.assertNotEqual(keyword.arg, 'ignore_https_errors')
         self.assertNotIn('--ignore-certificate-errors', DRIVER.read_text())
+
+    def test_tall_lyrics_require_both_real_inputs_and_accessible_unchanged_text(self):
+        value = dict(before='31px', after='31px', textLength=84, whiteSpace='normal', rows=8,
+            glyphsInside=True, glyphsInsidePanel=False, scrollWidth=374, clientWidth=374,
+            scrollHeight=292, clientHeight=292)
+        start = dict(native_input_count=1, fontSize='31px', textLength=84,
+            glyphTop=10, glyphBottom=292, top=10, bottom=208)
+        end = dict(native_input_count=1, fontSize='31px', textLength=84,
+            glyphTop=-74, glyphBottom=208, top=10, bottom=208)
+        inputs = [dict(mechanism=kind, start=copy.deepcopy(start), end=copy.deepcopy(end)) for kind in ('wheel', 'touch')]
+        with self.assertRaises(AssertionError):
+            self.functions['check_geometry'](value)
+        validate = self.functions['check_native_scroll_evidence']
+        validate(value, inputs)
+        for field, replacement in (('native_input_count', 0), ('native_input_count', True),
+            ('fontSize', '20px'), ('textLength', 40), ('glyphTop', -10)):
+            changed = copy.deepcopy(inputs)
+            changed[0]['start'][field] = replacement
+            with self.subTest(field=field, replacement=replacement), self.assertRaises(AssertionError):
+                validate(value, changed)
+        changed = copy.deepcopy(inputs)
+        changed[1]['end']['glyphBottom'] = 240
+        with self.assertRaises(AssertionError):
+            validate(value, changed)
+        with self.assertRaises(AssertionError):
+            validate(value, inputs[:1])
+        changed = copy.deepcopy(inputs)
+        changed[1]['mechanism'] = 'programmatic-scrollTop'
+        with self.assertRaises(AssertionError):
+            validate(value, changed)
+
+    def test_browser_waits_are_functions_under_the_real_nonce_csp(self):
+        tree = ast.parse(DRIVER.read_text())
+        waits = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute) and node.func.attr == 'wait_for_function']
+        self.assertGreater(len(waits), 10)
+        for call in waits:
+            self.assertIsInstance(call.args[0], ast.Constant)
+            self.assertIn('=>', call.args[0].value)
 
 
 if __name__ == '__main__':
