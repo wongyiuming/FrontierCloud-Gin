@@ -15,7 +15,7 @@ import (
 func TestMusicMetadataRangeValidatesNativeIdentityAndExactTail(t *testing.T) {
 	object, resource, owner := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 32)
 	payload := append([]byte("TAG"), bytes.Repeat([]byte("x"), 125)...)
-	for _, kind := range []string{"valid", "whole-file-200", "wrong-range", "wrong-total", "wrong-owner", "wrong-resource", "wrong-object", "encoding", "duplicate-range", "duplicate-owner", "short-body", "long-body", "chunked-short", "chunked-long", "truncated-body", "unauthorized", "forbidden"} {
+	for _, kind := range []string{"valid", "whole-file-200", "wrong-range", "wrong-total", "wrong-owner", "wrong-resource", "wrong-object", "encoding", "duplicate-range", "duplicate-owner", "short-body", "long-body", "chunked-short", "chunked-long", "truncated-body", "unauthorized", "forbidden", "fenced", "upstream-busy", "upstream-error", "bad-gateway", "unavailable", "gateway-timeout"} {
 		t.Run(kind, func(t *testing.T) {
 			server, roots := privateCA(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/internal/v1/media/"+object || r.Header.Get("Range") != "bytes=384-511" || r.Header.Get("Accept-Encoding") != "identity" || r.Header.Get("X-Media-Capability") != "bounded-capability" {
@@ -34,6 +34,18 @@ func TestMusicMetadataRangeValidatesNativeIdentityAndExactTail(t *testing.T) {
 					status = 401
 				case "forbidden":
 					status = 403
+				case "fenced":
+					status = 409
+				case "upstream-busy":
+					status = 429
+				case "upstream-error":
+					status = 500
+				case "bad-gateway":
+					status = 502
+				case "unavailable":
+					status = 503
+				case "gateway-timeout":
+					status = 504
 				case "wrong-range":
 					w.Header().Set("Content-Range", "bytes 383-510/512")
 				case "wrong-total":
@@ -61,6 +73,13 @@ func TestMusicMetadataRangeValidatesNativeIdentityAndExactTail(t *testing.T) {
 				if kind == "truncated-body" {
 					w.Header().Set("Content-Length", "128")
 				}
+				if kind == "fenced" {
+					// The real storage fence responds before producing range or
+					// placement headers. It still must not admit any body bytes.
+					for _, name := range []string{"Content-Range", "X-Media-Object-ID", "X-Media-Resource-ID", "X-Media-Owner-ID"} {
+						w.Header().Del(name)
+					}
+				}
 				w.WriteHeader(status)
 				if strings.HasPrefix(kind, "chunked-") {
 					w.(http.Flusher).Flush()
@@ -75,8 +94,11 @@ func TestMusicMetadataRangeValidatesNativeIdentityAndExactTail(t *testing.T) {
 				}
 			} else if err == nil {
 				t.Fatal("unproven response accepted", kind)
-			} else if errors.Is(err, ErrMediaRangeUnavailable) || got != nil {
-				t.Fatal("permanent range refusal became retryable or returned bytes", kind, err)
+			} else {
+				transient := kind == "fenced" || kind == "upstream-busy" || kind == "upstream-error" || kind == "bad-gateway" || kind == "unavailable" || kind == "gateway-timeout" || kind == "truncated-body"
+				if got != nil || errors.Is(err, ErrMediaRangeUnavailable) != transient {
+					t.Fatal("range failure classification or byte refusal changed", kind, err)
+				}
 			}
 		})
 	}

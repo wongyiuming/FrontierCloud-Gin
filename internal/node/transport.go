@@ -144,6 +144,13 @@ func (t *Transport) MediaReadRange(ctx context.Context, origin, objectID, resour
 		return nil, mediaRangeUnavailable(ctx, err)
 	}
 	defer resp.Body.Close()
+	// A write fence or temporary upstream failure is not evidence that the
+	// object disappeared. No response bytes are admitted on these statuses.
+	switch resp.StatusCode {
+	case http.StatusConflict, http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return nil, ErrMediaRangeUnavailable
+	}
 	length := end - start + 1
 	if resp.StatusCode != http.StatusPartialContent || len(resp.Header.Values("Content-Range")) != 1 || resp.Header.Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", start, end, size) || resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity" || len(resp.Header.Values("X-Media-Object-ID")) != 1 || len(resp.Header.Values("X-Media-Resource-ID")) != 1 || len(resp.Header.Values("X-Media-Owner-ID")) != 1 || resp.Header.Get("X-Media-Object-ID") != objectID || resp.Header.Get("X-Media-Resource-ID") != resourceID || resp.Header.Get("X-Media-Owner-ID") != owner || resp.ContentLength >= 0 && resp.ContentLength != length {
 		return nil, errors.New("metadata range placement or response mismatch")
@@ -151,7 +158,7 @@ func (t *Transport) MediaReadRange(ctx context.Context, origin, objectID, resour
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, length+1))
 	if err != nil {
 		var networkError net.Error
-		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) {
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &networkError) {
 			return nil, mediaRangeUnavailable(ctx, err)
 		}
 		return nil, errors.New("metadata range length mismatch")

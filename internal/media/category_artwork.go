@@ -42,6 +42,10 @@ func (s *Service) CategoryArtwork(ctx context.Context, kind string, entries []Ca
 }
 
 func (s *Service) DirectoryArtwork(ctx context.Context, name string, include bool) (CategoryArtwork, error) {
+	// Include category authorization/existence in the same lookup deadline;
+	// candidate traversal must not receive a fresh budget after a slow query.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	if err := s.CategoryExists(ctx, name, "music"); err != nil {
 		return CategoryArtwork{}, err
 	}
@@ -79,8 +83,6 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 	// One request-wide candidate/directory budget. This endpoint only returns
 	// cheap candidates: selected/visible browser work loads tags later, never a
 	// serial directory-wide media read on the catalog request path.
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
 	artwork := directoryArtwork{}
 	remaining := 8
 	collect := func(directory string) (bool, error) {
