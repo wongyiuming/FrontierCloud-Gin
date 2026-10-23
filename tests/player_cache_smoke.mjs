@@ -393,14 +393,30 @@ for (const block of ['art.video.buffered.end=()=>10', 'art.video.seeking=true', 
     const panel = {clientHeight: 210, clientWidth: 360, style: {setProperty(name, value) { styles[name] = value; }}};
     const track = {children: [], offsetWidth: 300, style: {}, classList: {add() {}, remove() {}},
         replaceChildren(...rows) { this.children = rows; }, append(row) { this.children.push(row); }};
+    const viewport = {clientHeight: 210, clientTop: 0, scrollTop: 0,
+        get scrollHeight() { return track.children.reduce((height, row) => height + row.offsetHeight, 0); },
+        getBoundingClientRect: () => ({top: 0, bottom: 210})};
+    track.parentElement = viewport;
+    function lyricRow() {
+        const row = {textContent: '', className: ''};
+        row.classList = {contains: name => row.className.split(/\s+/).includes(name)};
+        Object.defineProperty(row, 'offsetHeight', {get: () => row.textContent.length > 100 ? 126 : 63});
+        row.getBoundingClientRect = () => {
+            const top = track.children.slice(0, track.children.indexOf(row))
+                .reduce((height, item) => height + item.offsetHeight, 0) - viewport.scrollTop;
+            return {top, bottom: top + row.offsetHeight};
+        };
+        return row;
+    }
     const line = 'This long lyric must wrap without clipping or reducing its font size '.repeat(5);
     let timer;
     const lyrics = {console, activeLyricEntries: Array.from({length: 12}, (_, i) => ({time: i, text: i === 0 ? line : 'line ' + i})),
         activeLyricIndex: -1, lyricSlideTimer: null, LYRIC_SLIDE_MS: 480,
         clearLyricSlide() {}, setActiveLyricTime() {}, requestAnimationFrame() {},
+        getComputedStyle: () => ({lineHeight: '63px', paddingTop: '0px', paddingBottom: '0px'}),
         setTimeout(fn, delay) { timer = {fn, delay}; return 1; },
         document: {getElementById: id => id === 'inlineLyrics' ? panel : id === 'inlineLyricsTrack' ? track : null,
-            createElement: () => ({textContent: '', className: '', offsetHeight: 63})},
+            createElement: lyricRow},
         renderLyricWindow() {}, updateSynchronizedLyrics() {},
     };
     lyrics.window = lyrics;
@@ -412,8 +428,15 @@ for (const block of ['art.video.buffered.end=()=>10', 'art.video.seeking=true', 
     assert.equal(styles['--sync-lyric-row-height'], '30px', 'seven rows have a minimum rather than fixed height');
     const priorFont = styles['--sync-lyric-font-size'];
     lyrics.animateLyricForward(4);
+    assert.equal(track.children.length, 7);
+    assert.equal(track.style.transform, 'translateY(0)', 'wrapped rows render directly without a conflicting animation');
+    assert.equal(timer, undefined);
+    assert.equal(styles['--sync-lyric-font-size'], priorFont, 'wrapping must retain the height-derived font');
+    lyrics.activeLyricEntries.forEach(entry => { entry.text = 'short line'; });
+    lyrics.renderLyricWindow(3);
+    lyrics.animateLyricForward(4);
     assert.equal(track.children.length, 8);
-    assert.equal(track.style.transform, 'translateY(-63px)', 'animation follows the measured wrapped row height');
+    assert.equal(track.style.transform, 'translateY(-63px)', 'ordinary animation follows the measured row height');
     assert.equal(styles['--sync-lyric-font-size'], priorFont, 'wrapping never changes font size during a slide');
     assert.equal(timer.delay, 510); timer.fn();
     assert.equal(track.children.length, 7); assert.equal(track.style.transform, 'translateY(0)');
