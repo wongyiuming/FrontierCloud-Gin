@@ -359,6 +359,44 @@ def verify_lyric_access(page, selector, preserve_playback=False):
             'complete_text_accessible_by_actual_input': inputs, 'keyboard_scroll_preserved_playback': before is not None}
 
 
+def verify_center_play(page):
+    inputs = []
+    for text in ('短句', LONG_TEXT):
+        for mechanism in ('mouse', 'touch'):
+            page.evaluate('''text=>{art.pause();const base=art.currentTime;
+                activeLyricEntries=Array.from({length:7},(_,i)=>({time:i<=3?0:base+(i-3)*60,text:i===3?text:'短句'}));
+                document.getElementById('inlineLyrics').classList.remove('hidden');renderLyricWindow(3);}''', text)
+            page.wait_for_function('()=>art.video.paused && !art.video.seeking && !art.maskElement.hidden')
+            before = page.evaluate('''()=>{const button=art.maskElement,box=button.getBoundingClientRect();
+                const x=box.left+box.width/2,y=box.top+box.height/2;
+                return {x,y,buttonHit:document.elementFromPoint(x,y)?.closest('.art-center-play')===button,
+                    index:currentIndex,sequence:playerSwitchSequence,source:art.video.currentSrc,time:art.currentTime,
+                    lyricLength:document.querySelector('#inlineLyricsTrack .sync-lyric.current').textContent.length};}''')
+            assert before['buttonHit'] and before['lyricLength'] == len(text)
+            state = page.evaluate_handle('''()=>{const state={video:art.video,seeks:0};
+                state.onSeek=()=>state.seeks++;state.video.addEventListener('seeking',state.onSeek);return state;}''')
+            try:
+                if mechanism == 'mouse':
+                    page.mouse.click(before['x'], before['y'])
+                else:
+                    page.touchscreen.tap(before['x'], before['y'])
+                page.wait_for_function('(before)=>!art.video.paused && art.currentTime>before+.05', arg=before['time'], timeout=30000)
+                # Observe beyond the background gesture's 250ms next-track timer.
+                page.wait_for_timeout(400)
+                after = page.evaluate('''state=>({index:currentIndex,sequence:playerSwitchSequence,
+                    source:art.video.currentSrc,time:art.currentTime,paused:art.video.paused,pending:clickTimer!==null,
+                    sameVideo:state.video===art.video,seeks:state.seeks})''', state)
+            finally:
+                page.evaluate("state=>state.video.removeEventListener('seeking',state.onSeek)", state)
+                state.dispose()
+            assert not after['paused'] and not after['pending']
+            assert (before['index'], before['sequence'], before['source']) == (after['index'], after['sequence'], after['source'])
+            assert after['sameVideo'] and after['seeks'] == 0 and before['time'] < after['time'], 'center play must resume without seeking'
+            inputs.append({'mechanism': mechanism, 'before': before, 'after': after})
+    page.evaluate('()=>art.pause()')
+    return inputs
+
+
 def verify_lyric_gestures(page):
     page.evaluate('()=>selectMedia(0)')
     page.wait_for_function('() => currentIndex===0 && art.currentTime>.1 && !art.video.paused', timeout=30000)
@@ -410,8 +448,10 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
             assert page.locator('.fullscreen-lyrics-column').count() == 3
             page.screenshot(path=str(Path(record['output']) / f'lyrics-{width}.png'))
             page.evaluate('()=>closeFullscreenLyrics()')
+            center_play = verify_center_play(page)
             geometry.append({'viewport': [width, height], 'inline': inline, 'fullscreen': full,
-                             'row_offset': animation, 'wrapped_direct_render': wrapped})
+                             'row_offset': animation, 'wrapped_direct_render': wrapped,
+                             'center_play_inputs': center_play})
         gestures = verify_lyric_gestures(page)
         record['shared_lyrics'] = {'actual_served_renderer': True, 'layout_fixture_not_lyric_relation': True, 'layouts': geometry, 'gestures': gestures}
         record['shared_lyrics_verified'] = True
