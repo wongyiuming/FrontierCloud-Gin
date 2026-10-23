@@ -1240,7 +1240,6 @@ function cancelPlayerArtwork() {
 
 function playerArtworkReady() {
     if (typeof PLAYER_KIND === 'undefined' || PLAYER_KIND !== 'audio') return true;
-    if (typeof window.requestIdleCallback !== 'function') return false;
     const video = art?.video;
     if (document.hidden || !video || video.seeking) return false;
     if (video.paused) return !art.playRequested;
@@ -1273,6 +1272,7 @@ function pumpPlayerArtwork() {
 
 async function paintPlayerThumbnail(media, image) {
     if (!image || !usesPlayerThumbnail(media) || !playerArtworkReady()
+        || typeof window.requestIdleCallback !== 'function'
         || window.FrontierMusicMetadata?.canThumbnail?.() !== true) return;
     playerArtworkWasReady = true;
     const source = media.cover;
@@ -1360,7 +1360,8 @@ function observePlaylistMetadata(list) {
                     void paintPlayerThumbnail(media, entry.target.querySelector?.('img'));
                 } else visibleArtworkTracks.delete(media);
             }
-            if (!media?.encryption || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
+            if ((!media?.encryption && media?.native_metadata !== true)
+                || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
             if (entry.isIntersecting) visibleMetadataTracks.add(media);
             else visibleMetadataTracks.delete(media);
         }
@@ -1378,8 +1379,26 @@ function mediaIdentity(item) {
     return item?.resource_id || item?.media_id || item?.media_path || '';
 }
 
+function reuseNativeAlbumCover(media) {
+    if (media?.native_metadata !== true || media.encryption || media.encrypted || !media.album) return;
+    const parent = path => String(path || '').slice(0, String(path || '').lastIndexOf('/'));
+    const directory = parent(media.media_path);
+    const siblings = currentMediaList.filter(item => item.native_metadata === true && !item.encryption && !item.encrypted
+        && item.album === media.album && parent(item.media_path) === directory);
+    const cover = siblings.find(item => String(item.cover || '').startsWith('/api/v1/media/cover?'))?.cover;
+    if (!cover) return;
+    for (const item of siblings) {
+        if (!item.cover || item.cover === '/favicon.ico') {
+            item.cover = cover;
+            updateMetadataRow(item);
+            if (currentMediaList[currentIndex] === item) updateMediaSession(item);
+        }
+    }
+}
+
 function loadSelectedMetadata(media, priority = true) {
-    if (!media?.encryption || !window.FrontierMusicMetadata) return Promise.resolve(true);
+    if ((!media?.encryption && media?.native_metadata !== true)
+        || !window.FrontierMusicMetadata) return Promise.resolve(true);
     if (metadataTracks.has(media)) return metadataPromises.get(media) || Promise.resolve(true);
     if (!playerArtworkReady()) return Promise.resolve(null);
     playerArtworkWasReady = true;
@@ -1388,12 +1407,19 @@ function loadSelectedMetadata(media, priority = true) {
     const read = () => window.FrontierMusicMetadata.metadata(media, {priority, signal});
     const operation = typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
         ? new Promise(resolve => {
-            if (typeof window.requestIdleCallback !== 'function') { resolve(null); return; }
-            const cancelled = () => { window.cancelIdleCallback(id); resolve(null); };
-            const id = window.requestIdleCallback(deadline => {
+            const idle = typeof window.requestIdleCallback === 'function';
+            const cancelled = () => {
+                if (idle) window.cancelIdleCallback?.(id); else clearTimeout(id);
                 signal.removeEventListener('abort', cancelled);
-                resolve(!signal.aborted && deadline.timeRemaining() >= 8 && playerArtworkReady() ? Promise.resolve().then(read) : null);
-            });
+                resolve(null);
+            };
+            const ready = deadline => {
+                signal.removeEventListener('abort', cancelled);
+                resolve(!signal.aborted && (!idle || deadline.timeRemaining() >= 8) && playerArtworkReady()
+                    ? Promise.resolve().then(read) : null);
+            };
+            // One delayed attempt yields to playback; it never polls or bypasses buffer admission.
+            const id = idle ? window.requestIdleCallback(ready) : setTimeout(ready, 250);
             signal.addEventListener('abort', cancelled, {once: true});
             if (signal.aborted) cancelled();
         }) : read();
@@ -1401,6 +1427,7 @@ function loadSelectedMetadata(media, priority = true) {
         if (!tags || signal.aborted) { metadataTracks.delete(media); return null; }
         for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) media[field] = tags[field];
         if (!currentMediaList.includes(media)) return true;
+        reuseNativeAlbumCover(media);
         updateMetadataRow(media);
         if (currentMediaList[currentIndex] === media) {
             if (art) art.title = middleEllipsis(media.title, 54);

@@ -607,6 +607,12 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		time.Sleep(time.Second)
 	}
 	t.Log("real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed", kind, "2 Direct / 2 Relay")
+	if os.Getenv("FRONTIERCLOUD_TEST_MEDIA_BROWSER") == "1" {
+		if len(migrationCase) != 0 || os.Getenv("FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER") != "" {
+			t.Fatal("normal-TLS browser is additional to the default control matrix only")
+		}
+		fleetMediaBrowserGate(t, ctx, e, project, sites, perform)
+	}
 	if os.Getenv("FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER") == "1" {
 		fleetEncryptedQueueBrowserGate(t, ctx, e, sites)
 		fleetIdleCPU(t, ctx, e, sites)

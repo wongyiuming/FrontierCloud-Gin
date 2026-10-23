@@ -358,3 +358,5 @@ assert(directoryAdminCss.includes('.priority-directory-row'));
 assert(directoryAdminCss.includes('.priority-directory-control'));
 
 console.log('admin-ui-smoke-ok');
+
+await import('./admin_media_address_smoke.mjs');

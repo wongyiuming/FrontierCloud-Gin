@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type CategoryArtwork struct {
@@ -41,15 +42,25 @@ func (s *Service) CategoryArtwork(ctx context.Context, kind string, entries []Ca
 }
 
 func (s *Service) DirectoryArtwork(ctx context.Context, name string, include bool) (CategoryArtwork, error) {
+	// Include category authorization/existence in the same lookup deadline;
+	// candidate traversal must not receive a fresh budget after a slow query.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	if err := s.CategoryExists(ctx, name, "music"); err != nil {
 		return CategoryArtwork{}, err
 	}
-	artwork := s.categoryArtwork(ctx, name, include)
+	artwork, err := s.categoryArtwork(ctx, name, include)
+	if err != nil {
+		return CategoryArtwork{}, err
+	}
 	return CategoryArtwork{Cover: artwork.Cover, MetadataTracks: artwork.Tracks}, nil
 }
-func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) directoryArtwork {
+func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) (directoryArtwork, error) {
 	if !categoryShape(name, "music") {
-		return directoryArtwork{}
+		return directoryArtwork{}, ErrCategory
+	}
+	if err := ctx.Err(); err != nil {
+		return directoryArtwork{}, err
 	}
 	generation := uint64(0)
 	reliable, cacheable := s.repository.(catalogGeneration)
@@ -66,52 +77,69 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		cached, ok := s.categoryCovers[key]
 		s.tagsMu.Unlock()
 		if ok {
-			return cached
+			return cached, nil
 		}
 	}
+	// One request-wide candidate/directory budget. This endpoint only returns
+	// cheap candidates: selected/visible browser work loads tags later, never a
+	// serial directory-wide media read on the catalog request path.
 	artwork := directoryArtwork{}
-	tracks, err := s.Catalog(ctx, "music", name, "", include)
-	if err == nil && len(tracks) > 0 {
+	remaining := 8
+	collect := func(directory string) (bool, error) {
+		tracks, err := s.Catalog(ctx, "music", directory, "", include)
+		if err != nil {
+			return false, err
+		}
+		candidates := make([]Track, 0, min(len(tracks), remaining))
+		for _, track := range tracks {
+			if ctx.Err() != nil {
+				return false, ctx.Err()
+			}
+			if len(candidates) == remaining {
+				break
+			}
+			if strings.HasSuffix(strings.ToLower(track.MediaPath), ".mp3") {
+				candidates = append(candidates, track)
+			}
+		}
+		count := len(candidates)
+		remaining -= count
+		tracks = candidates
 		ids := make([]string, len(tracks))
 		for i := range tracks {
 			ids[i] = tracks[i].MediaID
 		}
-		metadata, e := s.Encryptions(ctx, ids)
-		if e == nil {
-			for i := range tracks {
-				if metadata[tracks[i].MediaID] != nil {
-					if len(artwork.Tracks) < 8 && strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3") {
-						track := tracks[i]
-						track.Encryption = metadata[track.MediaID]
-						artwork.Tracks = append(artwork.Tracks, track)
-					}
-					continue
-				}
-				s.applyMusicTags(ctx, &tracks[i])
-				if strings.HasPrefix(tracks[i].Cover, "/api/v1/media/cover?") {
-					artwork.Cover = tracks[i].Cover
-					artwork.Tracks = nil
-					break
-				}
-			}
+		metadata, err := s.Encryptions(ctx, ids)
+		if err != nil {
+			return false, err
 		}
-	} else if err == nil && len(strings.Split(name, "/")) == 2 {
+		for i := range tracks {
+			tracks[i].Encryption = metadata[tracks[i].MediaID]
+			s.DecorateMusicTracks(ctx, tracks[i:i+1])
+			artwork.Tracks = append(artwork.Tracks, tracks[i])
+		}
+		return count != 0, nil
+	}
+	found, err := collect(name)
+	if err == nil && !found && len(strings.Split(name, "/")) == 2 {
 		children, e := s.Subcategories(ctx, "music", name, include)
+		err = e
 		if e == nil {
-			for _, child := range children {
-				candidate := s.categoryArtwork(ctx, name+"/"+child.Name, include)
-				if candidate.Cover != "" {
-					artwork = candidate
+			for _, child := range children[:min(len(children), 7)] {
+				if remaining == 0 || ctx.Err() != nil {
 					break
 				}
-				if remaining := 8 - len(artwork.Tracks); remaining > 0 {
-					if len(candidate.Tracks) > remaining {
-						candidate.Tracks = candidate.Tracks[:remaining]
-					}
-					artwork.Tracks = append(artwork.Tracks, candidate.Tracks...)
+				if _, err = collect(name + "/" + child.Name); err != nil {
+					break
 				}
 			}
 		}
+	}
+	if err != nil {
+		return directoryArtwork{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return directoryArtwork{}, err
 	}
 	if cacheable {
 		s.tagsMu.Lock()
@@ -126,5 +154,5 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		}
 		s.tagsMu.Unlock()
 	}
-	return artwork
+	return artwork, nil
 }

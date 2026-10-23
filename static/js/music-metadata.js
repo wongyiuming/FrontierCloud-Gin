@@ -115,8 +115,81 @@
             signal?.removeEventListener('abort', abort);
         }
     }
+    async function metadataBytes(response) {
+        if (!response.body) throw new Error('音乐标签读取失败');
+        const reader = response.body.getReader(), chunks = [];
+        let length = 0;
+        try {
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                length += value.byteLength;
+                if (length > 128 * 1024) throw new Error('音乐标签响应超过上限');
+                chunks.push(value);
+            }
+        } catch (error) {
+            await reader.cancel().catch(() => {});
+            throw error;
+        } finally { reader.releaseLock(); }
+        const bytes = new Uint8Array(length);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        return bytes;
+    }
+    async function nativeMetadata(entry, signal) {
+        const path = entry.media_path || entry.path, identity = entry.resource_id || '';
+        if (typeof path !== 'string' || typeof identity !== 'string' || (identity && !/^[a-f0-9]{64}$/.test(identity)))
+            throw new Error('音乐标签来源无效');
+        const query = new URLSearchParams({file_path: path, resource_id: identity});
+        const controller = new AbortController(), abort = () => controller.abort();
+        signal?.addEventListener('abort', abort, {once: true});
+        if (signal?.aborted) controller.abort();
+        const timeout = setTimeout(abort, 15000);
+        try {
+            let response;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                controller.signal.throwIfAborted();
+                response = await fetch('/api/v1/media/metadata?' + query, {
+                    credentials: 'same-origin', cache: 'no-store', priority: 'low', signal: controller.signal,
+                });
+                if (response.ok) break;
+                const retry = response.status === 503 ? response.headers.get('Retry-After') : null;
+                await response.body?.cancel();
+                const seconds = typeof retry === 'string' && /^\d+$/.test(retry) ? Number(retry) : NaN;
+                if (attempt !== 0 || !Number.isInteger(seconds) || seconds < 1 || seconds >= 15)
+                    throw new Error('音乐标签读取失败');
+                await new Promise((resolve, reject) => {
+                    const abortDelay = () => {
+                        clearTimeout(timer);
+                        controller.signal.removeEventListener('abort', abortDelay);
+                        reject(controller.signal.reason || new Error('音乐标签读取已取消'));
+                    };
+                    const timer = setTimeout(() => {
+                        controller.signal.removeEventListener('abort', abortDelay);
+                        resolve();
+                    }, seconds * 1000);
+                    controller.signal.addEventListener('abort', abortDelay, {once: true});
+                    if (controller.signal.aborted) abortDelay();
+                });
+            }
+            const value = JSON.parse(new TextDecoder().decode(await metadataBytes(response)));
+            if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(field =>
+                !['title', 'artist', 'album', 'cover'].includes(field) || typeof value[field] !== 'string'
+                || value[field].length > (field === 'cover' ? 64 * 1024 : 8192))) throw new Error('音乐标签响应无效');
+            if (value.cover) {
+                const cover = new URL(value.cover, window.location.href);
+                if (!value.cover.startsWith('/api/v1/media/cover?') || cover.origin !== window.location.origin
+                    || cover.hash || cover.searchParams.size !== 2 || cover.searchParams.get('file_path') !== path
+                    || cover.searchParams.get('resource_id') !== identity) throw new Error('音乐标签来源无效');
+            }
+            return value;
+        } finally {
+            clearTimeout(timeout); signal?.removeEventListener('abort', abort);
+        }
+    }
     async function load(entry, signal) {
         signal?.throwIfAborted();
+        if (entry.native_metadata === true && !entry.encryption) return nativeMetadata(entry, signal);
         if (!window.FrontierMediaCrypto || !window.FrontierCryptoCommon) throw new Error('浏览器解密组件未加载');
         window.FrontierCryptoCommon.validate(entry.encryption);
         const size = entry.encryption.plaintext_size;
@@ -153,9 +226,11 @@
         return result;
     }
     function metadata(entry, {priority = false, signal} = {}) {
-        if (!entry?.encryption || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
-        // File ID, descriptor and logical identity prevent reuse after replacement.
-        const key = JSON.stringify([entry.media_path || entry.path, entry.resource_id || entry.media_id, entry.encryption]);
+        if ((!entry?.encryption && entry?.native_metadata !== true) || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
+        // Native catalog entries must reauthorize after each catalog refresh.
+        // Encrypted identities retain descriptor-bound reuse after replacement.
+        const key = entry.native_metadata === true && !entry.encryption ? entry
+            : JSON.stringify([entry.media_path || entry.path, entry.resource_id || entry.media_id, entry.encryption]);
         if (!cache.has(key)) {
             if (cache.size >= 128) cache.delete(cache.keys().next().value);
             const promise = limited(() => load(entry, signal), priority).catch(error => { cache.delete(key); throw error; });
@@ -165,7 +240,7 @@
     }
     async function decorate(entries, onUpdate = () => {}) {
         await Promise.all(entries.map(async entry => {
-            if (!entry?.encryption) return;
+            if (!entry?.encryption && entry?.native_metadata !== true) return;
             try {
                 const tags = await metadata(entry);
                 for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) entry[field] = tags[field];

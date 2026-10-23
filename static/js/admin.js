@@ -1514,7 +1514,7 @@ $('logout').onclick = async () => {
     }
 };
 
-(async () => {
+document.addEventListener('DOMContentLoaded', async () => {
     try {
         const status = await api('/api/v1/media/admin/status');
         uploadLimits = {...uploadLimits, ...status.limits};
@@ -1550,7 +1550,7 @@ $('logout').onclick = async () => {
     } catch (_error) {
         // api() handles expired sessions and navigation.
     }
-})();
+}, {once: true});
 // Karaoke user controls reuse the existing Admin session and CSRF boundary.
 (() => {
     const panel = document.getElementById('usersPanel');

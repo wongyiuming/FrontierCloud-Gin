@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf16"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
@@ -19,6 +19,8 @@ import (
 
 const maxMusicTagBytes = 8 << 20
 const maxMusicPictureBytes = 4 << 20
+
+var ErrMetadataBusy = errors.New("music metadata is busy")
 
 type MusicTags struct {
 	Title   string
@@ -233,17 +235,25 @@ func tagsFromFile(file *os.File, size int64) MusicTags {
 	tags := readMusicTags(file)
 	if size >= 128 && (tags.Title == "" || tags.Artist == "" || tags.Album == "") {
 		tail := make([]byte, 128)
-		if _, err := file.ReadAt(tail, size-128); err == nil && string(tail[:3]) == "TAG" {
-			if tags.Title == "" {
-				tags.Title = tagText(append([]byte{0}, tail[3:33]...))
-			}
-			if tags.Artist == "" {
-				tags.Artist = tagText(append([]byte{0}, tail[33:63]...))
-			}
-			if tags.Album == "" {
-				tags.Album = tagText(append([]byte{0}, tail[63:93]...))
-			}
+		if _, err := file.ReadAt(tail, size-128); err == nil {
+			tags = legacyMusicTags(tags, tail)
 		}
+	}
+	return tags
+}
+
+func legacyMusicTags(tags MusicTags, tail []byte) MusicTags {
+	if len(tail) != 128 || string(tail[:3]) != "TAG" {
+		return tags
+	}
+	if tags.Title == "" {
+		tags.Title = tagText(append([]byte{0}, tail[3:33]...))
+	}
+	if tags.Artist == "" {
+		tags.Artist = tagText(append([]byte{0}, tail[33:63]...))
+	}
+	if tags.Album == "" {
+		tags.Album = tagText(append([]byte{0}, tail[63:93]...))
 	}
 	return tags
 }
@@ -251,14 +261,28 @@ func tagsFromFile(file *os.File, size int64) MusicTags {
 // Metadata uses the same path/placement authorization as streaming. Remote
 // readers are closed after the tag prefix, never after downloading a song.
 func (s *Service) MusicMetadata(ctx context.Context, name, id string) (MusicTags, error) {
-	return s.musicMetadata(ctx, name, id, true)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return s.musicMetadata(ctx, name, id)
 }
 func (s *Service) cachedMusicTags(key string, read func() (MusicTags, error)) (MusicTags, error) {
 	s.tagsMu.Lock()
 	tags, ok := s.tagsCache[key]
+	if s.metadataSlots == nil {
+		s.metadataSlots = make(chan struct{}, 2)
+	}
+	slots := s.metadataSlots
 	s.tagsMu.Unlock()
 	if ok {
 		return tags, nil
+	}
+	// Every caller has already reauthorized the current path/owner/encryption
+	// and file identity. Warm artwork never competes with new heavy tag reads.
+	select {
+	case slots <- struct{}{}:
+		defer func() { <-slots }()
+	default:
+		return MusicTags{}, ErrMetadataBusy
 	}
 	tags, err := read()
 	if err != nil {
@@ -281,7 +305,7 @@ func (s *Service) cachedMusicTags(key string, read func() (MusicTags, error)) (M
 	s.tagsBytes += size
 	return tags, nil
 }
-func (s *Service) musicMetadata(ctx context.Context, name, id string, checkEncryption bool) (MusicTags, error) {
+func (s *Service) musicMetadata(ctx context.Context, name, id string) (MusicTags, error) {
 	release, err := s.acquire(ctx, false)
 	if err != nil {
 		return MusicTags{}, err
@@ -297,42 +321,61 @@ func (s *Service) musicMetadata(ctx context.Context, name, id string, checkEncry
 	if role == "Follower" {
 		return MusicTags{}, os.ErrNotExist
 	}
+	if id != "" && !ownedObjectID.MatchString(id) {
+		return MusicTags{}, ErrPath
+	}
 	if role == "Master" {
 		row, relation, err := s.resolveGlobal(ctx, id, name)
 		if err != nil {
 			return MusicTags{}, err
 		}
-		if row.Kind != "audio" {
+		if row.Kind != "audio" || !strings.HasSuffix(strings.ToLower(row.Path), ".mp3") {
 			return MusicTags{}, ErrPath
 		}
-		if checkEncryption {
-			if repository, ok := s.repository.(store.EncryptionRepository); ok {
-				meta, e := repository.Encryption(ctx, row.ID)
-				if e != nil {
-					return MusicTags{}, e
-				}
-				if meta != nil {
-					return MusicTags{}, nil
-				}
+		if repository, ok := s.repository.(store.EncryptionRepository); ok {
+			meta, e := repository.Encryption(ctx, row.ID)
+			if e != nil {
+				return MusicTags{}, e
+			}
+			if meta != nil {
+				return MusicTags{}, nil
 			}
 		}
 		if relation != nil {
-			return s.cachedMusicTags(row.ID+":"+row.ETag, func() (MusicTags, error) {
-				reader, err := s.control.ReadGlobalMedia(ctx, row)
+			return s.cachedMusicTags(row.ID+":"+row.MemberID+":"+row.ObjectID+":"+row.ETag+":"+strconv.FormatInt(row.Bytes, 10), func() (MusicTags, error) {
+				tags, err := s.remoteMusicTags(ctx, row)
 				if err != nil {
 					return MusicTags{}, err
 				}
-				defer reader.Close()
-				return readMusicTags(reader), nil
+				latest, _, err := s.resolveGlobal(ctx, row.ID, row.Path)
+				if err != nil {
+					return MusicTags{}, err
+				}
+				if latest.ObjectID != row.ObjectID || latest.MemberID != row.MemberID || latest.Bytes != row.Bytes || latest.ETag != row.ETag {
+					return MusicTags{}, ErrPath
+				}
+				return tags, nil
 			})
 		}
 		name = row.Path
+	}
+	if !strings.HasSuffix(strings.ToLower(name), ".mp3") {
+		return MusicTags{}, ErrPath
+	}
+	if role != "Master" && id != "" {
+		object, err := s.repository.ObjectByID(ctx, id)
+		if err != nil {
+			return MusicTags{}, err
+		}
+		if object == nil || object.Path != name {
+			return MusicTags{}, ErrPath
+		}
 	}
 	object, err := s.ValidateTrack(name)
 	if err != nil || object.Kind != "audio" {
 		return MusicTags{}, ErrPath
 	}
-	if checkEncryption && role != "Master" {
+	if role != "Master" {
 		ids, e := s.repository.EnsureObjects(ctx, []store.MediaObject{object})
 		if e != nil {
 			return MusicTags{}, e
@@ -359,38 +402,38 @@ func (s *Service) musicMetadata(ctx context.Context, name, id string, checkEncry
 	key := name + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
 	return s.cachedMusicTags(key, func() (MusicTags, error) { return tagsFromFile(file, info.Size()), nil })
 }
-func (s *Service) applyMusicTags(ctx context.Context, track *Track) {
-	if track.Type != "audio" || track.Encryption != nil {
-		return
-	}
-	tags, err := s.musicMetadata(ctx, track.MediaPath, track.ResourceID, false)
-	if err != nil {
-		return
-	}
-	if tags.Title != "" {
-		track.Title = tags.Title
-	}
-	if tags.Artist != "" {
-		track.Artist = tags.Artist
-	}
-	track.Album = tags.Album
-	if len(tags.Picture) > 0 {
-		track.Cover = "/api/v1/media/cover?" + url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode()
+func (s *Service) DecorateMusicTracks(ctx context.Context, tracks []Track) {
+	for i := range tracks {
+		tracks[i].NativeMetadata = tracks[i].Type == "audio" && tracks[i].Encryption == nil && strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3")
 	}
 }
-func (s *Service) DecorateMusicTracks(ctx context.Context, tracks []Track) {
-	covers := map[string]string{}
-	for i := range tracks {
-		s.applyMusicTags(ctx, &tracks[i])
-		if strings.HasPrefix(tracks[i].Cover, "/api/v1/media/cover?") {
-			covers[path.Dir(tracks[i].MediaPath)+":"+tracks[i].Album] = tracks[i].Cover
-		}
+
+func (s *Service) remoteMusicTags(ctx context.Context, row store.GlobalMedia) (MusicTags, error) {
+	if s.control == nil {
+		return MusicTags{}, ErrUnavailable
 	}
-	for i := range tracks {
-		if tracks[i].Encryption == nil && tracks[i].Cover == "/favicon.ico" && tracks[i].Album != "" {
-			if cover := covers[path.Dir(tracks[i].MediaPath)+":"+tracks[i].Album]; cover != "" {
-				tracks[i].Cover = cover
-			}
-		}
+	if row.Bytes < 10 {
+		return MusicTags{}, nil
 	}
+	header, err := s.control.ReadGlobalMediaRange(ctx, row, 0, 9)
+	if err != nil {
+		return MusicTags{}, err
+	}
+	tags := MusicTags{}
+	length := syncSafe(header[6:10])
+	if string(header[:3]) == "ID3" && header[3] >= 2 && header[3] <= 4 && length > 0 && length <= maxMusicTagBytes && int64(length) <= row.Bytes-10 {
+		body, err := s.control.ReadGlobalMediaRange(ctx, row, 10, int64(length)+9)
+		if err != nil {
+			return MusicTags{}, err
+		}
+		tags = readMusicTags(io.MultiReader(bytes.NewReader(header), bytes.NewReader(body)))
+	}
+	if row.Bytes >= 128 && (tags.Title == "" || tags.Artist == "" || tags.Album == "") {
+		tail, err := s.control.ReadGlobalMediaRange(ctx, row, row.Bytes-128, row.Bytes-1)
+		if err != nil {
+			return MusicTags{}, err
+		}
+		tags = legacyMusicTags(tags, tail)
+	}
+	return tags, nil
 }

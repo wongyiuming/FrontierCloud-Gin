@@ -29,6 +29,27 @@ func (s *Service) ReadGlobalMedia(ctx context.Context, v store.GlobalMedia) (io.
 	return client.MediaRead(ctx, rel.Endpoint, v.ObjectID, v.ID, v.MemberID, token, v.Bytes)
 }
 
+// ReadGlobalMediaRange reads only a bounded authenticated metadata range. It
+// uses the same capability and native owner identities as ordinary delivery.
+func (s *Service) ReadGlobalMediaRange(ctx context.Context, v store.GlobalMedia, start, end int64) ([]byte, error) {
+	if v.RelationshipID == nil {
+		return nil, store.ErrNodeState
+	}
+	token, err := s.MediaCapability(ctx, *v.RelationshipID, v.MemberID, v.ObjectID, v.ID, "archive-download", "")
+	if err != nil {
+		return nil, err
+	}
+	rel, err := s.repo.Relationship(ctx, *v.RelationshipID)
+	if err != nil {
+		return nil, err
+	}
+	client, ok := s.transport.(MediaRangeReadClient)
+	if !ok {
+		return nil, store.ErrNodeState
+	}
+	return client.MediaReadRange(ctx, rel.Endpoint, v.ObjectID, v.ID, v.MemberID, token, v.Bytes, start, end)
+}
+
 func (s *Service) RenameStorage(ctx context.Context, relationship, old, target, operation string) error {
 	if !storageRenameID.MatchString(relationship) || !storageRenameID.MatchString(operation) || !store.ValidDirectoryRename(old, target) {
 		return store.ErrNodeState
