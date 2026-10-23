@@ -82,9 +82,21 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		if err != nil {
 			return false, err
 		}
-		count := min(len(tracks), remaining)
+		candidates := make([]Track, 0, min(len(tracks), remaining))
+		for _, track := range tracks {
+			if ctx.Err() != nil {
+				return false, ctx.Err()
+			}
+			if len(candidates) == remaining {
+				break
+			}
+			if strings.HasSuffix(strings.ToLower(track.MediaPath), ".mp3") {
+				candidates = append(candidates, track)
+			}
+		}
+		count := len(candidates)
 		remaining -= count
-		tracks = tracks[:count]
+		tracks = candidates
 		ids := make([]string, len(tracks))
 		for i := range tracks {
 			ids[i] = tracks[i].MediaID
@@ -94,9 +106,6 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 			return false, err
 		}
 		for i := range tracks {
-			if !strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3") {
-				continue
-			}
 			tracks[i].Encryption = metadata[tracks[i].MediaID]
 			s.DecorateMusicTracks(ctx, tracks[i:i+1])
 			artwork.Tracks = append(artwork.Tracks, tracks[i])

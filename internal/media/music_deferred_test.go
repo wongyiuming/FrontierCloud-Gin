@@ -88,6 +88,49 @@ func TestMusicArtworkUsesOneCandidateBudgetAcrossChildren(t *testing.T) {
 	}
 }
 
+func TestMusicArtworkFiltersUnsupportedBeforeCandidateBudget(t *testing.T) {
+	root, db, service := deleteFixture(t)
+	ctx := context.Background()
+	identity, err := node.Initialize(ctx, db.Nodes(), filepath.Join(t.TempDir(), "secrets"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.identity = identity
+	directory := "music/Mixed"
+	if err := os.MkdirAll(filepath.Join(root, directory), 0700); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := []string{"flac", "m4a", "wav", "flac", "m4a", "wav", "flac", "m4a"}
+	for i, extension := range unsupported {
+		if err := os.WriteFile(filepath.Join(root, directory, fmt.Sprintf("%02d.%s", i, extension)), []byte("not an MP3"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 8; i < 17; i++ {
+		if err := os.WriteFile(filepath.Join(root, directory, fmt.Sprintf("%02d.MP3", i)), tagFixture(3, tagFrame(3, "TIT2", []byte("\x03Deferred title"))), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tracks, err := service.Catalog(ctx, "music", directory, "", false)
+	if err != nil || len(tracks) != 17 {
+		t.Fatal("mixed catalog fixture", len(tracks), err)
+	}
+	for i, extension := range unsupported {
+		if tracks[i].MediaPath != directory+"/"+fmt.Sprintf("%02d.%s", i, extension) {
+			t.Fatal("unsupported fixtures must precede every MP3", tracks[i])
+		}
+	}
+	art, err := service.DirectoryArtwork(ctx, directory, false)
+	if err != nil || len(art.MetadataTracks) != 8 || len(service.tagsCache) != 0 {
+		t.Fatal("unsupported tracks consumed the lazy MP3 budget", art, len(service.tagsCache), err)
+	}
+	for i, track := range art.MetadataTracks {
+		if track.MediaPath != directory+"/"+fmt.Sprintf("%02d.MP3", i+8) || !track.NativeMetadata || track.Title == "Deferred title" {
+			t.Fatal("wrong or eagerly read artwork candidate", track)
+		}
+	}
+}
+
 func TestDeferredMusicMetadataPreservesEncryptionAndNonQueuingAdmission(t *testing.T) {
 	_, _, service := deleteFixture(t)
 	tracks := []Track{{Type: "audio", MediaPath: "music/a/plain.mp3"}, {Type: "audio", MediaPath: "music/a/encrypted.mp3", Encryption: &mediacrypto.Metadata{}}, {Type: "video", MediaPath: "vido/a/video.mp4"}, {Type: "audio", MediaPath: "music/a/other.flac"}}
