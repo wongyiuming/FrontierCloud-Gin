@@ -184,6 +184,15 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 			if site != "primary" {
 				// Reauthorize even a warm tag/cover cache against the current
 				// heartbeat. A temporary outage must permit the bounded browser retry.
+				before, err := db.Nodes().Relationship(ctx, relID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if _, err := db.Database().Exec("UPDATE node_relationships SET last_heartbeat=? WHERE relationship_id=?", before.LastHeartbeat, relID); err != nil {
+						t.Error("restore fixture heartbeat", err)
+					}
+				})
 				if _, err := db.Database().Exec("UPDATE node_relationships SET last_heartbeat=1 WHERE relationship_id=?", relID); err != nil {
 					t.Fatal(err)
 				}
@@ -277,21 +286,22 @@ func TestMusicMetadataRequestContextFailureIsRetryable(t *testing.T) {
 	}
 }
 
-func TestMusicMetadataHiddenAndEncryptedDoNotBecomeRetryable(t *testing.T) {
-	router, db, dir, public := publicFixture(t, false)
+func TestMusicMetadataInvalidPathsAndEncryptedDoNotBecomeRetryable(t *testing.T) {
+	router, _, _, public := publicFixture(t, false)
 	ctx := context.Background()
-	data, _ := musicArtworkFixture()
-	name := "music/artist/song.mp3"
-	if err := os.WriteFile(filepath.Join(dir, "media", name), data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Media().SetHidden(ctx, []string{name}, true, store.AdminAudit{}); err != nil {
-		t.Fatal(err)
-	}
-	for _, endpoint := range []string{"metadata", "cover"} {
-		response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+url.Values{"file_path": {name}}.Encode(), "")
-		if response.Code != 404 || response.Header().Get("Retry-After") != "" || strings.Contains(response.Body.String(), "测试曲目") {
-			t.Fatal("hidden metadata authorization changed", endpoint, response.Code, response.Header())
+	// Plaintext hidden entries retain their existing direct-URL streaming
+	// semantics. Permanent refusal here means an invalid path or identity.
+	for _, query := range []url.Values{
+		{"file_path": {"../song.mp3"}},
+		{"file_path": {"music/artist/missing.mp3"}},
+		{"file_path": {"music/artist/song.mp3"}, "resource_id": {"invalid"}},
+		{"file_path": {"music/artist/song.mp3"}, "resource_id": {strings.Repeat("f", 64)}},
+	} {
+		for _, endpoint := range []string{"metadata", "cover"} {
+			response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+query.Encode(), "")
+			if response.Code != 404 || response.Header().Get("Retry-After") != "" {
+				t.Fatal("invalid metadata identity/path became retryable", endpoint, response.Code, response.Header())
+			}
 		}
 	}
 	meta, err := mediacrypto.NewMetadata(10)
@@ -305,7 +315,7 @@ func TestMusicMetadataHiddenAndEncryptedDoNotBecomeRetryable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stage.Close()
-	name, err = public.media.PublishEncrypted(ctx, stage, "encrypted.mp3", "music/artist", "", false, 255, store.AdminAudit{}, &meta)
+	name, err := public.media.PublishEncrypted(ctx, stage, "encrypted.mp3", "music/artist", "", false, 255, store.AdminAudit{}, &meta)
 	if err != nil {
 		t.Fatal(err)
 	}

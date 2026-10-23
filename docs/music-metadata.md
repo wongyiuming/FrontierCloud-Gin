@@ -1,18 +1,23 @@
 # Music metadata and directory artwork
 
-Plain MP3 uploads retain their original bytes. The first catalog read derives
-title, artist, album and embedded artwork from ID3v2.2/v2.3/v2.4 tags, with
-ID3v1 text fallback for local files. Missing or malformed tags retain the
-filename and default artwork. These derived fields never change media identity,
+Plain MP3 uploads retain their original bytes. Catalog responses retain filename
+and default artwork; optional metadata requests derive title, artist, album and
+embedded artwork from ID3v2.2/v2.3/v2.4 tags, with bounded ID3v1 tail reads for
+local and remote files. Missing or malformed tags retain the catalog fallbacks.
+These derived fields never change media identity,
 placement, managed paths or explicit lyric relations.
 
 Tag parsing reads at most 8 MiB of metadata and accepts at most 4 MiB of JPEG,
 PNG, WebP or GIF artwork. It does not decode audio, transcode or execute external
-tools. Storage-node reads stop after the tag prefix. Derived metadata and images
+tools. Storage-node reads fetch only the bounded tag prefix and, when needed,
+the final 128 bytes. Derived metadata and images
 share a cache bounded to 256 entries and 32 MiB. File size/modification time or
 remote object identity/ETag key the cache; cover requests revalidate the source
 before serving cached artwork. Non-MP3 audio formats retain their existing
-playback behavior.
+playback behavior. Two non-queuing slots admit cold metadata reads; already
+authorized warm-cache reads do not consume those slots. Temporary admission or
+owner failures return HTTP 503 with a two-second Retry-After. The browser retries
+at most once within its original fifteen-second metadata deadline.
 
 Encrypted MP3 metadata is derived in the authorized browser through the existing
 service-worker Range adapter. The Master and storage nodes never decrypt it.
@@ -32,7 +37,10 @@ browser requests that endpoint only for a visible card, receiving its plain
 cover or at most eight visible encrypted track descriptors as candidates. Directory
 scans admit at most three visible-card jobs and reselect from the currently
 visible page after each phase; paging away cannot enqueue more old-page scans.
-Candidate queries have an eight-second deadline. Encrypted metadata Range reads
+Candidate queries have an eight-second browser deadline and a two-second server
+lookup deadline. A lookup timeout returns HTTP 503, never a successful empty
+result; the browser retries once after two seconds within the same deadline.
+Encrypted metadata Range reads
 have a fifteen-second per-read deadline and retain their candidate for later
 retry on transient failure. The existing two-job decryption limit is unchanged.
 A page-memory lookup cache deduplicates candidate queries, holds at most 32
@@ -53,11 +61,12 @@ original views and Media Session keep their existing original sources.
 Thumbnail work has its own serial channel, preserving both encrypted-metadata
 slots. It reuses a page-local decrypted Blob, or reads only the same-origin
 browser HTTP cache (`only-if-cached`); a cache miss cannot start a network fetch.
-Only visible queue rows request work. Both audio-player tag reads and thumbnails
-require a native browser idle callback with at least eight milliseconds available,
+Only visible queue rows request work. Audio-player tag reads and thumbnails
+use a native browser idle callback with at least eight milliseconds available,
 and either explicitly paused playback or at least twelve seconds buffered ahead
 (a completely buffered final segment also qualifies). There is no forced start
-after a buffering deadline. Missing idle support leaves placeholders/filenames.
+after a buffering deadline. Without idle-callback support, admitted metadata may
+use one cancellable 250ms delay; thumbnails retain their placeholder.
 Falling below that playback-buffer threshold, waiting for media, seeking, switching tracks, backgrounding or leaving the page
 cancels artwork work and in-flight tag Range requests. Thumbnail jobs have a
 two-second total lifetime including queue waiting, and recheck visibility and
@@ -86,8 +95,10 @@ Cover URLs identify the current managed music path and resource ID through
 `/api/v1/media/cover`. Tracks without their own artwork may share another
 visible track's cover in the same album and directory. Music directories derive
 representative artwork from visible plain tracks; a directory without embedded
-artwork uses a consistent album placeholder. Artwork follows catalog visibility
-and mutations; it does not introduce separately managed image files.
+artwork uses a consistent album placeholder. Directory candidates follow the
+catalog's explicit hidden/public scope and mutations; per-file plaintext URLs
+retain the existing media-access semantics. Encrypted key visibility checks
+remain mandatory. No separately managed image files are introduced.
 
 Frontier UI shows nine large album covers per horizontally snapped page. Native
 touch scrolling, mouse drag, wheel and keyboard navigation share the
