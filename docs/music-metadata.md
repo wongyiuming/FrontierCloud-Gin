@@ -15,8 +15,9 @@ share a cache bounded to 256 entries and 32 MiB. File size/modification time or
 remote object identity/ETag key the cache; cover requests revalidate the source
 before serving cached artwork. Non-MP3 audio formats retain their existing
 playback behavior. Two non-queuing slots admit cold metadata reads; already
-authorized warm-cache reads do not consume those slots. Temporary admission or
-owner failures return HTTP 503 with a two-second Retry-After. The browser retries
+authorized warm-cache reads do not consume those slots. Admission saturation,
+known-offline owners and propagated cancellation/deadline errors return HTTP 503
+with a two-second Retry-After. The browser retries
 at most once within its original fifteen-second metadata deadline.
 
 Encrypted MP3 metadata is derived in the authorized browser through the existing
@@ -33,8 +34,9 @@ Covers are deduplicated by SHA-256 in a page-local 32 MiB
 blob pool and revoked on page exit; decrypted tags/covers never enter session
 storage, uploads, SQL, or a server-side cache. Directory listings contain only
 an artwork endpoint URL per album; they do not embed track descriptors. The
-browser requests that endpoint only for a visible card, receiving its plain
-cover or at most eight visible encrypted track descriptors as candidates. Directory
+browser requests that endpoint only for a visible card, receiving at most eight
+visible plain or encrypted MP3 candidates. Plain candidates use the optional
+native metadata endpoint; encrypted candidates are read in the browser. Directory
 scans admit at most three visible-card jobs and reselect from the currently
 visible page after each phase; paging away cannot enqueue more old-page scans.
 Candidate queries have an eight-second browser deadline and a two-second server
