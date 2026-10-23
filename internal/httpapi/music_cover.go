@@ -13,12 +13,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 )
 
 // Retry within the browser's fixed metadata deadline; media streaming's
 // 30-second backoff would outlive that small optional-work budget.
 func temporaryMusicMetadataError(err error) bool {
 	return errors.Is(err, media.ErrMetadataBusy) || errors.Is(err, media.ErrUnavailable) ||
+		errors.Is(err, node.ErrMediaRangeUnavailable) ||
 		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 

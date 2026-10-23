@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -15,8 +16,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
+
+type failingMusicRange struct {
+	*clusterHTTP
+	cause error
+	reads int
+}
+
+func (f *failingMusicRange) MediaReadRange(context.Context, string, string, string, string, string, int64, int64, int64) ([]byte, error) {
+	f.reads++
+	return nil, f.cause
+}
 
 func musicArtworkFixture() ([]byte, []byte) {
 	frame := func(name string, data []byte) []byte {
@@ -236,6 +249,32 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 	if _, err = public.media.UploadMasterBytes(ctx, ticket.ID, bytes.NewReader(payload), store.AdminAudit{}); err != nil {
 		t.Fatal(err)
 	}
+	// A healthy heartbeat does not guarantee the following data-plane read.
+	// Exercise the actual HTTP endpoints with the transport's sanitized sentinel;
+	// failed reads must not poison the cold metadata/cover cache.
+	identity, err := node.Initialize(ctx, db.Nodes(), public.settings.SecretsDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rangeWire := &failingMusicRange{clusterHTTP: wire, cause: node.ErrMediaRangeUnavailable}
+	public.media.ConfigureCluster(db.Nodes(), db.Pool(), node.NewService(db.Nodes(), identity, rangeWire))
+	for _, endpoint := range []string{"metadata", "cover"} {
+		response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+url.Values{"file_path": {ticket.Path}, "resource_id": {ticket.MediaID}}.Encode(), "")
+		if response.Code != 503 || response.Header().Get("Retry-After") != "2" || !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+			t.Fatal("healthy-heartbeat range outage became permanent missing metadata", endpoint, response.Code, response.Header())
+		}
+	}
+	rangeWire.cause = errors.New("metadata range placement or response mismatch")
+	for _, endpoint := range []string{"metadata", "cover"} {
+		response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+url.Values{"file_path": {ticket.Path}, "resource_id": {ticket.MediaID}}.Encode(), "")
+		if response.Code != 404 || response.Header().Get("Retry-After") != "" {
+			t.Fatal("permanent range refusal became retryable", endpoint, response.Code, response.Header())
+		}
+	}
+	if rangeWire.reads != 4 {
+		t.Fatal("HTTP metadata checks did not reach the cold data plane", rangeWire.reads)
+	}
+	public.media.ConfigureCluster(db.Nodes(), db.Pool(), master)
 	ranges := []string{}
 	wire.mediaReadHook = func(value string) { ranges = append(ranges, value) }
 	for _, target := range []string{"/api/v1/media/catalog/media?media_type=music&path=music/Legacy&playback_session_id=cold", "/api/v1/media/catalog/artwork?path=music/Legacy"} {

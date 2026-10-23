@@ -34,6 +34,19 @@ var resourceIdentifier = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var ErrRemoteNotFound = errors.New("node control HTTP 404")
 var ErrRemoteConflict = errors.New("node control HTTP 409")
 
+// ErrMediaRangeUnavailable permits bounded metadata retries without disclosing
+// the peer address or capability from an underlying transport error.
+var ErrMediaRangeUnavailable = errors.New("verified metadata range unavailable")
+
+func mediaRangeUnavailable(ctx context.Context, cause error) error {
+	for _, stable := range []error{context.Canceled, context.DeadlineExceeded} {
+		if errors.Is(ctx.Err(), stable) || errors.Is(cause, stable) {
+			return errors.Join(ErrMediaRangeUnavailable, stable)
+		}
+	}
+	return ErrMediaRangeUnavailable
+}
+
 func ValidIdentifier(value string) bool { return nodeIdentifier.MatchString(value) }
 
 var hostPattern = regexp.MustCompile(`^[a-z0-9.-]+$`)
@@ -128,7 +141,7 @@ func (t *Transport) MediaReadRange(ctx context.Context, origin, objectID, resour
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	resp, err := t.storage.Do(req)
 	if err != nil {
-		return nil, errors.New("verified metadata range unavailable")
+		return nil, mediaRangeUnavailable(ctx, err)
 	}
 	defer resp.Body.Close()
 	length := end - start + 1
@@ -136,7 +149,14 @@ func (t *Transport) MediaReadRange(ctx context.Context, origin, objectID, resour
 		return nil, errors.New("metadata range placement or response mismatch")
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, length+1))
-	if err != nil || int64(len(raw)) != length {
+	if err != nil {
+		var networkError net.Error
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) {
+			return nil, mediaRangeUnavailable(ctx, err)
+		}
+		return nil, errors.New("metadata range length mismatch")
+	}
+	if int64(len(raw)) != length {
 		return nil, errors.New("metadata range length mismatch")
 	}
 	return raw, nil
