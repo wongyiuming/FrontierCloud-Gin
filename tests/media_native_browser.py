@@ -212,10 +212,10 @@ def exercise_player(browser, fixture, folder, mode, site, images, record):
         page.wait_for_function('() => currentIndex===0 && art.currentTime>.1 && art.duration>8000', timeout=30000)
         proof['manual_mse'] = True
         page.evaluate('()=>{art.currentTime=art.duration-2;return art.play();}')
-        page.wait_for_function('() => currentIndex===0 && !art.video.seeking && frontierCloudContinuousAudio.status().active', timeout=30000)
-        page.evaluate('()=>{window.nativeMSEVideo=art.video;window.nativeMSESource=art.url;}')
+        page.wait_for_function('() => currentIndex===0 && art.duration>8000 && art.currentTime>=art.duration-3 && !art.video.seeking && frontierCloudContinuousAudio.status().active', timeout=30000)
+        page.evaluate('()=>{window.nativeMSEVideo=art.video;window.nativeMSESource=art.url;window.nativeMSECurrentSrc=art.video.currentSrc;}')
         page.wait_for_function('() => currentIndex===1 && art.currentTime>.1 && !art.video.paused && !art.video.error', timeout=45000)
-        assert page.evaluate('art.video===nativeMSEVideo && art.url===nativeMSESource && frontierCloudContinuousAudio.status().active && !frontierCloudContinuousAudio.status().pipeline_error')
+        assert page.evaluate('art.video===nativeMSEVideo && art.url===nativeMSESource && art.video.currentSrc===nativeMSECurrentSrc && frontierCloudContinuousAudio.status().active && !frontierCloudContinuousAudio.status().pipeline_error')
         proof['automatic_mse'] = True
         # Observe normal selected/visible metadata work before making any
         # explicit tag call. This catches permanently starved visible queues.
@@ -254,54 +254,208 @@ def lyric_geometry(page, selector):
     return page.locator(selector).evaluate('''line=>{
         line.style.whiteSpace='nowrap';const before=getComputedStyle(line).fontSize;line.style.removeProperty('white-space');
         const style=getComputedStyle(line),box=line.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(line);
-        const rows=[...range.getClientRects()],panel=line.closest('#inlineLyrics,#lyrics'),clip=panel?.getBoundingClientRect();
-        return {before,after:style.fontSize,whiteSpace:style.whiteSpace,rows:rows.length,
+        const rows=[...range.getClientRects()],panel=line.closest('.sync-lyrics-lines,.fullscreen-lyrics-column,#lyrics'),clip=panel?.getBoundingClientRect();
+        return {before,after:style.fontSize,textLength:line.textContent.length,whiteSpace:style.whiteSpace,rows:rows.length,
             glyphsInside:rows.every(row=>row.top>=box.top-1&&row.bottom<=box.bottom+1),
             glyphsInsidePanel:!clip||rows.every(row=>row.top>=clip.top-1&&row.bottom<=clip.bottom+1),
             scrollWidth:line.scrollWidth,clientWidth:line.clientWidth,scrollHeight:line.scrollHeight,clientHeight:line.clientHeight};}''')
 
 
-def check_geometry(value):
+def check_geometry(value, require_visible=True):
     assert value['before'] == value['after'] and value['whiteSpace'] == 'normal' and value['rows'] > 1 and value['glyphsInside']
-    assert value['glyphsInsidePanel']
+    if require_visible:
+        assert value['glyphsInsidePanel']
     assert value['scrollWidth'] <= value['clientWidth'] + 1 and value['scrollHeight'] <= value['clientHeight'] + 1
 
 
+def lyric_viewport(page, selector):
+    return page.locator(selector).evaluate('''line=>{
+        const panel=line.closest('.sync-lyrics-lines,.fullscreen-lyrics-column,#lyrics');
+        if(!panel)throw Error('actual lyric viewport required');
+        const range=document.createRange();range.selectNodeContents(line);const glyphs=[...range.getClientRects()];
+        const box=panel.getBoundingClientRect(),style=getComputedStyle(panel);
+        return {glyphTop:Math.min(...glyphs.map(r=>r.top)),glyphBottom:Math.max(...glyphs.map(r=>r.bottom)),
+            top:box.top+panel.clientTop,bottom:box.top+panel.clientTop+panel.clientHeight,
+            height:panel.clientHeight,scrollHeight:panel.scrollHeight,scrollTop:panel.scrollTop,
+            x:box.left+box.width/4,overflowY:style.overflowY,pointerEvents:style.pointerEvents,
+            fontSize:getComputedStyle(line).fontSize,textLength:line.textContent.length};
+    }''')
+
+
+def native_lyric_scroll(page, selector, edge, mechanism):
+    cdp = page.context.new_cdp_session(page) if mechanism == 'touch' else None
+    count = 0
+    try:
+        for _ in range(12):
+            state = lyric_viewport(page, selector)
+            if edge == 'start':
+                reached = state['glyphTop'] >= state['top']-1 and state['glyphTop'] < state['bottom']-1
+                delta = state['glyphTop']-state['top']-6
+            else:
+                reached = state['glyphBottom'] <= state['bottom']+1 and state['glyphBottom'] > state['top']+1
+                delta = state['glyphBottom']-state['bottom']+6
+            if reached:
+                return {**state, 'native_input_count': count}
+            assert state['overflowY'] in ('auto', 'scroll') and state['pointerEvents'] != 'none'
+            if mechanism == 'wheel':
+                page.mouse.move(state['x'], (state['top']+state['bottom'])/2)
+                page.mouse.wheel(0, delta)
+            else:
+                distance = min(max(abs(delta), 24), state['height']*.55)
+                direction = 1 if delta > 0 else -1
+                start = state['top']+state['height']*(.8 if direction > 0 else .2)
+                assert page.locator(selector).evaluate('''(line,point)=>line.closest('.sync-lyrics-lines,.fullscreen-lyrics-column,#lyrics')
+                    .contains(document.elementFromPoint(point.x,point.y))''', {'x': state['x'], 'y': start}), 'touch must start on lyrics, outside playback controls'
+                cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': state['x'], 'y': start}]})
+                for step in range(1, 13):
+                    point = {'x': state['x'], 'y': start-direction*distance*step/12}
+                    cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [point]})
+                    page.wait_for_timeout(24)
+                # A real finger pause before release avoids an uncontrolled fling.
+                page.wait_for_timeout(100)
+                cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+            count += 1
+            page.wait_for_timeout(120)
+        raise AssertionError('lyric edge not reachable using actual '+mechanism)
+    finally:
+        if cdp is not None:
+            cdp.detach()
+
+
+def check_native_scroll_evidence(value, inputs):
+    check_geometry(value, require_visible=False)
+    assert len(inputs) == 2 and {row['mechanism'] for row in inputs} == {'wheel', 'touch'}
+    for row in inputs:
+        start, end = row['start'], row['end']
+        assert all(type(v['native_input_count']) is int and v['native_input_count'] > 0 for v in (start, end))
+        assert start['fontSize'] == end['fontSize'] == value['after']
+        assert start['textLength'] == end['textLength'] == value['textLength']
+        assert start['glyphTop'] >= start['top']-1 and start['glyphTop'] < start['bottom']-1
+        assert end['glyphBottom'] <= end['bottom']+1 and end['glyphBottom'] > end['top']+1
+
+
+def verify_lyric_access(page, selector, preserve_playback=False):
+    value, viewport = lyric_geometry(page, selector), lyric_viewport(page, selector)
+    tall = viewport['glyphBottom']-viewport['glyphTop'] > viewport['height']
+    check_geometry(value, require_visible=not tall)
+    if not tall:
+        return {'geometry': value, 'viewport': viewport, 'all_glyphs_visible': True}
+    before = page.evaluate('()=>({index:currentIndex,time:art.currentTime,paused:art.video.paused})') if preserve_playback else None
+    inputs = []
+    for mechanism in ('wheel', 'touch'):
+        end = native_lyric_scroll(page, selector, 'end', mechanism)
+        start = native_lyric_scroll(page, selector, 'start', mechanism)
+        inputs.append({'mechanism': mechanism, 'start': start, 'end': end})
+    check_native_scroll_evidence(value, inputs)
+    if before is not None:
+        viewport_node = page.locator(selector).locator('xpath=..')
+        assert viewport_node.get_attribute('id') == 'inlineLyricsTrack'
+        viewport_node.locator('xpath=..').focus()
+        scroll_before = lyric_viewport(page, selector)['scrollTop']
+        page.keyboard.press('PageDown')
+        page.wait_for_function('(before)=>document.getElementById("inlineLyricsLines").scrollTop>before+1', arg=scroll_before)
+        after = page.evaluate('()=>({index:currentIndex,time:art.currentTime,paused:art.video.paused})')
+        assert before['index'] == after['index'] and before['paused'] and after['paused']
+        assert abs(before['time']-after['time']) < .05, 'vertical lyric input must not seek'
+    return {'geometry': value, 'viewport': viewport, 'all_glyphs_visible_at_once': False,
+            'complete_text_accessible_by_actual_input': inputs, 'keyboard_scroll_preserved_playback': before is not None}
+
+
+def verify_center_play(page):
+    inputs = []
+    for text in ('短句', LONG_TEXT):
+        for mechanism in ('mouse', 'touch'):
+            page.evaluate('''text=>{art.pause();const base=art.currentTime;
+                activeLyricEntries=Array.from({length:7},(_,i)=>({time:i<=3?0:base+(i-3)*60,text:i===3?text:'短句'}));
+                document.getElementById('inlineLyrics').classList.remove('hidden');renderLyricWindow(3);}''', text)
+            page.wait_for_function('()=>art.video.paused && !art.video.seeking && !art.maskElement.hidden')
+            before = page.evaluate('''()=>{const button=art.maskElement,box=button.getBoundingClientRect();
+                const x=box.left+box.width/2,y=box.top+box.height/2;
+                return {x,y,buttonHit:document.elementFromPoint(x,y)?.closest('.art-center-play')===button,
+                    index:currentIndex,sequence:playerSwitchSequence,source:art.video.currentSrc,time:art.currentTime,
+                    lyricLength:document.querySelector('#inlineLyricsTrack .sync-lyric.current').textContent.length};}''')
+            assert before['buttonHit'] and before['lyricLength'] == len(text)
+            state = page.evaluate_handle('''()=>{const state={video:art.video,seeks:0};
+                state.onSeek=()=>state.seeks++;state.video.addEventListener('seeking',state.onSeek);return state;}''')
+            try:
+                if mechanism == 'mouse':
+                    page.mouse.click(before['x'], before['y'])
+                else:
+                    page.touchscreen.tap(before['x'], before['y'])
+                page.wait_for_function('(before)=>!art.video.paused && art.currentTime>before+.05', arg=before['time'], timeout=30000)
+                # Observe beyond the background gesture's 250ms next-track timer.
+                page.wait_for_timeout(400)
+                after = page.evaluate('''state=>({index:currentIndex,sequence:playerSwitchSequence,
+                    source:art.video.currentSrc,time:art.currentTime,paused:art.video.paused,pending:clickTimer!==null,
+                    sameVideo:state.video===art.video,seeks:state.seeks})''', state)
+            finally:
+                page.evaluate("state=>state.video.removeEventListener('seeking',state.onSeek)", state)
+                state.dispose()
+            assert not after['paused'] and not after['pending']
+            assert (before['index'], before['sequence'], before['source']) == (after['index'], after['sequence'], after['source'])
+            assert after['sameVideo'] and after['seeks'] == 0 and before['time'] < after['time'], 'center play must resume without seeking'
+            inputs.append({'mechanism': mechanism, 'before': before, 'after': after})
+    page.evaluate('()=>art.pause()')
+    return inputs
+
+
+def verify_lyric_gestures(page):
+    page.evaluate('()=>selectMedia(0)')
+    page.wait_for_function('() => currentIndex===0 && art.currentTime>.1 && !art.video.paused', timeout=30000)
+    point = page.locator('#inlineLyricsLines').evaluate('node=>{const r=node.getBoundingClientRect();return {x:r.left+r.width*.55,y:r.top+r.height*.35};}')
+    page.mouse.click(point['x'], point['y'])
+    page.wait_for_function('() => currentIndex===1 && art.currentTime>.1 && !art.video.paused', timeout=30000)
+    page.mouse.dblclick(point['x'], point['y'], delay=80)
+    page.wait_for_function('() => currentIndex===0 && art.currentTime>.1 && !art.video.paused', timeout=30000)
+    page.evaluate('()=>art.pause()')
+    before = page.evaluate('()=>art.currentTime')
+    page.mouse.move(point['x']-45, point['y']);page.mouse.down()
+    page.mouse.move(point['x']+45, point['y'], steps=12);page.mouse.up()
+    page.wait_for_function('(before)=>currentIndex===0 && art.video.paused && art.currentTime>=before+15 && art.currentTime<=before+22', arg=before, timeout=30000)
+    return {'single_click_next': True, 'double_click_previous': True, 'horizontal_drag_seeks_without_track_change': True,
+            'horizontal_delta_seconds': page.evaluate('()=>art.currentTime')-before}
+
+
 def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
-    context = browser.new_context(viewport={'width': 390, 'height': 844})
+    context = browser.new_context(viewport={'width': 390, 'height': 844}, has_touch=True)
     page = context.new_page()
     geometry = []
     try:
         page.goto(fixture['origin'] + '/api/v1/media/music/category?' + urlencode({'path': folder}), wait_until='domcontentloaded')
         page.wait_for_function('() => typeof art!=="undefined" && art && typeof FrontierLyricsUI!=="undefined"', timeout=45000)
+        page.wait_for_function('() => art.currentTime>.1 && !art.video.seeking && art.video.readyState>=2 && inlineLyricsRequest===null', timeout=30000)
         page.evaluate('()=>art.pause()')
+        page.wait_for_function('() => art.video.paused')
         for width, height in ((390, 844), (768, 1024), (1360, 768)):
             page.set_viewport_size({'width': width, 'height': height})
             # Layout-only fixture data passes through the actual served shared
             # renderer. No response, asset or player implementation is replaced.
-            page.evaluate('''text=>{activeLyricEntries=Array.from({length:11},(_,i)=>({time:i,text:i===3?text:'短句 '+i}));
+            page.evaluate('''text=>{const base=art.currentTime;activeLyricEntries=Array.from({length:11},(_,i)=>({time:i<=3?0:base+i-3,text:i===3?text:'短句 '+i}));
                 document.getElementById('inlineLyrics').classList.remove('hidden');renderLyricWindow(3);}''', LONG_TEXT)
-            page.wait_for_function('document.getElementById("inlineLyricsTrack").children.length===7')
-            inline = lyric_geometry(page, '#inlineLyricsTrack .sync-lyric.current')
-            check_geometry(inline)
+            page.wait_for_function('() => (document.getElementById("inlineLyricsTrack").children.length===7)')
+            page.wait_for_function('(text)=>activeLyricIndex===3 && document.querySelector("#inlineLyricsTrack .sync-lyric.current").textContent===text', arg=LONG_TEXT)
+            inline = verify_lyric_access(page, '#inlineLyricsTrack .sync-lyric.current', preserve_playback=True)
             wrapped = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack');
-                animateLyricForward(4);return {transform:track.style.transform,rows:track.children.length,active:activeLyricIndex};}''')
-            assert wrapped == {'transform': 'translateY(0)', 'rows': 7, 'active': 4}
+                animateLyricForward(4);return {stationary:new DOMMatrixReadOnly(getComputedStyle(track).transform).isIdentity,
+                    rows:track.children.length,active:activeLyricIndex};}''')
+            assert wrapped == {'stationary': True, 'rows': 7, 'active': 4}
             page.evaluate('()=>{activeLyricEntries.forEach(entry=>entry.text="短句");renderLyricWindow(3);}')
             animation = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack'),height=track.firstElementChild.offsetHeight;
                 animateLyricForward(4);return {height,transform:track.style.transform,rows:track.children.length};}''')
             assert animation['height'] > 0 and animation['transform'] == f"translateY(-{animation['height']}px)" and animation['rows'] == 8
-            page.wait_for_function('document.getElementById("inlineLyricsTrack").children.length===7')
+            page.wait_for_function('() => (document.getElementById("inlineLyricsTrack").children.length===7)')
             page.evaluate('''text=>{activeLyricEntries[3].text=text;renderLyricWindow(3);}''', LONG_TEXT)
             page.evaluate('()=>{openFullscreenLyrics();renderFullscreenLyrics();sizeFullscreenLyrics();}')
-            full = lyric_geometry(page, '.fullscreen-lyric-line[data-lyric-index="3"]')
-            check_geometry(full)
+            full = verify_lyric_access(page, '.fullscreen-lyric-line[data-lyric-index="3"]')
             assert page.locator('.fullscreen-lyrics-column').count() == 3
             page.screenshot(path=str(Path(record['output']) / f'lyrics-{width}.png'))
             page.evaluate('()=>closeFullscreenLyrics()')
+            center_play = verify_center_play(page)
             geometry.append({'viewport': [width, height], 'inline': inline, 'fullscreen': full,
-                             'row_offset': animation, 'wrapped_direct_render': wrapped})
-        record['shared_lyrics'] = {'actual_served_renderer': True, 'layout_fixture_not_lyric_relation': True, 'layouts': geometry}
+                             'row_offset': animation, 'wrapped_direct_render': wrapped,
+                             'center_play_inputs': center_play})
+        gestures = verify_lyric_gestures(page)
+        record['shared_lyrics'] = {'actual_served_renderer': True, 'layout_fixture_not_lyric_relation': True, 'layouts': geometry, 'gestures': gestures}
         record['shared_lyrics_verified'] = True
     finally:
         context.close()
@@ -319,7 +473,7 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
     page = context.new_page()
     try:
         page.goto(fixture['origin'] + '/karaoke/?' + urlencode({'media': karaoke_id}), wait_until='domcontentloaded')
-        page.wait_for_function('typeof state!=="undefined" && state.ready && nativeKaraoke.account200 && !document.getElementById("record").disabled', timeout=30000)
+        page.wait_for_function('() => (typeof state!=="undefined" && state.ready && nativeKaraoke.account200 && !document.getElementById("record").disabled)', timeout=30000)
         actual = page.evaluate('({...nativeKaraoke,ready:state.ready,shared:!!window.FrontierLyricsUI,rows:document.querySelector("#lyrics").children.length,phase:state.phase})')
         assert actual['context200'] and actual['account200'] and not actual['prematureEnable'] and actual['microphoneCalls'] == 0
         assert actual['ready'] and actual['shared'] and actual['rows'] == 7 and actual['phase'] == 'idle'
@@ -335,7 +489,7 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
         context.route('**/api/v1/karaoke/account/status', account_failure)
         guest = context.new_page()
         guest.goto(fixture['origin'] + '/karaoke/?' + urlencode({'media': karaoke_id}), wait_until='domcontentloaded')
-        guest.wait_for_function('typeof state!=="undefined" && state.ready && nativeKaraoke.accountStatus===503 && !elements.record.disabled', timeout=30000)
+        guest.wait_for_function('() => (typeof state!=="undefined" && state.ready && nativeKaraoke.accountStatus===503 && !elements.record.disabled)', timeout=30000)
         guest_state = guest.evaluate('''({...nativeKaraoke,ready:state.ready,disabled:elements.record.disabled,
             guest:state.account===null,uploadDisabled:elements.upload.disabled})''')
         assert guest_state['context200'] and not guest_state['account200'] and not guest_state['prematureEnable']
@@ -345,7 +499,7 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
         context.unroute('**/api/v1/karaoke/account/status', account_failure)
         failed = context.new_page()
         failed.goto(fixture['origin'] + '/karaoke/', wait_until='domcontentloaded')
-        failed.wait_for_function('typeof state!=="undefined" && document.getElementById("status").textContent.includes("初始化失败")', timeout=30000)
+        failed.wait_for_function('() => (typeof state!=="undefined" && document.getElementById("status").textContent.includes("初始化失败"))', timeout=30000)
         refused = failed.evaluate('''async()=>{await startRecording();return {ready:state.ready,disabled:elements.record.disabled,
             phase:state.phase,microphoneCalls:nativeKaraoke.microphoneCalls};}''')
         assert refused == {'ready': False, 'disabled': True, 'phase': 'idle', 'microphoneCalls': 0}
@@ -391,11 +545,13 @@ def run_fixture(path, workspace, audio):
             admin = context.new_page()
             ready = admin.goto(fixture['origin'] + '/health/ready', wait_until='domcontentloaded')
             assert ready and ready.status == 200, 'normal certificate verified HTTPS must be ready'
+            landing = admin.goto(fixture['origin'] + '/api/v1/media/', wait_until='domcontentloaded')
+            assert landing and landing.status == 200, 'normal HTTPS public document required before login fetch'
             login = admin.evaluate('''async key=>(await fetch('/api/v1/media/admin/elevate',{
                 method:'POST',body:new URLSearchParams({token:key})})).status''', key)
             assert login == 200
             admin.goto(fixture['origin'] + '/api/v1/media/admin/', wait_until='domcontentloaded')
-            admin.wait_for_function('typeof runUploadTask==="function" && typeof FrontierMediaCrypto!=="undefined" && uploadSiteType.options.length===4')
+            admin.wait_for_function('() => (typeof runUploadTask==="function" && typeof FrontierMediaCrypto!=="undefined" && uploadSiteType.options.length===4)')
             open_media(admin)
             albums, placements, karaoke_ids = [], {}, []
             for site, mode in (('primary', 'plain'), ('primary', 'encrypted'), ('direct', 'plain'), ('direct', 'encrypted'), ('relay', 'plain'), ('relay', 'encrypted')):
