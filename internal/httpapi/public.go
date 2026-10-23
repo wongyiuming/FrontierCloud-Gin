@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -191,16 +192,19 @@ func (p *Public) directoryArtwork(c *gin.Context) {
 	if !ok {
 		return
 	}
+	c.Header("Cache-Control", "private, no-store")
 	artwork, err := p.media.DirectoryArtwork(c.Request.Context(), name, include)
 	if err != nil {
-		if errors.Is(err, media.ErrCategory) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			c.Header("Retry-After", "2")
+			detail(c, 503, "Music artwork lookup timed out")
+		} else if errors.Is(err, media.ErrCategory) {
 			detail(c, 404, "Music category not found")
 		} else {
 			internalError(c, err)
 		}
 		return
 	}
-	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, artwork)
 }
 

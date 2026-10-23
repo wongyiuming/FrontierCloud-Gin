@@ -45,12 +45,18 @@ func (s *Service) DirectoryArtwork(ctx context.Context, name string, include boo
 	if err := s.CategoryExists(ctx, name, "music"); err != nil {
 		return CategoryArtwork{}, err
 	}
-	artwork := s.categoryArtwork(ctx, name, include)
+	artwork, err := s.categoryArtwork(ctx, name, include)
+	if err != nil {
+		return CategoryArtwork{}, err
+	}
 	return CategoryArtwork{Cover: artwork.Cover, MetadataTracks: artwork.Tracks}, nil
 }
-func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) directoryArtwork {
+func (s *Service) categoryArtwork(ctx context.Context, name string, include bool) (directoryArtwork, error) {
 	if !categoryShape(name, "music") {
-		return directoryArtwork{}
+		return directoryArtwork{}, ErrCategory
+	}
+	if err := ctx.Err(); err != nil {
+		return directoryArtwork{}, err
 	}
 	generation := uint64(0)
 	reliable, cacheable := s.repository.(catalogGeneration)
@@ -67,7 +73,7 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		cached, ok := s.categoryCovers[key]
 		s.tagsMu.Unlock()
 		if ok {
-			return cached
+			return cached, nil
 		}
 	}
 	// One request-wide candidate/directory budget. This endpoint only returns
@@ -127,7 +133,13 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 			}
 		}
 	}
-	if cacheable && err == nil && ctx.Err() == nil {
+	if err != nil {
+		return directoryArtwork{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return directoryArtwork{}, err
+	}
+	if cacheable {
 		s.tagsMu.Lock()
 		if s.coverGeneration == generation {
 			if len(s.categoryCovers) >= 256 {
@@ -140,5 +152,5 @@ func (s *Service) categoryArtwork(ctx context.Context, name string, include bool
 		}
 		s.tagsMu.Unlock()
 	}
-	return artwork
+	return artwork, nil
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source = fs.readFileSync(new URL('../static/js/media-browser.js', import.meta.url), 'utf8');
+const source = fs.readFileSync(process.env.FRONTIER_MEDIA_BROWSER_SOURCE || new URL('../static/js/media-browser.js', import.meta.url), 'utf8');
 const template = fs.readFileSync(new URL('../static/media/category.html', import.meta.url), 'utf8');
 const observationTag = template.match(/<script\b[^>]*src="\{\{NETWORK_OBSERVATION_JS_URL\}\}"[^>]*>/)?.[0];
 assert.ok(observationTag, 'category page must retain independent network observation');
@@ -22,7 +22,7 @@ function element() {
     };
 }
 
-function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl, windowExtras = {}, now = Date.now} = {}) {
+function fixture({readyState = 'loading', catalogPresent = true, config, fetchImpl, windowExtras = {}, now = Date.now, timers} = {}) {
     const grid = element();
     const heading = element();
     heading.textContent = '前沿音乐 - 達明一派';
@@ -47,11 +47,11 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
         sessionStorage: {getItem: () => null, setItem() {}},
         URL,
         AbortController,
-        clearTimeout() {},
+        clearTimeout: timers?.clearTimeout || (() => {}),
         Date: {now},
         // Do not fire DOMContentLoaded, idle timers, or any observation script:
         // they represent an independent resource download that never completes.
-        setTimeout() {},
+        setTimeout: timers?.setTimeout || (() => {}),
         fetch: (url, options) => {
             requests.push({url, options});
             return fetchImpl ? fetchImpl(url, options) : Promise.reject(new Error('unexpected catalog request'));
@@ -162,6 +162,58 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(attempts, 2); assert.equal(reads, 1, 'candidate endpoint must be retryable after a transient failure');
 }
 console.log('catalog-startup-smoke-ok');
+
+for (const scenario of ['recovered', 'still-busy', 'deadline', 'invalid-delay', 'denied']) {
+    const pendingTimers = new Map(), scheduled = [], signals = [];
+    let nextTimer = 0, visible = [], attempts = 0, reads = 0, canceledBodies = 0;
+    const timers = {
+        setTimeout(callback, delay) { scheduled.push(delay); pendingTimers.set(++nextTimer, {callback, delay}); return nextTimer; },
+        clearTimeout(id) { pendingTimers.delete(id); },
+    };
+    const fire = delay => {
+        const entry = [...pendingTimers].find(([, timer]) => timer.delay === delay);
+        assert(entry, `missing bounded timer ${delay} for ${scenario}`);
+        pendingTimers.delete(entry[0]); entry[1].callback();
+    };
+    const page = fixture({timers, now: () => 10000,
+        config: {bootstrap: [{name: 'Timeout recovery', artwork_url: '/api/v1/media/catalog/artwork?path=timeout'}]},
+        fetchImpl: async (_url, options) => {
+            attempts++; signals.push(options.signal);
+            if (attempts === 2 && scenario === 'recovered') return {ok: true, json: async () => ({metadata_tracks: ['recovered']})};
+            return {ok: false, status: scenario === 'denied' ? 403 : 503,
+                headers: {get: () => scenario === 'invalid-delay' ? '8' : '2'},
+                body: {async cancel() { canceledBodies++; }}};
+        },
+        windowExtras: {innerHeight: 800, requestIdleCallback() {},
+            FrontierDirectoryGlobe: {refresh() {}, visibleCards: () => visible},
+            FrontierMusicMetadata: {metadata: async () => { reads++; return {cover: '/api/v1/media/cover?file_path=recovered'}; }}},
+    });
+    page.grid.contains = card => page.grid.children.includes(card);
+    visible = page.grid.children;
+    const hydrate = page.artworkListeners.find(item => item.event === 'frontier-directory-visible').callback;
+    const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(setImmediate); };
+    hydrate(); await settle();
+    assert.equal(attempts, 1); assert.equal(canceledBodies, 1);
+    assert.equal(scheduled.filter(delay => delay === 8000).length, 1, 'one deadline covers both attempts and the delay');
+    if (scenario === 'invalid-delay' || scenario === 'denied') {
+        assert(!scheduled.includes(2000), 'invalid Retry-After or denied access must not start an automatic retry');
+    } else if (scenario === 'deadline') {
+        fire(8000); await settle();
+        assert.equal(attempts, 1, 'expiration cancels the pending delay without issuing a second request');
+        assert.equal(signals[0].aborted, true);
+    } else {
+        fire(2000); await settle();
+        assert.equal(attempts, 2, 'a 503 must retry without a new visibility event');
+        assert.equal(signals[0], signals[1], 'both attempts share the same cancellation boundary');
+        assert.equal(scheduled.filter(delay => delay === 2000).length, 1, 'at most one delayed retry');
+        assert.equal(reads, scenario === 'recovered' ? 1 : 0);
+        assert.equal(canceledBodies, scenario === 'recovered' ? 1 : 2);
+        assert.equal(Boolean(page.grid.children[0].children[0].querySelector('img')), scenario === 'recovered');
+        hydrate(); await settle();
+        assert.equal(attempts, 2, 'success is complete and repeated failure retains visibility backoff');
+    }
+    assert.equal(pendingTimers.size, 0, 'settled artwork must release deadline and backoff timers');
+}
 
 {
     let visible=[], slowResolve;

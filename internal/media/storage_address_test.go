@@ -29,6 +29,87 @@ type addressMembers struct {
 
 func (r addressMembers) Members(context.Context) ([]store.StorageMember, error) { return r.rows, nil }
 
+type countedAddressNodes struct {
+	store.NodeRepository
+	queries int
+}
+
+func (r *countedAddressNodes) Relationships(ctx context.Context, revoked bool) ([]store.Relationship, error) {
+	r.queries++
+	return r.NodeRepository.Relationships(ctx, revoked)
+}
+
+type countedAddressMembers struct {
+	store.PoolRepository
+	queries int
+}
+
+func (r *countedAddressMembers) Members(ctx context.Context) ([]store.StorageMember, error) {
+	r.queries++
+	return r.PoolRepository.Members(ctx)
+}
+
+func TestAdminLocalStorageAddressesIgnoreUnrelatedMalformedRelationship(t *testing.T) {
+	_, db, service := masterFixture(t)
+	ctx := context.Background()
+	relation := store.Relationship{ID: strings.Repeat("d", 32), PeerID: strings.Repeat("e", 32), Endpoint: "https://unrelated.test", PublicKey: strings.Repeat("f", 43), Credential: "fixture-credential", Direction: "downstream", Mode: "Relay", State: "pending", Protocol: 2, CreatedAt: 1}
+	if err := db.Nodes().PrepareRelationship(ctx, relation, store.NodeAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Database().ExecContext(ctx, "UPDATE node_relationships SET summary=? WHERE relationship_id=?", "{", relation.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Nodes().Relationships(ctx, true); err == nil {
+		t.Fatal("fixture must produce a real relationship query/decode error")
+	}
+	nodes := &countedAddressNodes{NodeRepository: db.Nodes()}
+	members := &countedAddressMembers{PoolRepository: db.Pool()}
+	service.ConfigureCluster(nodes, members, nil)
+	for _, scope := range []string{"lyrics/artist", "music/artist"} {
+		tree, err := service.Tree(ctx, scope)
+		if err != nil {
+			t.Fatal("unrelated relationship blocked local tree", scope, err)
+		}
+		search, err := service.Search(ctx, "song", scope)
+		if err != nil {
+			t.Fatal("unrelated relationship blocked local search", scope, err)
+		}
+		for _, items := range [][]TreeItem{tree.Items, search.Items} {
+			files := 0
+			for _, item := range items {
+				if item.Kind == "file" {
+					files++
+					if item.StorageAddress == nil || *item.StorageAddress != "https://master.test" || !item.StorageAddressLocal {
+						t.Fatal("wrong local address", item)
+					}
+				}
+			}
+			if files == 0 {
+				t.Fatal("local fixture was not listed", scope)
+			}
+		}
+	}
+	if members.queries != 0 || nodes.queries != 0 {
+		t.Fatal("local-only responses queried unrelated cluster ownership", members.queries, nodes.queries)
+	}
+	for _, item := range []TreeItem{{Kind: "file", Path: "music/remote/song.mp3", MemberID: relation.PeerID, Transport: "Relay"}, {Kind: "file", Path: "music/unknown/song.mp3", MemberID: "unknown", Transport: "Local"}} {
+		items := []TreeItem{item}
+		if err := service.treeStorageAddresses(ctx, items); err == nil || items[0].StorageAddress != nil || items[0].StorageAddressLocal {
+			t.Fatal("remote/unknown ownership error was hidden", items, err)
+		}
+	}
+	if members.queries != 2 || nodes.queries != 2 {
+		t.Fatal("remote bindings must still query their owners", members.queries, nodes.queries)
+	}
+	if _, err := db.Database().ExecContext(ctx, "UPDATE node_relationships SET summary=? WHERE relationship_id=?", "{}", relation.ID); err != nil {
+		t.Fatal(err)
+	}
+	unknown := []TreeItem{{Kind: "file", Path: "music/unknown/song.mp3", MemberID: "unknown", Transport: "Local"}}
+	if err := service.treeStorageAddresses(ctx, unknown); err != nil || unknown[0].StorageAddress != nil || unknown[0].StorageAddressLocal {
+		t.Fatal("unknown ownership borrowed the Master address", unknown, err)
+	}
+}
+
 func TestAdminStorageAddressUsesExactOwnerBindingWithoutOnlineFallback(t *testing.T) {
 	master, direct, relay := strings.Repeat("a", 32), strings.Repeat("b", 32), strings.Repeat("c", 32)
 	d, r, foreign, upstream, unsafe := "direct", "relay", "foreign", "upstream", "unsafe"

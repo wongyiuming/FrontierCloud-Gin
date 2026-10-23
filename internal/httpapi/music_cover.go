@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -13,6 +14,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 )
+
+// Retry within the browser's fixed metadata deadline; media streaming's
+// 30-second backoff would outlive that small optional-work budget.
+func temporaryMusicMetadataError(err error) bool {
+	return errors.Is(err, media.ErrMetadataBusy) || errors.Is(err, media.ErrUnavailable) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
 
 func (p *Public) musicMetadata(c *gin.Context) {
 	name, ok := queryText(c, "file_path", 4096)
@@ -26,9 +34,9 @@ func (p *Public) musicMetadata(c *gin.Context) {
 	}
 	tags, err := p.media.MusicMetadata(c.Request.Context(), name, id)
 	c.Header("Cache-Control", "private, no-store")
-	if errors.Is(err, media.ErrMetadataBusy) {
+	if temporaryMusicMetadataError(err) {
 		c.Header("Retry-After", "2")
-		detail(c, 503, "Music metadata is busy")
+		detail(c, 503, "Music metadata temporarily unavailable")
 		return
 	}
 	if err != nil {
@@ -49,10 +57,10 @@ func (p *Public) musicMetadata(c *gin.Context) {
 
 func (p *Public) musicCover(c *gin.Context) {
 	tags, err := p.media.MusicMetadata(c.Request.Context(), c.Query("file_path"), c.Query("resource_id"))
-	if errors.Is(err, media.ErrMetadataBusy) {
+	if temporaryMusicMetadataError(err) {
 		c.Header("Retry-After", "2")
 		c.Header("Cache-Control", "private, no-store")
-		detail(c, 503, "Music metadata is busy")
+		detail(c, 503, "Music metadata temporarily unavailable")
 		return
 	}
 	if err != nil || len(tags.Picture) == 0 {

@@ -2,7 +2,8 @@
 
 Run alongside scripts/test-native-matrix.sh with FRONTIERCLOUD_TEST_MEDIA_BROWSER=1.
 The printed workspace is this client's --workspace. No application imports,
-response interception, TLS exceptions or deployed environments are supported.
+TLS exceptions or deployed environments are supported. The account-outage
+subcase explicitly injects an HTTP 503; ordinary playback uses real responses.
 The native Go driver still performs its complete default matrix afterwards.
 """
 import argparse

@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -179,6 +181,35 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 			if cover.Code != 200 || !bytes.Equal(cover.Body.Bytes(), jpeg) {
 				t.Fatal(site, cover.Code, cover.Body.String())
 			}
+			if site != "primary" {
+				// Reauthorize even a warm tag/cover cache against the current
+				// heartbeat. A temporary outage must permit the bounded browser retry.
+				if _, err := db.Database().Exec("UPDATE node_relationships SET last_heartbeat=1 WHERE relationship_id=?", relID); err != nil {
+					t.Fatal(err)
+				}
+				for _, target := range []string{"/api/v1/media/metadata?" + url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode(), track.Cover} {
+					response := request(router, "GET", target, "")
+					if response.Code != 503 || response.Header().Get("Retry-After") != "2" || !strings.Contains(response.Header().Get("Cache-Control"), "no-store") || !strings.HasPrefix(response.Header().Get("Content-Type"), "application/json") || response.Header().Get("Location") != "" || response.Header().Get("X-Accel-Redirect") != "" {
+						t.Fatal("offline music metadata must remain retryable", site, target, response.Code, response.Header(), response.Body.String())
+					}
+				}
+				for _, endpoint := range []string{"metadata", "cover"} {
+					response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+url.Values{"file_path": {track.MediaPath}, "resource_id": {strings.Repeat("f", 64)}}.Encode(), "")
+					if response.Code != 404 || response.Header().Get("Retry-After") != "" {
+						t.Fatal("unknown identity became a transient failure", endpoint, response.Code, response.Header())
+					}
+				}
+				relation, err := db.Nodes().Relationship(ctx, relID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := master.Tick(ctx, relation); err != nil {
+					t.Fatal(err)
+				}
+				if response := request(router, "GET", track.Cover, ""); response.Code != 200 || !bytes.Equal(response.Body.Bytes(), jpeg) || response.Header().Get("Retry-After") != "" {
+					t.Fatal("recovered owner did not restore original artwork", site, response.Code)
+				}
+			}
 		})
 	}
 	// A remote ID3v1-only track needs only its ten-byte prefix and final 128
@@ -219,5 +250,71 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 		if result := request(router, "GET", target, ""); result.Code != 404 {
 			t.Fatal("metadata ignored exact path/identity", target, result.Code)
 		}
+	}
+}
+
+func TestMusicMetadataRequestContextFailureIsRetryable(t *testing.T) {
+	router, _, _, _ := publicFixture(t, false)
+	for _, kind := range []string{"deadline", "cancelled"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			if kind == "deadline" {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			} else {
+				cancel()
+			}
+			defer cancel()
+			for _, endpoint := range []string{"metadata", "cover"} {
+				req := httptest.NewRequest("GET", "/api/v1/media/"+endpoint+"?file_path=music/artist/song.mp3", nil).WithContext(ctx)
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, req)
+				if response.Code != 503 || response.Header().Get("Retry-After") != "2" || !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+					t.Fatal("request context failure became permanent missing metadata", endpoint, response.Code, response.Header(), response.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestMusicMetadataHiddenAndEncryptedDoNotBecomeRetryable(t *testing.T) {
+	router, db, dir, public := publicFixture(t, false)
+	ctx := context.Background()
+	data, _ := musicArtworkFixture()
+	name := "music/artist/song.mp3"
+	if err := os.WriteFile(filepath.Join(dir, "media", name), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Media().SetHidden(ctx, []string{name}, true, store.AdminAudit{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, endpoint := range []string{"metadata", "cover"} {
+		response := request(router, "GET", "/api/v1/media/"+endpoint+"?"+url.Values{"file_path": {name}}.Encode(), "")
+		if response.Code != 404 || response.Header().Get("Retry-After") != "" || strings.Contains(response.Body.String(), "测试曲目") {
+			t.Fatal("hidden metadata authorization changed", endpoint, response.Code, response.Header())
+		}
+	}
+	meta, err := mediacrypto.NewMetadata(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Opaque bytes exercise the server's refusal to inspect encrypted tags;
+	// browser AES-GCM acceptance independently validates actual encryption.
+	stage, err := public.media.Stage(ctx, bytes.NewReader(bytes.Repeat([]byte{'x'}, int(meta.CiphertextSize))), meta.CiphertextSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stage.Close()
+	name, err = public.media.PublishEncrypted(ctx, stage, "encrypted.mp3", "music/artist", "", false, 255, store.AdminAudit{}, &meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {name}}.Encode(), "")
+	if response.Code != 200 || response.Body.String() != "{}" || response.Header().Get("Retry-After") != "" {
+		t.Fatal("encrypted bytes entered native metadata", response.Code, response.Header(), response.Body.String())
+	}
+	response = request(router, "GET", "/api/v1/media/cover?"+url.Values{"file_path": {name}}.Encode(), "")
+	if response.Code != 404 || response.Header().Get("Retry-After") != "" {
+		t.Fatal("encrypted artwork became server-readable or retryable", response.Code, response.Header())
 	}
 }

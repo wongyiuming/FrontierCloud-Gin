@@ -66,12 +66,23 @@ func (s *Service) treeStorageAddresses(ctx context.Context, items []TreeItem) er
 	} else if s.identity != nil {
 		identity = s.identity.NodeIdentity
 	}
+	local := func(item TreeItem) bool {
+		return identity.Role != "Master" || strings.HasPrefix(item.Path, "lyrics/") ||
+			(identity.ID != "" && item.MemberID == identity.ID && item.Transport == "Local")
+	}
+	needsOwners := false
+	for _, item := range items {
+		if item.Kind == "file" && !local(item) {
+			needsOwners = true
+			break
+		}
+	}
 	type address struct {
 		endpoint *string
 		local    bool
 	}
 	owners := map[string]address{}
-	if identity.Role == "Master" && s.pool != nil && s.nodes != nil {
+	if needsOwners && identity.Role == "Master" && s.pool != nil && s.nodes != nil {
 		members, err := s.pool.Members(ctx)
 		if err != nil {
 			return err
@@ -100,7 +111,7 @@ func (s *Service) treeStorageAddresses(ctx context.Context, items []TreeItem) er
 			continue
 		}
 		value := address{}
-		if identity.Role != "Master" || strings.HasPrefix(items[i].Path, "lyrics/") {
+		if local(items[i]) {
 			value = address{storageAddress(identity.Endpoint), true}
 		} else {
 			value = owners[items[i].MemberID]

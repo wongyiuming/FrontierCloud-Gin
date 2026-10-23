@@ -11,7 +11,7 @@ COPY protocol ./protocol
 COPY migrations ./migrations
 COPY static ./static
 # Keep deployment contract tests executable in the build stage only.
-COPY Dockerfile Dockerfile.gin ./
+COPY Dockerfile Dockerfile.gin compose.foc.yaml ./
 # Bound per-build package/compiler parallelism. Several independent node agents
 # may build on one Engine; inheriting every host CPU can exhaust host memory.
 RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go test -p=1 ./... && \
