@@ -396,8 +396,9 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
             page.wait_for_function('(text)=>activeLyricIndex===3 && document.querySelector("#inlineLyricsTrack .sync-lyric.current").textContent===text', arg=LONG_TEXT)
             inline = verify_lyric_access(page, '#inlineLyricsTrack .sync-lyric.current', preserve_playback=True)
             wrapped = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack');
-                animateLyricForward(4);return {transform:track.style.transform,rows:track.children.length,active:activeLyricIndex};}''')
-            assert wrapped == {'transform': 'translateY(0)', 'rows': 7, 'active': 4}
+                animateLyricForward(4);return {stationary:new DOMMatrixReadOnly(getComputedStyle(track).transform).isIdentity,
+                    rows:track.children.length,active:activeLyricIndex};}''')
+            assert wrapped == {'stationary': True, 'rows': 7, 'active': 4}
             page.evaluate('()=>{activeLyricEntries.forEach(entry=>entry.text="短句");renderLyricWindow(3);}')
             animation = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack'),height=track.firstElementChild.offsetHeight;
                 animateLyricForward(4);return {height,transform:track.style.transform,rows:track.children.length};}''')
