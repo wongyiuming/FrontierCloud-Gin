@@ -277,7 +277,7 @@ def lyric_viewport(page, selector):
         return {glyphTop:Math.min(...glyphs.map(r=>r.top)),glyphBottom:Math.max(...glyphs.map(r=>r.bottom)),
             top:box.top+panel.clientTop,bottom:box.top+panel.clientTop+panel.clientHeight,
             height:panel.clientHeight,scrollHeight:panel.scrollHeight,scrollTop:panel.scrollTop,
-            x:box.left+box.width/2,overflowY:style.overflowY,pointerEvents:style.pointerEvents,
+            x:box.left+box.width/4,overflowY:style.overflowY,pointerEvents:style.pointerEvents,
             fontSize:getComputedStyle(line).fontSize,textLength:line.textContent.length};
     }''')
 
@@ -304,6 +304,8 @@ def native_lyric_scroll(page, selector, edge, mechanism):
                 distance = min(max(abs(delta), 24), state['height']*.55)
                 direction = 1 if delta > 0 else -1
                 start = state['top']+state['height']*(.8 if direction > 0 else .2)
+                assert page.locator(selector).evaluate('''(line,point)=>line.closest('.sync-lyrics-lines,.fullscreen-lyrics-column,#lyrics')
+                    .contains(document.elementFromPoint(point.x,point.y))''', {'x': state['x'], 'y': start}), 'touch must start on lyrics, outside playback controls'
                 cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': state['x'], 'y': start}]})
                 for step in range(1, 13):
                     point = {'x': state['x'], 'y': start-direction*distance*step/12}
