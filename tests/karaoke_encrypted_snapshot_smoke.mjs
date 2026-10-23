@@ -83,7 +83,7 @@ assert((await plain.text()).includes(lyrics[0].text), 'plain-source recordings r
 const karaokeSource = fs.readFileSync('static/js/karaoke.js', 'utf8');
 const karaokeTemplate = fs.readFileSync('static/media/karaoke.html', 'utf8');
 assert.match(karaokeTemplate, /<button id="record"[^>]* disabled>/);
-for (const first of ['media', 'account', 'media-failure', 'account-failure']) {
+for (const first of ['media', 'account', 'media-failure', 'account-failure', 'account-late-failure']) {
     const controls = new Map();
     const control = id => {
         if (!controls.has(id)) controls.set(id, {...node(), disabled: id === 'record'});
@@ -108,17 +108,39 @@ for (const first of ['media', 'account', 'media-failure', 'account-failure']) {
     assert.equal(microphoneCalls, 0, 'pre-ready calls cannot open the microphone');
     const media = () => releaseMedia(Response.json({title: 'Ready track', type: 'audio', stream_url: '/stream', has_lyrics: false}));
     const account = () => releaseAccount(Response.json({user: null}));
-    if (first === 'media') { media(); await flush(); assert.equal(control('record').disabled, true); account(); }
+    if (first === 'media' || first === 'account-late-failure') {
+        media(); await flush();
+        assert.equal(vm.runInContext('state.ready', fixture), true, 'media readiness does not wait for an optional account response');
+        assert.equal(control('record').disabled, false);
+        if (first === 'media') account();
+        else releaseAccount(new Response('', {status: 502}));
+    }
     if (first === 'account') { account(); await flush(); assert.equal(control('record').disabled, true); media(); }
-    if (first === 'media-failure') { releaseMedia(new Response('', {status: 403})); account(); }
-    if (first === 'account-failure') { releaseAccount(new Response('', {status: 403})); media(); }
+    if (first === 'media-failure') {
+        releaseMedia(new Response('', {status: 403})); await flush();
+        assert.equal(vm.runInContext('state.ready', fixture), false);
+        account();
+    }
+    if (first === 'account-failure') {
+        releaseAccount(new Response('', {status: 502})); await flush();
+        assert.equal(control('record').disabled, true, 'account failure cannot grant media readiness');
+        media();
+    }
     await flush();
-    const succeeded = first === 'media' || first === 'account';
+    const succeeded = first !== 'media-failure';
     assert.equal(vm.runInContext('state.ready', fixture), succeeded);
-    assert.equal(control('record').disabled, !succeeded, 'both successful initialization branches are required');
+    assert.equal(control('record').disabled, !succeeded, 'only mandatory media initialization grants recording readiness');
+    if (first.includes('account') && first.includes('failure')) {
+        assert.equal(vm.runInContext('state.account', fixture), null);
+        assert.equal(vm.runInContext('state.accountStatus', fixture), null);
+        assert.equal(control('accountName').textContent, '游客');
+        assert.equal(control('upload').disabled, true, 'failed account lookup cannot grant an upload capability');
+        assert.match(control('authMessage').textContent, /HTTP 502/);
+        assert(!control('status').textContent.includes('初始化失败'), 'optional account error cannot replace media readiness');
+    }
     if (!succeeded) {
         await vm.runInContext('startRecording()', fixture);
         assert.equal(microphoneCalls, 0, 'a failed startup remains fenced');
     }
 }
-console.log('karaoke-encrypted-snapshot-smoke-ok: opaque snapshot and media/account ready lifecycle');
+console.log('karaoke-encrypted-snapshot-smoke-ok: opaque snapshot and independent optional account lifecycle');

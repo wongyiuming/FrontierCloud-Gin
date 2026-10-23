@@ -283,35 +283,42 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
             page.wait_for_function('document.getElementById("inlineLyricsTrack").children.length===7')
             inline = lyric_geometry(page, '#inlineLyricsTrack .sync-lyric.current')
             check_geometry(inline)
+            wrapped = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack');
+                animateLyricForward(4);return {transform:track.style.transform,rows:track.children.length,active:activeLyricIndex};}''')
+            assert wrapped == {'transform': 'translateY(0)', 'rows': 7, 'active': 4}
+            page.evaluate('()=>{activeLyricEntries.forEach(entry=>entry.text="短句");renderLyricWindow(3);}')
             animation = page.evaluate('''()=>{const track=document.getElementById('inlineLyricsTrack'),height=track.firstElementChild.offsetHeight;
                 animateLyricForward(4);return {height,transform:track.style.transform,rows:track.children.length};}''')
             assert animation['height'] > 0 and animation['transform'] == f"translateY(-{animation['height']}px)" and animation['rows'] == 8
             page.wait_for_function('document.getElementById("inlineLyricsTrack").children.length===7')
+            page.evaluate('''text=>{activeLyricEntries[3].text=text;renderLyricWindow(3);}''', LONG_TEXT)
             page.evaluate('()=>{openFullscreenLyrics();renderFullscreenLyrics();sizeFullscreenLyrics();}')
             full = lyric_geometry(page, '.fullscreen-lyric-line[data-lyric-index="3"]')
             check_geometry(full)
             assert page.locator('.fullscreen-lyrics-column').count() == 3
             page.screenshot(path=str(Path(record['output']) / f'lyrics-{width}.png'))
             page.evaluate('()=>closeFullscreenLyrics()')
-            geometry.append({'viewport': [width, height], 'inline': inline, 'fullscreen': full, 'row_offset': animation})
+            geometry.append({'viewport': [width, height], 'inline': inline, 'fullscreen': full,
+                             'row_offset': animation, 'wrapped_direct_render': wrapped})
         record['shared_lyrics'] = {'actual_served_renderer': True, 'layout_fixture_not_lyric_relation': True, 'layouts': geometry}
         record['shared_lyrics_verified'] = True
     finally:
         context.close()
     context = browser.new_context(viewport={'width': 1360, 'height': 900})
-    context.add_init_script('''window.nativeKaraoke={context200:false,account200:false,prematureEnable:false,microphoneCalls:0};
+    context.add_init_script('''window.nativeKaraoke={context200:false,account200:false,accountStatus:0,prematureEnable:false,microphoneCalls:0};
         const savedFetch=window.fetch.bind(window);window.fetch=(...args)=>{const result=savedFetch(...args);result.then(response=>{
             const path=new URL(response.url).pathname;if(path==='/api/v1/karaoke/context')nativeKaraoke.context200=response.status===200;
-            if(path==='/api/v1/karaoke/account/status')nativeKaraoke.account200=response.status===200;},()=>{});return result;};
+            if(path==='/api/v1/karaoke/account/status'){nativeKaraoke.account200=response.status===200;
+                nativeKaraoke.accountStatus=response.status;}},()=>{});return result;};
         const media=navigator.mediaDevices;if(media?.getUserMedia){const original=media.getUserMedia.bind(media);
             media.getUserMedia=(...args)=>{nativeKaraoke.microphoneCalls++;return original(...args);};}
         new MutationObserver(()=>{const button=document.getElementById('record');if(button&&!button.disabled&&
-            !(nativeKaraoke.context200&&nativeKaraoke.account200))nativeKaraoke.prematureEnable=true;
+            !nativeKaraoke.context200)nativeKaraoke.prematureEnable=true;
         }).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:['disabled']});''')
     page = context.new_page()
     try:
         page.goto(fixture['origin'] + '/karaoke/?' + urlencode({'media': karaoke_id}), wait_until='domcontentloaded')
-        page.wait_for_function('typeof state!=="undefined" && state.ready && !document.getElementById("record").disabled', timeout=30000)
+        page.wait_for_function('typeof state!=="undefined" && state.ready && nativeKaraoke.account200 && !document.getElementById("record").disabled', timeout=30000)
         actual = page.evaluate('({...nativeKaraoke,ready:state.ready,shared:!!window.FrontierLyricsUI,rows:document.querySelector("#lyrics").children.length,phase:state.phase})')
         assert actual['context200'] and actual['account200'] and not actual['prematureEnable'] and actual['microphoneCalls'] == 0
         assert actual['ready'] and actual['shared'] and actual['rows'] == 7 and actual['phase'] == 'idle'
@@ -322,6 +329,19 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
         page.locator('#fullLyrics').click()
         assert page.locator('#lyricsOverlay .fullscreen-lyrics-column').count() == 3
         page.screenshot(path=str(Path(record['output']) / 'karaoke-ready.png'))
+        def account_failure(route):
+            route.fulfill(status=503, content_type='application/json', body='{"detail":"Account unavailable in fault injection"}')
+        context.route('**/api/v1/karaoke/account/status', account_failure)
+        guest = context.new_page()
+        guest.goto(fixture['origin'] + '/karaoke/?' + urlencode({'media': karaoke_id}), wait_until='domcontentloaded')
+        guest.wait_for_function('typeof state!=="undefined" && state.ready && nativeKaraoke.accountStatus===503 && !elements.record.disabled', timeout=30000)
+        guest_state = guest.evaluate('''({...nativeKaraoke,ready:state.ready,disabled:elements.record.disabled,
+            guest:state.account===null,uploadDisabled:elements.upload.disabled})''')
+        assert guest_state['context200'] and not guest_state['account200'] and not guest_state['prematureEnable']
+        assert guest_state['ready'] and not guest_state['disabled'] and guest_state['guest'] and guest_state['uploadDisabled']
+        assert guest_state['microphoneCalls'] == 0
+        guest.close()
+        context.unroute('**/api/v1/karaoke/account/status', account_failure)
         failed = context.new_page()
         failed.goto(fixture['origin'] + '/karaoke/', wait_until='domcontentloaded')
         failed.wait_for_function('typeof state!=="undefined" && document.getElementById("status").textContent.includes("初始化失败")', timeout=30000)
@@ -330,6 +350,7 @@ def exercise_lyrics_and_karaoke(browser, fixture, folder, karaoke_id, record):
         assert refused == {'ready': False, 'disabled': True, 'phase': 'idle', 'microphoneCalls': 0}
         failed.close()
         record['karaoke'] = {'valid': actual, 'invalid_media_refused': refused, 'lyrics': karaoke_geometry,
+                             'guest_account_503': guest_state, 'account_fault_injection': True,
                              'microphone_or_recording_tested': False, 'response_observation_only': True}
         record['karaoke_readiness_verified'] = True
     finally:
