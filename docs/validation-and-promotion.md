@@ -33,6 +33,15 @@ Required scopes are:
 | tests/operator_recovery_acceptance.py | Actual operator backup/restore/upgrade, both stores |
 | scripts/test-native-matrix.sh | Five Go nodes: one Master, two Direct, two Relay; both store combinations |
 | tests/browser_ui_regression.py and tests/*browser.mjs | Real Chromium UI, cache, continuous playback and disconnect recovery |
+| tests/player_touch_seek_browser.py | Native touch seeking over short/wrapped lyrics and the player background, vertical lyric scrolling, mouse and control ownership at phone/tablet/desktop sizes |
+
+Run the focused touch regression on the development host with its installed
+Playwright Python and Chromium: `python tests/player_touch_seek_browser.py
+--output /private/new-touch-evidence`. It loads the shipped audio markup, CSS,
+player and lyric scripts with a decoded generated audio fixture; catalog/network
+startup is isolated. The evidence records actual CDP touch coordinates, pointer
+events, media time and asset hashes. It does not replace the HTTP, encryption or
+fleet gates. Mouse dragging alone is not evidence of touchscreen seeking.
 
 An unconfigured `go test ./...` can skip Redis/Engine/fleet acceptance. Its green
 exit is not proof those gates ran. Save JSON test events and classify all skips;
