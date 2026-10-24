@@ -392,13 +392,25 @@ for (const block of ['art.video.buffered.end=()=>10', 'art.video.seeking=true', 
     const styles = {};
     const panel = {clientHeight: 210, clientWidth: 360, style: {setProperty(name, value) { styles[name] = value; }}};
     const track = {children: [], offsetWidth: 300, style: {}, classList: {add() {}, remove() {}},
-        replaceChildren(...rows) { this.children = rows; }, append(row) { this.children.push(row); }};
+        replaceChildren(...rows) { this.children = []; rows.forEach(row => this.append(row)); },
+        append(row) { this.insertBefore(row, null); },
+        insertBefore(row, reference) {
+            if (row === reference) return row;
+            if (row.parentElement) row.parentElement.removeChild(row);
+            const index = reference === null ? this.children.length : this.children.indexOf(reference);
+            assert.ok(index >= 0);
+            this.children.splice(index, 0, row); row.parentElement = this; return row;
+        },
+        removeChild(row) {
+            const index = this.children.indexOf(row); assert.ok(index >= 0);
+            this.children.splice(index, 1); row.parentElement = null; return row;
+        }};
     const viewport = {clientHeight: 210, clientTop: 0, scrollTop: 0,
         get scrollHeight() { return track.children.reduce((height, row) => height + row.offsetHeight, 0); },
         getBoundingClientRect: () => ({top: 0, bottom: 210})};
     track.parentElement = viewport;
     function lyricRow() {
-        const row = {textContent: '', className: ''};
+        const row = {textContent: '', className: '', dataset: {}};
         row.classList = {contains: name => row.className.split(/\s+/).includes(name)};
         Object.defineProperty(row, 'offsetHeight', {get: () => row.textContent.length > 100 ? 126 : 63});
         row.getBoundingClientRect = () => {
