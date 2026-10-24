@@ -26,7 +26,8 @@ PROBE = r"""() => {
     const fail = (kind, detail) => {
         if (failures.length < 25) failures.push({kind, ...detail});
     };
-    const snapshot = () => new Map([...track.children].filter(row => row.textContent.trim())
+    // The temporary departing row is outside the seven-line logical window.
+    const snapshot = () => new Map([...track.children].filter(row => row.textContent.trim() && !row.classList.contains('departing'))
         .map(row => [row.textContent, {row, textNode: row.firstChild}]));
     const shared = () => {
         const wanted = new Set(activeLyricEntries.slice(Math.max(0, stage.index - 3), stage.index + 4)
