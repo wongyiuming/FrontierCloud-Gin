@@ -66,7 +66,7 @@ Never weaken an existing regression merely to make a new implementation pass. If
 
 - Frontend code MUST remain HTML, CSS and native JavaScript across public pages, players and Admin GUI. Do not introduce frontend frameworks, framework-based components or rendering engines in place of native browser APIs. Follow the [frontend baseline](ARCHITECTURE.md#frontend-baseline--html-css-and-native-javascript) when adding dependencies or redesigning UI; build/test tooling is not permission to change the shipped frontend stack.
 - A cluster has one business Master. storage nodes are resource nodes, not independent business authorities.
-- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. The owner-authorized global operator exception requires the one-shot default `foc-host-init` service and permits the separate `compose.foc.yaml` installer to install `/usr/local/bin/foc`, its private short-lived host backend, and its deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control; business and certificate runtimes remain Compose services. See `docs/operator-manual.md` for installation scopes and refusal rules.
+- Product components must be built and run by Docker/Compose. Do not install host services/users/executables or add systemctl-based product control. Certificate control is a bounded Compose container, with private persistent volumes and no Docker socket, host PID or privileged mode. `foc` is optional administration tooling: ordinary business and storage Compose startup must work without its binary, registry, operator receipt, host installation write permissions or installer success. Application, storage and automatic TLS initialization must never depend on the tool. The limited host-operator exception permits explicit `operator` profile invocation of `foc-host-init`, or the separate `deploy/compose.foc.yaml` source installer (packaged as `compose.foc.yaml` in the operator bundle), to install `/usr/local/bin/foc`, its private short-lived backend and deployment registry. This exception grants no Docker permissions and introduces no host service, user, systemd unit or systemctl control. Preserve native data/identity admission independently of operator registration. See `docs/operator-manual.md` for installation scopes and refusal rules.
 - Master-owned business state (lyrics, lyric relations, playback/business facts, users, audit facts) must not silently migrate to storage nodes.
 - One managed media object is complete and belongs to exactly one storage member. Do not split one logical object across storage members.
 - Compute Worker is retired. Do not add worker slots, compute scheduling, worker UI, or worker product configuration back without an explicit architecture decision.
@@ -124,7 +124,11 @@ The complete local baseline and CI composition are maintained in the separate [E
 Preserve the two-value automatic HTTPS fresh-start baseline in ARCHITECTURE.md. Render
 real Compose with only those two values and also with empty optional values;
 verify default public latest images, no builds, SQLite, persistent initialization,
-ports and project identity. Run a fresh HTTPS startup on the development host
+ports and project identity. Verify business and storage startup with the operator
+profile disabled, no global `foc`, registry or operator receipt, and unavailable
+tool installation paths. Test explicit tool installation and its refusal cases
+separately; they cannot gate application or automatic TLS initialization.
+Run a fresh HTTPS startup on the development host
 with one CPU and isolated networks/IPs/volumes using ports 80/443; no random
 public port override may bypass startup validation. Fixture image aliases may stand in for
 unreleased main/latest bytes, but that is not evidence that remote latest exists.

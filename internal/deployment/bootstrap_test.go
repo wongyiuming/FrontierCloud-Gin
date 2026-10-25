@@ -36,7 +36,7 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		}
 	}
 	fixture := map[string]string{
-		"Dockerfile.gin": "FROM committed-native\n",
+		"Dockerfile.gin":   "FROM committed-native\n",
 		"Dockerfile":       "FROM committed-native\n",
 		"nginx/Dockerfile": "FROM committed-edge\n", "go.mod": "module fixture\n", "go.sum": "committed-sum\n",
 		"cmd/entry.txt": "committed\n", "internal/core.txt": "committed\n", "migrations/schema.txt": "committed\n",
@@ -45,7 +45,7 @@ func TestBootstrapArchivesExactCommitAndRejectsMutableSelections(t *testing.T) {
 		"app/main.py": "excluded reference runtime\n", "updater/server.py": "excluded reference updater\n",
 		"docker-compose.yaml": "services: {}\n", "docker-compose.gin-mysql.yaml": "services: {}\n",
 		"docker-compose.storage.yaml": "services: {}\n", ".env.example": "SERVER_NAME=fixture.invalid\n",
-		"compose.foc.yaml": "services: {}\n", "scripts/foc": "#!/bin/sh\n", "scripts/install-foc.sh": "#!/bin/sh\n",
+		"deploy/compose.foc.yaml": "services: {}\n", "scripts/foc": "#!/bin/sh\n", "scripts/install-foc.sh": "#!/bin/sh\n",
 		".env.storage.example": "SERVER_NAME=fixture.invalid\n", "docs/operator-manual.md": "Operator fixture\n",
 		"docs/operator-upgrade.md": "Approved upgrade fixture\n", "docs/operator-recovery-sets.md": "Recovery set fixture\n",
 	}
@@ -90,7 +90,7 @@ test "$(cat "$dest/Dockerfile")" = FROM\ committed-native
 test "$(cat "$dest/Dockerfile.gin")" = FROM\ committed-native
 test "$(cat "$dest/docs/operator-upgrade.md")" = Approved\ upgrade\ fixture
 test "$(cat "$dest/docs/operator-recovery-sets.md")" = Recovery\ set\ fixture
-test -f "$dest/compose.foc.yaml"
+test -f "$dest/$(cat "$BOOTSTRAP_CAPTURE/installer-path")"
 test -f "$dest/scripts/foc"
 test -f "$dest/scripts/install-foc.sh"
 for excluded in .env data .git app updater/server.py cmd/untracked.txt; do
@@ -101,6 +101,7 @@ done
 	if err := os.Mkdir(capture, 0700); err != nil {
 		t.Fatal(err)
 	}
+	write("capture/installer-path", "deploy/compose.foc.yaml\n", 0600)
 	run := func(selection string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "bash", "scripts/build-native-images.sh", selection)
 		cmd.Dir = root
@@ -142,5 +143,15 @@ done
 	}
 	if !strings.Contains(lines[1], "FRONTIERCLOUD_RUNTIME=go") {
 		t.Fatal("edge lost explicit native runtime label")
+	}
+	// Historical revisions must still archive the path their Dockerfiles select.
+	if err := os.Rename(filepath.Join(root, "deploy", "compose.foc.yaml"), filepath.Join(root, "compose.foc.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "deploy/compose.foc.yaml", "compose.foc.yaml")
+	git("-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-qm", "legacy installer layout fixture")
+	write("capture/installer-path", "compose.foc.yaml\n", 0600)
+	if out, err := run(git("rev-parse", "HEAD")); err != nil {
+		t.Fatalf("historical installer archive failed: %v: %s", err, out)
 	}
 }

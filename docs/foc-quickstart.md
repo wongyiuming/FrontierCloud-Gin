@@ -13,6 +13,24 @@ foc status
 `foc version` reports the tool version; `foc status` reports the deployment version.
 Multiple deployments require `foc --directory /absolute/deployment status`.
 
+For a running standard Compose deployment without an operator receipt, current
+tools register the explicitly selected directory before status, diagnose, logs,
+restart, upgrade or a local backup plan/create. Ambiguous discovery registers
+none of the candidates. To perform that metadata step explicitly before status:
+
+```sh
+foc --directory /absolute/deployment compose-register
+foc --directory /absolute/deployment status
+```
+
+Registration requires complete release, running-image, Compose and native-state
+proof; rejection or a missing/unsafe resulting receipt stops the original
+command. Existing receipts are not registered again. Installation, doctor,
+restore, node and independent archive/set commands never trigger registration.
+Use the installation guide for a deployment that is not running yet. These
+commands require a tool version supporting installer-free registration; the
+older pinned bootstrap bundle must be refreshed through a verified release.
+
 ## Update this node
 
 ```sh
@@ -60,12 +78,12 @@ Read-only `status` leaves `business_read=unverified` and may return exit code 3;
 it has not read actual media and is not reporting playback failure. Blocking
 checks return 2. Upgrade-managed read verification is recorded separately.
 
-Default business and storage Compose include mandatory global foc installation.
-On a fresh Linux host, normal Compose startup installs the command; first use
-verifies and registers the running deployment. The independently pinned bootstrap
-backend can be older than the application; `foc upgrade` refreshes it when needed.
-Older deployments without that stage use the separate
-[Compose installer](operator-manual.md#global-host-command).
+`foc` is optional. Ordinary business and storage Compose startup runs independently
+of tool installation or registration. To add the global command to a running
+deployment, explicitly run the `operator` profile's `foc-host-init` service; first
+use then verifies and registers that deployment. The independently pinned tool
+backend may be older than the application; `foc upgrade` refreshes it when needed.
+See the [installation commands and separate installer](operator-manual.md#global-host-command).
 
 Upgrade changes images within the recorded Compose selection. New services,
 mounts, environment configuration, host relocation and database conversion need

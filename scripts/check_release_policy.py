@@ -41,8 +41,9 @@ for token in ('promote-main:', 'reviewed.data.commit.tree.sha !== commit.data.co
     require(token in workflow, f"Reviewed CI promotion guard missing: {token}")
 require('github.paginate' not in workflow, "Promotion lookup must remain bounded")
 
-require(web == read("Dockerfile.gin") and compose == read("docker-compose.gin.yaml"),
-        "Native aliases must match defaults")
+require(web == read("Dockerfile.gin"), "Native Dockerfile alias must match default")
+require(not (ROOT / "docker-compose.gin.yaml").exists(),
+        "Retired duplicate Compose entry must not return")
 for path in ("Dockerfile.python", "docker-compose.python.yaml",
              "scripts/test-mixed-runtime.sh", "scripts/test-mixed-release.sh",
              "scripts/test-store-interop.sh", "tests/store.Dockerfile"):

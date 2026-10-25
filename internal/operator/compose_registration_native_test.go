@@ -1,7 +1,8 @@
 package operator
 
 // Opt-in isolated development node. Publication proof is injected only here;
-// default Compose initialization, host installation and Docker are actual.
+// default Compose initialization and Docker are actual. Host installation is
+// optional and registration must not create or alter the global command.
 import (
 	"context"
 	"encoding/json"
@@ -42,9 +43,10 @@ func (r rawComposeRegistrationRunner) Run(ctx context.Context, name string, args
 		if e = json.Unmarshal(raw, &cfg); e != nil {
 			return nil, e
 		}
-		service := cfg.Services["foc-host-init"]
-		service.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("a", 64)
-		cfg.Services["foc-host-init"] = service
+		if service, present := cfg.Services["foc-host-init"]; present {
+			service.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("a", 64)
+			cfg.Services["foc-host-init"] = service
+		}
 		return json.Marshal(cfg)
 	}
 	return raw, nil
@@ -85,6 +87,10 @@ func TestNativeDefaultComposeRegistersGlobalFoc(t *testing.T) {
 		t.Fatal(e)
 	}
 	d.Runner = rawComposeRegistrationRunner{spec.Directory}
+	before, beforeErr := os.ReadFile("/usr/local/bin/foc")
+	if beforeErr != nil && !os.IsNotExist(beforeErr) {
+		t.Fatal(beforeErr)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	r, e := d.RegisterCompose(ctx, "amd64", fakeEvidence{true}, privateRegistrationImages{spec.ConfigDigests, spec.InstallerRevision})
@@ -115,10 +121,14 @@ func TestNativeDefaultComposeRegistersGlobalFoc(t *testing.T) {
 	if _, e = d.ValidateReceipt(ctx, r); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = os.Stat("/usr/local/bin/foc"); e != nil {
-		t.Fatal("normal Compose did not install host command", e)
+	after, afterErr := os.ReadFile("/usr/local/bin/foc")
+	if afterErr != nil && !os.IsNotExist(afterErr) {
+		t.Fatal(afterErr)
 	}
-	if e = exclusiveJSON(filepath.Join(spec.Directory, "compose-foc-evidence.json"), map[string]any{"status": "passed", "default_compose_installed_global_foc": true, "registration_executed": true, "public_installation_proof": false, "publication_proof_injected": true, "schema_generation": r.Images["web"].Generation, "role": spec.Role}); e != nil {
+	if os.IsNotExist(beforeErr) != os.IsNotExist(afterErr) || string(before) != string(after) {
+		t.Fatal("Compose registration created or altered the host command")
+	}
+	if e = exclusiveJSON(filepath.Join(spec.Directory, "compose-foc-evidence.json"), map[string]any{"status": "passed", "registration_preserved_host_command": true, "global_foc_present": beforeErr == nil, "registration_executed": true, "public_installation_proof": false, "publication_proof_injected": true, "schema_generation": r.Images["web"].Generation, "role": spec.Role}); e != nil {
 		t.Fatal(e)
 	}
 }

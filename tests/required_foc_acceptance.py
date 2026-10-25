@@ -1,4 +1,4 @@
-"""Development-only default Compose/global foc acceptance inside an isolated Engine.
+"""Development-only optional foc and independent Compose acceptance in an isolated Engine.
 
 The outer fixture supplies a disposable Docker-in-Docker node and prebuilt images.
 No published host ports or production target are used. Private TLS cases inject
@@ -11,11 +11,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_REVISION = '1ce61b545727a19059a7ba82eb8bd45a9c93aa14'
 BOOTSTRAP_IMAGE = 'ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:8101bf3e423648ed4f1c2a29e671286a6391963ef562f55be4579476d45779de'
+ACTIVE_COMMANDS = []
+CLEANUP_OUTPUT = None
 
 
 def main():
@@ -23,6 +26,8 @@ def main():
     for name in ('node', 'workspace', 'revision', 'image', 'edge-image', 'output'):
         parser.add_argument('--' + name, required=True)
     args = parser.parse_args()
+    global CLEANUP_OUTPUT
+    CLEANUP_OUTPUT = Path(args.output)
     work = Path(args.workspace).resolve()
     assert work.name.startswith('foc-required-fixtures-') and not work.exists()
     work.mkdir()
@@ -33,10 +38,15 @@ def main():
     def save():
         Path(args.output).write_text(json.dumps(result, indent=2) + '\n')
 
-    def execute(argv, allowed=(0,), env=None):
+    def execute(argv, allowed=(0,), env=None, timeout=240):
         record = {'argv': [str(x) for x in argv]}
         records.append(record)
-        completed = subprocess.run(record['argv'], capture_output=True, text=True, env=env, timeout=240)
+        try:
+            completed = subprocess.run(record['argv'], capture_output=True, text=True, env=env, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            record.update(exit_code=None, timed_out=True)
+            save()
+            raise RuntimeError('fixture input timed out: ' + ' '.join(record['argv'])) from None
         record['exit_code'] = completed.returncode
         # Keep command inputs and bounded structured facts, never container logs/secrets.
         record['stdout_sha256'] = hashlib.sha256(completed.stdout.encode()).hexdigest()
@@ -55,6 +65,55 @@ def main():
 
     def compose(directory, filename, *argv):
         return engine('compose', '--project-directory', str(directory), '-f', str(directory / filename), *argv)
+
+    def native_identity(command):
+        value = json.loads(engine(*command, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
+        assert value['node_id'] and not value['maintenance'], value
+        return value['node_id']
+
+    def healthy(command, tls=False):
+        engine(*command, 'exec', '-T', 'web', '/app/frontiercloud', 'healthcheck')
+        if tls:
+            certificate = json.loads(engine(*command, 'exec', '-T', 'web', '/app/frontiercloud', 'certificate-status'))
+            assert certificate['https_ready'] and certificate['serving_matches'], certificate
+            assert certificate['fingerprint'] == certificate['serving_fingerprint'], certificate
+            return certificate['fingerprint']
+
+    def no_operator(directory, command):
+        inner('sh', '-ec', 'test ! -e /usr/local/bin/foc; test ! -e /usr/local/lib/frontiercloud/foc; '
+              'test ! -e /etc/frontiercloud/foc-deployments')
+        assert not (directory / '.fc-deployment.json').exists()
+        configuration = json.loads(engine(*command, 'config', '--format', 'json'))
+        assert 'foc-host-init' not in configuration['services']
+        containers = engine('ps', '--all', '--filter', 'label=com.docker.compose.project=' + configuration['name'],
+                            '--format', '{{.Label "com.docker.compose.service"}}').splitlines()
+        assert 'foc-host-init' not in containers
+
+    def cpu_recovered(command):
+        container = engine(*command, 'ps', '-q', 'web').strip()
+        assert container and '\n' not in container
+        limits = json.loads(engine('inspect', '--format', '{{json .HostConfig}}', container))
+        assert limits['NanoCpus'] == 1000000000 and limits['Memory'] == 512 * 1024 * 1024
+        result.setdefault('web_limits', []).append({'container': container,
+                                                    'nano_cpus': limits['NanoCpus'], 'memory_bytes': limits['Memory']})
+        samples, consecutive = [], 0
+        started = time.monotonic()
+        deadline = started + 30
+        while time.monotonic() < deadline:
+            raw = execute(['docker', 'exec', args.node, 'docker', 'stats', '--no-stream',
+                           '--format', '{{.CPUPerc}}', container],
+                          timeout=min(5, max(.1, deadline - time.monotonic()))).strip()
+            value = float(raw.removesuffix('%'))
+            samples.append({'elapsed_seconds': round(time.monotonic() - started, 3), 'cpu_percent': value})
+            consecutive = consecutive + 1 if value < 20 else 0
+            if consecutive == 5 and time.monotonic() <= deadline:
+                return samples
+            time.sleep(1)
+        # Stop the affected Web before reporting a compute-caused failure.
+        engine(*command, 'stop', 'web')
+        result['cpu_failure_samples'] = samples
+        save()
+        raise RuntimeError('Web failed one-core CPU recovery acceptance')
 
     def wait_file(path, limit=90):
         deadline = time.monotonic() + limit
@@ -78,42 +137,39 @@ def main():
         assert all(x['state'] == 'pass' or x['item'] == 'business_read' and x['state'] == 'unverified' for x in facts['checks']), facts
         return facts
 
-    # Real published bytes, no release-proof injection or extra runtime overrides.
+    # Real published bytes, no release-proof injection. The development-only
+    # resource overlay bounds Web to the same one-core acceptance budget.
     case = work / 'public-master'
     case.mkdir()
     shutil.copyfile(ROOT / 'docker-compose.yaml', case / 'docker-compose.yaml')
     (case / '.env').write_text('COMPOSE_PROJECT_NAME=foc-required-public-master\nFRONTIERCLOUD_REVISION=' + BOOTSTRAP_REVISION + '\n')
-    compose(case, 'docker-compose.yaml', 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
-    assert inner('sh', '-lc', 'cd /; command -v foc').strip() == '/usr/local/bin/foc'
-    raw = inner('sh', '-lc', 'cd /; foc --json status', allowed=(0, 3))
-    before = json.loads(raw)
-    assert all(x['state'] == 'pass' or x['item'] == 'business_read' for x in before['checks']), before
-    assert (case / '.fc-deployment.json').is_file()
-    first = inner('sha256sum', '/usr/local/lib/frontiercloud/foc/fc').split()[0]
-    compose(case, 'docker-compose.yaml', 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
-    assert first == inner('sha256sum', '/usr/local/lib/frontiercloud/foc/fc').split()[0]
-    assert node_identity(before) == node_identity(status(case))
+    resources = case / 'resources.json'
+    resources.write_text(json.dumps({'services': {'web': {'cpus': 1, 'mem_limit': '512m', 'memswap_limit': '512m'}}}))
+    public_command = ['compose', '--project-directory', str(case), '-f', str(case / 'docker-compose.yaml'), '-f', str(resources)]
+    ACTIVE_COMMANDS.append((args.node, public_command))
+    no_operator(case, public_command)
+    engine(*public_command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
+    healthy(public_command)
+    public_identity = native_identity(public_command)
+    no_operator(case, public_command)
+    engine(*public_command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
+    healthy(public_command)
+    assert public_identity == native_identity(public_command)
+    no_operator(case, public_command)
     result['cases'].append({'case': 'published-default-master', 'actual_input': 'docker compose up -d --pull never --wait',
-                            'public_release_proof_injected': False, 'global_status_from_root': True,
-                            'metadata_registration_executed': True, 'repeat_preserved_backend_and_identity': True})
-
-    # Refresh to the candidate through its actual Compose installer, then repeat
-    # older default bootstrap: it must not downgrade a different managed backend.
-    env = ['-e', 'FOC_OPERATOR_IMAGE=' + args.image, '-e', 'FOC_OPERATOR_REVISION=' + args.revision,
-           '-e', 'FOC_DEPLOYMENT_DIRECTORY=' + str(case), '-e', 'FOC_OPERATOR_PULL_POLICY=never']
-    execute(['docker', 'exec', *env, args.node, 'docker', 'compose', '-f', str(ROOT / 'compose.foc.yaml'), 'run', '--rm', '--no-deps', 'install'])
-    assert inner('foc', 'version').strip() == args.revision
-    compose(case, 'docker-compose.yaml', 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
-    assert inner('foc', 'version').strip() == args.revision
-    result['cases'].append({'case': 'candidate-refresh-and-repeat', 'candidate_installer_real': True,
-                            'older_bootstrap_did_not_downgrade': True, 'public_candidate_proof_claimed': False})
-    compose(case, 'docker-compose.yaml', 'stop')
+                            'public_business_bytes': True, 'publication_proof_injected': False,
+                            'development_only_resource_limits': True,
+                            'operator_installed': False, 'receipt_created': False,
+                            'default_repeat_preserved_identity': True,
+                            'cpu_percent_samples': cpu_recovered(public_command)})
+    engine(*public_command, 'stop')
 
     candidate_alias = 'ghcr.io/wongyiuming/frontiercloud-gin-web:' + args.revision
     # Only this private Engine supplies the candidate alias; its release proof
     # remains injected by the compiled test and is never claimed as publication.
     engine('image', 'tag', args.image, candidate_alias)
 
+    fixtures = []
     for profile, database in (('business', 'sqlite'), ('business', 'mysql'), ('direct', 'sqlite'), ('relay', 'sqlite')):
         name = profile + '-' + database
         print('START', name, flush=True)
@@ -131,8 +187,11 @@ def main():
         command = ['compose', '--project-directory', str(directory), '-f', str(directory / filename)]
         if database == 'mysql':
             command += ['-f', str(directory / 'docker-compose.gin-mysql.yaml')]
-        cfg = json.loads(engine(*command, 'config', '--format', 'json'))
+        cfg = json.loads(engine(*command, '--profile', 'operator', 'config', '--format', 'json'))
         for service, spec in cfg['services'].items():
+            # Dedicated private networks permit all fresh profiles to remain
+            # idle until every profile has proved startup without a host tool.
+            spec.pop('ports', None)
             image = spec['image']
             if service != 'foc-host-init' and 'frontiercloud-gin-web' in image:
                 spec['image'] = candidate_alias
@@ -160,32 +219,68 @@ def main():
             cfg['services']['mysql'].update(cpus=1, mem_limit='768m', memswap_limit='768m')
             (directory / 'docker-compose.gin-mysql.yaml').write_text('{}\n')
         (directory / filename).write_text(json.dumps(cfg))
+        ACTIVE_COMMANDS.append((args.node, command))
         engine(*command, 'up', '-d', '--pull', 'never', 'certificate-agent')
         wait_file(control / 'ca-ready')
         engine(*command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
         wait_file(control / 'issued-and-serving')
-        spec = {'directory': str(directory), 'role': 'master' if profile == 'business' else 'storage', 'database': database,
+        no_operator(directory, command)
+        identity = native_identity(command)
+        fingerprint = healthy(command, tls=True)
+        result['cases'].append({'case': name + '-without-operator', 'normal_up_without_foc': True,
+                                'registry_created': False, 'receipt_created': False, 'installer_container_created': False,
+                                'real_native_identity_and_database': True, 'private_ca_https_verified': True,
+                                'serving_fingerprint_matches': True, 'publication_proof_injected': False,
+                                'candidate_publication_claimed': False, 'trust_bypass': False,
+                                'cpu_percent_samples': cpu_recovered(command)})
+        fixtures.append((name, directory, command, identity, fingerprint))
+        save()
+
+    # Only after every runtime topology has proved fresh startup independently,
+    # register the running private candidate through the compiled proof fixture.
+    for name, directory, command, identity, fingerprint in fixtures:
+        database = 'mysql' if name == 'business-mysql' else 'sqlite'
+        spec = {'directory': str(directory), 'role': 'master' if name.startswith('business-') else 'storage', 'database': database,
                 'installer_revision': BOOTSTRAP_REVISION, 'config_digests': {'web': image_id(args.image), 'nginx': image_id(args.edge_image), 'installer': image_id(BOOTSTRAP_IMAGE)}}
         specfile = directory / 'registration-spec.json'
         specfile.write_text(json.dumps(spec))
         execute(['docker', 'exec', '-e', 'FC_COMPOSE_REGISTRATION_SPEC=' + str(specfile), args.node,
                  str(ROOT / '.ci-out/operator.test'), '-test.v', '-test.timeout=4m', '-test.run=^TestNativeDefaultComposeRegistersGlobalFoc$'])
+        # The separate installer consumes an existing verified receipt; no
+        # candidate publication is inferred from this isolated test image.
+        env = ['-e', 'FOC_OPERATOR_IMAGE=' + args.image, '-e', 'FOC_OPERATOR_REVISION=' + args.revision,
+               '-e', 'FOC_DEPLOYMENT_DIRECTORY=' + str(directory), '-e', 'FOC_OPERATOR_PULL_POLICY=never']
+        execute(['docker', 'exec', *env, args.node, 'docker', 'compose', '-f', str(ROOT / 'deploy/compose.foc.yaml'),
+                 'run', '--rm', '--no-deps', 'install'])
+        assert inner('foc', 'version').strip() == args.revision
+        engine(*command, '--profile', 'operator', 'run', '--rm', '--no-deps', 'foc-host-init')
+        assert inner('foc', 'version').strip() == args.revision
         before = status(directory)
-        certificate = json.loads(engine(*command, 'exec', '-T', 'web', '/app/frontiercloud', 'certificate-status'))
-        assert certificate['https_ready'] and certificate['serving_matches'], certificate
+        assert native_identity(command) == identity
+        assert healthy(command, tls=True) == fingerprint
+        failure = directory / 'installer-failure.json'
+        failure.write_text(json.dumps({'services': {'foc-host-init': {
+            'entrypoint': ['/bin/sh', '-ec', 'exit 1'], 'command': []}}}))
+        execute(['docker', 'exec', args.node, 'docker', *command, '-f', str(failure), '--profile', 'operator',
+                 'run', '--rm', '--no-deps', 'foc-host-init'], allowed=(1,))
+        assert native_identity(command) == identity
+        assert healthy(command, tls=True) == fingerprint
         engine(*command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
         assert node_identity(before) == node_identity(status(directory))
         assert inner('foc', 'version').strip() == args.revision
-        result['cases'].append({'case': name, 'normal_required_installer_executed': True,
+        result['cases'].append({'case': name + '-optional-operator', 'installer_explicitly_selected': True,
+                                'failing_installer_exit_code': 1, 'failure_preserved_identity_and_tls': True,
                                 'real_native_identity_and_database': True, 'private_ca_https_verified': True,
                                 'serving_fingerprint_matches': True, 'registration_and_global_status': True,
                                 'repeat_preserved_identity_and_newer_backend': True,
-                                'publication_proof_injected_for_candidate': True, 'trust_bypass': False})
+                                'publication_proof_injected_for_candidate': True, 'trust_bypass': False,
+                                'cpu_percent_samples': cpu_recovered(command)})
         engine(*command, 'stop')
         save()
         print('PASS', name, flush=True)
 
-    # A foreign command must fail before any native initializer creates identity.
+    # A foreign host command refuses explicit installation, while the ordinary
+    # business deployment keeps operating with the same native identity.
     directory = work / 'collision'
     directory.mkdir()
     shutil.copyfile(ROOT / 'docker-compose.yaml', directory / 'docker-compose.yaml')
@@ -193,24 +288,51 @@ def main():
     inner('cp', '/usr/local/bin/foc', '/root/foc-before-collision')
     inner('sh', '-ec', "printf '#!/bin/sh\\nexit 0\\n' > /usr/local/bin/foc")
     before = inner('sha256sum', '/usr/local/bin/foc').split()[0]
-    execute(['docker', 'exec', args.node, 'docker', 'compose', '--project-directory', str(directory), '-f', str(directory / 'docker-compose.yaml'), 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '30'], allowed=(1,))
+    resources = directory / 'resources.json'
+    resources.write_text(json.dumps({'services': {'web': {'cpus': 1, 'mem_limit': '512m', 'memswap_limit': '512m'}}}))
+    collision_command = ['compose', '--project-directory', str(directory), '-f', str(directory / 'docker-compose.yaml'), '-f', str(resources)]
+    ACTIVE_COMMANDS.append((args.node, collision_command))
+    engine(*collision_command, 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
+    healthy(collision_command)
+    identity = native_identity(collision_command)
+    execute(['docker', 'exec', args.node, 'docker', *collision_command, '--profile', 'operator',
+             'run', '--rm', '--no-deps', 'foc-host-init'], allowed=(2,))
     assert before == inner('sha256sum', '/usr/local/bin/foc').split()[0]
-    assert not (directory / 'data/node-vault.key').exists()
-    raw = compose(directory, 'docker-compose.yaml', 'ps', '--all', '--format', 'json')
-    try:
-        services = json.loads(raw)
-    except json.JSONDecodeError:
-        services = [json.loads(line) for line in raw.splitlines() if line.strip()]
-    if isinstance(services, dict):
-        services = [services]
-    assert all(row['State'] != 'running' for row in services if row['Service'] in ('web', 'secrets-init', 'media-init', 'certificate-init'))
+    healthy(collision_command)
+    assert identity == native_identity(collision_command)
     inner('cp', '/root/foc-before-collision', '/usr/local/bin/foc')
-    result['cases'].append({'case': 'foreign-command-collision', 'startup_refused': True, 'foreign_command_unchanged': True,
-                            'native_initializers_not_started': True})
+    result['cases'].append({'case': 'foreign-command-collision', 'business_startup_succeeded': True,
+                            'explicit_installer_refused': True, 'foreign_command_unchanged': True,
+                            'native_identity_preserved': True, 'cpu_percent_samples': cpu_recovered(collision_command)})
+    engine(*collision_command, 'stop')
     result['passed'] = True
     save()
-    print('PASS: required Compose installation, global status, all profiles, retry and collision', flush=True)
+    print('PASS: independent default Compose, optional operator, all profiles, TLS and installer failure isolation', flush=True)
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        cleanup = []
+        failed = sys.exc_info()[0] is not None
+        for node, command in reversed(ACTIVE_COMMANDS):
+            # Failure handling stops Web before other cleanup, including an
+            # assertion failure outside the subprocess helper.
+            steps = [('stop', 'web'), ('stop',)] if failed else [('stop',)]
+            for step in steps:
+                argv = ['docker', 'exec', node, 'docker', *command, *step]
+                try:
+                    completed = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+                    cleanup.append({'argv': argv, 'exit_code': completed.returncode})
+                except (OSError, subprocess.TimeoutExpired):
+                    cleanup.append({'argv': argv, 'exit_code': None})
+        if CLEANUP_OUTPUT is not None and CLEANUP_OUTPUT.exists():
+            facts = json.loads(CLEANUP_OUTPUT.read_text())
+            facts['finally_cleanup'] = cleanup
+            facts['cleanup_passed'] = all(item['exit_code'] == 0 for item in cleanup)
+            if not facts['cleanup_passed']:
+                facts['passed'] = False
+            CLEANUP_OUTPUT.write_text(json.dumps(facts, indent=2) + '\n')
+        if not failed and any(item['exit_code'] != 0 for item in cleanup):
+            raise RuntimeError('isolated Compose cleanup failed; stop the outer disposable Engine')

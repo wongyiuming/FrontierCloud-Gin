@@ -147,6 +147,28 @@ func TestInstallPinsOneRevisionAndInfrastructureBeforeStarting(t *testing.T) {
 		t.Fatal("project drift accepted")
 	}
 }
+
+func TestExistingGinComposeReceiptRetainsItsFiles(t *testing.T) {
+	for _, database := range []string{"sqlite", "mysql"} {
+		t.Run(database, func(t *testing.T) {
+			d, err := New(t.TempDir(), "master", database)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files := append([]string(nil), d.Files...)
+			files[0] = "docker-compose.gin.yaml"
+			r := Receipt{Version: ConfigurationVersion, Role: "master", Database: database, Project: "retained", Revision: strings.Repeat("a", 40), Files: files, State: "ready"}
+			if err = exclusiveJSON(filepath.Join(d.Directory, ReceiptFile), r); err != nil {
+				t.Fatal(err)
+			}
+			opened, got, err := Open(d.Directory)
+			if err != nil || !reflect.DeepEqual(opened.Files, files) || !reflect.DeepEqual(got.Files, files) {
+				t.Fatal("existing Compose selection changed", err)
+			}
+		})
+	}
+}
+
 func TestInstallRefusesDataIdentityVolumesAndExistingContainers(t *testing.T) {
 	for _, kind := range []string{"database", "media", "identity", "volume", "container", "symlink", "changed-mount"} {
 		t.Run(kind, func(t *testing.T) {

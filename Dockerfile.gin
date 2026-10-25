@@ -11,7 +11,8 @@ COPY protocol ./protocol
 COPY migrations ./migrations
 COPY static ./static
 # Keep deployment contract tests executable in the build stage only.
-COPY Dockerfile Dockerfile.gin compose.foc.yaml ./
+COPY Dockerfile Dockerfile.gin ./
+COPY deploy/compose.foc.yaml ./deploy/
 # Bound per-build package/compiler parallelism. Several independent node agents
 # may build on one Engine; inheriting every host CPU can exhaust host memory.
 RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 /usr/local/go/bin/go test -p=1 ./... && \
@@ -36,7 +37,7 @@ WORKDIR /app
 COPY --from=build /out/frontiercloud /app/frontiercloud
 COPY --from=build /out/fc /app/operator/fc
 COPY scripts/foc scripts/install-foc.sh /app/operator/
-COPY compose.foc.yaml /app/operator/
+COPY deploy/compose.foc.yaml /app/operator/
 COPY docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example /app/operator/
 COPY docs/operator-manual.md /app/operator/OPERATOR-MANUAL.md
 COPY docs/operator-upgrade.md /app/operator/APPROVED-UPGRADES.md

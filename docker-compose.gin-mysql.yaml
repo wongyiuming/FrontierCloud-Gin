@@ -1,4 +1,4 @@
-# Select with COMPOSE_FILE=docker-compose.gin.yaml:docker-compose.gin-mysql.yaml
+# Select with COMPOSE_FILE=docker-compose.yaml:docker-compose.gin-mysql.yaml
 # (use ';' as the COMPOSE_FILE separator on Windows).
 services:
   web:

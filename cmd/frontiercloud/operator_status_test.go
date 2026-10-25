@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/runtimefacts"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
@@ -59,7 +59,7 @@ func TestOperatorStatusPreservesIdentityAndReportsOfflineFenceWithoutNewLocks(t 
 	if e = operatorStatusCommand(&out); e != nil {
 		t.Fatal(e)
 	}
-	var fact operator.RuntimeFact
+	var fact runtimefacts.RuntimeFact
 	if e = json.Unmarshal(out.Bytes(), &fact); e != nil || fact.NodeID != identity.ID || fact.Role != "Standalone" || fact.Database.SchemaGeneration != migrations.Generation || !fact.NativeMaintenance || !fact.Maintenance {
 		t.Fatal(fact, e)
 	}

@@ -1,6 +1,6 @@
 // Package operator implements short-lived host-side Compose workflows. Native
-// status shares its readonly fact types; Web never invokes the host workflows
-// or receives Docker socket authority.
+// status consumes the independent runtimefacts contract; Web never imports
+// these host workflows or receives Docker socket authority.
 package operator
 
 import (

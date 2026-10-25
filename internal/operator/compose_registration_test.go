@@ -14,8 +14,12 @@ import (
 
 type registrationRunner struct {
 	*upgradeRunner
-	root       string
-	wrongImage bool
+	root             string
+	wrongImage       bool
+	withoutInstaller bool
+	labels           map[string]string
+	duplicateWeb     bool
+	missingWeb       bool
 }
 
 func (r *registrationRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -23,12 +27,18 @@ func (r *registrationRunner) Run(ctx context.Context, name string, args ...strin
 	if strings.Contains(call, "ps --all --format json") {
 		var rows []registrationContainer
 		for service := range r.config.Services {
+			if service == "foc-host-init" && r.withoutInstaller || service == "web" && r.missingWeb {
+				continue
+			}
 			row := registrationContainer{ID: service, Service: service, State: "running", Health: "healthy"}
 			if service == "foc-host-init" {
 				row.State = "exited"
 				row.Health = ""
 			}
 			rows = append(rows, row)
+			if service == "web" && r.duplicateWeb {
+				rows = append(rows, row)
+			}
 		}
 		r.calls = append(r.calls, call)
 		return json.Marshal(rows)
@@ -44,9 +54,13 @@ func (r *registrationRunner) Run(ctx context.Context, name string, args ...strin
 		r.calls = append(r.calls, call)
 		return json.Marshal("sha256:" + strings.Repeat(id, 64))
 	}
-	if strings.Contains(call, "inspect --format {{json .Config.Labels}} foc-host-init") {
+	if strings.Contains(call, "inspect --format {{json .Config.Labels}} web") {
 		r.calls = append(r.calls, call)
-		return json.Marshal(map[string]string{"frontiercloud.foc-bootstrap": "1", "com.docker.compose.project": r.config.Name, "com.docker.compose.project.working_dir": r.root, "com.docker.compose.project.config_files": filepath.Join(r.root, "docker-compose.yaml")})
+		labels := map[string]string{"frontiercloud.runtime": "go", "frontiercloud.component": "web", "com.docker.compose.service": "web", "com.docker.compose.oneoff": "False", "com.docker.compose.project": r.config.Name, "com.docker.compose.project.working_dir": r.root, "com.docker.compose.project.config_files": filepath.Join(r.root, "docker-compose.yaml")}
+		for name, value := range r.labels {
+			labels[name] = value
+		}
+		return json.Marshal(labels)
 	}
 	if strings.Contains(call, "image inspect --format {{json .Config.Labels}}") {
 		r.calls = append(r.calls, call)
@@ -74,6 +88,7 @@ func registrationFixture(t *testing.T) (*Deployment, *registrationRunner) {
 		t.Fatal(e)
 	}
 	service.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("c", 64)
+	service.Environment["FOC_OPERATOR_REVISION"] = strings.Repeat("a", 40)
 	base.config.Services["foc-host-init"] = service
 	base.config.Services["web"].Environment["DATA_ROOT"] = "/app/data"
 	if e := os.Mkdir(filepath.Join(d.Directory, "data"), 0700); e != nil {
@@ -85,6 +100,75 @@ func registrationFixture(t *testing.T) (*Deployment, *registrationRunner) {
 	runner := &registrationRunner{upgradeRunner: &upgradeRunner{fakeRunner: base, data: filepath.Join(d.Directory, "data"), node: strings.Repeat("d", 32)}, root: d.Directory}
 	d.Runner = runner
 	return d, runner
+}
+
+func TestComposeRegistrationDoesNotDependOnInstallerContainer(t *testing.T) {
+	for _, kind := range []string{"no-installer-service", "removed-installer-container"} {
+		t.Run(kind, func(t *testing.T) {
+			d, runner := registrationFixture(t)
+			if kind == "no-installer-service" {
+				delete(runner.config.Services, "foc-host-init")
+			} else {
+				runner.withoutInstaller = true
+			}
+			r, err := d.RegisterCompose(context.Background(), "amd64", fakeEvidence{true}, registrationImages{})
+			if err != nil || r.State != "ready" {
+				t.Fatal(r, err)
+			}
+			_, installed := r.ServiceImages["foc-host-init"]
+			if installed != (kind == "removed-installer-container") {
+				t.Fatal("registration invented or lost installer selection", r.ServiceImages)
+			}
+			if _, err = d.ValidateReceipt(context.Background(), r); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestInstallerFreeComposeRegistrationStillRequiresUniqueNativeWeb(t *testing.T) {
+	cases := map[string]map[string]string{
+		"different-project":   {"com.docker.compose.project": "other"},
+		"different-directory": {"com.docker.compose.project.working_dir": "/unrelated"},
+		"different-files":     {"com.docker.compose.project.config_files": "/unrelated/docker-compose.yaml"},
+		"one-off":             {"com.docker.compose.oneoff": "True"},
+		"forged-service":      {"com.docker.compose.service": "redis"},
+		"foreign-runtime":     {"frontiercloud.runtime": "python"},
+		"foreign-component":   {"frontiercloud.component": "nginx"},
+		"scaled-web":          nil, "missing-web": nil, "unreviewed-image": nil, "image-drift": nil,
+	}
+	for name, labels := range cases {
+		t.Run(name, func(t *testing.T) {
+			d, runner := registrationFixture(t)
+			delete(runner.config.Services, "foc-host-init")
+			runner.labels, runner.duplicateWeb, runner.missingWeb, runner.wrongImage = labels, name == "scaled-web", name == "missing-web", name == "image-drift"
+			if _, err := d.RegisterCompose(context.Background(), "amd64", fakeEvidence{name != "unreviewed-image"}, registrationImages{}); err == nil {
+				t.Fatal("unsafe installer-free registration admitted")
+			}
+			if _, err := os.Lstat(filepath.Join(d.Directory, ReceiptFile)); !os.IsNotExist(err) {
+				t.Fatal("rejected registration published a receipt", err)
+			}
+		})
+	}
+}
+
+func TestRemovedInstallerStillRequiresIndependentReviewedPin(t *testing.T) {
+	for _, kind := range []string{"invalid-revision", "different-pin"} {
+		t.Run(kind, func(t *testing.T) {
+			d, runner := registrationFixture(t)
+			runner.withoutInstaller = true
+			s := runner.config.Services["foc-host-init"]
+			if kind == "invalid-revision" {
+				s.Environment["FOC_OPERATOR_REVISION"] = "latest"
+			} else {
+				s.Image = "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:" + strings.Repeat("e", 64)
+			}
+			runner.config.Services["foc-host-init"] = s
+			if _, err := d.RegisterCompose(context.Background(), "amd64", fakeEvidence{true}, registrationImages{}); err == nil {
+				t.Fatal("unverified removed installer bundle admitted")
+			}
+		})
+	}
 }
 
 func TestComposeRegistrationPinsActualImagesWithoutChangingBusinessState(t *testing.T) {
