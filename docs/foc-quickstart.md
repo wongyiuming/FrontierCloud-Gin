@@ -60,12 +60,12 @@ Read-only `status` leaves `business_read=unverified` and may return exit code 3;
 it has not read actual media and is not reporting playback failure. Blocking
 checks return 2. Upgrade-managed read verification is recorded separately.
 
-Default business and storage Compose include mandatory global foc installation.
-On a fresh Linux host, normal Compose startup installs the command; first use
-verifies and registers the running deployment. The independently pinned bootstrap
-backend can be older than the application; `foc upgrade` refreshes it when needed.
-Older deployments without that stage use the separate
-[Compose installer](operator-manual.md#global-host-command).
+`foc` is optional. Ordinary business and storage Compose startup runs independently
+of tool installation or registration. To add the global command to a running
+deployment, explicitly run the `operator` profile's `foc-host-init` service; first
+use then verifies and registers that deployment. The independently pinned tool
+backend may be older than the application; `foc upgrade` refreshes it when needed.
+See the [installation commands and separate installer](operator-manual.md#global-host-command).
 
 Upgrade changes images within the recorded Compose selection. New services,
 mounts, environment configuration, host relocation and database conversion need

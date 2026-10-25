@@ -43,13 +43,17 @@ class StorageDeploymentContract(unittest.TestCase):
         self.assertIn('RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev"', text)
         self.assertNotIn('RELEASE_BRANCH="gin_main"', text)
 
-    def test_appliance_has_two_resident_services_and_required_exiting_initializers(self):
+    def test_appliance_has_two_resident_services_and_optional_host_operator(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         services = text.split("\nservices:\n", 1)[1].split("\nvolumes:\n", 1)[0]
         self.assertEqual(re.findall(r"^  ([a-z-]+):$", services, re.M),
                          ["foc-host-init", "secrets-init", "media-init", "certificate-init", "certificate-agent", "web"])
         self.assertEqual(services.count('restart: "no"'), 4)
         self.assertEqual(services.count("restart: unless-stopped"), 2)
+        operator, runtime = services.split('  secrets-init:\n', 1)
+        self.assertIn('profiles: [operator]', operator)
+        self.assertNotIn('foc-host-init', runtime)
+        self.assertNotIn('profiles:', runtime)
         for forbidden in ("docker.sock", "updater_control", "mysql:", "redis:", "nginx:", "coturn"):
             self.assertNotIn(forbidden, services)
 

@@ -29,8 +29,9 @@ x-logging: &service-logging
   options: {max-size: "10m", max-file: "3"}
 
 services:
-  # Mandatory host entry; bootstrap from an independently published immutable bundle.
+  # Optional host command; install explicitly with --profile operator run.
   foc-host-init:
+    profiles: [operator]
     image: ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:8101bf3e423648ed4f1c2a29e671286a6391963ef562f55be4579476d45779de
     user: "0:0"
     entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
@@ -58,8 +59,6 @@ services:
       - {type: bind, source: /etc/frontiercloud, target: /etc/frontiercloud}
 
   secrets-init:
-    depends_on:
-      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:0"
     command: [init-secrets]
@@ -75,8 +74,6 @@ services:
     logging: *service-logging
 
   media-init:
-    depends_on:
-      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:0"
     command: [init-media]
@@ -91,8 +88,6 @@ services:
     logging: *service-logging
 
   certificate-init:
-    depends_on:
-      foc-host-init: {condition: service_completed_successfully}
     <<: *app-image
     user: "0:10001"
     command: [init-certificate]

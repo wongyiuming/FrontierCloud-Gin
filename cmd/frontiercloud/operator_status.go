@@ -12,7 +12,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/runtimefacts"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 )
 
@@ -36,7 +36,7 @@ func operatorStatusCommand(output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	result := operator.RuntimeFact{NodeID: identity.ID, Role: identity.Role, Database: snapshot, Nodes: []operator.NodeFact{}}
+	result := runtimefacts.RuntimeFact{NodeID: identity.ID, Role: identity.Role, Database: snapshot, Nodes: []runtimefacts.NodeFact{}}
 	// Existence is enough to observe fail-closed maintenance. No lock inode is
 	// created and no flag is removed/repaired by a status query.
 	for _, flag := range []string{sitecontrol.Manual, maintenance.Marker} {
@@ -56,7 +56,7 @@ func operatorStatusCommand(output io.Writer) error {
 		return err
 	}
 	for _, r := range relations {
-		result.Nodes = append(result.Nodes, operator.NodeFact{NodeID: r.PeerID, Direction: r.Direction, State: r.State, Health: r.Status, LastHeartbeat: r.LastHeartbeat, Protocol: r.Protocol})
+		result.Nodes = append(result.Nodes, runtimefacts.NodeFact{NodeID: r.PeerID, Direction: r.Direction, State: r.State, Health: r.Status, LastHeartbeat: r.LastHeartbeat, Protocol: r.Protocol})
 	}
 	return json.NewEncoder(output).Encode(result)
 }

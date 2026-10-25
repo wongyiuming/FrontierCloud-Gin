@@ -4,9 +4,10 @@ Public releases comprise `ghcr.io/wongyiuming/frontiercloud-gin-web` and
 `ghcr.io/wongyiuming/frontiercloud-gin-nginx`, built from the same explicit main
 commit. Web contains the native application, `fc` and certificate controller.
 No update-daemon image is built, published or required by installation or upgrade.
-Default Compose installs global foc from a separately pinned, already published
-Web bundle. This bootstrap image is intentionally independent of the selected
-application release and is not silently replaced during business upgrades.
+The optional `operator` profile installs global foc from a separately pinned,
+already published Web bundle. Ordinary Compose startup does not run or depend on
+this installer. Its image is independent of the selected application release and
+is not silently replaced during business upgrades.
 
 ## Reviewed source and CI
 

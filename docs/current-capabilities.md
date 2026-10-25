@@ -39,12 +39,12 @@ format conversion and its deployment controller are removed. Video uses browser
 decoding without automatic repair of incompatible audio. Voice control has only
 been evaluated; it is not implemented.
 
-`fc` remains the operator bundle/backend name. The host-global launcher is `foc`
-to avoid replacing Bash's builtin. Default Compose requires `foc-host-init`
-before application initialization. First use verifies/registers the running
-deployment. A separately pinned published bootstrap backend may precede the
-application version; normal upgrade refreshes it when needed. Older deployments
-retain the separate Compose installer; see [daily operation](foc-quickstart.md).
+`fc` remains the operator bundle/backend name. The optional host-global launcher
+is `foc`, preserving Bash's builtin. Business, storage and automatic TLS startup
+work without it. `foc-host-init` runs only through the explicit `operator` profile;
+first tool use verifies/registers the running deployment. A separately pinned
+tool backend may precede the application version; normal upgrade refreshes it.
+The separate Compose installer remains available; see [daily operation](foc-quickstart.md).
 
 Persisted `Follower`, `only_stroge`, historical schema snapshots, recovery journals
 and absence regressions retain compatibility/recovery value. Old names alone

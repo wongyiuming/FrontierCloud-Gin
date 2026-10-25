@@ -124,8 +124,10 @@ func (d *Deployment) registrationContainers(ctx context.Context, cfg Config) (ma
 		}
 		result[row.Service] = row
 	}
-	if len(result) != len(cfg.Services) {
-		return nil, errors.New("Compose registration requires the complete selected service set")
+	for name, service := range cfg.Services {
+		if _, present := result[name]; !present && !focHostInstaller(name, service) {
+			return nil, errors.New("Compose registration requires the complete selected service set")
+		}
 	}
 	return result, nil
 }
@@ -162,17 +164,17 @@ func (d *Deployment) RegisterCompose(ctx context.Context, arch string, evidence 
 	if e != nil {
 		return result, e
 	}
-	if !focHostInstaller("foc-host-init", cfg.Services["foc-host-init"]) {
-		return result, errors.New("automatic registration requires the standard Compose foc installer")
+	if installer, present := cfg.Services["foc-host-init"]; present && !focHostInstaller("foc-host-init", installer) {
+		return result, errors.New("Compose foc installer differs from its bounded installation contract")
 	}
 	containers, e := d.registrationContainers(ctx, cfg)
 	if e != nil {
 		return result, e
 	}
-	labelsRaw, e := d.Runner.Run(ctx, "docker", "inspect", "--format", "{{json .Config.Labels}}", containers["foc-host-init"].ID)
+	labelsRaw, e := d.Runner.Run(ctx, "docker", "inspect", "--format", "{{json .Config.Labels}}", containers["web"].ID)
 	var labels map[string]string
-	if e != nil || json.Unmarshal(labelsRaw, &labels) != nil || labels["frontiercloud.foc-bootstrap"] != "1" || labels["com.docker.compose.project"] != cfg.Name || filepath.Clean(labels["com.docker.compose.project.working_dir"]) != d.Directory {
-		return result, errors.New("Compose installer identity does not match the host deployment")
+	if e != nil || json.Unmarshal(labelsRaw, &labels) != nil || labels["com.docker.compose.service"] != "web" || !strings.EqualFold(labels["com.docker.compose.oneoff"], "false") || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.component"] != "web" || labels["com.docker.compose.project"] != cfg.Name || !filepath.IsAbs(labels["com.docker.compose.project.working_dir"]) || filepath.Clean(labels["com.docker.compose.project.working_dir"]) != d.Directory {
+		return result, errors.New("Compose Web identity does not match the host deployment")
 	}
 	var actualFiles []string
 	for _, file := range strings.Split(labels["com.docker.compose.project.config_files"], ",") {
@@ -210,18 +212,11 @@ func (d *Deployment) RegisterCompose(ctx context.Context, arch string, evidence 
 	}
 	for name, service := range cfg.Services {
 		if name == "foc-host-init" {
-			labelRaw, err := d.Runner.Run(ctx, "docker", "image", "inspect", "--format", "{{json .Config.Labels}}", imageIDs[name])
-			var installerLabels map[string]string
-			if err != nil || json.Unmarshal(labelRaw, &installerLabels) != nil || !release.ValidSHA(installerLabels["frontiercloud.revision"]) {
-				return result, release.ErrImageIntegrity
-			}
-			installerRevision := installerLabels["frontiercloud.revision"]
-			installerEvidence, err := evidence.Artifact(ctx, installerRevision)
-			if err != nil || installerEvidence["publishable"] != true || installerEvidence["sha"] != installerRevision {
-				return result, release.ErrImageIntegrity
-			}
-			installer, err := images.Prove(ctx, installerRevision, "web", arch)
-			if err != nil || installer.ConfigDigest != imageIDs[name] || installer.Platform != "linux/"+arch || !strings.HasPrefix(service.Image, "ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:") {
+			// A --rm installation is allowed to leave no container. The
+			// configured host executable bundle still needs its independent
+			// reviewed public pin, and any retained container must match it.
+			installer, err := proveHostInstaller(ctx, service, arch, evidence, images)
+			if err != nil || imageIDs[name] != "" && installer.ConfigDigest != imageIDs[name] {
 				return result, release.ErrImageIntegrity
 			}
 			r.ServiceImages[name] = installer.Image

@@ -6,15 +6,33 @@ path from first installation, optional audits and controlled recovery.
 
 ## Global host command
 
-The global entry is `foc`, preserving Bash's existing `fc` builtin. This release
-provides required Compose installation and verified registration. Both default
-business and storage YAML include `foc-host-init`; normal `docker compose up`
-installs the global command before native application initialization. The service
-uses an independently published immutable Web bundle and exits. Existing different
-managed backends are retained; foreign commands and unsafe paths block startup.
-Its bootstrap backend may be older than the business image; normal upgrade
-refreshes it when necessary. Older Compose deployments with a valid receipt may
-use the explicit installer below without changing their business configuration.
+The optional global entry is `foc`, preserving Bash's existing `fc` builtin.
+FrontierCloud starts and runs through ordinary Docker Compose without this
+command, its deployment registry or an operator receipt. Business, storage and
+automatic TLS initialization do not depend on tool installation or registration,
+or on write access to its host installation paths. Native data/identity admission
+and its runtime receipts remain separate, mandatory application checks.
+
+Business and storage YAML expose `foc-host-init` only under the explicit
+`operator` profile. Ordinary `docker compose up` leaves it disabled. For a running
+standard business deployment, install the optional tool from that deployment's
+Compose directory:
+
+```sh
+docker compose --profile operator run --rm --no-deps foc-host-init
+```
+
+For a storage deployment:
+
+```sh
+docker compose -f docker-compose.storage.yaml --profile operator run --rm --no-deps foc-host-init
+```
+
+This service uses an independently published immutable Web bundle and exits.
+Existing different managed backends are retained. Foreign commands, unsafe paths
+or interrupted installation fail the tool operation; they do not block normal
+business, storage or certificate startup. The bootstrap backend may be older
+than the business image; a normal tool upgrade refreshes it when necessary.
 
 The first invocation completes metadata-only registration of a marked standard
 Compose project: it verifies the actual running public image configuration
@@ -26,13 +44,14 @@ are read-only. Unrelated Docker projects are never adopted automatically.
 Ambiguous deployments still require explicit selection. Host installation
 refuses an unrelated `foc` command; the existing Bash `fc` command is untouched.
 
-An existing deployment using older Compose files can bootstrap the same entry
+An existing deployment using older Compose files can explicitly install the same entry
 with its separate `compose.foc.yaml` installer and an explicitly verified public
 Web digest, full revision and existing deployment:
 
 In a source checkout the installer is `deploy/compose.foc.yaml`; the extracted
-public operator bundle retains `compose.foc.yaml` at its top level. This installer
-is unnecessary for new deployments, which already include `foc-host-init`.
+public operator bundle retains `compose.foc.yaml` at its top level. This optional
+installer is independent of the application stack and requires an existing
+deployment selected for operator management.
 
 ```sh
 export FOC_OPERATOR_IMAGE=ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:VERIFIED_DIGEST

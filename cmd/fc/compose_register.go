@@ -57,39 +57,16 @@ func registerCompose(ctx context.Context, directory string) (operationErr error)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	raw, e := runner.Run(ctx, "docker", "ps", "--all", "--filter", "label=com.docker.compose.project.working_dir="+root, "--filter", "label=frontiercloud.foc-bootstrap=1", "--format", "{{.ID}}")
-	ids := strings.Fields(string(raw))
-	if e != nil || len(ids) != 1 {
-		return errors.New("one standard Compose foc installer is required for the selected directory")
-	}
-	raw, e = runner.Run(ctx, "docker", "inspect", "--format", "{{json .Config.Labels}}", ids[0])
-	var labels map[string]string
-	if e != nil || json.Unmarshal(raw, &labels) != nil || labels["frontiercloud.foc-bootstrap"] != "1" || filepath.Clean(labels["com.docker.compose.project.working_dir"]) != root {
-		return errors.New("invalid Compose installer identity")
-	}
-	files := strings.Split(labels["com.docker.compose.project.config_files"], ",")
-	role, database := "master", "sqlite"
-	for i, file := range files {
-		if filepath.Dir(filepath.Clean(file)) != root {
-			return errors.New("Compose file lies outside the selected deployment directory")
-		}
-		files[i] = filepath.Base(file)
-	}
-	if len(files) == 1 && files[0] == "docker-compose.storage.yaml" {
-		role = "storage"
-	} else if len(files) == 2 && (files[0] == "docker-compose.yaml" || files[0] == "docker-compose.gin.yaml") && files[1] == "docker-compose.gin-mysql.yaml" {
-		database = "mysql"
-	} else if len(files) != 1 || files[0] != "docker-compose.yaml" && files[0] != "docker-compose.gin.yaml" {
-		return errors.New("automatic registration requires the standard Master or Storage Compose selection")
-	}
-	d, e := operator.New(root, role, database)
+	labels, e := discoverComposeWeb(ctx, runner, root)
 	if e != nil {
 		return e
 	}
-	d.Files = files
-	d.Project = labels["com.docker.compose.project"]
+	d, e := composeDeployment(root, labels)
+	if e != nil {
+		return e
+	}
 	d.Runner = runner
-	raw, e = runner.Run(ctx, "docker", "info", "--format", "{{.Architecture}}")
+	raw, e := runner.Run(ctx, "docker", "info", "--format", "{{.Architecture}}")
 	if e != nil {
 		return e
 	}
@@ -104,4 +81,48 @@ func registerCompose(ctx context.Context, directory string) (operationErr error)
 		return e
 	}
 	return rememberDeployment(ctx, root)
+}
+
+// Discovery is only a candidate selection. RegisterCompose independently
+// proves the exact running public images, selected files and native identity.
+func discoverComposeWeb(ctx context.Context, runner operator.Runner, root string) (map[string]string, error) {
+	raw, e := runner.Run(ctx, "docker", "ps", "--filter", "label=com.docker.compose.project.working_dir="+root, "--filter", "label=com.docker.compose.service=web", "--filter", "label=frontiercloud.runtime=go", "--filter", "label=frontiercloud.component=web", "--format", "{{.ID}}")
+	ids := strings.Fields(string(raw))
+	if e != nil || len(ids) != 1 {
+		return nil, errors.New("one running native Compose Web container is required for the selected directory")
+	}
+	raw, e = runner.Run(ctx, "docker", "inspect", "--format", "{{json .Config.Labels}}", ids[0])
+	var labels map[string]string
+	if e != nil || json.Unmarshal(raw, &labels) != nil || labels["com.docker.compose.service"] != "web" || !strings.EqualFold(labels["com.docker.compose.oneoff"], "false") || labels["frontiercloud.runtime"] != "go" || labels["frontiercloud.component"] != "web" || !filepath.IsAbs(labels["com.docker.compose.project.working_dir"]) || filepath.Clean(labels["com.docker.compose.project.working_dir"]) != root {
+		return nil, errors.New("invalid native Compose Web identity")
+	}
+	return labels, nil
+}
+
+func composeDeployment(root string, labels map[string]string) (*operator.Deployment, error) {
+	if labels["com.docker.compose.project"] == "" {
+		return nil, errors.New("missing Compose project identity")
+	}
+	files := strings.Split(labels["com.docker.compose.project.config_files"], ",")
+	role, database := "master", "sqlite"
+	for i, file := range files {
+		if !filepath.IsAbs(file) || filepath.Dir(filepath.Clean(file)) != root {
+			return nil, errors.New("Compose file lies outside the selected deployment directory")
+		}
+		files[i] = filepath.Base(file)
+	}
+	if len(files) == 1 && files[0] == "docker-compose.storage.yaml" {
+		role = "storage"
+	} else if len(files) == 2 && (files[0] == "docker-compose.yaml" || files[0] == "docker-compose.gin.yaml") && files[1] == "docker-compose.gin-mysql.yaml" {
+		database = "mysql"
+	} else if len(files) != 1 || files[0] != "docker-compose.yaml" && files[0] != "docker-compose.gin.yaml" {
+		return nil, errors.New("automatic registration requires the standard Master or Storage Compose selection")
+	}
+	d, e := operator.New(root, role, database)
+	if e != nil {
+		return nil, e
+	}
+	d.Files = files
+	d.Project = labels["com.docker.compose.project"]
+	return d, nil
 }

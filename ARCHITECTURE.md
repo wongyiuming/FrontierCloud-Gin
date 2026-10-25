@@ -266,15 +266,25 @@ visual redesign is not authorization to change this architecture boundary.
 
 ### Operator installation boundary
 
+`foc` is an optional administration tool, not a FrontierCloud runtime dependency.
+Ordinary business and storage Compose startup must succeed without a `foc`
+binary, host deployment registry, operator receipt or successful tool installer.
+It must not require write access to the tool's host installation paths.
+Application, storage and automatic TLS initialization cannot depend on tool
+installation, registration or discovery. The existing native data/identity
+admission checks remain mandatory; their runtime receipts are separate from
+optional operator metadata.
+
 The short-lived `fc` host client is distributed inside the public Web image's
 operator bundle, alongside the canonical Compose files and environment examples.
 It is not a resident service or a Web request handler. Docker subprocess access
 exists only in `cmd/fc`, never in a linked Web service package. No business
-container receives a Docker socket. Storage ordinary installation pulls the same
-public Web component as Master; source compilation is a separate developer path.
+container receives a Docker socket. Optional guarded storage installation pulls
+the same public Web component as Master; source compilation is a separate
+developer path.
 
-Fresh installation verifies one reviewed main revision and all selected runtime
-manifest/config digests, persists every service digest and a project/role/mount/
+Installation through this optional client verifies one reviewed main revision
+and all selected runtime manifest/config digests, persists every service digest and a project/role/mount/
 database binding before startup, and refuses existing identity/data/volumes.
 Installation pull failure never authorizes compilation. Restart uses only those
 fixed images and rejects changed deployment selection. Doctor does not create
@@ -380,19 +390,21 @@ workers. Reports retain the existing maximum eight observed addresses.
 
 All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
-The owner explicitly requires a limited global-operator installation: the one-shot
-`foc-host-init` service in default business and storage Compose, and the separate
-`deploy/compose.foc.yaml` source installer for older deployments (packaged as
-`compose.foc.yaml` in the operator bundle), may write `/usr/local/bin/foc`, a private backend
+The optional global-operator installation is a limited exception: the one-shot
+`foc-host-init` service under the explicit `operator` profile in business and
+storage Compose, and the separate `deploy/compose.foc.yaml` source installer
+(packaged as `compose.foc.yaml` in the operator bundle), may write
+`/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.
 It discovers recorded deployments and invokes existing manual operator workflows.
-Default Compose requires `foc-host-init` to complete successfully before
-application initializers run. It uses an independently published immutable Web
-bundle, without optional profiles or new operator settings. A foreign command,
-unsafe path or interrupted installation fails closed. Automatic startup retains
-an already installed different managed backend rather than downgrading it.
+Ordinary `docker compose up` leaves this profile disabled and starts application
+initializers independently. The explicit installer uses an independently
+published immutable Web bundle. A foreign command, unsafe path or interrupted
+installation fails the tool operation without blocking the application's normal
+startup or runtime. Explicit installation retains an already installed different
+managed backend rather than downgrading it.
 First use verifies marked running public images and provenance before recording
 the deployment receipt and immutable image lock. This installation completion writes only
 operator metadata, never business data, DDL, permissions or service state.
@@ -451,7 +463,9 @@ A fresh HTTPS business deployment requires only `TLS_ENABLED` and `SERVER_NAME`.
 Certificate paths and ACME webroot are not operator configuration. Every other operator setting
 has a usable default. Plain `docker compose up -d` pulls public GHCR `latest`
 Web/Nginx images; it must not require a user-supplied source SHA or run
-local builds. Empty optional values retain their defaults. HTTP without `.env`
+local builds. Its default service graph excludes the optional operator installer
+and has no dependency on host operator state or installation permissions.
+Empty optional values retain their defaults. HTTP without `.env`
 also remains supported. Public DNS and reachable standard validation/listening
 ports are prerequisites. Fresh installations never require prepared certificates.
 Go obtains, validates and renews certificates; bootstrap exposes no plaintext

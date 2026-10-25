@@ -21,12 +21,23 @@ class HostEntryTests(unittest.TestCase):
         self.registry = self.root / 'registry'
         self.labels = self.root / 'labels'
         self.labels.write_text('')
+        self.web_labels = self.root / 'web-labels'
+        self.web_labels.write_text('')
         self.scratch = self.root / 'scratch'
         self.scratch.mkdir()
         self.backend.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CALLS"\nexit 0\n')
         self.backend.chmod(0o755)
         docker = self.root / 'docker'
-        docker.write_text('#!/bin/sh\ncat "$LABELS"\nexit "${DOCKER_EXIT:-0}"\n')
+        docker.write_text('''#!/bin/sh
+case "$*" in
+  *"--filter label=com.docker.compose.service=web"*)
+    case "$*" in *"--filter label=frontiercloud.runtime=go"*) ;; *) exit 97 ;; esac
+    case "$*" in *"--filter label=frontiercloud.component=web"*) ;; *) exit 97 ;; esac
+    cat "$WEB_LABELS" ;;
+  *) cat "$LABELS" ;;
+esac
+exit "${DOCKER_EXIT:-0}"
+''')
         docker.chmod(0o755)
         source = (ROOT / 'scripts/foc').read_text()
         source = source.replace('backend=/usr/local/lib/frontiercloud/foc/fc', 'backend=' + shlex.quote(str(self.backend)))
@@ -34,7 +45,8 @@ class HostEntryTests(unittest.TestCase):
         self.entry = self.root / 'foc'
         self.entry.write_text(source)
         self.env = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ['PATH'],
-                        CALLS=str(self.calls), LABELS=str(self.labels), TMPDIR=str(self.scratch),
+                        CALLS=str(self.calls), LABELS=str(self.labels), WEB_LABELS=str(self.web_labels),
+                        TMPDIR=str(self.scratch),
                         XDG_STATE_HOME=str(self.root / 'user-state'))
 
     def deployment(self, name):
@@ -182,18 +194,68 @@ class HostEntryTests(unittest.TestCase):
         self.assertTrue(self.global_entry.exists())
         self.assertIn('@compose', (self.root / 'etc/frontiercloud/foc-deployments').read_text())
 
-    def test_auto_registry_ignores_unrelated_compose_deployments(self):
+    def test_web_discovery_ignores_unmarked_compose_deployments(self):
         native = self.deployment('managed')
         unrelated = self.root / 'other'
         unrelated.mkdir()
         self.registry.write_text('@compose\n' + str(native) + '\n')
         self.labels.write_text(str(unrelated) + '\n' + str(native) + '\n')
-        docker = self.root / 'docker'
-        docker.write_text('#!/bin/sh\ncase "$*" in *foc-bootstrap*) exit 0 ;; esac\ncat "$LABELS"\n')
+        self.web_labels.write_text(str(native) + '\n')
         self.assertEqual(self.invoke('status').returncode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), 'status'])
+        self.assertFalse((unrelated / '.fc-deployment.json').exists())
 
-    def test_automatic_startup_retains_different_backend_at_same_generation(self):
+    def test_marked_running_web_can_register_without_installer_or_registry(self):
+        native = self.root / 'running-native'
+        native.mkdir()
+        self.labels.write_text(str(native) + '\n')
+        self.web_labels.write_text(str(native) + '\n')
+        registration = self.root / 'registration'
+        self.env['REGISTRATION'] = str(registration)
+        self.backend.write_text('''#!/bin/sh
+if [ "$3" = compose-register ]; then
+  printf '%s\\n' "$2" > "$REGISTRATION"
+  printf '{}' > "$2/.fc-deployment.json"
+  exit 0
+fi
+printf '%s\\n' "$@" > "$CALLS"
+''')
+        result = self.invoke('status')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(registration.read_text().strip(), str(native))
+        self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), 'status'])
+
+    def test_marked_web_rejected_by_backend_does_not_become_registered(self):
+        native = self.root / 'unproved-native'
+        native.mkdir()
+        self.labels.write_text(str(native) + '\n')
+        self.web_labels.write_text(str(native) + '\n')
+        self.backend.write_text('#!/bin/sh\n[ "$3" != compose-register ] || exit 33\nprintf "%s\\n" "$@" > "$CALLS"\n')
+        self.assertNotEqual(self.invoke('status').returncode, 0)
+        self.assertFalse((native / '.fc-deployment.json').exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_multiple_marked_web_candidates_do_not_register_either(self):
+        candidates = [self.root / name for name in ('first-native', 'second-native')]
+        for directory in candidates:
+            directory.mkdir()
+        self.web_labels.write_text(''.join(str(directory) + '\n' for directory in candidates))
+        result = self.invoke('status')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('multiple deployments', result.stderr)
+        self.assertFalse(self.calls.exists())
+        for directory in candidates:
+            self.assertFalse((directory / '.fc-deployment.json').exists())
+
+    def test_success_without_receipt_publication_still_refuses(self):
+        native = self.root / 'missing-result'
+        native.mkdir()
+        self.web_labels.write_text(str(native) + '\n')
+        self.assertEqual(self.invoke('status').returncode, 2)
+        self.assertFalse((native / '.fc-deployment.json').exists())
+        self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(native), 'compose-register'])
+
+    def test_explicit_compose_install_retains_different_backend_at_same_generation(self):
         self.installer_fixture()
         self.assertEqual(self.install().returncode, 0)
         before = (self.home / 'fc').read_bytes()

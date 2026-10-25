@@ -28,16 +28,18 @@ require exact-source proof. Bootstrap history alone is not release proof.
 
 ## Quick start
 
-Already have a registered global `foc` deployment? Use the separate
+`foc` is an optional host administration tool. FrontierCloud starts and runs
+through Docker Compose without it, a host deployment registry or an operator
+receipt. Already have a registered global `foc` deployment? Use the separate
 [daily foc guide](docs/foc-quickstart.md) for status and the one-command `foc upgrade`
 path; installation and advanced recovery remain in the complete manual.
 
-For the guarded installation path without a source checkout, use the public
+For the optional guarded installation path without a source checkout, use the public
 [operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
 one published main release, configure the domain and run `./fc doctor` followed
 by `./fc install master` (or `storage`). Its receipt pins all component digests
-and rejects existing state. Default business and storage Compose also install
-the mandatory global `foc` entry before their application initializers run.
+and rejects existing state. Ordinary Compose startup initializes the application
+directly; global tool installation is a separate, explicit action.
 
 For a fresh HTTPS node, point public DNS at this host and create `.env` with
 only these two values (replace the example hostname):
@@ -55,8 +57,10 @@ All other settings have defaults: public GHCR `latest` images from the newest
 successfully published **main** release, SQLite, `./data`, generated persistent
 secrets, the `frontiercloud-gin` project and ports 80/443/3478. No source SHA,
 host Python, local image preparation or compilation is required. With no `.env`,
-the same command starts HTTP at `http://localhost`. Public TCP 80/443 must be
-reachable and available. Go obtains, validates and renews certificates; no
+the same command starts HTTP at `http://localhost`. The `operator` profile stays
+disabled, so no `foc` binary or write access to its host installation paths is
+required. Public TCP 80/443 must be reachable and available. Go obtains,
+validates and renews certificates; no
 prepared certificate or Certbot is required. Public HTTP/HTTPS ports are fixed
 at 80/443. Startup does not migrate an old store.
 
@@ -95,8 +99,10 @@ there are no upload, path, manual renewal or automatic-renewal toggle controls.
 Storage exports are encrypted to a fresh browser key before crossing the Master.
 
 Fresh storage deployments use `.env.storage.example` and
-`docker-compose.storage.yaml` alone. Use `./fc install storage` from the public
-operator bundle; the repository's `scripts/deploy-storage.sh` delegates to it.
+`docker-compose.storage.yaml` alone. After preparing that deployment's `.env`,
+run `docker compose -f docker-compose.storage.yaml up -d --wait`.
+The optional public operator bundle also provides `./fc install storage`;
+the repository's `scripts/deploy-storage.sh` delegates to that guarded path.
 `STORAGE_TRANSPORT=direct` uses public HTTPS 443. Relay deployments explicitly set
 `STORAGE_TRANSPORT=relay`, `STORAGE_PORT=8443` and the corresponding HTTPS endpoint;
 8443 carries authenticated Master communication without idle listeners on 80/443.
@@ -110,9 +116,20 @@ Detailed configuration, generated-secret recovery, first Admin access, role init
 
 The root has three Compose files: `docker-compose.yaml` for business deployment,
 `docker-compose.gin-mysql.yaml` as its optional MySQL overlay, and
-`docker-compose.storage.yaml` for either Direct or Relay. Default deployments
-include foc. The [separate foc installer](deploy/compose.foc.yaml) is only for
-existing deployments that lack the global command; it is not another business stack.
+`docker-compose.storage.yaml` for either Direct or Relay. The `foc-host-init`
+service is available only through the explicit `operator` profile. To install
+the optional global tool for a running standard business deployment:
+
+```bash
+docker compose --profile operator run --rm --no-deps foc-host-init
+```
+
+For storage, add `-f docker-compose.storage.yaml` to that command. Tool installation
+or registration failure does not block business, storage or automatic TLS startup.
+The [separate foc installer](deploy/compose.foc.yaml) remains available for existing
+deployments; it is not another business stack. See the
+[operator manual](docs/operator-manual.md#global-host-command) for installation
+permissions and registration checks.
 
 On registered hosts, `foc upgrade` selects a verified published release, refreshes
 the tool when needed, captures state recovery material and verifies the deployment
