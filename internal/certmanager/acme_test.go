@@ -41,6 +41,12 @@ type mockCA struct {
 	challenge, host, thumb, status, problem string
 	chain                                   []byte
 	accounts, issued, verified              int
+	profiles                                bool
+	ariWindowStart, ariWindowEnd            time.Time
+	ariRequests                             int
+	orders                                  []map[string]any
+	certificates                            []*x509.Certificate
+	ipValidity                              time.Duration
 }
 
 func newCA(t *testing.T, host, challenge string) *mockCA {
@@ -60,7 +66,7 @@ func newCA(t *testing.T, host, challenge string) *mockCA {
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(root)
-	ca := &mockCA{root: root, key: key, roots: roots, host: host, challenge: challenge, status: "pending"}
+	ca := &mockCA{root: root, key: key, roots: roots, host: host, challenge: challenge, status: "pending", profiles: true}
 	ca.server = httptest.NewServer(http.HandlerFunc(ca.handle))
 	t.Cleanup(ca.server.Close)
 	return ca
@@ -73,6 +79,10 @@ func (ca *mockCA) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Replay-Nonce", base64.RawURLEncoding.EncodeToString(nonce))
 	w.Header().Set("Content-Type", "application/json")
 	base := ca.server.URL
+	kind := "dns"
+	if net.ParseIP(ca.host) != nil {
+		kind = "ip"
+	}
 	var payload map[string]any
 	if r.Method == "POST" {
 		var jws struct{ Protected, Payload string }
@@ -99,15 +109,38 @@ func (ca *mockCA) handle(w http.ResponseWriter, r *http.Request) {
 		if len(ca.chain) > 0 {
 			state = "valid"
 		}
-		v := map[string]any{"status": state, "identifiers": []any{map[string]any{"type": "dns", "value": ca.host}}, "authorizations": []string{base + "/authorization"}, "finalize": base + "/finalize"}
+		v := map[string]any{"status": state, "identifiers": []any{map[string]any{"type": kind, "value": ca.host}}, "authorizations": []string{base + "/authorization"}, "finalize": base + "/finalize"}
 		if len(ca.chain) > 0 {
 			v["certificate"] = base + "/certificate"
 		}
 		return v
 	}
+	if strings.HasPrefix(r.URL.Path, "/renewal-info/") {
+		ca.ariRequests++
+		start, end := ca.ariWindowStart, ca.ariWindowEnd
+		firstID := ""
+		if len(ca.certificates) > 0 {
+			first := ca.certificates[0]
+			firstID = base64.RawURLEncoding.EncodeToString(first.AuthorityKeyId) + "." + base64.RawURLEncoding.EncodeToString(first.SerialNumber.Bytes())
+		}
+		if strings.TrimPrefix(r.URL.Path, "/renewal-info/") != firstID {
+			start = time.Now().Add(48 * time.Hour)
+			end = start.Add(time.Hour)
+		}
+		w.Header().Set("Retry-After", "3600")
+		out(map[string]any{"suggestedWindow": map[string]string{"start": start.UTC().Format(time.RFC3339Nano), "end": end.UTC().Format(time.RFC3339Nano)}})
+		return
+	}
 	switch r.URL.Path {
 	case "/directory":
-		out(map[string]any{"newNonce": base + "/nonce", "newAccount": base + "/account", "newOrder": base + "/new-order", "revokeCert": base + "/revoke", "keyChange": base + "/key-change"})
+		directory := map[string]any{"newNonce": base + "/nonce", "newAccount": base + "/account", "newOrder": base + "/new-order", "revokeCert": base + "/revoke", "keyChange": base + "/key-change"}
+		if ca.profiles {
+			directory["meta"] = map[string]any{"profiles": map[string]any{"shortlived": base + "/profiles/shortlived"}}
+		}
+		if !ca.ariWindowStart.IsZero() {
+			directory["renewalInfo"] = base + "/renewal-info"
+		}
+		out(directory)
 	case "/nonce":
 		w.WriteHeader(200)
 	case "/account":
@@ -118,6 +151,18 @@ func (ca *mockCA) handle(w http.ResponseWriter, r *http.Request) {
 	case "/account/1":
 		out(map[string]any{"status": "valid", "orders": base + "/orders"})
 	case "/new-order":
+		identifiers, _ := payload["identifiers"].([]any)
+		validIdentifier := len(identifiers) == 1
+		if validIdentifier {
+			identifier, _ := identifiers[0].(map[string]any)
+			validIdentifier = identifier["type"] == kind && identifier["value"] == ca.host
+		}
+		if !validIdentifier || kind == "ip" && payload["profile"] != "shortlived" {
+			w.WriteHeader(400)
+			out(map[string]any{"type": "urn:ietf:params:acme:error:malformed", "detail": "unexpected identifier/profile", "status": 400})
+			return
+		}
+		ca.orders = append(ca.orders, payload)
 		if ca.problem != "" {
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(429)
@@ -132,10 +177,13 @@ func (ca *mockCA) handle(w http.ResponseWriter, r *http.Request) {
 	case "/order":
 		out(order())
 	case "/authorization":
-		out(map[string]any{"status": ca.status, "identifier": map[string]any{"type": "dns", "value": ca.host}, "challenges": []any{map[string]any{"type": "http-01", "url": base + "/challenge", "status": ca.status, "token": "fixture-token"}}})
+		out(map[string]any{"status": ca.status, "identifier": map[string]any{"type": kind, "value": ca.host}, "challenges": []any{map[string]any{"type": "http-01", "url": base + "/challenge", "status": ca.status, "token": "fixture-token"}}})
 	case "/challenge":
 		req, _ := http.NewRequest("GET", "http://"+ca.challenge+"/.well-known/acme-challenge/fixture-token", nil)
 		req.Host = ca.host
+		if net.ParseIP(ca.host) != nil && strings.Contains(ca.host, ":") {
+			req.Host = "[" + ca.host + "]"
+		}
 		client := &http.Client{Timeout: time.Second, Transport: &http.Transport{Proxy: nil}}
 		response, e := client.Do(req)
 		if e != nil {
@@ -160,18 +208,33 @@ func (ca *mockCA) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		csr, e := x509.ParseCertificateRequest(der)
-		if e != nil || csr.CheckSignature() != nil || len(csr.DNSNames) != 1 || csr.DNSNames[0] != ca.host {
+		validCSR := e == nil && csr.CheckSignature() == nil
+		if validCSR && kind == "ip" {
+			validCSR = len(csr.DNSNames) == 0 && len(csr.IPAddresses) == 1 && csr.IPAddresses[0].Equal(net.ParseIP(ca.host))
+		} else if validCSR {
+			validCSR = len(csr.DNSNames) == 1 && csr.DNSNames[0] == ca.host && len(csr.IPAddresses) == 0
+		}
+		if !validCSR {
 			w.WriteHeader(400)
 			return
 		}
 		ca.issued++
-		leaf := &x509.Certificate{SerialNumber: big.NewInt(int64(ca.issued + 10)), DNSNames: csr.DNSNames, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(90 * 24 * time.Hour), ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+		notBefore, notAfter := time.Now().Add(-time.Minute), time.Now().Add(90*24*time.Hour)
+		if kind == "ip" {
+			notAfter = notBefore.Add(160 * time.Hour)
+			if ca.ipValidity > 0 {
+				notAfter = notBefore.Add(ca.ipValidity)
+			}
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(int64(ca.issued + 10)), DNSNames: csr.DNSNames, IPAddresses: csr.IPAddresses, NotBefore: notBefore, NotAfter: notAfter, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
 		cert, e := x509.CreateCertificate(rand.Reader, leaf, ca.root, csr.PublicKey, ca.key)
 		if e != nil {
 			w.WriteHeader(500)
 			return
 		}
 		ca.chain = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
+		parsed, _ := x509.ParseCertificate(cert)
+		ca.certificates = append(ca.certificates, parsed)
 		w.Header().Set("Location", base+"/order")
 		out(order())
 	case "/certificate":
@@ -213,7 +276,10 @@ func fixture(t *testing.T, profile Profile) (options, *mockCA, *Serving) {
 	}
 	serving := &Serving{host: opt.host, directory: opt.published, roots: ca.roots}
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
-	server.TLS = &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: serving.GetCertificate}
+	actualTLS := &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: serving.GetCertificate}
+	// StartTLS injects a localhost default certificate. A client using an IP
+	// sends no SNI, so return the real serving configuration before selection.
+	server.TLS = &tls.Config{MinVersion: tls.VersionTLS12, GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) { return actualTLS, nil }}
 	server.StartTLS()
 	t.Cleanup(server.Close)
 	opt.serving = strings.TrimPrefix(server.URL, "https://")

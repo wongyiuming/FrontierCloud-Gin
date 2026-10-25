@@ -4,18 +4,26 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/frontiercloud-tls-edge ./cmd/frontiercloud-tls-edge
 COPY internal/certedge ./internal/certedge
+COPY internal/certificate ./internal/certificate
 COPY internal/filelease ./internal/filelease
 RUN GOMEMLIMIT=600MiB GOGC=25 GOMAXPROCS=2 CGO_ENABLED=0 go build -p=1 -trimpath -ldflags="-s -w" -o /tls-edge ./cmd/frontiercloud-tls-edge
 
 FROM nginx:1.30.4-alpine AS traffic-module-builder
-RUN apk add --no-cache build-base curl pcre2-dev openssl-dev zlib-dev linux-headers
+RUN apk add --no-cache build-base curl patch pcre2-dev openssl-dev zlib-dev linux-headers
 COPY nginx/traffic /module
+COPY nginx/patches/0001-verified-ip-san.patch /build/verified-ip-san.patch
 WORKDIR /build
 RUN curl -fsSL https://nginx.org/download/nginx-1.30.4.tar.gz -o nginx.tar.gz && \
     echo "4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b  nginx.tar.gz" | sha256sum -c - && \
     tar -xzf nginx.tar.gz && cd nginx-1.30.4 && \
-    ./configure --with-compat --with-http_ssl_module --with-http_v2_module --add-dynamic-module=/module && \
-    make -j2 modules && test -s objs/ngx_http_fc_traffic_module.so
+    echo "73fcac5753c0c4a43a5da0318c9a3a4fbac141ba2d9c2e44b4b63dc55159e54a  src/event/ngx_event_openssl.c" | sha256sum -c - && \
+    echo "bc180b0ce7574c8470c0b8d98dbbdbb3b994262e7a62bd7deec2e82ed7b2af70  /build/verified-ip-san.patch" | sha256sum -c - && \
+    patch --batch --forward --fuzz=0 -p1 < /build/verified-ip-san.patch && \
+    configure_args="$(nginx -V 2>&1 | sed -n 's/^configure arguments: //p')" && \
+    test -n "$configure_args" && \
+    eval "./configure $configure_args --add-dynamic-module=/module" && \
+    make -j2 && test -s objs/nginx && test -s objs/ngx_http_fc_traffic_module.so
+RUN strip /build/nginx-1.30.4/objs/nginx /build/nginx-1.30.4/objs/ngx_http_fc_traffic_module.so
 
 FROM nginx:1.30.4-alpine
 
@@ -34,6 +42,7 @@ RUN addgroup -g 10001 frontiercloud-media
 # Keep runtime environment substitution in Nginx templates. Avoid BuildKit-only
 # COPY --chmod for compatibility with the bounded development build driver.
 COPY nginx/nginx.conf /etc/nginx/templates/nginx.conf.template
+COPY --from=traffic-module-builder /build/nginx-1.30.4/objs/nginx /usr/sbin/nginx
 COPY --from=traffic-module-builder /build/nginx-1.30.4/objs/ngx_http_fc_traffic_module.so /usr/lib/nginx/modules/
 COPY nginx/15-select-tls.sh /docker-entrypoint.d/15-select-tls.sh
 COPY nginx/19-maintenance-gate.sh /docker-entrypoint.d/19-maintenance-gate.sh

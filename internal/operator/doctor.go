@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
 	"net"
 	"os"
@@ -111,14 +112,17 @@ func (d *Deployment) Doctor(ctx context.Context) Report {
 	}
 	host := web.Environment["SERVER_NAME"]
 	if web.Environment["TLS_ENABLED"] == "true" {
-		if host == "" || host == "localhost" || net.ParseIP(host) != nil || strings.ContainsAny(host, " /:@") {
-			r.Add("dns", "blocked", "HTTPS requires a valid public DNS hostname", "set SERVER_NAME and the corresponding storage endpoint")
+		identity, identityErr := certificate.NormalizeSubject(host)
+		if identityErr != nil {
+			r.Add("dns", "blocked", "HTTPS requires a valid DNS hostname or bare public IP address", "set SERVER_NAME and the corresponding storage endpoint")
+		} else if certificate.IsIP(identity) {
+			r.Add("ip_identity", "pass", "public IP certificate identity is valid; DNS is not required", "verify this address routes to the selected deployment")
 		} else if _, e := net.DefaultResolver.LookupIPAddr(ctx, host); e != nil {
 			r.Add("dns", "blocked", "hostname does not resolve from this host", "correct public A/AAAA records")
 		} else {
 			r.Add("dns", "pass", "hostname resolves from the operator host", "check all A/AAAA destinations and NAT forwarding")
 		}
-		r.Add("inbound_http01", "unverified", "local DNS/outbound access does not prove public TCP 80 reaches this host", "verify public reachability independently before certificate issuance")
+		r.Add("inbound_http01", "unverified", "local identity/outbound checks do not prove public TCP 80 reaches this host", "verify public reachability independently before certificate issuance")
 		r.Add("inbound_https", "unverified", "public TCP reachability cannot be established locally", "verify 443 for Direct/Master or the configured Relay port from an external host")
 	} else {
 		r.Add("tls", "warning", "automatic HTTPS is disabled", "enable HTTPS before using fixed Master/Storage roles")

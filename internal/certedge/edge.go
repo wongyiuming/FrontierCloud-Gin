@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 )
 
@@ -93,7 +94,6 @@ func (e *Edge) readyAt(ctx context.Context, address string) error {
 }
 
 var id = regexp.MustCompile(`^[a-f0-9]{32}$`)
-var host = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 var files = []string{"extra-servers.conf", "public-tls.conf"}
 
 func read(path string, max int64) ([]byte, error) {
@@ -185,7 +185,7 @@ func (e *Edge) generation() (string, error) {
 	}
 	_, err = leaf.Verify(x509.VerifyOptions{DNSName: e.Host, Roots: e.roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}})
 	if err != nil {
-		return "", errors.New("managed TLS chain, DNS identity or validity verification failed")
+		return "", errors.New("managed TLS chain, DNS/IP identity or validity verification failed")
 	}
 	return pointer.Generation, nil
 }
@@ -193,9 +193,11 @@ func (e *Edge) Initialize() error {
 	if !e.Enabled {
 		return nil
 	}
-	if !host.MatchString(e.Host) || !strings.Contains(e.Host, ".") {
-		return errors.New("automatic Nginx TLS requires a DNS hostname")
+	identity, err := certificate.NormalizeSubject(e.Host)
+	if err != nil {
+		return errors.New("automatic Nginx TLS requires a DNS hostname or public IP address")
 	}
+	e.Host = identity
 	if err := os.MkdirAll(e.runtime, 0755); err != nil {
 		return err
 	}
@@ -208,6 +210,7 @@ func (e *Edge) Initialize() error {
 		if err != nil {
 			return err
 		}
+		b = canonicalServerNames(b, e.Host)
 		if err = write(filepath.Join(e.runtime, file+".automatic-template"), b); err != nil {
 			return err
 		}
@@ -218,10 +221,34 @@ func (e *Edge) Initialize() error {
 	}
 	return e.selectGeneration(generation)
 }
+
+var serverNameDirective = regexp.MustCompile(`(?m)(\bserver_name[ \t]+)([^;\r\n]+)(;)`)
+
+func canonicalServerNames(body []byte, identity string) []byte {
+	if !certificate.IsIP(identity) {
+		return body
+	}
+	return serverNameDirective.ReplaceAllFunc(body, func(line []byte) []byte {
+		parts := serverNameDirective.FindSubmatch(line)
+		value := strings.TrimSpace(string(parts[2]))
+		canonical, err := certificate.NormalizeSubject(strings.Trim(value, "[]"))
+		if err != nil || canonical != identity {
+			return line
+		}
+		if strings.Contains(identity, ":") {
+			canonical = "[" + identity + "]"
+		}
+		return []byte(string(parts[1]) + canonical + ";")
+	})
+}
 func (e *Edge) bootstrap() string {
 	ipv6 := ""
 	if e.IPv6 {
 		ipv6 = "listen [::]:80;"
+	}
+	host := e.Host
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
 	}
 	return fmt.Sprintf(`user nginx frontiercloud-media;
 worker_processes 1;
@@ -246,7 +273,7 @@ http {
   location / { return 444; }
  }
 }
-`, ipv6, e.Host)
+`, ipv6, host)
 }
 func (e *Edge) selectGeneration(generation string) error {
 	if !id.MatchString(generation) {

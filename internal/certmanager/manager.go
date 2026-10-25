@@ -52,6 +52,7 @@ type options struct {
 	lookup                                              func(context.Context, string) ([]net.IPAddr, error)
 	issuer                                              func(*certmagic.Config) *certmagic.ACMEIssuer
 	ingress                                             string
+	renewCheck, attemptTimeout, retryDelay              time.Duration
 }
 type journal struct {
 	Host        string `json:"host"`
@@ -71,7 +72,8 @@ type Manager struct {
 	cache             *certmagic.Cache
 	storage           *controlledStorage
 	cfg               *certmagic.Config
-	issuer            *boundedIssuer
+	issuer            *certmagic.ACMEIssuer
+	attempt           *issuanceAttempt
 	journal           journal
 	view              certificate.View
 	challenge         *http.Server
@@ -102,8 +104,25 @@ func open(parent context.Context, opt options) (*Manager, error) {
 	if opt.profile != Business && opt.profile != Direct && opt.profile != Relay {
 		return nil, errors.New("invalid certificate network profile")
 	}
-	if opt.enabled && !certificate.Hostname(opt.host) {
-		return nil, errors.New("automatic TLS requires a public DNS hostname")
+	if opt.enabled {
+		subject, err := certificate.NormalizeSubject(opt.host)
+		if err != nil {
+			return nil, err
+		}
+		opt.host = subject
+	}
+	if opt.attemptTimeout <= 0 {
+		opt.attemptTimeout = 3 * time.Minute
+	}
+	if opt.retryDelay <= 0 {
+		opt.retryDelay = 5 * time.Minute
+	}
+	check := time.Hour
+	if certificate.IsIP(opt.host) {
+		check = 5 * time.Minute
+	}
+	if opt.renewCheck > 0 {
+		check = opt.renewCheck
 	}
 	for _, entry := range []struct {
 		path string
@@ -166,17 +185,49 @@ func open(parent context.Context, opt options) (*Manager, error) {
 		slog.Warn("automatic TLS lifecycle journal recovered", "domain", opt.host, "code", "journal_recovered")
 	}
 	logger := zap.NewNop() // ACME logs can contain full filesystem paths and CSR data.
-	m.cache = certmagic.NewCache(certmagic.CacheOptions{GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) { return m.cfg, nil }, Capacity: 1, RenewCheckInterval: time.Hour, Logger: logger})
+	m.cache = certmagic.NewCache(certmagic.CacheOptions{GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) { return m.cfg, nil }, Capacity: 1, RenewCheckInterval: check, Logger: logger})
 	m.storage = &controlledStorage{backend: &certmagic.FileStorage{Path: filepath.Join(opt.private, "cache")}}
-	m.cfg = certmagic.New(m.cache, certmagic.Config{DefaultServerName: opt.host, Storage: m.storage, OnEvent: m.event, Logger: logger, KeySource: certmagic.StandardKeyGenerator{KeyType: certmagic.P256}})
+	policy := certmagic.Config{DefaultServerName: opt.host, Storage: m.storage, OnEvent: m.event, Logger: logger, KeySource: certmagic.StandardKeyGenerator{KeyType: certmagic.P256}}
+	if certificate.IsIP(opt.host) {
+		policy.RenewalWindowRatio = 0.5
+	}
+	m.cfg = certmagic.New(m.cache, policy)
 	issue := opt.issuer
 	if issue == nil {
 		issue = func(cfg *certmagic.Config) *certmagic.ACMEIssuer {
 			return certmagic.NewACMEIssuer(cfg, certmagic.ACMEIssuer{CA: opt.ca, Agreed: true, DisableTLSALPNChallenge: true, ListenHost: challengeHost(opt.challenge), AltHTTPPort: challengePort(opt.challenge), CertObtainTimeout: 3 * time.Minute, HTTPProxy: func(*http.Request) (*url.URL, error) { return nil, nil }, Logger: logger})
 		}
 	}
-	m.issuer = &boundedIssuer{ACMEIssuer: issue(m.cfg), manager: m}
+	m.issuer = issue(m.cfg)
+	// Keep the concrete issuer: CertMagic uses *ACMEIssuer to bind ARI
+	// renewalInfo into newOrder.replaces. An embedding Issuer wrapper loses it.
+	if certificate.IsIP(opt.host) {
+		m.issuer.Profile = "shortlived"
+	}
+	if m.issuer.CertObtainTimeout <= 0 || m.issuer.CertObtainTimeout > 3*time.Minute {
+		m.issuer.CertObtainTimeout = 3 * time.Minute
+	}
 	m.cfg.Issuers = []certmagic.Issuer{m.issuer}
+	if certificate.IsIP(opt.host) {
+		issuer := m.issuer.IssuerKey()
+		m.storage.ip = &ipCertificateStorage{
+			host: opt.host, roots: opt.roots,
+			privateKey:  certmagic.StorageKeys.SitePrivateKey(issuer, opt.host),
+			certificate: certmagic.StorageKeys.SiteCert(issuer, opt.host),
+			metadata:    certmagic.StorageKeys.SiteMeta(issuer, opt.host),
+			operation:   make(chan struct{}, 1),
+			capture: func() func(string) {
+				m.mu.Lock()
+				attempt := m.attempt
+				if attempt == nil || attempt.finished {
+					m.mu.Unlock()
+					return nil // Internal validated legacy adoption is not issuance.
+				}
+				m.mu.Unlock()
+				return func(code string) { m.finishAttempt(attempt, code) }
+			},
+		}
+	}
 	if err := m.adoptLegacy(); err != nil {
 		// Invalid historical material is retained for offline recovery, never
 		// trusted or served. Automatic issuance continues with a new identity.
@@ -209,54 +260,59 @@ func challengePort(addr string) int {
 	return n
 }
 
-// The wrapper preserves CertMagic's ARI, revocation and pre-check interfaces.
-// All ACME work stays off the normal Web request path.
-type boundedIssuer struct {
-	*certmagic.ACMEIssuer
-	manager *Manager
+// Issuance starts under CertMagic's per-subject storage lock. Both initial
+// issuance and renewal emit cert_obtaining before CSR/key creation. Returning an
+// error vetoes that attempt without replacing the concrete ACME issuer.
+type issuanceAttempt struct {
+	done     chan struct{}
+	finished bool
+	renewal  bool
 }
 
-func (b *boundedIssuer) Issue(parent context.Context, csr *x509.CertificateRequest) (*certmagic.IssuedCertificate, error) {
-	m := b.manager
-	ctx, cancel := context.WithTimeout(parent, 3*time.Minute)
+func (m *Manager) beginAttempt(parent context.Context, renewal bool) error {
+	ctx, cancel := context.WithTimeout(parent, m.opt.attemptTimeout)
 	defer cancel()
 	m.mu.Lock()
-	retry := m.journal.RetryAt
+	retry, last := m.journal.RetryAt, m.journal.CompletedAt
+	busy := m.attempt != nil && !m.attempt.finished
 	m.mu.Unlock()
+	if busy {
+		return errors.New("certificate issuance is already active")
+	}
 	if time.Now().Unix() < retry {
-		return nil, errors.New("certificate retry cooldown")
+		return errors.New("certificate retry cooldown")
 	}
-	m.mu.Lock()
-	last := m.journal.CompletedAt
-	m.mu.Unlock()
 	if time.Now().Year() < 2020 || last > time.Now().Add(5*time.Minute).Unix() {
-		m.failed("system_clock", false)
-		return nil, errors.New("certificate issuance refused because system time is inconsistent")
+		m.failed("system_clock", renewal)
+		return errors.New("certificate issuance refused because system time is inconsistent")
 	}
-	if m.opt.lookup != nil {
+	// An approved literal is the identifier itself; never resolve/reinterpret
+	// IP identities through DNS. NormalizeSubject has already checked scope.
+	if !certificate.IsIP(m.opt.host) && m.opt.lookup != nil {
 		lookupCtx, stop := context.WithTimeout(ctx, 3*time.Second)
-		addresses, e := m.opt.lookup(lookupCtx, m.opt.host)
+		addresses, err := m.opt.lookup(lookupCtx, m.opt.host)
 		stop()
-		if e != nil || len(addresses) == 0 {
-			m.failed("dns", false)
-			return nil, errors.New("certificate DNS lookup failed")
+		if err != nil || len(addresses) == 0 {
+			m.failed("dns", renewal)
+			return errors.New("certificate DNS lookup failed")
 		}
 	}
 	if m.opt.profile != Business {
-		if e := m.beginChallenge(); e != nil {
-			m.failed("port80_busy", false)
-			return nil, e
+		if err := m.beginChallenge(); err != nil {
+			m.failed("port80_busy", renewal)
+			return err
 		}
-		defer m.endChallenge()
 	}
 	if m.opt.ingress != "" {
 		if err := awaitIngress(ctx, m.opt.ingress, m.opt.host); err != nil {
-			m.failed("http01_ingress", false)
-			return nil, err
+			if m.opt.profile != Business {
+				m.endChallenge()
+			}
+			m.failed("http01_ingress", renewal)
+			return err
 		}
 	}
 	m.mu.Lock()
-	renewal := m.view.Fingerprint != ""
 	m.journal.State = Issuing
 	if renewal {
 		m.journal.State = Renewing
@@ -265,23 +321,67 @@ func (b *boundedIssuer) Issue(parent context.Context, csr *x509.CertificateReque
 	m.issueFinished = time.Time{}
 	m.journal.Error = ""
 	if err := m.saveLocked(); err != nil {
-		m.journal.Error = "journal_unwritable"
-		m.journal.State = Failed
+		m.journal.Error, m.journal.State = "journal_unwritable", Failed
 		m.updateView()
 		m.mu.Unlock()
-		return nil, errors.New("certificate lifecycle journal cannot be persisted")
+		if m.opt.profile != Business {
+			m.endChallenge()
+		}
+		return errors.New("certificate lifecycle journal cannot be persisted")
 	}
+	attempt := &issuanceAttempt{done: make(chan struct{}), renewal: renewal}
+	m.attempt = attempt
 	m.updateView()
+	m.wg.Add(1)
 	m.mu.Unlock()
-	result, e := b.ACMEIssuer.Issue(ctx, csr)
-	if e != nil {
-		m.failed(classify(e), renewal)
-	} else {
-		m.mu.Lock()
-		m.issueFinished = time.Now()
+	// CertMagic has early key/CSR/storage error paths without a terminal event.
+	// The watchdog bounds our socket lease even on those paths. It does not
+	// authorize concurrent issuance: the next cert_obtaining still must own
+	// CertMagic's storage lock. ACME network work has its own issuer timeout.
+	go func() {
+		defer m.wg.Done()
+		timer := time.NewTimer(m.opt.attemptTimeout)
+		defer timer.Stop()
+		select {
+		case <-attempt.done:
+			return
+		case <-m.ctx.Done():
+			return
+		case <-timer.C:
+			m.finishAttempt(attempt, "ca_timeout")
+		}
+	}()
+	return nil
+}
+
+func (m *Manager) finishAttempt(expected *issuanceAttempt, failure string) bool {
+	m.mu.Lock()
+	attempt := m.attempt
+	if attempt == nil || attempt.finished || expected != nil && expected != attempt {
 		m.mu.Unlock()
+		return false
 	}
-	return result, e
+	attempt.finished = true
+	close(attempt.done)
+	var server *http.Server
+	var listener net.Listener
+	if m.opt.profile != Business {
+		server, listener = m.challenge, m.challengeListener
+		m.challenge, m.challengeListener = nil, nil
+	}
+	// A late watchdog must never overwrite a successful terminal event. Mark
+	// the attempt and its timeout result under one lock before releasing it.
+	if failure != "" {
+		m.failedLocked(failure, attempt.renewal)
+	}
+	m.mu.Unlock()
+	if server != nil {
+		_ = server.Close()
+	}
+	if listener != nil {
+		_ = listener.Close()
+	}
+	return true
 }
 
 // Each node has one bounded challenge server. Relay owns it only while Issue
@@ -350,16 +450,12 @@ func (m *Manager) event(ctx context.Context, name string, data map[string]any) e
 	}
 	switch name {
 	case "cert_obtaining":
-		m.mu.Lock()
-		m.journal.State = Pending
-		if renewal, _ := data["renewal"].(bool); renewal {
-			m.journal.State = Renewing
-		}
-		m.updateView()
-		m.mu.Unlock()
+		renewal, _ := data["renewal"].(bool)
+		return m.beginAttempt(ctx, renewal)
 	case "cert_failed":
+		m.finishAttempt(nil, "")
 		m.mu.Lock()
-		recorded := m.journal.Error != ""
+		recorded := m.journal.Error != "" && !servingProbeError(m.journal.Error)
 		m.mu.Unlock()
 		if recorded {
 			return nil
@@ -368,6 +464,7 @@ func (m *Manager) event(ctx context.Context, name string, data map[string]any) e
 		renewal, _ := data["renewal"].(bool)
 		m.failed(classify(e), renewal)
 	case "cert_obtained":
+		m.finishAttempt(nil, "")
 		m.mu.Lock()
 		m.issueFinished = time.Time{}
 		m.journal.State = Pending
@@ -425,11 +522,14 @@ func classify(e error) string {
 func (m *Manager) failed(code string, renewal bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.failedLocked(code, renewal)
+}
+func (m *Manager) failedLocked(code string, renewal bool) {
 	if m.ctx.Err() != nil {
 		return
 	}
 	m.journal.Error = code
-	m.journal.RetryAt = time.Now().Add(5 * time.Minute).Unix()
+	m.journal.RetryAt = time.Now().Add(m.opt.retryDelay).Unix()
 	m.journal.CompletedAt = time.Now().Unix()
 	m.journal.State = Failed
 	if m.view.NotAfter > time.Now().Unix() {
@@ -628,6 +728,9 @@ func (m *Manager) refresh() {
 	m.view.NotBefore = pair.Leaf.NotBefore.Unix()
 	m.view.NotAfter = pair.Leaf.NotAfter.Unix()
 	m.view.SAN = append([]string(nil), pair.Leaf.DNSNames...)
+	for _, address := range pair.Leaf.IPAddresses {
+		m.view.SAN = append(m.view.SAN, address.String())
+	}
 	m.view.Issuer = pair.Leaf.Issuer.String()
 	m.view.NextRenewal = pair.Leaf.NotAfter.Add(-time.Duration(float64(pair.Leaf.NotAfter.Sub(pair.Leaf.NotBefore)) * m.cfg.RenewalWindowRatio)).Unix()
 	m.mu.Unlock()

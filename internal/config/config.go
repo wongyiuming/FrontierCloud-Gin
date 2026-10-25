@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -159,8 +160,11 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if err != nil || value.WebRTCCooldown < 10 || value.WebRTCCooldown > 3600 {
 		return Config{}, errors.New("invalid WEBRTC_REPORT_COOLDOWN")
 	}
-	if value.TLSEnabled && !certificate.Hostname(value.ServerName) {
-		return Config{}, errors.New("SERVER_NAME must be a DNS hostname for automatic TLS")
+	if value.TLSEnabled {
+		value.ServerName, err = certificate.NormalizeSubject(value.ServerName)
+		if err != nil {
+			return Config{}, errors.New("SERVER_NAME must be a DNS hostname or bare public IP address for automatic TLS")
+		}
 	}
 	value.PublicOrigin, err = publicOrigin(value, getenv)
 	if err != nil {
@@ -245,7 +249,7 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 			return Config{}, errors.New("direct storage requires port 443; relay storage requires a private communication port from 1024 through 65535")
 		}
 		endpoint, e := url.Parse(value.StorageEndpoint)
-		if e != nil || endpoint.Scheme != "https" || !strings.EqualFold(endpoint.Hostname(), value.ServerName) || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" || endpoint.Opaque != "" {
+		if e != nil || endpoint.Scheme != "https" || !sameHost(endpoint.Hostname(), value.ServerName) || !validURLHost(endpoint) || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.Path != "" || endpoint.RawPath != "" || endpoint.Opaque != "" {
 			return Config{}, errors.New("STORAGE_ENDPOINT must be a certificate-verified HTTPS root URL matching SERVER_NAME")
 		}
 		endpointPort := 443
@@ -255,6 +259,12 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		if e != nil || endpointPort != value.StoragePort {
 			return Config{}, errors.New("STORAGE_ENDPOINT port must match the direct or relay deployment profile")
 		}
+		canonicalPort := ""
+		if endpointPort != 443 {
+			canonicalPort = strconv.Itoa(endpointPort)
+		}
+		endpoint.Host = urlHost(value.ServerName, canonicalPort)
+		value.StorageEndpoint = endpoint.String()
 		value.HTTPAddress = fallback(getenv("HTTP_ADDR"), ":"+strconv.Itoa(value.StoragePort))
 		_, port, e := net.SplitHostPort(value.HTTPAddress)
 		if e != nil || port != strconv.Itoa(value.StoragePort) {
@@ -274,14 +284,12 @@ func publicOrigin(value Config, getenv func(string) string) (string, error) {
 			scheme = "https"
 		}
 		host := value.ServerName
-		if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
-			host = "[" + host + "]"
-		}
+		host = urlHost(host, "")
 		raw = (&url.URL{Scheme: scheme, Host: host}).String()
 	}
 	origin, err := url.Parse(raw)
 	if err != nil || strings.ContainsAny(raw, "\r\n\t ") || origin.User != nil || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || origin.Opaque != "" || origin.RawPath != "" ||
-		(origin.Path != "" && origin.Path != "/") || (origin.Scheme != "http" && origin.Scheme != "https") || !strings.EqualFold(origin.Hostname(), strings.Trim(value.ServerName, "[]")) {
+		(origin.Path != "" && origin.Path != "/") || (origin.Scheme != "http" && origin.Scheme != "https") || !sameHost(origin.Hostname(), value.ServerName) || !validURLHost(origin) {
 		return "", errors.New("PUBLIC_ORIGIN must be an HTTP(S) origin matching SERVER_NAME, without credentials, path, query or fragment")
 	}
 	if err := PublicPort(origin); err != nil {
@@ -291,7 +299,34 @@ func publicOrigin(value Config, getenv func(string) string) (string, error) {
 		return "", errors.New("PUBLIC_ORIGIN scheme must match TLS_ENABLED")
 	}
 	origin.Path = ""
+	origin.Host = urlHost(value.ServerName, origin.Port())
 	return origin.String(), nil
+}
+
+func sameHost(left, right string) bool {
+	if address, err := netip.ParseAddr(left); err == nil {
+		other, e := netip.ParseAddr(right)
+		return e == nil && address.Zone() == "" && other.Zone() == "" && address.Unmap() == other.Unmap()
+	}
+	return strings.EqualFold(left, right)
+}
+
+func validURLHost(value *url.URL) bool {
+	address, err := netip.ParseAddr(value.Hostname())
+	if err != nil {
+		return !strings.ContainsAny(value.Hostname(), ":%[]")
+	}
+	return address.Zone() == "" && (!address.Is6() || strings.HasPrefix(value.Host, "["))
+}
+
+func urlHost(host, port string) string {
+	if port != "" {
+		return net.JoinHostPort(host, port)
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
 }
 
 func boolean(value string, defaultValue bool) (bool, error) {

@@ -36,18 +36,24 @@ path; installation and advanced recovery remain in the complete manual.
 
 For the optional guarded installation path without a source checkout, use the public
 [operator bundle](docs/operator-manual.md): download `scripts/get-fc.sh`, extract
-one published main release, configure the domain and run `./fc doctor` followed
+one published main release, configure the DNS hostname or public IP and run `./fc doctor` followed
 by `./fc install master` (or `storage`). Its receipt pins all component digests
 and rejects existing state. Ordinary Compose startup initializes the application
 directly; global tool installation is a separate, explicit action.
 
-For a fresh HTTPS node, point public DNS at this host and create `.env` with
-only these two values (replace the example hostname):
+For a fresh HTTPS node, point public DNS at this host or use the host's public IP.
+Create `.env` with only these two values (replace the example hostname):
 
 ```dotenv
 TLS_ENABLED=true
 SERVER_NAME=4399.com
 ```
+
+`SERVER_NAME` also accepts a bare public IPv4 or IPv6 address. IP certificates
+use Let’s Encrypt's 160-hour `shortlived` profile and renew automatically;
+the existing DNS certificate policy is unchanged. See the
+[automatic TLS contract](docs/storage-certificate-control.md) for identity,
+port ownership and renewal behavior.
 
 ```bash
 docker compose up -d --wait

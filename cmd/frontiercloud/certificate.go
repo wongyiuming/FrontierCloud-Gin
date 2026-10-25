@@ -135,7 +135,7 @@ func queryCertificateContainer(action string) (certificate.View, error) {
 	}
 	host := settings.ServerName
 	if settings.TLSEnabled && !certificate.Hostname(host) {
-		return certificate.View{}, errors.New("invalid certificate container hostname")
+		return certificate.View{}, errors.New("invalid certificate container DNS/IP identity")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

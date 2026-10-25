@@ -446,6 +446,28 @@ a clear failure without displacing another application. Relay retains its
 high-port communication endpoint; Direct retains public HTTPS 443.
 See [automatic TLS audit and replacement contract](docs/automatic-tls-audit.md).
 
+### Automatic TLS for public IP identities
+
+`SERVER_NAME` accepts a DNS name or a bare public IPv4/IPv6 identity. DNS names
+retain their DNS validation contract; an IP requires no DNS record. IPs select
+the approved CA's `shortlived` profile automatically, validate IP SANs with full
+TLS verification, and use the same private account/cache, atomic publication,
+serving proof, recovery and read-only Admin lifecycle as DNS identities. Reject
+non-public IPs, zones, bracketed literals, URLs, ports and IP certificates with
+more than seven days of total validity. Endpoint URL formatting remains
+separate from this certificate identity input.
+
+IP renewal uses ARI when available, a five-minute maintenance check and an
+earlier half-lifetime fallback window. Temporary HTTP-01 port conflicts fail
+closed, preserve an existing valid serving pair and retry without displacing
+another application. Independent projects keep separate accounts and private
+certificates. HTTP-01 ingress belongs to this deployment; unrelated projects
+must not create competing automatic challenge listeners. A separately hosted
+application with a static certificate remains its operator's renewal responsibility.
+No external challenge router, webroot, shared private certificate or host-service
+control becomes a new product prerequisite. See the focused
+[IP and shared-host contract](docs/storage-certificate-control.md#public-ip-identities-and-shared-hosts).
+
 The persisted role discriminator `Follower` remains in protocol-v2/SQL to
 preserve node IDs, references and transactional recovery. It is not a supported
 independent business deployment or another business authority. Do not globally
@@ -466,8 +488,9 @@ Web/Nginx images; it must not require a user-supplied source SHA or run
 local builds. Its default service graph excludes the optional operator installer
 and has no dependency on host operator state or installation permissions.
 Empty optional values retain their defaults. HTTP without `.env`
-also remains supported. Public DNS and reachable standard validation/listening
-ports are prerequisites. Fresh installations never require prepared certificates.
+also remains supported. A valid DNS or public-IP identity and reachable standard
+validation/listening ports are prerequisites; DNS resolution is required only
+for DNS identities. Fresh installations never require prepared certificates.
 Go obtains, validates and renews certificates; bootstrap exposes no plaintext
 business while waiting for issuance. Published HTTPS must be verified before
 reporting TLS ready or generating a five-minute storage pairing package.

@@ -52,6 +52,9 @@ func ValidIdentifier(value string) bool { return nodeIdentifier.MatchString(valu
 var hostPattern = regexp.MustCompile(`^[a-z0-9.-]+$`)
 
 func permittedAddress(address netip.Addr) bool {
+	if address.Zone() != "" {
+		return false
+	}
 	address = address.Unmap()
 	return address.IsValid() && !address.IsLoopback() && !address.IsLinkLocalUnicast() && !address.IsLinkLocalMulticast() && !address.IsMulticast() && !address.IsUnspecified()
 }
@@ -60,15 +63,20 @@ func permittedAddress(address netip.Addr) bool {
 // paths or downgrade to HTTP. DNS is checked again against actual dial addresses.
 func Endpoint(raw string) (string, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || (u.Path != "" && u.Path != "/") {
+	if err != nil || strings.ContainsAny(raw, "\r\n\t ") || strings.ContainsRune(raw, 92) || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.RawPath != "" || (u.Path != "" && u.Path != "/") {
 		return "", errors.New("节点通信需要可验证证书的 HTTPS 根地址")
 	}
-	host, err := idna.Lookup.ToASCII(strings.ToLower(u.Hostname()))
-	if err != nil || !hostPattern.MatchString(host) || host == "localhost" || host == "metadata.google.internal" || strings.HasSuffix(host, ".localhost") {
-		return "", errors.New("节点地址必须是有效的 HTTPS 主机名或 IPv4 地址")
-	}
-	if address, err := netip.ParseAddr(host); err == nil && !permittedAddress(address) {
-		return "", errors.New("不能使用回环、链路本地或元数据地址")
+	host := strings.ToLower(u.Hostname())
+	if address, e := netip.ParseAddr(host); e == nil {
+		if !permittedAddress(address) || address.Is6() && !strings.HasPrefix(u.Host, "[") {
+			return "", errors.New("不能使用回环、链路本地、作用域或元数据地址")
+		}
+		host = address.Unmap().String()
+	} else {
+		host, err = idna.Lookup.ToASCII(host)
+		if err != nil || !hostPattern.MatchString(host) || host == "localhost" || host == "metadata.google.internal" || strings.HasSuffix(host, ".localhost") {
+			return "", errors.New("节点地址必须是有效的 HTTPS 主机名、IPv4 或 IPv6 地址")
+		}
 	}
 	port := u.Port()
 	if port != "" {
@@ -83,9 +91,33 @@ func Endpoint(raw string) (string, error) {
 		}
 	}
 	if port != "" {
-		host += ":" + port
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
 	}
 	return "https://" + host, nil
+}
+
+// RelayTarget keeps an internal proxy path, HTTPS authority and HTTP Host on
+// the same verified endpoint. IPv6 brackets are part of the authority, while
+// certificate verification continues to use the underlying IP SAN identity.
+func RelayTarget(raw string) (host, port string, err error) {
+	origin, err := Endpoint(raw)
+	if err != nil {
+		return "", "", err
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return "", "", err
+	}
+	host, port = parsed.Hostname(), parsed.Port()
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port == "" {
+		port = "443"
+	}
+	return host, port, nil
 }
 
 type Envelope struct {

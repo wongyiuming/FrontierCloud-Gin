@@ -427,13 +427,13 @@
         const observed = relation.summary?.certificate || {};
         const queried = certificateViews.get(relation.relationship_id);
         const facts = queried && Date.now() - queried.at < 30000 ? queried.value : observed;
-        const labels = {DISABLED: '未启用 TLS', PENDING: '等待证书', VALIDATING: '验证域名', ISSUING: '签发中', ACTIVE: '已生效', RENEWING: '续期中', DEGRADED: '降级，需检查', FAILED: '失败'};
-        const codes = {dns: 'DNS 未就绪或解析失败', port80_busy: '80 端口被占用', http01_unreachable: '公网 HTTP-01 不可达', http01_ingress: '等待内部 Challenge 入口就绪', authorization: '域名授权失败', caa: 'CAA 限制', rate_limited: 'CA 限流，自动退避', ca_unavailable: 'CA 暂不可用', ca_timeout: 'CA 请求超时', ca_error: 'CA 请求失败', domain_rejected: 'CA 拒绝域名', system_clock: '系统时间异常', interrupted: '上次操作中断', journal_unwritable: '状态无法持久化', journal_recovered: '已保护损坏记录，等待安全重试', certificate_cache_unreadable: '证书缓存无法读取，保留有效旧证书', certificate_not_yet_valid: '证书尚未生效，请检查系统时间', certificate_cache_unwritable: '签发结果无法保存，保留旧证书', legacy_certificate_invalid: '历史证书无法安全迁移', challenge_listener: 'ACME 验证监听器异常', certificate_validation: '证书完整校验失败', certificate_invalid: '证书已失效或损坏', certificate_expired: '证书已过期', serving_certificate_mismatch: '线上证书尚未与托管证书一致', serving_probe_timeout: '线上 TLS 探测超时，尚未验证当前状态', serving_dns: '线上 TLS 探测 DNS 解析失败', serving_connection: '线上 TLS 探测连接失败', serving_tls_verification: '线上证书信任链、域名或有效期校验失败', serving_tls_handshake: '线上 TLS 握手失败', controller_unavailable: '证书控制器不可用'};
+        const labels = {DISABLED: '未启用 TLS', PENDING: '等待证书', VALIDATING: '验证域名 / IP', ISSUING: '签发中', ACTIVE: '已生效', RENEWING: '续期中', DEGRADED: '降级，需检查', FAILED: '失败'};
+        const codes = {dns: 'DNS 未就绪或解析失败', port80_busy: '80 端口被占用', http01_unreachable: '公网 HTTP-01 不可达', http01_ingress: '等待内部 Challenge 入口就绪', authorization: '域名 / IP 授权失败', caa: 'CAA 限制', rate_limited: 'CA 限流，自动退避', ca_unavailable: 'CA 暂不可用', ca_timeout: 'CA 请求超时', ca_error: 'CA 请求失败', domain_rejected: 'CA 拒绝域名 / IP', system_clock: '系统时间异常', interrupted: '上次操作中断', journal_unwritable: '状态无法持久化', journal_recovered: '已保护损坏记录，等待安全重试', certificate_cache_unreadable: '证书缓存无法读取，保留有效旧证书', certificate_not_yet_valid: '证书尚未生效，请检查系统时间', certificate_cache_unwritable: '签发结果无法保存，保留旧证书', certificate_issuance_invalid: '签发结果未通过安全校验，自动退避重试', legacy_certificate_invalid: '历史证书无法安全迁移', challenge_listener: 'ACME 验证监听器异常', certificate_validation: '证书完整校验失败', certificate_invalid: '证书已失效或损坏', certificate_expired: '证书已过期', serving_certificate_mismatch: '线上证书尚未与托管证书一致', serving_probe_timeout: '线上 TLS 探测超时，尚未验证当前状态', serving_dns: '线上 TLS 探测 DNS 解析失败', serving_connection: '线上 TLS 探测连接失败', serving_tls_verification: '线上证书信任链、域名 / IP SAN 或有效期校验失败', serving_tls_handshake: '线上 TLS 握手失败', controller_unavailable: '证书控制器不可用'};
         section.append(heading, kv([
             ['TLS', facts.enabled ? '已启用' : facts.state === 'DISABLED' ? '未启用' : '待查询'],
             ['管理方式', facts.mode === 'automatic' ? '自动托管' : '待查询'],
             ['状态', labels[facts.state] || '待查询'],
-            ['域名', facts.hostname || '待查询'],
+            ['域名 / IP', facts.hostname || '待查询'],
             ['SAN', Array.isArray(facts.san) ? facts.san.join(', ') : '待查询'],
             ['签发机构', facts.issuer || '待查询'],
             ['生效时间', localTime(facts.not_before)],

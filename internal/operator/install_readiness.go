@@ -25,13 +25,21 @@ func (d *Deployment) installCertificateReady(ctx context.Context, cfg Config) er
 			return errInstallCertificate
 		}
 	}
+	expectedIdentity := environment["SERVER_NAME"]
+	if enabled {
+		var err error
+		expectedIdentity, err = certificate.NormalizeSubject(expectedIdentity)
+		if err != nil {
+			return errInstallCertificate
+		}
+	}
 	for ctx.Err() == nil {
 		probe, cancel := context.WithTimeout(ctx, 5*time.Second)
 		raw, err := d.Compose(probe, true, "exec", "-T", "web", "/app/frontiercloud", "certificate-status")
 		cancel()
 		if err == nil {
 			var v certificate.View
-			if json.Unmarshal(raw, &v) != nil || v.Enabled != enabled || enabled && v.Hostname != environment["SERVER_NAME"] {
+			if json.Unmarshal(raw, &v) != nil || v.Enabled != enabled || enabled && v.Hostname != expectedIdentity {
 				return errInstallCertificate
 			}
 			if v.State == "FAILED" {
