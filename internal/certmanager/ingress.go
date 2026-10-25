@@ -3,7 +3,9 @@ package certmanager
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,6 +20,9 @@ func awaitIngress(ctx context.Context, address, host string) error {
 			return err
 		}
 		request.Host = host
+		if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+			request.Host = "[" + host + "]"
+		}
 		response, err := client.Do(request)
 		if err == nil {
 			ready := response.StatusCode == http.StatusNotFound && response.Header.Get("X-FrontierCloud-ACME") == "ready"

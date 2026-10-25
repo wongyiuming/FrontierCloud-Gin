@@ -33,4 +33,14 @@ for config_name in extra-servers.conf public-listen.conf public-tls.conf; do
   fi
 done
 
+# SERVER_NAME stays a bare certificate identity. Nginx compares bracketed IPv6
+# HTTP Host literals; change only this fixed placeholder, never interpolate an
+# unvalidated environment value into a sed program. Repeated starts are stable.
+for template in /etc/nginx/templates/nginx.conf.template "$template_dir/extra-servers.conf.template"; do
+  sed -i 's/server_name \[${SERVER_NAME}\];/server_name ${SERVER_NAME};/g' "$template"
+  case "${SERVER_NAME:-localhost}" in
+    *:*) sed -i 's/server_name ${SERVER_NAME};/server_name [${SERVER_NAME}];/g' "$template" ;;
+  esac
+done
+
 echo "nginx: selected $nginx_mode configuration with PUBLIC_BIND_ADDRESS=$public_bind_address"

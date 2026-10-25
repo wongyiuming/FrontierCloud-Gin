@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -55,6 +56,9 @@ func publishFixture(t *testing.T, e *Edge, generation, domain string, expires ti
 	e.roots = x509.NewCertPool()
 	e.roots.AddCert(root)
 	leaf := &x509.Certificate{SerialNumber: big.NewInt(2), DNSNames: []string{domain}, NotBefore: time.Now().Add(-time.Hour), NotAfter: expires, KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	if address := net.ParseIP(domain); address != nil {
+		leaf.DNSNames, leaf.IPAddresses = nil, []net.IP{address}
+	}
 	der, err := x509.CreateCertificate(rand.Reader, leaf, root, &key.PublicKey, key)
 	if err != nil {
 		t.Fatal(err)

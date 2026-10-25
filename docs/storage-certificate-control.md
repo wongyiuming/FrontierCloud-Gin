@@ -2,8 +2,10 @@
 
 TLS_ENABLED is the only TLS switch. True always means Go-managed ACME issuance,
 renewal and recovery. There is no manual certificate mode or renewal toggle.
-First installation requires public DNS and reachable TCP 80 for HTTP-01, not
-prepared PEM files, Certbot or a host service. Business HTTPS uses Nginx on 443;
+SERVER_NAME accepts a DNS name or a bare public IPv4/IPv6 address. A DNS name
+requires working public DNS; an IP identity needs no DNS record. Both require
+reachable TCP 80 for HTTP-01, not prepared PEM files, Certbot or a host service.
+Business HTTPS uses Nginx on 443;
 Direct Storage uses native Go HTTPS on 443; Relay Storage uses its configured
 communication high port (default 8443). Relay has no idle 80/443 listener.
 
@@ -13,6 +15,43 @@ for the bounded HTTP-01 operation. All success, failure and cancellation paths
 close that listener. Port conflicts fail visibly without taking over another
 application. Business uses a private challenge listener behind Nginx. Bootstrap
 allows ACME challenge only and does not expose business APIs or Admin over HTTP.
+
+## Public IP identities and shared hosts
+
+Public IP identities use the approved Let's Encrypt `shortlived` profile
+(currently 160 hours). The controller selects it automatically and rejects an
+IP certificate whose total validity exceeds seven days. It checks IP SANs with
+normal chain, identity, time and key validation; it never substitutes a DNS SAN
+or disables TLS verification. Private, loopback, link-local, multicast and
+reserved IP identities, IPv6 zones, bracketed literals, URLs and ports are not
+SERVER_NAME values. IPv6 brackets belong only in an HTTPS endpoint URL.
+An IP change requires fresh authorization just as a DNS identity change does.
+
+The controller admits an IP certificate into its cache only after the complete
+new key and chain pass these checks. A CA response violating the selected
+profile is rejected before replacing the prior cache; the diagnostic code is
+`certificate_issuance_invalid`. The valid old serving pair remains available
+while the library retries. Certificate-cache write failures remain a separate
+`certificate_cache_unwritable` condition.
+
+IP renewal uses the library's ARI information when available, a five-minute
+maintenance check and a half-lifetime fallback renewal window. IP certificates
+have a much shorter recovery margin than ordinary DNS certificates. An occupied
+80 causes a visible failure and bounded retry; an existing valid serving pair
+remains available. Persistent occupation or repeated collisions can still
+prevent renewal and eventually expire that pair. No controller stops another
+application, shares its account/key storage or assumes that an occupied port
+can answer this deployment's challenge.
+
+Reserve HTTP-01 ingress for FrontierCloud's automatic validation. A cohosted
+HTTPS application can use a separate port and its own independently maintained
+static certificate. It must not open 80 in the background or borrow FrontierCloud's
+certificate. Its HTTPS availability then lasts only until its certificate's
+actual expiry unless its operator renews it. Coordinate any separate HTTP-01
+renewal through an explicit maintenance window; do not silently take 80 from
+FrontierCloud or describe a static certificate as automatically renewing.
+There is no external challenge-router mode or cross-project certificate sharing.
+See the [Let's Encrypt IP certificate announcement](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability).
 
 Private account/cache/journal, controller socket and complete published pairs
 use three separate persistent project volumes. The account is root-private;
@@ -58,7 +97,8 @@ Storage deployment waits for HTTPS before generating a fresh five-minute
 one-use pairing package. Failure to become ready is a deployment failure, not a
 successful pairing; the controller remains available for bounded retries.
 
-DNS, occupied 80, HTTP-01 reachability, authorization, CAA, CA rate limit/service,
+DNS where applicable, occupied 80, HTTP-01 reachability, authorization, CAA,
+CA rate limit/service,
 clock, cache/journal persistence and certificate/serving errors have distinct
 bounded diagnostics. CertMagic owns account persistence, ACME transactions,
 storage locking, renewal scheduling and ARI when the CA supplies it. A failed
@@ -85,3 +125,12 @@ controller account/cache and verifies online renewal. Fixture trust/CA options
 exist only in the test binary. No product CA/path override, public CA request,
 host port publication or host service is added. Python is the operator/test
 harness language and is not packaged into any product image.
+
+The same development-only script also covers literal public-form IP identities
+on isolated internal Docker networks: Business, Direct and Relay use real
+HTTP-01, shipping TLS consumers, container recreation, persistent accounts and
+online ARI scheduling. A failed automatic renewal must preserve trusted service
+with the old certificate, then recover through the normal automatic retry.
+IPv6 runs only when an actual Docker dual-stack network probe succeeds;
+otherwise the evidence records an explicit unsupported skip. No fixture
+changes public-IP admission or contacts the corresponding public Internet IP.

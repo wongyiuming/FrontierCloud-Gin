@@ -291,15 +291,11 @@ func (s *Service) remoteDelivery(ctx context.Context, row store.GlobalMedia, rel
 	if relation.Mode != "Relay" || !nginx {
 		return Delivery{}, ErrUnavailable
 	}
-	parsed, err := url.Parse(origin)
+	host, port, err := node.RelayTarget(origin)
 	if err != nil {
 		return Delivery{}, err
 	}
-	port := parsed.Port()
-	if port == "" {
-		port = "443"
-	}
-	result.Relay = "/_relay_media/" + parsed.Hostname() + "/" + port + "/" + row.ObjectID + "/" + token
+	result.Relay = "/_relay_media/" + host + "/" + port + "/" + row.ObjectID + "/" + token
 	return result, nil
 }
 

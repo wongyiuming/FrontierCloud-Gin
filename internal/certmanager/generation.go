@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 )
 
 const (
@@ -70,6 +72,12 @@ func Validate(host string, cert, key []byte, roots *x509.CertPool, now time.Time
 	leaf, err := x509.ParseCertificate(p.Certificate[0])
 	if err != nil {
 		return nil, errors.New("certificate parse failed")
+	}
+	// Public IP issuance explicitly selects the CA's shortlived profile. Never
+	// publish a silently substituted long-lived IP certificate from another
+	// profile, including an otherwise trusted imported generation.
+	if certificate.IsIP(host) && (leaf.NotAfter.Sub(leaf.NotBefore) <= 0 || leaf.NotAfter.Sub(leaf.NotBefore) > 7*24*time.Hour) {
+		return nil, errors.New("IP certificate does not match the short-lived policy")
 	}
 	intermediates := x509.NewCertPool()
 	for _, der := range p.Certificate[1:] {

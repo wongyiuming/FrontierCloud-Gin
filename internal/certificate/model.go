@@ -3,7 +3,6 @@
 package certificate
 
 import (
-	"net"
 	"regexp"
 	"strings"
 )
@@ -43,8 +42,8 @@ type View struct {
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 
-func Hostname(s string) bool {
-	if !hostnamePattern.MatchString(s) || !strings.Contains(s, ".") || net.ParseIP(s) != nil {
+func dnsHostname(s string) bool {
+	if !hostnamePattern.MatchString(s) || !strings.Contains(s, ".") {
 		return false
 	}
 	for _, label := range strings.Split(s, ".") {

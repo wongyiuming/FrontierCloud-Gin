@@ -294,15 +294,11 @@ func (s *Manager) Delivery(ctx context.Context, user, id string, download, nginx
 	if e != nil {
 		return p, "", e
 	}
-	u, e := url.Parse(origin)
+	host, port, e := node.RelayTarget(origin)
 	if e != nil {
 		return p, "", e
 	}
-	port := u.Port()
-	if port == "" {
-		port = "443"
-	}
-	return p, "/_relay_recording/" + u.Hostname() + "/" + port + "/" + id + "/" + token, nil
+	return p, "/_relay_recording/" + host + "/" + port + "/" + id + "/" + token, nil
 }
 func (s *Manager) cleanup(ctx context.Context, user, id string, a store.KaraokeAudit) error {
 	p, e := s.placement(ctx, user, id, false)

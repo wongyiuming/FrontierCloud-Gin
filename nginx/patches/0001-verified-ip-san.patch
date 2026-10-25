@@ -1,0 +1,38 @@
+--- a/src/event/ngx_event_openssl.c
++++ b/src/event/ngx_event_openssl.c
+@@ -5277 +5277,7 @@
+-    X509   *cert;
++    X509       *cert;
++#ifdef X509_CHECK_FLAG_ALWAYS_CHECK_SUBJECT
++    in_addr_t   addr4;
++#if (NGX_HAVE_INET6)
++    u_char      addr6[16];
++#endif
++#endif
+@@ -5289,0 +5296,26 @@
++    }
++
++    /* FrontierCloud: literal addresses require iPAddress SANs, never DNS SANs. */
++    addr4 = ngx_inet_addr(name->data, name->len);
++    if (addr4 != INADDR_NONE
++        || (name->len == 15
++            && ngx_memcmp(name->data, "255.255.255.255", 15) == 0))
++    {
++        if (X509_check_ip(cert, (u_char *) &addr4, 4, 0) != 1) {
++            goto failed;
++        }
++        goto found;
++    }
++
++    if (name->data[0] == '[') {
++#if (NGX_HAVE_INET6)
++        if (name->len < 3 || name->data[name->len - 1] != ']'
++            || ngx_inet6_addr(name->data + 1, name->len - 2, addr6) != NGX_OK
++            || X509_check_ip(cert, addr6, 16, 0) != 1)
++        {
++            goto failed;
++        }
++        goto found;
++#else
++        goto failed;
++#endif

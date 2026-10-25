@@ -20,6 +20,15 @@ cleanup() {
   if docker image inspect "$driver" >/dev/null 2>&1; then
     docker image rm "$driver" >/dev/null
   fi
+  # Emit non-secret evidence before removing fixtures, including failed runs.
+  python3 - "$work" <<'PY'
+import json, pathlib, sys
+work = pathlib.Path(sys.argv[1])
+for name in ("domain-resources.json", "ip-resources.json", "resources.json", "ip-delivery-evidence.json"):
+    path = work / name
+    if path.is_file():
+        print(json.dumps({"certificate_acceptance_record": name, "evidence": json.loads(path.read_text())}, sort_keys=True))
+PY
   case "$work" in /tmp/fc-certificate-????????)
     test "$(readlink -f "$work")" = "$work"
     rm -rf -- "$work" ;;
@@ -37,5 +46,8 @@ git archive --format=tar "$revision" -- "${paths[@]}" | DOCKER_BUILDKIT=0 docker
 docker run --rm --name "$identity-compiler" --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e GOMEMLIMIT=600MiB -e CGO_ENABLED=0 -v "$work:/out" "$driver" /usr/local/go/bin/go test -c -p=1 -o /out/certificate.test ./internal/certmanager
 chmod 755 "$work/certificate.test"
 python3 tests/storage_certificate_containers.py run "$work" "$identity" "$revision"
+cp "$work/resources.json" "$work/domain-resources.json"
+python3 tests/storage_certificate_containers.py run-ip "$work" "$identity" "$revision"
+cp "$work/resources.json" "$work/ip-resources.json"
 test "$(git rev-parse HEAD)" = "$revision"
 test -z "$(git status --porcelain)"
