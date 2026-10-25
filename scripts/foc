@@ -25,9 +25,29 @@ for argument in "$@"; do
   esac
 done
 [ "$pending" = false ] || { echo 'foc: --directory requires a value' >&2; exit 2; }
-[ -n "$command" ] || set -- "$@" status
+if [ -z "$command" ]; then command=status; set -- "$@" status; fi
 if [ "$explicit" = true ]; then
   [ -n "$directory" ] || { echo 'foc: --directory must not be empty' >&2; exit 2; }
+  # Only commands opening a local running deployment may register it. Install,
+  # doctor and recovery targets must reach the backend without this side effect.
+  case "$command:$action" in
+    status:|diagnose:|logs:|restart:|upgrade:*|backup:plan|backup:create)
+      directory_check=$directory
+      while [ "$directory_check" != / ] && [ "${directory_check%/}" != "$directory_check" ]; do directory_check=${directory_check%/}; done
+      [ ! -L "$directory_check" ] || { echo 'foc: unsafe selected deployment directory' >&2; exit 2; }
+      if [ -d "$directory" ]; then
+        if [ -e "$directory/.fc-deployment.json" ] || [ -L "$directory/.fc-deployment.json" ]; then
+          [ -f "$directory/.fc-deployment.json" ] && [ ! -L "$directory/.fc-deployment.json" ] || {
+            echo 'foc: selected deployment receipt is unsafe' >&2; exit 2;
+          }
+        else
+          "$backend" --directory "$directory" compose-register >&2 || exit 2
+          [ -f "$directory/.fc-deployment.json" ] && [ ! -L "$directory/.fc-deployment.json" ] || {
+            echo 'foc: automatic registration did not publish a safe deployment receipt' >&2; exit 2;
+          }
+        fi
+      fi ;;
+  esac
   exec "$backend" "$@"
 fi
 # These commands select remote nodes, archives or explicit recovery targets.
@@ -91,10 +111,16 @@ done < "$work/automatic"
 LC_ALL=C sort -u "$work/candidates" > "$work/unique"
 count=$(wc -l < "$work/unique" | tr -d ' ')
 case "$count" in
-  0) echo 'foc: no recorded deployment found; use --directory for first installation' >&2; exit 2 ;;
+  0) echo 'foc: no recorded deployment found.' >&2
+     echo 'For a running standard Compose deployment, first run: foc --directory DIR compose-register' >&2
+     echo 'After registration, run: foc --directory DIR status. For first installation, follow the installation guide.' >&2
+     exit 2 ;;
   1) IFS= read -r directory < "$work/unique" ;;
-  *) echo 'foc: multiple deployments found; select with --directory:' >&2
-     cat "$work/unique" >&2; exit 2 ;;
+  *) echo 'foc: multiple deployments found; select an absolute directory:' >&2
+     cat "$work/unique" >&2
+     echo 'For an unregistered running standard Compose deployment, first run: foc --directory DIR compose-register' >&2
+     echo 'After registration, run: foc --directory DIR status' >&2
+     exit 2 ;;
 esac
 if [ ! -e "$directory/.fc-deployment.json" ] && [ ! -L "$directory/.fc-deployment.json" ]; then
   "$backend" --directory "$directory" compose-register >&2 || exit 2

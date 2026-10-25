@@ -13,6 +13,24 @@ foc status
 `foc version` reports the tool version; `foc status` reports the deployment version.
 Multiple deployments require `foc --directory /absolute/deployment status`.
 
+For a running standard Compose deployment without an operator receipt, current
+tools register the explicitly selected directory before status, diagnose, logs,
+restart, upgrade or a local backup plan/create. Ambiguous discovery registers
+none of the candidates. To perform that metadata step explicitly before status:
+
+```sh
+foc --directory /absolute/deployment compose-register
+foc --directory /absolute/deployment status
+```
+
+Registration requires complete release, running-image, Compose and native-state
+proof; rejection or a missing/unsafe resulting receipt stops the original
+command. Existing receipts are not registered again. Installation, doctor,
+restore, node and independent archive/set commands never trigger registration.
+Use the installation guide for a deployment that is not running yet. These
+commands require a tool version supporting installer-free registration; the
+older pinned bootstrap bundle must be refreshed through a verified release.
+
 ## Update this node
 
 ```sh
