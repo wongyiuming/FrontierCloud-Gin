@@ -101,7 +101,7 @@ def main():
     # older default bootstrap: it must not downgrade a different managed backend.
     env = ['-e', 'FOC_OPERATOR_IMAGE=' + args.image, '-e', 'FOC_OPERATOR_REVISION=' + args.revision,
            '-e', 'FOC_DEPLOYMENT_DIRECTORY=' + str(case), '-e', 'FOC_OPERATOR_PULL_POLICY=never']
-    execute(['docker', 'exec', *env, args.node, 'docker', 'compose', '-f', str(ROOT / 'compose.foc.yaml'), 'run', '--rm', '--no-deps', 'install'])
+    execute(['docker', 'exec', *env, args.node, 'docker', 'compose', '-f', str(ROOT / 'deploy/compose.foc.yaml'), 'run', '--rm', '--no-deps', 'install'])
     assert inner('foc', 'version').strip() == args.revision
     compose(case, 'docker-compose.yaml', 'up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
     assert inner('foc', 'version').strip() == args.revision

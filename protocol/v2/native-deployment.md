@@ -1,9 +1,15 @@
 # Go-only deployment
 
-The root `Dockerfile` and `docker-compose.yaml` now select native Go. The retained
-`Dockerfile.gin` / `docker-compose.gin.yaml` aliases are identical. The default
+The root `Dockerfile` and `docker-compose.yaml` select native Go. The retained
+`Dockerfile.gin` build alias is identical. The duplicate `docker-compose.gin.yaml`
+is no longer shipped; foc still recognizes that filename in existing deployments. The default
 SQLite profile has no MySQL service, volume or dependency; the optional
 `docker-compose.gin-mysql.yaml` overlay adds MySQL and its healthy dependency.
+The root has only these two business selections and the independent
+`docker-compose.storage.yaml` appliance. Direct and Relay use that same storage
+file with different environment settings. The legacy foc-only installer lives in
+`deploy/compose.foc.yaml` in source; its public operator-bundle path remains
+`compose.foc.yaml`. New deployments already install foc through their default stack.
 Python deployment is prohibited. Retired app/ and Python application entrypoints have been removed. Python scripts and test drivers remain outside native images. Database selection is not permission to overwrite an existing cluster's database, identity or physical ownership.
 
 In `.env`, select the runtime/database combination:

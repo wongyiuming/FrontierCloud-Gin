@@ -176,7 +176,7 @@ func TestSelfUpdateRequiresReviewedPublicImageAndChangesNoBusinessState(t *testi
 	}
 }
 func TestEmbeddedFocInstallerMatchesCanonicalCompose(t *testing.T) {
-	canonical, err := os.ReadFile(filepath.Join("..", "..", "compose.foc.yaml"))
+	canonical, err := os.ReadFile(filepath.Join("..", "..", "deploy", "compose.foc.yaml"))
 	if err != nil || string(canonical) != string(focInstaller) {
 		t.Fatal("operator installer drift", err)
 	}

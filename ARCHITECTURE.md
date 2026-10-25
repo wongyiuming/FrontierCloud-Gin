@@ -382,7 +382,8 @@ All product components are built and run through Docker/Compose. Do not install
 host executables, users, systemd units or invoke systemctl for product services.
 The owner explicitly requires a limited global-operator installation: the one-shot
 `foc-host-init` service in default business and storage Compose, and the separate
-`compose.foc.yaml` installer for older deployments, may write `/usr/local/bin/foc`, a private backend
+`deploy/compose.foc.yaml` source installer for older deployments (packaged as
+`compose.foc.yaml` in the operator bundle), may write `/usr/local/bin/foc`, a private backend
 under `/usr/local/lib/frontiercloud/foc`, and `/etc/frontiercloud/foc-deployments`.
 The operator process may run briefly on the host; it is not a resident service
 and does not grant Docker access, create users/systemd units or invoke systemctl.

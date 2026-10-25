@@ -7,8 +7,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RequiredFocComposeTests(unittest.TestCase):
+    def test_root_entries_are_deployments_and_legacy_installer_still_ships(self):
+        files = {p.name for p in ROOT.glob('*compose*.yaml')}
+        self.assertEqual(files, {'docker-compose.yaml', 'docker-compose.gin-mysql.yaml',
+                                 'docker-compose.storage.yaml'})
+        self.assertTrue((ROOT / 'deploy/compose.foc.yaml').is_file())
+        for name in ('Dockerfile', 'Dockerfile.gin', 'ci/Dockerfile.web'):
+            text = (ROOT / name).read_text(encoding='utf-8')
+            self.assertIn('COPY deploy/compose.foc.yaml /app/operator/', text)
+            if name != 'ci/Dockerfile.web':
+                self.assertIn('COPY deploy/compose.foc.yaml ./deploy/', text)
+
     def test_every_default_has_required_independently_pinned_installer(self):
-        for name in ('docker-compose.yaml', 'docker-compose.gin.yaml', 'docker-compose.storage.yaml'):
+        for name in ('docker-compose.yaml', 'docker-compose.storage.yaml'):
             with self.subTest(name=name):
                 text = (ROOT / name).read_text(encoding='utf-8')
                 installer = text.split('  foc-host-init:\n', 1)[1].split('  secrets-init:\n', 1)[0]

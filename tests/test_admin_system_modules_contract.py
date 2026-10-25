@@ -21,7 +21,7 @@ class AdminSystemModulesContractTests(unittest.TestCase):
         self.assertNotIn("RegisterReleaseAdmin", runtime)
         self.assertNotIn("SocketAgent", runtime)
         self.assertFalse(any(path.startswith("/api/v1/media/admin/nodes/release") for path in schema["paths"]))
-        for compose in ("docker-compose.yaml", "docker-compose.gin.yaml"):
+        for compose in ("docker-compose.yaml", "docker-compose.storage.yaml"):
             value = self.read(compose)
             for forbidden in ("  updater:", "docker.sock", "updater_control", "maintenance_state"):
                 self.assertNotIn(forbidden, value)

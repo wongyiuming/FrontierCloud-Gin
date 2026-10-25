@@ -30,6 +30,10 @@ An existing deployment using older Compose files can bootstrap the same entry
 with its separate `compose.foc.yaml` installer and an explicitly verified public
 Web digest, full revision and existing deployment:
 
+In a source checkout the installer is `deploy/compose.foc.yaml`; the extracted
+public operator bundle retains `compose.foc.yaml` at its top level. This installer
+is unnecessary for new deployments, which already include `foc-host-init`.
+
 ```sh
 export FOC_OPERATOR_IMAGE=ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:VERIFIED_DIGEST
 export FOC_OPERATOR_REVISION=FULL_PUBLISHED_MAIN_SHA

@@ -317,7 +317,7 @@ class HostEntryTests(unittest.TestCase):
 
     def test_compose_parent_views_exclude_runtime_socket_roots(self):
         import yaml
-        service = yaml.safe_load((ROOT / 'compose.foc.yaml').read_text())['services']['install']
+        service = yaml.safe_load((ROOT / 'deploy/compose.foc.yaml').read_text())['services']['install']
         volumes = service['volumes']
         views = [v for v in volumes if v['target'].startswith('/host')]
         self.assertEqual({v['source'] for v in views}, {'/usr', '/etc'})

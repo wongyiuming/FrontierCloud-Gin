@@ -108,6 +108,12 @@ before touching an existing owned disk.
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
+The root has three Compose files: `docker-compose.yaml` for business deployment,
+`docker-compose.gin-mysql.yaml` as its optional MySQL overlay, and
+`docker-compose.storage.yaml` for either Direct or Relay. Default deployments
+include foc. The [separate foc installer](deploy/compose.foc.yaml) is only for
+existing deployments that lack the global command; it is not another business stack.
+
 On registered hosts, `foc upgrade` selects a verified published release, refreshes
 the tool when needed, captures state recovery material and verifies the deployment
 before opening. Run it independently on each host. AdminGUI has no upgrade or
