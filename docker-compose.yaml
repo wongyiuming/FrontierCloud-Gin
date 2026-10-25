@@ -32,14 +32,14 @@ services:
   # Optional host command; install explicitly with --profile operator run.
   foc-host-init:
     profiles: [operator]
-    image: ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:8101bf3e423648ed4f1c2a29e671286a6391963ef562f55be4579476d45779de
+    image: ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:591850f193bb314885b44eb499bb38913dbf583a1a11c99e9a201cd286e593b4
     user: "0:0"
     entrypoint: ["/bin/sh", "/app/operator/install-foc.sh"]
     command: ["auto"]
     environment:
       FOC_COMPOSE_INSTALL: "1"
       FOC_AUTOMATIC_PROJECT: "1"
-      FOC_OPERATOR_REVISION: 1ce61b545727a19059a7ba82eb8bd45a9c93aa14
+      FOC_OPERATOR_REVISION: 7fa1be5e6b8e2dde09421b4958e5b689a9e3040b
     labels:
       frontiercloud.foc-bootstrap: "1"
     restart: "no"

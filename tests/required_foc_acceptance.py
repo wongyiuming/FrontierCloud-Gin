@@ -15,8 +15,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BOOTSTRAP_REVISION = '1ce61b545727a19059a7ba82eb8bd45a9c93aa14'
-BOOTSTRAP_IMAGE = 'ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:8101bf3e423648ed4f1c2a29e671286a6391963ef562f55be4579476d45779de'
+BOOTSTRAP_REVISION = '7fa1be5e6b8e2dde09421b4958e5b689a9e3040b'
+BOOTSTRAP_IMAGE = 'ghcr.io/wongyiuming/frontiercloud-gin-web@sha256:591850f193bb314885b44eb499bb38913dbf583a1a11c99e9a201cd286e593b4'
 ACTIVE_COMMANDS = []
 CLEANUP_OUTPUT = None
 
