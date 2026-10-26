@@ -25,6 +25,9 @@ func (d *Download) PlanDelivery(id, snapshot, requestID, traceID string, nginx b
 	result := Delivery{ResourceID: entry.MediaID, ObjectID: entry.MediaID}
 	if len(d.globals) == 1 {
 		row := d.globals[0]
+		if row.Transport == "S3" {
+			return Delivery{}, ErrBrowserSource
+		}
 		_, relation, err := d.service.resolveGlobal(d.ctx, row.ID, row.Path)
 		if err != nil {
 			return Delivery{}, err

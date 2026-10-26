@@ -408,10 +408,11 @@ async function initialize() {
   state.context = await response.json();
   elements.title.textContent = state.context.title;
   elements.kind.textContent = state.context.type === 'video' ? '视频' : '音乐';
-  if (state.context.encryption || state.context.encrypted) {
+  if (state.context.encryption || state.context.encrypted || state.context.transport === 'S3') {
     if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
-    await window.FrontierMediaCrypto.ensureWorker();
-    state.context.stream_url = window.FrontierMediaCrypto.virtualUrl(state.context.file_path, false, state.context.encryption?.file_id);
+    const source = {...state.context, media_path: state.context.file_path};
+    await window.FrontierMediaCrypto.prepareCatalog([source]);
+    state.context.stream_url = source.url;
   }
   elements.media.src = state.context.stream_url;
   if (state.context.type === 'audio') elements.media.style.display = 'none';

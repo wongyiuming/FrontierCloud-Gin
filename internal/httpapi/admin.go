@@ -38,6 +38,7 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.POST("/crypto/session", a.cryptoSession)
 	protected.POST("/crypto/prepare", a.cryptoPrepare)
 	protected.POST("/crypto/key", a.cryptoKey)
+	protected.POST("/crypto/source", a.s3Source)
 	protected.GET("/crypto/bytes", a.cryptoBytes)
 	protected.HEAD("/crypto/bytes", a.cryptoBytes)
 	protected.POST("/key/temporary", a.temporary)
@@ -72,6 +73,7 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.GET("/media-priority", a.mediaPriorities)
 	protected.GET("/priority-order", a.priorityOrder)
 	protected.POST("/priority-order", a.movePriority)
+	a.registerS3(protected)
 	return a, nil
 }
 

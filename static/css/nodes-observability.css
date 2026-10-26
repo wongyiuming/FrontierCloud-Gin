@@ -301,3 +301,12 @@
 
 .node-pairing-details { margin-top: 12px; }
 .node-pairing-details > summary { cursor: pointer; padding: 9px 0; color: #9eb1c5; font-size: 12px; }
+.node-s3-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 0; }
+.node-s3-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; min-width: 0; }
+.node-s3-field input, .node-s3-field select { width: 100%; min-width: 0; box-sizing: border-box; }
+.node-s3-enabled, .node-s3-form .node-note { grid-column: 1 / -1; }
+.node-s3-enabled { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.node-s3-form > button { justify-self: start; }
+.node-s3-details { padding: 12px 0; }
+.node-s3-details > details { margin-top: 14px; }
+@media (max-width: 640px) { .node-s3-form { grid-template-columns: 1fr; } }

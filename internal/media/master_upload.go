@@ -22,7 +22,7 @@ type UploadTicket struct {
 	MediaID   string `json:"media_id"`
 	Path      string `json:"path"`
 	Transport string `json:"transport"`
-	MemberID  string `json:"member_id"`
+	MemberID  string `json:"member_id,omitempty"`
 	URL       string `json:"upload_url"`
 	Site      string `json:"site_type"`
 	Label     string `json:"site_label"`
@@ -58,6 +58,7 @@ func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
 	}
 	result := map[string]any{}
 	var allocated, used, reserved, available, offline, largest, physicalTotal, physicalFree int64
+	unknownPhysical := false
 	add := func(a, b int64) int64 {
 		b = max(0, b)
 		if a > math.MaxInt64-b {
@@ -76,7 +77,11 @@ func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
 		// ceiling; this read view does not grant a write reservation.
 		v.Available = 0
 		if v.Enabled != 0 && v.Writable != 0 && v.Health == "online" {
-			v.Available = min(max(0, v.Allocation-v.Used-v.Reserved), max(0, v.PhysicalFree-store.PhysicalReserve))
+			if v.Kind == "S3" && v.Transport == "S3" {
+				v.Available = max(0, v.Allocation-v.Used-v.Reserved)
+			} else {
+				v.Available = min(max(0, v.Allocation-v.Used-v.Reserved), max(0, v.PhysicalFree-store.PhysicalReserve))
+			}
 		}
 		v.OnlineWritable = v.Available
 		if v.Enabled != 0 {
@@ -86,12 +91,21 @@ func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
 		reserved = add(reserved, v.Reserved)
 		available = add(available, v.Available)
 		offline = add(offline, v.OfflineStored)
-		physicalTotal = add(physicalTotal, v.PhysicalTotal)
-		physicalFree = add(physicalFree, v.PhysicalFree)
+		if v.Kind == "S3" {
+			unknownPhysical = true
+		} else {
+			physicalTotal = add(physicalTotal, v.PhysicalTotal)
+			physicalFree = add(physicalFree, v.PhysicalFree)
+		}
 		largest = max(largest, v.Available)
 	}
 	result["allocated_bytes"], result["used_bytes"], result["reserved_bytes"], result["available_bytes"], result["online_writable_bytes"], result["offline_stored_bytes"] = allocated, used, reserved, available, available, offline
 	result["physical_total_bytes"], result["physical_free_bytes"], result["current_allocated_bytes"], result["project_used_bytes"] = physicalTotal, physicalFree, allocated, used
+	result["physical_capacity_known"] = !unknownPhysical
+	result["known_physical_total_bytes"], result["known_physical_free_bytes"] = physicalTotal, physicalFree
+	if unknownPhysical {
+		result["physical_total_bytes"], result["physical_free_bytes"] = nil, nil
+	}
 	auto := store.StorageMember{ID: "auto", Kind: "Auto", Transport: "Automatic", Enabled: 1, Health: "online", Writable: 1, Available: largest, OnlineWritable: largest, Compute: map[string]any{}, Backup: map[string]any{}}
 	result["members"] = append([]store.StorageMember{auto}, members...)
 	return result, nil
@@ -115,6 +129,9 @@ func (s *Service) ReserveMasterUpload(ctx context.Context, filename, target, rel
 func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, target, relative, site string, size int64, maxName int, a store.AdminAudit, encryption *mediacrypto.Metadata) (UploadTicket, error) {
 	if err := s.requireMaster(ctx); err != nil {
 		return UploadTicket{}, err
+	}
+	if site == "s3" && s.s3 == nil {
+		return UploadTicket{}, ErrUnavailable
 	}
 	release, err := s.acquire(ctx, true)
 	if err != nil {
@@ -145,7 +162,11 @@ func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, ta
 	if err != nil {
 		return UploadTicket{}, err
 	}
-	ticket := UploadTicket{ID: v.ID, MediaID: v.MediaID, Path: v.Path, Transport: v.Member.Transport, MemberID: v.MemberID, URL: "/api/v1/media/admin/upload/session/" + v.ID + "/bytes", Site: site, Label: map[string]string{"primary": "主站", "direct": "直连", "relay": "中继"}[site]}
+	ticket := UploadTicket{ID: v.ID, MediaID: v.MediaID, Path: v.Path, Transport: v.Member.Transport, MemberID: v.MemberID, URL: "/api/v1/media/admin/upload/session/" + v.ID + "/bytes", Site: site, Label: map[string]string{"primary": "主站", "direct": "直连", "relay": "中继", "s3": "S3 存储桶"}[site]}
+	if v.Member.Transport == "S3" {
+		ticket.MemberID = ""
+		ticket.URL = "/api/v1/media/admin/upload/s3/" + v.ID
+	}
 	if v.Member.Transport == "Direct" {
 		if s.control == nil {
 			return UploadTicket{}, ErrUnavailable
@@ -220,6 +241,9 @@ func (s *Service) UploadMasterBytes(ctx context.Context, id string, reader io.Re
 	if err != nil {
 		return UploadResult{}, err
 	}
+	if v.Member.Transport == "S3" || v.Member.Kind == "S3" {
+		return UploadResult{}, ErrBrowserSource
+	}
 	if v.State == "complete" {
 		return completedResult(v), nil
 	}
@@ -289,6 +313,9 @@ func (s *Service) FinalizeMasterUpload(ctx context.Context, id string, a store.A
 	if err != nil {
 		return UploadResult{}, err
 	}
+	if v.Member.Transport == "S3" || v.Member.Kind == "S3" {
+		return s.S3CompleteUpload(ctx, id, a)
+	}
 	if v.State == "complete" {
 		return completedResult(v), nil
 	}
@@ -316,6 +343,10 @@ func (s *Service) CancelMasterUpload(ctx context.Context, id string, a store.Adm
 	defer release()
 	v, err := s.masterUpload(ctx, id)
 	if err != nil {
+		return err
+	}
+	if v.Member.Transport == "S3" || v.Member.Kind == "S3" {
+		_, err = s.S3CancelUpload(ctx, id, a)
 		return err
 	}
 	if v.State == "complete" {

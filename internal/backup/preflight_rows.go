@@ -229,6 +229,10 @@ func checkBackupRow(table string, r map[string]any) error {
 			if (text("transport") != "Direct" && text("transport") != "Relay") || r["relationship_id"] == nil {
 				return bad
 			}
+		} else if text("member_kind") == "S3" {
+			if text("transport") != "S3" || r["relationship_id"] != nil || num("storage_enabled") != 0 || num("writable") != 0 || text("health") != "offline" || num("physical_free_bytes") != 0 {
+				return bad
+			}
 		} else {
 			return bad
 		}
@@ -270,6 +274,8 @@ func checkBackupRow(table string, r map[string]any) error {
 		if text("state") == "ready" && (num("generation") <= 0 || text("checksum") == "") {
 			return bad
 		}
+	case "s3_members", "s3_objects":
+		return checkS3BackupRow(table, r)
 	}
 	return nil
 }
@@ -307,6 +313,9 @@ func validPasswordEncoding(s string) bool {
 }
 
 func checkBackupReferences(ctx context.Context, tx *sql.Tx) error {
+	if err := checkS3BackupReferences(ctx, tx); err != nil {
+		return err
+	}
 	// Audits and completed jobs may refer to removed users/media: they are
 	// evidence, not ownership. Do not invent active relationships from any ID.
 	checks := []struct{ name, query string }{

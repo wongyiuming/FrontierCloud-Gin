@@ -60,5 +60,6 @@ func BusinessBackupTables() []string {
 		"admin_audit_log", "webrtc_observation_events", "webrtc_observation_summary",
 		"ip_security_audit_log", "ip_security_summary", "ip_security_projection",
 		"ip_auto_ban_events", "ip_permanent_whitelist", "node_audit",
+		"s3_members", "s3_objects",
 	}
 }

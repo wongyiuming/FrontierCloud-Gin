@@ -20,6 +20,10 @@ node tests/priority_conflict_smoke.mjs
 node tests/node_retirement_ui_smoke.mjs
 node tests/node_migration_ui_smoke.mjs
 node tests/admin_crypto_upload_smoke.mjs
+node tests/s3_frontend_smoke.mjs
+node tests/s3_nodes_smoke.mjs
+node tests/s3_media_worker_smoke.mjs
+FC_CRYPTO_COMPILED=1 node tests/s3_media_worker_smoke.mjs
 node tests/karaoke_encrypted_snapshot_smoke.mjs
 node tests/catalog_startup_smoke.mjs
 node tests/directory_globe_smoke.mjs

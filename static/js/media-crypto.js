@@ -10,12 +10,13 @@
     let sessionPromise = null;
     let workerPromise = null;
     const envelopes = new Map();
+    const sources = new Map();
     const faults = new Map();
     const temporaryNames = new Set();
 
     function requireCrypto() {
         if (!window.isSecureContext || !crypto.subtle || !common)
-            throw new Error('加密功能需要 HTTPS 和支持 Web Crypto 的浏览器');
+            throw new Error('媒体安全功能需要 HTTPS 和支持 Web Crypto 的浏览器');
     }
     function headers() {
         return admin && typeof requestHeaders === 'function'
@@ -85,29 +86,63 @@
             return await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
         } finally { new Uint8Array(raw).fill(0); }
     }
+    function sourceGrant(data, startedAt) {
+        const ttl = data.source_expires_in ?? data.expires_in;
+        if (!Number.isInteger(ttl) || ttl < 1 || ttl > 300 || typeof data.object_id !== 'string' || !data.object_id)
+            throw new Error('S3 读取授权无效');
+        const url = new URL(data.source_url);
+        if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.href.length > 16384)
+            throw new Error('S3 读取地址无效');
+        const signed = data.source_headers;
+        if (!signed || Array.isArray(signed) || Object.keys(signed).length !== 1
+            || typeof signed['If-Match'] !== 'string' || !/^"[^"\r\n]{1,1024}"$/.test(signed['If-Match']))
+            throw new Error('S3 读取身份约束缺失');
+        return {transport: 'S3', object_id: data.object_id, source_url: url.href, source_headers: signed,
+            source_head_url: data.source_head_url, source_head_headers: data.source_head_headers,
+            size_bytes: data.size_bytes, content_type: data.content_type, filename: data.filename,
+            expires_at: data.source_expires_at ?? data.expires_at, deadline: startedAt + ttl * 1000};
+    }
     async function fileGrant(filePath, expectedFileId = '', revalidate = false) {
-        const activeSession = await getSession();
+        const descriptor = sources.get(filePath);
         const cached = envelopes.get(filePath);
         if (!revalidate && cached && cached.deadline > common.monotonicNow() + 10000
-            && (!expectedFileId || cached.encryption.file_id === expectedFileId)) return cached;
-        const data = await jsonRequest('/key', {session_id: activeSession.session_id, file_path: filePath});
-        if (expectedFileId && data.encryption?.file_id !== expectedFileId) {
-            const error = new Error('文件已替换，请刷新目录后重新选择');
-            error.status = 409;
-            throw error;
+            && (descriptor?.transport !== 'S3' || cached.object_id === descriptor.object_id)
+            && (!expectedFileId || (cached.encryption?.file_id || cached.object_id) === expectedFileId)) return cached;
+        const startedAt = common.monotonicNow();
+        let grant;
+        if (descriptor?.transport === 'S3' && !descriptor.encryption && !descriptor.encrypted) {
+            const data = await jsonRequest('/source', {file_path: filePath, object_id: descriptor.object_id});
+            grant = sourceGrant(data, startedAt);
+            if (!Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < 1 || grant.size_bytes > 10 * 1024 ** 3
+                || grant.object_id !== descriptor.object_id || expectedFileId && grant.object_id !== expectedFileId)
+                throw new Error('文件已替换，请刷新目录后重新选择');
+        } else {
+            const activeSession = await getSession();
+            const data = await jsonRequest('/key', {session_id: activeSession.session_id, file_path: filePath,
+                ...(descriptor?.transport === 'S3' ? {object_id: descriptor.object_id} : {})});
+            if (expectedFileId && data.encryption?.file_id !== expectedFileId) {
+                const error = new Error('文件已替换，请刷新目录后重新选择'); error.status = 409; throw error;
+            }
+            const key = await unwrap(activeSession, data.encryption, data.key_envelope);
+            grant = {encryption: data.encryption, key, source_url: data.source_url || data.download_url,
+                content_type: data.content_type, filename: data.filename,
+                expires_at: data.key_envelope.expires_at, deadline: activeSession.deadline};
+            if (data.transport === 'S3') {
+                Object.assign(grant, sourceGrant(data, startedAt));
+                grant.deadline = Math.min(grant.deadline, activeSession.deadline);
+                if (descriptor?.object_id && grant.object_id !== descriptor.object_id) {
+                    const error = new Error('文件已替换，请刷新目录后重新选择'); error.status = 409; throw error;
+                }
+            }
         }
-        const key = await unwrap(activeSession, data.encryption, data.key_envelope);
-        const grant = {encryption: data.encryption, key,
-            source_url: data.source_url || data.download_url, content_type: data.content_type,
-            filename: data.filename, expires_at: data.key_envelope.expires_at, deadline: activeSession.deadline};
+        if (grant.deadline <= common.monotonicNow()) throw new Error('媒体读取授权已过期');
         if (envelopes.size >= 32) envelopes.delete(envelopes.keys().next().value);
-        envelopes.set(filePath, grant);
-        return grant;
+        envelopes.set(filePath, grant); return grant;
     }
     function workerMessage(worker, data) {
         return new Promise((resolve, reject) => {
             const channel = new MessageChannel();
-            const timeout = setTimeout(() => { channel.port1.close(); reject(new Error('加密播放初始化超时')); }, 15000);
+            const timeout = setTimeout(() => { channel.port1.close(); reject(new Error('媒体播放初始化超时')); }, 15000);
             channel.port1.onmessage = event => {
                 clearTimeout(timeout);
                 channel.port1.close();
@@ -119,7 +154,7 @@
     }
     async function ensureWorker() {
         requireCrypto();
-        if (!navigator.serviceWorker) throw new Error('此浏览器不支持加密媒体流式播放');
+        if (!navigator.serviceWorker) throw new Error('此浏览器不支持媒体流式播放');
         if (!workerPromise) workerPromise = (async () => {
             await navigator.serviceWorker.register('/media-crypto-sw.js', {scope: '/', updateViaCache: 'none'});
             await navigator.serviceWorker.ready;
@@ -127,7 +162,7 @@
                 await new Promise((resolve, reject) => {
                     const timer = setTimeout(() => {
                         navigator.serviceWorker.removeEventListener('controllerchange', changed);
-                        reject(new Error('加密媒体服务尚未就绪，请刷新页面'));
+                        reject(new Error('媒体服务尚未就绪，请刷新页面'));
                     }, 15000);
                     const changed = () => {
                         if (!navigator.serviceWorker.controller) return;
@@ -166,13 +201,15 @@
         return `/__fc_media/${token}/${encodeURIComponent(filePath)}${query.size ? '?' + query : ''}`;
     }
     async function prepareCatalog(entries) {
-        if (!entries?.some(media => media.encryption || media.encrypted)) return entries;
+        if (!entries?.some(media => media.encryption || media.encrypted || media.transport === 'S3')) return entries;
         await ensureWorker();
         for (const media of entries) {
-            if (!media.encryption && !media.encrypted) continue;
+            if (!media.encryption && !media.encrypted && media.transport !== 'S3') continue;
             const path = media.media_path || media.path;
             if (!path) throw new Error('加密媒体路径缺失');
-            media.url = virtualUrl(path, false, media.encryption?.file_id);
+            if (media.transport === 'S3' && !media.object_id) throw new Error('S3 对象身份缺失');
+            sources.set(path, {transport: media.transport, object_id: media.object_id, encryption: media.encryption, encrypted: media.encrypted});
+            media.url = virtualUrl(path, false, media.encryption?.file_id || media.object_id);
         }
         return entries;
     }
@@ -328,12 +365,28 @@
             await output.close();
             const ciphertext = await handle.getFile();
             if (ciphertext.size !== metadata.ciphertext_size) throw new Error('加密文件长度校验失败');
-            return {file: ciphertext, encryption: metadata, preparation_token: prepared.preparation_token, cleanup};
+            return {file: ciphertext, encryption: metadata, preparation_token: prepared.preparation_token, cleanup,
+                retainedName: name, retain() { temporaryNames.delete(name); }};
         } catch (error) {
             if (output) await output.abort().catch(() => {});
             await cleanup();
             throw error;
         }
+    }
+    function validRetainedName(name) {
+        if (typeof name !== 'string' || !/^[0-9]{10,16}-[a-f0-9]{32}-[a-f0-9]{32}$/.test(name))
+            throw new Error('本地密文恢复记录无效');
+        return name;
+    }
+    async function readRetainedUpload(name) {
+        const directory = await temporaryDirectory();
+        return (await directory.getFileHandle(validRetainedName(name))).getFile();
+    }
+    async function forgetRetainedUpload(name) {
+        const directory = await temporaryDirectory();
+        await directory.removeEntry(validRetainedName(name)).catch(error => {
+            if (error.name !== 'NotFoundError') throw error;
+        });
     }
     function failureFor(input) {
         try {
@@ -362,14 +415,20 @@
     }
     async function downloadPlan(items) {
         await ensureWorker();
+        for (const item of items) if (item.transport === 'S3') {
+            if (!item.object_id) throw new Error('S3 对象身份缺失');
+            sources.set(item.path, {transport: 'S3', object_id: item.object_id, encryption: item.encryption, encrypted: item.encrypted});
+        }
         const normalized = items.map(item => ({...item, file_path: item.path,
             plaintext_size: item.encryption?.plaintext_size ?? item.size ?? item.size_bytes,
-            url: item.encryption ? virtualUrl(item.path, false, item.encryption.file_id) : item.url}));
+            url: item.encryption || item.transport === 'S3' ? virtualUrl(item.path, false, item.encryption?.file_id || item.object_id) : item.url}));
         if (normalized.length === 1) {
             const anchor = document.createElement('a');
-            anchor.href = normalized[0].encryption
-                ? virtualUrl(normalized[0].path, true, normalized[0].encryption.file_id) : normalized[0].url;
-            if (!normalized[0].encryption)
+            anchor.href = normalized[0].encryption || normalized[0].transport === 'S3'
+                ? virtualUrl(normalized[0].path, true, normalized[0].encryption?.file_id || normalized[0].object_id) : normalized[0].url;
+            // Chromium's download attribute bypasses the worker fetch handler.
+            // Worker-backed attachments already supply Content-Disposition.
+            if (!normalized[0].encryption && normalized[0].transport !== 'S3')
                 anchor.download = normalized[0].filename || normalized[0].path.split('/').pop();
             anchor.click();
             return;
@@ -403,7 +462,7 @@
         }).catch(() => {});
     });
     window.FrontierMediaCrypto = {prepareCatalog, ensureWorker, encryptFile, encryptUploadFile, textFor,
-        encryptRecordingLyrics, decryptRecordingLyrics,
+        encryptRecordingLyrics, decryptRecordingLyrics, readRetainedUpload, forgetRetainedUpload,
         virtualUrl, failureFor, resetFault, downloadPlan, parseLyrics: common?.parseLyrics, crcUpdate};
     void cleanAbandonedTemporaryFiles().catch(() => {});
 })();

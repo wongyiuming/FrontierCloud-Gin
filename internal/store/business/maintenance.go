@@ -46,6 +46,11 @@ func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceS
 		{"migration_scopes", "SELECT COUNT(*) FROM migration_scopes"},
 		{"migration_storage", "SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')"},
 		{"migration_binding_orphans", "SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL"},
+		{"s3_uploads", "SELECT COUNT(*) FROM s3_uploads WHERE state NOT IN ('published','aborted') OR create_uncertain<>0"},
+		{"s3_part_orphans", "SELECT COUNT(*) FROM s3_upload_parts p LEFT JOIN s3_uploads u ON u.upload_id=p.upload_id WHERE u.upload_id IS NULL"},
+		{"s3_probes", "SELECT COUNT(*) FROM s3_probe_journal WHERE state<>'settled'"},
+		{"s3_objects", "SELECT COUNT(*) FROM s3_objects WHERE state NOT IN ('active','deleted')"},
+		{"s3_cleanup_bindings", "SELECT COUNT(*) FROM s3_members WHERE cleanup_only<>0"},
 	} {
 		var count int64
 		if err := tx.QueryRowContext(ctx, check.query).Scan(&count); err != nil {

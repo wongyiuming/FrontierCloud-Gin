@@ -11,6 +11,8 @@ import (
 
 type KaraokeMedia struct {
 	Kind, ID, Path, Type string
+	Transport, ObjectID  string
+	SizeBytes            int64
 	HasLyrics            bool
 }
 
@@ -37,13 +39,15 @@ func (s *Service) ResolveKaraoke(ctx context.Context, token string) (KaraokeMedi
 	if e = s.ready(); e != nil {
 		return KaraokeMedia{}, e
 	}
-	var name, typ string
+	var name, typ, transport, objectID string
+	var size int64
 	if kind == "global" {
 		row, _, e := s.resolveGlobal(ctx, id, "")
 		if e != nil {
 			return KaraokeMedia{}, e
 		}
 		name, typ = row.Path, row.Kind
+		transport, objectID, size = row.Transport, row.ObjectID, row.Bytes
 	} else {
 		row, e := s.repository.ObjectByID(ctx, id)
 		if e != nil {
@@ -57,11 +61,16 @@ func (s *Service) ResolveKaraoke(ctx context.Context, token string) (KaraokeMedi
 			return KaraokeMedia{}, os.ErrNotExist
 		}
 		name, typ = row.Path, row.Kind
+		info, e := s.safeInfo(name)
+		if e != nil {
+			return KaraokeMedia{}, e
+		}
+		transport, objectID, size = "Local", row.ID, info.Size()
 	}
 	if typ != "audio" && typ != "video" {
 		return KaraokeMedia{}, os.ErrNotExist
 	}
-	result := KaraokeMedia{Kind: kind, ID: id, Path: name, Type: typ}
+	result := KaraokeMedia{Kind: kind, ID: id, Path: name, Type: typ, Transport: transport, ObjectID: objectID, SizeBytes: size}
 	if typ == "audio" {
 		linked, e := s.repository.LyricPath(ctx, id)
 		if e != nil {

@@ -40,7 +40,16 @@ func (s *Service) DeleteGlobal(ctx context.Context, paths []string, a store.Admi
 	}
 	// No filesystem lock is held while a remote node is contacted. SQL owns
 	// the durable path/role fence, so every pending row continues to block reuse.
+	prepareRelease, err := s.acquire(ctx, false)
+	if err != nil {
+		return result, err
+	}
+	if err = s.ready(); err != nil {
+		prepareRelease()
+		return result, err
+	}
 	rows, err := s.pool.PrepareGlobalDelete(ctx, items, a)
+	prepareRelease()
 	if err != nil {
 		return result, err
 	}
@@ -65,6 +74,16 @@ func (s *Service) retryGlobalDelete(ctx context.Context, v store.GlobalMedia, a 
 	}
 	if row.Role != "Master" {
 		return store.ErrNodeState
+	}
+	if v.Transport == "S3" {
+		release, err := s.acquireS3(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		err = s.s3.Delete(ctx, v.ID, a)
+		s.invalidateCatalog()
+		return err
 	}
 	if v.MemberID == row.ID {
 		return s.deleteMasterLocal(ctx, v, a)

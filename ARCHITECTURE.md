@@ -22,11 +22,11 @@ storage nodes own only the resource state required to serve their assigned data 
 
 ## 3. Storage model
 
-The Master exposes one logical storage pool containing Master Local plus enabled storage nodes.
+The Master exposes one logical storage pool containing Master Local, enabled storage nodes, and optional Master-owned S3 adapters.
 
 - One logical media path identifies one complete media object.
 - One complete object belongs to exactly one storage member at a time.
-- Placement is transparent to playback/download: Local, Direct, and Relay are transport choices, not different business objects.
+- Placement is transparent to playback/download: Local, Direct, Relay, and S3 are transport choices, not different business objects.
 - Storage allocation is FrontierCloud logical capacity. Physical disk capacity is observed separately.
 - Admin Storage wording is intentionally split into `physical used / all` and `used / allocated`; do not conflate filesystem free space with FrontierCloud quota.
 
@@ -34,17 +34,53 @@ The Master exposes one logical storage pool containing Master Local plus enabled
 
 Admin media upload chooses a **site type**, never a concrete storage member. The selector starts empty and media upload does not begin until a type is explicitly selected.
 
-The only supported site types are:
+The supported site types are:
 
 - `primary` — the Master Local placement (`member_kind=MasterLocal`, transport `Local`);
 - `direct` — storage node placements whose current transport is `Direct`;
-- `relay` — storage node placements whose current transport is `Relay`.
+- `relay` — storage node placements whose current transport is `Relay`;
+- `s3` — optional private object-store placements (`member_kind=S3`, transport `S3`), configured only by the Master.
 
 For Direct and Relay uploads, the user must not name a specific member. The first live object/reservation in an immediate parent folder selects an eligible member by lowest `(used + reserved) / allocated` pressure, then more available bytes. Subsequent direct children bind to that same owner; a child folder is a separate affinity unit. An offline, non-writable or full bound owner causes refusal, never silent spill to another member. Historical split-owner folders fail closed. Member selection plus durable reservation is serialized by the storage write lock so concurrent Admin sessions see current `reserved_bytes`.
 
 Historical media requires **no migration** for this feature. Existing `storage_member_id`, `member_kind`, and `transport` remain the source of truth; Admin derives the visible site type from those fields. A missing transport in a local/Standalone media tree is treated as primary/local. Changing this presentation must not rewrite historical ownership.
 
-Site-type colors in Admin are observation aids only: local/primary uses a muted green marker, Direct a muted amber marker, and Relay a muted red marker. They must remain low-saturation badges rather than full-row alert colors.
+S3 participates in the same immediate-parent affinity, serialized reservation,
+logical allocation and browser encryption rules. It is an adapter rather than a
+native node: it has no pairing identity, relationship credential, heartbeat,
+filesystem capacity observation, Compute or business-Backup capability. Unknown
+provider capacity and traffic must remain explicitly unknown. S3 managed media
+is restricted to music/video; native recording, migration and retirement jobs
+must reject it rather than falling through to local files or peer RPC.
+
+The Master seals explicit S3 credentials in its existing private vault and owns
+the catalog, immutable provider keys, upload intent and object version/ETag
+proofs. Ordinary media bytes, including plaintext when explicitly selected,
+travel directly between browser and provider. Short-lived signed URLs and their
+required headers are bearer authority: do not log or persist them, drop their
+signed If-Match headers, relay ordinary media through the Master, or obtain
+credentials from an ambient cloud/host identity. A folder rename changes only
+the managed logical path; it never renames provider keys.
+
+Provider writes require durable intent before network mutation. Timeout, an
+empty multipart list or elapsed time alone is not proof that an uncertain
+Create failed. Pending cancellation/deletion retains quota and path fences
+until exact owned upload/object absence is established and issued grants have
+settled. Bound each object to at most 10 GiB, 8 MiB parts, two unconfirmed grants,
+a 30-minute idle and 24-hour absolute upload deadline, and at most five-minute
+bearers. Do not claim a multipart ETag/composite checksum is a complete-file
+SHA256 or treat provider SSE as browser encryption.
+
+Changing location is forbidden while data or unresolved intent remains. A
+same-location credential handoff must disable admission, settle old grants,
+clean unresolved uploads, and pass a fresh capability probe before resuming.
+It must preserve existing object IDs, keys, versions, ETags, ownership and quota.
+Business v2 backups export only stable S3 object/location metadata with secrets
+removed and restored members disabled; unresolved intents/grants block that
+snapshot. Full state recovery retains the private vault with the database.
+See the [S3 adapter contract](docs/s3-storage.md).
+
+Site-type colors in Admin are observation aids only: local/primary uses a muted green marker, Direct a muted amber marker, Relay a muted red marker, and S3 a muted blue marker. They must remain low-saturation badges rather than full-row alert colors.
 
 Compute Worker is **retired**. Worker slots, leased compute scheduling, worker UI, or product-level Compute configuration must not be reintroduced accidentally through compatibility code.
 

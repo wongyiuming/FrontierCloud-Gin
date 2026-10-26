@@ -22,6 +22,8 @@ func (a *Admin) mutationAudit(c *gin.Context, action string, paths []string) sto
 
 func mediaAdminError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, media.ErrBrowserSource):
+		browserSourceRequired(c)
 	case errors.Is(err, store.ErrPriorityStale):
 		detail(c, 409, "排序已被修改，请刷新后重试")
 	case errors.Is(err, store.ErrPriorityRange):

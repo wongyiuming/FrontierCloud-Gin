@@ -19,7 +19,8 @@ import (
 )
 
 // Admission is exact: same-generation preparation or the retained generation
-// 4/5/6 to generation-7 additive migrations. This never performs reverse DDL.
+// 4/5/6 chain and generation-7 to generation-8 additive migration. This never
+// performs reverse DDL or infers compatibility with an unknown future schema.
 func prepareReleaseCommand(arguments []string) error {
 	flags := flag.NewFlagSet("prepare-release", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -95,7 +96,17 @@ func prepareReleaseCommand(arguments []string) error {
 }
 
 func supportedReleaseSource(generation int) bool {
-	return generation == migrations.Generation || migrations.Generation == 7 && (generation == 4 || generation == 5 || generation == 6)
+	if generation == migrations.Generation {
+		return true
+	}
+	switch migrations.Generation {
+	case 7:
+		return generation == 4 || generation == 5 || generation == 6
+	case 8:
+		return generation == 4 || generation == 5 || generation == 6 || generation == 7
+	default:
+		return false
+	}
 }
 
 // Prior generations have no knowledge of future tables. Read the exact source
@@ -112,7 +123,7 @@ func inspectReleaseSource(ctx context.Context, db store.Store, expected int) err
 		}
 		return nil
 	}
-	if migrations.Generation != 7 || !supportedReleaseSource(expected) {
+	if (migrations.Generation != 7 && migrations.Generation != 8) || !supportedReleaseSource(expected) {
 		return errors.New("unsupported schema transition")
 	}
 	provider, ok := db.(interface{ Database() *sql.DB })

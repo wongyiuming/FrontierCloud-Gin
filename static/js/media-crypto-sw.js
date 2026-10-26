@@ -98,7 +98,7 @@ async function requestGrant(token, filePath, expectedFileId = '', fallbackClient
     const client = await self.clients.get(capability?.clientId || fallbackClientId);
     if (!client) {
         capabilities.delete(token);
-        const error = new Error('解密会话已失效，请刷新播放页面');
+        const error = new Error('媒体会话已失效，请刷新播放页面');
         error.status = 403;
         throw error;
     }
@@ -106,7 +106,7 @@ async function requestGrant(token, filePath, expectedFileId = '', fallbackClient
         const channel = new MessageChannel();
         const timer = setTimeout(() => {
             channel.port1.close();
-            reject(new Error('浏览器解密授权超时'));
+            reject(new Error('浏览器媒体授权超时'));
         }, 20000);
         channel.port1.onmessage = event => {
             clearTimeout(timer);
@@ -134,8 +134,12 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
     const pendingIdentity = identity + (revalidate ? ':revalidate' : '');
     if (pendingGrants.has(pendingIdentity)) return pendingGrants.get(pendingIdentity);
     const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId, revalidate).then(grant => {
-        common.validate(grant.encryption);
-        if (!(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
+        if (grant.encryption) common.validate(grant.encryption);
+        else if (grant.transport !== 'S3' || !Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < 1 || grant.size_bytes > 10 * 1024 ** 3
+            || typeof grant.object_id !== 'string' || !grant.object_id || expectedFileId && grant.object_id !== expectedFileId)
+            throw new Error('媒体对象描述无效');
+        if (grant.transport === 'S3') validateS3Source(grant);
+        if (grant.encryption && !(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
             || grant.deadline <= common.monotonicNow() || grant.deadline > common.monotonicNow() + 900000) {
             const error = new Error('解密授权已失效');
             error.status = 403;
@@ -176,9 +180,15 @@ async function readChunk(grant, index, signal, revalidate) {
     }
     if (!ciphertext) {
         const response = await fetch(grant.source_url, {
-            headers: {Range: `bytes=${expected.start}-${expected.end}`},
-            credentials: 'same-origin', cache: 'no-store', signal,
+            headers: {...(grant.source_headers || {}), Range: `bytes=${expected.start}-${expected.end}`},
+            credentials: grant.transport === 'S3' ? 'omit' : 'same-origin',
+            ...(grant.transport === 'S3' ? {mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer'} : {}),
+            cache: 'no-store', signal,
         });
+        if (grant.transport === 'S3' && response.headers.get('ETag') !== grant.source_headers['If-Match']) {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('S3 对象身份校验失败'); error.status = 422; throw error;
+        }
         const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
         const exactRange = response.status === 206 && contentRange
             && Number(contentRange[1]) === expected.start && Number(contentRange[2]) === expected.end
@@ -207,8 +217,90 @@ async function readChunk(grant, index, signal, revalidate) {
     }
 }
 
+function validateS3Source(grant) {
+    const url = new URL(grant.source_url);
+    const headers = grant.source_headers;
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.href.length > 16384
+        || !headers || Array.isArray(headers) || Object.keys(headers).length !== 1
+        || typeof headers['If-Match'] !== 'string' || !/^"[^"\r\n]{1,1024}"$/.test(headers['If-Match'])
+        || grant.deadline > common.monotonicNow() + 300000) throw new Error('S3 读取授权无效');
+}
+async function s3Range(grant, start, end, signal, head = false) {
+    validateS3Source(grant);
+    const target = head ? grant.source_head_url : grant.source_url;
+    const signed = head ? grant.source_head_headers : grant.source_headers;
+    if (head) {
+        const url = new URL(target);
+        if (url.protocol !== 'https:' || url.username || url.password || url.hash
+            || url.href.length > 16384 || !signed || Array.isArray(signed)
+            || Object.entries(signed).some(([name, value]) => name !== 'If-Match'
+                && !(name === 'X-Amz-Checksum-Mode' && value === 'ENABLED'))
+            || signed['If-Match'] !== grant.source_headers['If-Match'])
+            throw new Error('S3 HEAD 授权无效');
+    }
+    const response = await fetch(target, {method: head ? 'HEAD' : 'GET',
+        headers: {...signed, ...(!head ? {Range: `bytes=${start}-${end}`} : {})},
+        credentials: 'omit', mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store', signal});
+    const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
+    const exact = head ? response.status === 200 && Number(response.headers.get('Content-Length')) === grant.size_bytes
+        : response.status === 206 && range && Number(range[1]) === start && Number(range[2]) === end && Number(range[3]) === grant.size_bytes
+        || response.status === 200 && start === 0 && end + 1 === grant.size_bytes;
+    if (!exact || response.headers.get('ETag') !== grant.source_headers['If-Match']
+        || !head && Number(response.headers.get('Content-Length')) !== end - start + 1) {
+        await response.body?.cancel().catch(() => {});
+        const error = new Error('S3 未返回已授权的对象与范围'); error.status = response.status === 403 ? 403 : 422; throw error;
+    }
+    return response;
+}
+async function serveS3(request, grant, token, filePath, download, expectedFileId, fallbackClientId) {
+    const size = grant.size_bytes, selected = common.range(request.headers.get('Range'), size);
+    if (!selected) return new Response(null, {status: 416, headers: {'Content-Range': `bytes */${size}`, 'Cache-Control': 'no-store'}});
+    const headers = new Headers({'Content-Type': grant.content_type || 'application/octet-stream',
+        'Content-Length': String(selected.end - selected.start + 1), 'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ETag: grant.source_headers['If-Match']});
+    if (selected.partial) headers.set('Content-Range', `bytes ${selected.start}-${selected.end}/${size}`);
+    if (download) headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(grant.filename || filePath.split('/').pop())}`);
+    if (request.method === 'HEAD') {
+        await s3Range(grant, 0, 0, request.signal, true);
+        return new Response(null, {status: selected.partial ? 206 : 200, headers});
+    }
+    let offset = selected.start;
+    const controller = new AbortController();
+    request.signal.addEventListener('abort', () => controller.abort(), {once: true});
+    if (request.signal.aborted) controller.abort();
+    const identity = grant.object_id, etag = grant.source_headers['If-Match'];
+    const stream = new ReadableStream({
+        async pull(output) {
+            try {
+                if (offset > selected.end) { output.close(); return; }
+                if (grant.deadline <= common.monotonicNow() + 10000) {
+                    const fresh = await getGrant(token, filePath, expectedFileId, fallbackClientId);
+                    if (fresh.encryption || fresh.object_id !== identity || fresh.source_headers?.['If-Match'] !== etag || fresh.size_bytes !== size)
+                        throw new Error('S3 对象已变化，请重新选择');
+                    Object.assign(grant, fresh);
+                }
+                const end = Math.min(selected.end, offset + common.CHUNK_SIZE - 1);
+                const response = await s3Range(grant, offset, end, controller.signal);
+                const bytes = await common.boundedBytes(response, end - offset + 1);
+                output.enqueue(bytes); offset = end + 1;
+                if (offset > selected.end) output.close();
+            } catch (error) {
+                const cancelled = request.signal.aborted || error.name === 'AbortError';
+                controller.abort();
+                if (!cancelled) {
+                    const client = await self.clients.get(capabilities.get(token)?.clientId || '');
+                    client?.postMessage({type: 'fc-crypto-fault', token, file_path: filePath, error: 'S3 媒体授权或对象校验失败，请重新选择'});
+                }
+                output.error(error);
+            }
+        }, cancel() { controller.abort(); },
+    }, {highWaterMark: 0});
+    return new Response(stream, {status: selected.partial ? 206 : 200, headers});
+}
+
 async function servePlaintext(request, token, filePath, download, expectedFileId = '', fallbackClientId = '') {
     const grant = await getGrant(token, filePath, expectedFileId, fallbackClientId);
+    if (!grant.encryption) return serveS3(request, grant, token, filePath, download, expectedFileId, fallbackClientId);
     const size = grant.encryption.plaintext_size;
     const selected = common.range(request.headers.get('Range'), size);
     if (!selected) return new Response(null, {status: 416,
@@ -269,7 +361,7 @@ self.addEventListener('fetch', event => {
         if (!['GET', 'HEAD'].includes(event.request.method)) return new Response(null, {status: 405});
         const parts = url.pathname.slice(PREFIX.length).split('/');
         const token = parts.shift();
-        if (!/^[a-f0-9]{32}$/.test(token || '')) return new Response('解密会话已失效', {status: 403});
+        if (!/^[a-f0-9]{32}$/.test(token || '')) return new Response('媒体会话已失效', {status: 403});
         try {
             const filePath = decodeURIComponent(parts.join('/'));
             return await servePlaintext(event.request, token, filePath, url.searchParams.has('download'),
@@ -319,9 +411,9 @@ async function* archive(plan, signal) {
         local.view.setBigUint64(extra + 12, BigInt(item.plaintext_size), true);
         yield local.bytes;
         offset += local.bytes.length;
-        const response = item.encryption
+        const response = item.encryption || item.transport === 'S3'
             ? await servePlaintext(new Request(new URL(item.url, self.location.origin), {signal}),
-                plan.token, item.file_path, false, item.encryption.file_id)
+                plan.token, item.file_path, false, item.encryption?.file_id || item.object_id)
             : await fetch(item.url, {credentials: 'same-origin', cache: 'no-store', signal});
         if (!response.ok || !response.body) throw new Error('下载文件读取失败');
         const reader = response.body.getReader();

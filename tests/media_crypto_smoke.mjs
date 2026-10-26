@@ -45,7 +45,7 @@ const opfs = {
     async *entries() { for (const entry of temporary) yield entry; },
     async removeEntry(name) { temporary.delete(name); },
     async getFileHandle(name) {
-        temporary.set(name, []);
+        if (!temporary.has(name)) temporary.set(name, []);
         return {
             async createWritable() {
                 return {
@@ -194,6 +194,13 @@ for (const [name, header] of [
     await validUpload.cleanup();
 }
 const bytes = Uint8Array.from({length: 2 * 1048576 + 97}, (_, index) => index % 251);
+const retained = await page.FrontierMediaCrypto.encryptFile(inputFile(new Uint8Array([1, 2, 3]), 'retained.mp3'));
+retained.retain();
+assert.equal((await page.FrontierMediaCrypto.readRetainedUpload(retained.retainedName)).size, retained.file.size);
+assert.equal(retained.key, undefined, 'retained ciphertext descriptor contains no file key');
+await assert.rejects(page.FrontierMediaCrypto.readRetainedUpload('../unrelated'), /恢复记录/);
+await page.FrontierMediaCrypto.forgetRetainedUpload(retained.retainedName);
+assert.equal(temporary.size, 0, 'explicit cleanup removes only the retained ciphertext file');
 const first = await prepare(bytes, 'music/a.mp3', 'https://direct.example/cipher/a');
 const secondBytes = new TextEncoder().encode('second encrypted resource');
 const second = await prepare(secondBytes, 'music/b.mp3', 'https://cloud.example/relay/b');
@@ -567,6 +574,11 @@ await page.FrontierMediaCrypto.downloadPlan([{path: 'music/b.mp3', encryption: s
 assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
     'single encrypted attachment also reaches the worker through navigation');
 assert.match(downloadAnchors.at(-1).href, /[?&]download=1/);
+await page.FrontierMediaCrypto.downloadPlan([{path: 'music/s3-plain.mp3', transport: 'S3', object_id: 'immutable-object'}]);
+assert(!Object.hasOwn(downloadAnchors.at(-1), 'download'),
+    'S3 plaintext attachments must navigate through the worker; Chromium download attribute bypasses its fetch handler');
+assert.match(downloadAnchors.at(-1).href, /[?&]download=1/);
+assert.match(downloadAnchors.at(-1).href, /[?&]object=immutable-object/);
 await page.FrontierMediaCrypto.downloadPlan([{path: 'lyrics/plain.lrc', url: '/plain-lyric', filename: 'plain.lrc'}]);
 assert.equal(downloadAnchors.at(-1).download, 'plain.lrc', 'normal backend downloads retain their filename attribute');
 

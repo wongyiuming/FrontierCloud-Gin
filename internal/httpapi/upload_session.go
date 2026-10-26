@@ -30,8 +30,11 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 	if !decodeAdmin(c, &body) {
 		return
 	}
-	if (body.Site != "primary" && body.Site != "direct" && body.Site != "relay") || utf8.RuneCountInString(body.Target) > 1024 || utf8.RuneCountInString(body.Relative) > 1024 || body.Filename == "" || utf8.RuneCountInString(body.Filename) > 255 || body.Bytes <= 0 {
+	if (body.Site != "primary" && body.Site != "direct" && body.Site != "relay" && body.Site != "s3") || utf8.RuneCountInString(body.Target) > 1024 || utf8.RuneCountInString(body.Relative) > 1024 || body.Filename == "" || utf8.RuneCountInString(body.Filename) > 255 || body.Bytes <= 0 {
 		invalid(c, "body", "upload")
+		return
+	}
+	if body.Site == "s3" && !nodeHTTPS(c, a.settings, a.network) {
 		return
 	}
 	encoded := ""
@@ -54,8 +57,16 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 		detail(c, 413, "文件超过单文件上传限制")
 		return
 	}
+	if body.Site == "s3" && body.Bytes > 10*1024*1024*1024 {
+		detail(c, 413, "S3 单个对象最多允许 10 GiB")
+		return
+	}
 	result, err := a.public.media.ReserveMasterEncryptedUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, body.Site, body.Bytes, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, "upload-reserved", []string{body.Filename}), meta)
 	if err != nil {
+		if body.Site == "s3" {
+			s3HTTPError(c, err)
+			return
+		}
 		uploadError(c, err)
 		return
 	}

@@ -130,6 +130,7 @@ func (p *Public) registerMediaCrypto(router *gin.Engine) error {
 	group := router.Group("/api/v1/media/crypto")
 	group.POST("/session", p.cryptoSession)
 	group.POST("/key", p.cryptoKey)
+	group.POST("/source", p.s3Source)
 	group.POST("/revoke", p.cryptoRevoke)
 	group.GET("/bytes", p.cryptoLyricBytes)
 	group.HEAD("/bytes", p.cryptoLyricBytes)
@@ -288,6 +289,7 @@ type cryptoKeyBody struct {
 	SessionID  string `json:"session_id"`
 	FilePath   string `json:"file_path"`
 	ResourceID string `json:"resource_id"`
+	ObjectID   string `json:"object_id"`
 }
 
 func (p *Public) cryptoKey(c *gin.Context) {
@@ -321,7 +323,7 @@ func (p *Public) cryptoKeyFor(c *gin.Context, binding string, body cryptoKeyBody
 	if !p.cryptoAvailable(c) {
 		return
 	}
-	if len(body.FilePath) > 4096 || len(body.ResourceID) > 128 || body.FilePath == "" && body.ResourceID == "" {
+	if len(body.FilePath) > 4096 || len(body.ResourceID) > 128 || len(body.ObjectID) > 128 || body.FilePath == "" && body.ResourceID == "" {
 		invalid(c, "body", "file_path")
 		return
 	}
@@ -337,6 +339,21 @@ func (p *Public) cryptoKeyFor(c *gin.Context, binding string, body cryptoKeyBody
 	envelope, err := p.crypto.Wrap(binding, body.SessionID, *object.Encryption)
 	if err != nil {
 		cryptoError(c, err)
+		return
+	}
+	read, err := p.media.ReadSource(c.Request.Context(), object.Path, body.ObjectID, admin)
+	if err != nil {
+		s3HTTPError(c, err)
+		return
+	}
+	if read.ObjectID != "" {
+		response, ok := s3SourceJSON(c, object.Path, read)
+		if !ok {
+			return
+		}
+		response["encryption"], response["key_envelope"] = object.Encryption, envelope
+		response["source_expires_in"], response["source_expires_at"] = response["expires_in"], response["expires_at"]
+		c.JSON(200, response)
 		return
 	}
 	query := url.Values{"file_path": {object.Path}}

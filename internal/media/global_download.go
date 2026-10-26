@@ -49,6 +49,9 @@ func (d *Download) StreamRemoteSingle(writer io.Writer) error {
 }
 
 func (d *Download) globalSource(row store.GlobalMedia) (io.ReadCloser, error) {
+	if row.Transport == "S3" {
+		return nil, ErrBrowserSource
+	}
 	if err := d.ctx.Err(); err != nil {
 		return nil, err
 	}

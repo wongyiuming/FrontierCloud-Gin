@@ -419,3 +419,46 @@ func TestUpgradeGeneration6RecoveryPointIsNotRelabelledAsTargetGeneration7(t *te
 		t.Fatal("forward DDL was never invoked")
 	}
 }
+
+func TestUpgradeGeneration7RecoveryPointIsNotRelabelledAsTargetGeneration8(t *testing.T) {
+	if migrations.Generation != 8 {
+		t.Skip("explicit generation-8 transition")
+	}
+	d, r, runner, _ := upgradeFixture(t)
+	runner.generation = 7
+	for key, proof := range r.Images {
+		proof.Generation = 7
+		r.Images[key] = proof
+	}
+	if e := replaceJSON(filepath.Join(d.Directory, ReceiptFile), r); e != nil {
+		t.Fatal(e)
+	}
+	p, e := d.PlanUpgrade(context.Background(), r, strings.Repeat("b", 40), "amd64", fakeEvidence{true}, upgradeImages{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if p.FromGeneration != 7 || p.Generation != 8 {
+		t.Fatal(p)
+	}
+	output := filepath.Join(d.Directory, "generation-7-recovery.tar")
+	state, e := d.ApplyUpgrade(context.Background(), r, p, p.SHA256, p.NodeID, output, false, fakeEvidence{true}, upgradeImages{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	runtimeSnapshot, e := recovery.Check(context.Background(), output, state.BackupSHA)
+	if e != nil || runtimeSnapshot.Manifest.SchemaGeneration != 7 || state.Phase != "prepared_fenced" {
+		t.Fatal(runtimeSnapshot.Manifest.SchemaGeneration, state.Phase, e)
+	}
+	confirmed := false
+	for _, call := range runner.calls {
+		if strings.Contains(call, "prepare-release") {
+			if !strings.Contains(call, "--from-generation 7") || !strings.Contains(call, "--confirm-generation 8") || !strings.Contains(call, "--confirm-node-id "+p.NodeID) || !strings.Contains(call, "--backup-sha256 "+state.BackupSHA) {
+				t.Fatal("schema migration omitted exact source/recovery confirmation", call)
+			}
+			confirmed = true
+		}
+	}
+	if !confirmed {
+		t.Fatal("forward DDL was never invoked")
+	}
+}

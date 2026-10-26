@@ -96,7 +96,7 @@ func (r *Repository) PendingGlobalDeletes(ctx context.Context, limit int) ([]sto
 	if limit < 1 || limit > 500 {
 		limit = 50
 	}
-	rows, err := r.db.QueryContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.state='pending_delete' ORDER BY g.updated_at,g.media_id LIMIT ?", limit)
+	rows, err := r.db.QueryContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.state='pending_delete' AND s.transport<>'S3' ORDER BY g.updated_at,g.media_id LIMIT ?", limit)
 	if err != nil {
 		return nil, err
 	}
@@ -179,12 +179,19 @@ func (r *Repository) CompleteGlobalDelete(ctx context.Context, id string, a stor
 	})
 }
 func (r *Repository) completeGlobalDelete(ctx context.Context, q queryer, id string, a store.AdminAudit) error {
+	return r.completeGlobalDeleteProof(ctx, q, id, a, false)
+}
+
+func (r *Repository) completeGlobalDeleteProof(ctx context.Context, q queryer, id string, a store.AdminAudit, s3Proof bool) error {
 	v, err := scanGlobal(q.QueryRowContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.media_id=?"+r.lock(), id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if (v.Transport == "S3") != s3Proof {
+		return nodeConflict("S3 deletion requires exact provider absence proof")
 	}
 	if v.State != "pending_delete" {
 		return nodeConflict("global deletion was not prepared")

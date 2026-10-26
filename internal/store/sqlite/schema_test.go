@@ -115,8 +115,8 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 	if err := store.database.QueryRow("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 49 {
-		t.Fatalf("got %d tables, want 49", count)
+	if count != 54 {
+		t.Fatalf("got %d tables, want 54", count)
 	}
 	if _, err := store.database.Exec("DROP TABLE frontiercloud_schema_migrations"); err != nil {
 		t.Fatal(err)

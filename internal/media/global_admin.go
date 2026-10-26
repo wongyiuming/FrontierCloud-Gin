@@ -13,7 +13,7 @@ import (
 
 func globalTreeItem(row store.GlobalMedia, h map[string]bool) TreeItem {
 	size := row.Bytes
-	item := TreeItem{Name: path.Base(row.Path), Path: row.Path, Kind: "file", Size: &size, Hidden: hidden(row.Path, h), HiddenDirect: h[row.Path], Media: true, MediaID: row.ID, MemberID: row.MemberID, Transport: row.Transport, NodeHealth: row.Health}
+	item := TreeItem{Name: path.Base(row.Path), Path: row.Path, Kind: "file", Size: &size, SizeBytes: &size, Hidden: hidden(row.Path, h), HiddenDirect: h[row.Path], Media: true, MediaID: row.ID, ObjectID: row.ObjectID, MemberID: row.MemberID, Transport: row.Transport, NodeHealth: row.Health}
 	return item
 }
 func (s *Service) globalScan(ctx context.Context, scope string, h map[string]bool) ([]TreeItem, error) {

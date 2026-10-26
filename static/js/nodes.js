@@ -112,7 +112,120 @@
         let observability = {members: [], relationships: []};
         try { observability = await api('/api/v1/media/admin/nodes/observability'); }
         catch (error) { console.warn('node observability unavailable', error); }
-        return {node, observability};
+        const s3 = node.role === 'Master' ? await api('/api/v1/media/admin/nodes/s3') : {members: []};
+        return {node, observability, s3: Array.isArray(s3) ? s3 : (s3.members || s3.items || [])};
+    }
+
+    function s3Request(path, method, body) {
+        return api('/api/v1/media/admin/nodes/s3' + path, {
+            method, headers: requestHeaders(), body: JSON.stringify(body),
+        });
+    }
+
+    function s3Form(member = null, recovery = false) {
+        const form = make('form', 'node-s3-form');
+        const fields = {};
+        const field = (name, label, type = 'text', value = '', required = false) => {
+            const wrapper = make('label', 'node-s3-field', label);
+            const input = make('input'); input.type = type; input.value = value;
+            input.required = required; input.autocomplete = 'off';
+            input.setAttribute('aria-label', label);
+            fields[name] = input; wrapper.append(input); form.append(wrapper);
+            return input;
+        };
+        if (!recovery) {
+            field('name', '显示名称', 'text', member?.name || '', true).maxLength = 100;
+            field('endpoint', 'HTTPS 服务地址', 'url', member?.location?.endpoint || '', true);
+            field('bucket', '存储桶', 'text', member?.location?.bucket || '', true);
+            field('region', '区域', 'text', member?.location?.region || '', true);
+            field('prefix', '对象前缀', 'text', member?.location?.prefix || '');
+            const styleLabel = make('label', 'node-s3-field', '寻址方式');
+            const style = make('select'); fields.style = style;
+            for (const [value, label] of [['auto', '自动'], ['path', '路径'], ['virtual', '虚拟主机']]) {
+                const option = make('option', '', label); option.value = value; style.append(option);
+            }
+            style.value = member?.location?.style || 'auto'; styleLabel.append(style); form.append(styleLabel);
+            const capacity = field('capacity', '分配配额（GiB）', 'number', String((member?.allocated_bytes || 1073741824) / 1073741824), true);
+            capacity.min = '1'; capacity.max = '10240'; capacity.step = '0.01';
+            const enabledLabel = make('label', 'node-s3-enabled');
+            const enabled = make('input'); enabled.type = 'checkbox'; enabled.checked = Boolean(member?.storage_enabled);
+            fields.enabled = enabled; enabledLabel.append(enabled, document.createTextNode('允许新上传（需先通过检查）')); form.append(enabledLabel);
+        }
+        field('access_key', member && !recovery ? 'Access Key（留空保留）' : 'Access Key', 'password', '', !member || recovery);
+        field('secret_key', member && !recovery ? 'Secret Key（留空保留）' : 'Secret Key', 'password', '', !member || recovery);
+        field('session_token', '临时会话令牌（可选）', 'password');
+        field('expires_at', '临时凭据到期时间（可选）', 'datetime-local');
+        form.append(make('p', 'node-note', recovery
+            ? '此凭据只用于清理未决对象，不恢复新写入。密钥不会显示或回填。'
+            : '密钥仅提交时发送，不会显示或回填。容量是项目配额；供应商物理容量与外部流量未知。'));
+        const submit = make('button', 'apply', recovery ? '提交清理凭据' : member ? '保存 S3 配置' : '添加 S3 存储');
+        submit.type = 'submit'; form.append(submit);
+        form.onsubmit = event => {
+            event.preventDefault();
+            const credentialsPresent = Boolean(fields.access_key.value || fields.secret_key.value || fields.session_token.value || fields.expires_at.value);
+            if (credentialsPresent && (!fields.access_key.value || !fields.secret_key.value)) {
+                setStatus('请完整填写 Access Key 和 Secret Key'); return;
+            }
+            const credentials = credentialsPresent ? {access_key: fields.access_key.value, secret_key: fields.secret_key.value,
+                session_token: fields.session_token.value, expires_at: fields.expires_at.value ? Math.floor(new Date(fields.expires_at.value).getTime() / 1000) : 0} : null;
+            if (credentials && !Number.isSafeInteger(credentials.expires_at)) {
+                setStatus('凭据到期时间无效'); return;
+            }
+            const payload = recovery ? {revision: member.revision, credentials} : {
+                ...(member ? {revision: member.revision} : {}), name: fields.name.value.trim(),
+                location: {endpoint: fields.endpoint.value.trim(), bucket: fields.bucket.value.trim(), region: fields.region.value.trim(), prefix: fields.prefix.value.trim(), style: fields.style.value},
+                allocated_bytes: Math.round(Number(fields.capacity.value) * 1073741824), enabled: fields.enabled.checked,
+                ...(credentials ? {credentials} : {}),
+            };
+            submit.disabled = true;
+            // Clear the live password inputs immediately. API responses never populate them.
+            for (const name of ['access_key', 'secret_key', 'session_token']) fields[name].value = '';
+            action(async () => {
+                await s3Request(member ? `/${encodeURIComponent(member.member_id)}${recovery ? '/recovery-credentials' : ''}` : '', recovery ? 'POST' : member ? 'PATCH' : 'POST', payload);
+                return recovery ? '清理凭据已提交；未决状态将持续保留至核验完成' : 'S3 配置已保存；新配置需通过连通性检查后启用';
+            }).finally(() => { submit.disabled = false; });
+        };
+        return form;
+    }
+
+    function s3Card(member) {
+        const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
+        const card = make('article', 'node-card'), header = make('header', 'node-card-header');
+        const title = make('div', 'node-card-title');
+        title.append(make('strong', '', member.name || member.location?.bucket || 'S3 存储'), make('small', '', member.location?.endpoint || '地址不可用'));
+        const badges = make('div', 'node-card-badges');
+        const state = member.cleanup_only ? '仅清理' : member.probe_state === 'ready' ? '检查通过' : member.probe_state === 'running' ? '检查中' : '待检查';
+        badges.append(pill('S3', 'muted'), pill(member.storage_enabled ? '已启用' : '未启用', member.storage_enabled ? 'good' : 'muted'), pill(state, member.cleanup_only ? 'warn' : 'muted'));
+        header.append(title, badges);
+        collapsibleNodeCard(card, header, member.member_id,
+            `已使用 / 已分配 ${gib(member.used_bytes)} / ${gib(member.allocated_bytes)} · 预留 ${gib(member.reserved_bytes)} · 物理容量未知`, () => {
+                const details = make('div', 'node-s3-details');
+                details.append(kv([['存储桶', member.location?.bucket || '-'], ['对象前缀', member.location?.prefix || '/'], ['外部流量', '未知'], ['凭据到期', member.credential_expires_at ? localTime(member.credential_expires_at) : '长期凭据'], ['状态', member.error_code || state]]));
+                const actions = make('div', 'node-card-actions');
+                actions.append(button('检查连接与读写', async () => {
+                    const result = await s3Request(`/${encodeURIComponent(member.member_id)}/test`, 'POST', {revision: member.revision});
+                    return result.cleanup_uncertain ? '检查结果包含未决清理，请保留配置并等待核验' : '连通性检查已完成，请查看最新状态';
+                }, 'apply'), button('移除配置', async () => {
+                    if (!window.confirm('仅在没有对象、上传和未决清理时移除此 S3 配置？')) return '已保留配置';
+                    await s3Request(`/${encodeURIComponent(member.member_id)}`, 'DELETE', {revision: member.revision});
+                    return 'S3 配置已移除';
+                }, 'danger'));
+                details.append(actions);
+                const configure = make('details'); configure.append(make('summary', '', '配置与凭据'), s3Form(member)); details.append(configure);
+                const recovery = make('details'); recovery.append(make('summary', '', '未决清理凭据'), s3Form(member, true)); details.append(recovery);
+                return [details];
+            });
+        cell.append(card); row.append(cell); return row;
+    }
+
+    function s3Creation(master) {
+        let section = $('nodeS3Creation');
+        if (!section) {
+            section = make('details', 'node-pairing-details'); section.id = 'nodeS3Creation';
+            section.append(make('summary', '', '添加 S3 存储'), s3Form());
+            panel.querySelector('.nodes-table-scroll').after(section);
+        }
+        section.hidden = !master;
     }
 
     function ensureOverview() {
@@ -262,7 +375,7 @@
         const config = configBox(member);
         const actions = make('div', 'node-card-actions');
         const mode = document.createElement('select');
-        mode.setAttribute('aria-label', `${member.member_id} 数据传输模式`);
+        mode.setAttribute('aria-label', `${relation.peer_endpoint || '存储节点'} 数据传输模式`);
         mode.title = 'Relay 由 Master 中转业务数据；Direct 允许数据面直接访问 存储节点。';
         for (const value of ['Relay', 'Direct']) { const option = document.createElement('option'); option.value = value; option.textContent = value; mode.append(option); }
         mode.value = relation.mode;
@@ -313,7 +426,7 @@
         const card = make('article', 'node-card');
         const header = make('header', 'node-card-header');
         const title = make('div', 'node-card-title');
-        title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : member.member_id), make('small', '', relation?.peer_endpoint || '本机资源'));
+        title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : relation?.peer_endpoint || '存储节点'), make('small', '', member.member_kind === 'MasterLocal' ? '本机资源' : member.transport || relation?.mode || 'Storage'));
         const badges = make('div', 'node-card-badges');
         badges.append(pill(member.member_kind === 'MasterLocal' ? 'LOCAL' : String(relation?.status || 'UNKNOWN').toUpperCase(), member.member_kind === 'MasterLocal' ? 'info' : relation?.status === 'online' ? 'good' : 'bad'), pill(member.transport || relation?.mode || 'Local', 'muted'));
         header.append(title, badges);
@@ -495,22 +608,23 @@
         return '已下载此节点的证书及私钥 PEM 文件';
     }
 
-    function renderRows(node, observed) {
+    function renderRows(node, observed, s3) {
         const body = $('nodeRelationships'); body.replaceChildren();
         const localCertificate = node.certificate ? {local: true, relationship_id: node.node_id, summary: {certificate: node.certificate}} : null;
         const relations = new Map((node.relationships || []).map(item => [item.peer_id, item]));
         const observedMembers = new Map((observed.members || []).map(item => [item.member_id, item]));
         if (node.storage_pool) {
             for (const member of node.storage_pool.members || []) {
-                if (member.member_id === 'auto' || member.member_kind === 'Auto') continue;
+                if (member.member_id === 'auto' || member.member_kind === 'Auto' || member.member_kind === 'S3') continue;
                 body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id), localCertificate));
             }
 
         }
+        for (const member of s3) body.append(s3Card(member));
         if (localCertificate && !(node.storage_pool?.members || []).some(member => member.member_kind === 'MasterLocal')) {
             const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
             const card = make('article', 'node-card');
-            const header = make('header', 'node-card-header'); header.append(make('strong', '', `${node.role} · ${node.node_id}`));
+            const header = make('header', 'node-card-header'); header.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`));
             collapsibleNodeCard(card, header, node.node_id, '本机证书', () => {
                 const grid = make('div', 'node-card-grid'); grid.append(certificatePanel(localCertificate)); return [grid];
             });
@@ -521,8 +635,8 @@
 
     async function refresh() {
         const current = refreshQueue.then(async () => {
-            const {node, observability} = await loadData();
-            $('nodeIdentity').textContent = `${node.role} · ${node.node_id} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
+            const {node, observability, s3} = await loadData();
+            $('nodeIdentity').textContent = `${node.role} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
             visible('nodePromotion', node.role === 'Standalone'); visible('nodePairing', node.role !== 'Standalone');
             visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
             $('nodePairPackage').readOnly = false;
@@ -530,14 +644,17 @@
             renderOverview(node, observability);
             const pool = node.storage_pool;
             $('storagePoolSummary').textContent = pool ? `Storage Pool · ${storageText(pool)}` : `${node.role} · 资源策略由 Master 管理`;
-            renderRows(node, observability);
+            renderRows(node, observability, s3);
+            s3Creation(node.role === 'Master');
         });
         refreshQueue = current.catch(() => {}); return current;
     }
 
     function startAutoRefresh() {
         if (refreshTimer) return;
-        refreshTimer = setInterval(() => { if (panel.classList.contains('expanded')) refresh().catch(error => setStatus(error.message)); }, 10000);
+        refreshTimer = setInterval(() => {
+            if (panel.classList.contains('expanded') && !panel.contains(document.activeElement)) refresh().catch(error => setStatus(error.message));
+        }, 10000);
     }
     function stopAutoRefresh() { if (refreshTimer) clearInterval(refreshTimer); refreshTimer = null; }
 

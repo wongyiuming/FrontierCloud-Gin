@@ -80,3 +80,12 @@
     background: rgba(139, 69, 62, .13);
     border-color: rgba(181, 105, 97, .34);
 }
+
+.media-site-badge.site-s3 {
+    color: #a99abf;
+    background: rgba(108, 88, 139, .13);
+    border-color: rgba(151, 131, 181, .34);
+}
+.s3-resume-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; font-size: 13px; }
+.s3-resume-row > span { flex: 1 1 230px; overflow-wrap: anywhere; color: #b5c0c9; }
+.s3-resume-row > button { font-size: 12px; }

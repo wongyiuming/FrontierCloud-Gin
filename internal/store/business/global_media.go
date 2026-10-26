@@ -112,6 +112,9 @@ func (r *Repository) Upload(ctx context.Context, id string) (v store.UploadReser
 	return
 }
 func memberSite(v store.StorageMember) string {
+	if v.Kind == "S3" && v.Transport == "S3" {
+		return "s3"
+	}
 	if v.Kind == "MasterLocal" {
 		return "primary"
 	}
@@ -126,6 +129,9 @@ func memberSite(v store.StorageMember) string {
 func capacity(v store.StorageMember) int64 {
 	if v.Enabled == 0 || v.Writable == 0 || v.Health != "online" || v.Draining {
 		return 0
+	}
+	if v.Kind == "S3" && v.Transport == "S3" {
+		return max(0, v.Allocation-v.Used-v.Reserved)
 	}
 	// Reserved transfers are not yet reflected in physical free space. Account
 	// for them here as well, so a large logical allocation cannot oversubscribe
@@ -144,7 +150,7 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 	if strings.HasPrefix(name, "vido/") {
 		kind = "video"
 	}
-	if !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: name, Kind: kind}, Bytes: size}) || size <= 0 || size > 10*store.GiB || (site != "primary" && site != "direct" && site != "relay") || localPhysicalFree < 0 {
+	if !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: name, Kind: kind}, Bytes: size}) || size <= 0 || size > 10*store.GiB || (site != "primary" && site != "direct" && site != "relay" && site != "s3") || localPhysicalFree < 0 {
 		return result, nodeConflict("invalid upload reservation")
 	}
 	id, err := randomID()
@@ -233,6 +239,16 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 		}
 		candidates := []store.StorageMember{}
 		for _, v := range members {
+			if v.Kind == "S3" {
+				current, err := r.s3Member(ctx, q, v.ID, r.lock())
+				if err != nil {
+					return err
+				}
+				if current.CleanupOnly || current.ProbeRevision != current.Revision || current.ProbeState != "ready" ||
+					current.SealedCredentials == "" || current.CredentialExpiresAt != 0 && current.CredentialExpiresAt <= now {
+					v.Writable = 0
+				}
+			}
 			draining, err := r.migrationDraining(ctx, q, v.ID)
 			if err != nil {
 				return err
@@ -294,6 +310,11 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 			return err
 		}
 		result.Encryption = encryption
+		if site == "s3" {
+			if err = r.reserveS3(ctx, q, result); err != nil {
+				return err
+			}
+		}
 		detail, _ := json.Marshal(map[string]any{"upload_id": id, "media_id": mediaID, "member_id": member.ID, "site_type": site, "expected_bytes": size})
 		a.Action = "upload-reserved"
 		a.Detail = string(detail)
@@ -308,7 +329,7 @@ func (r *Repository) FinalizeUpload(ctx context.Context, id, objectID string, ac
 		return result, nodeConflict("invalid upload completion")
 	}
 	err = r.write(ctx, func(q queryer) error {
-		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, false, &result)
+		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, false, false, &result)
 	})
 	return
 }
@@ -332,12 +353,12 @@ func (r *Repository) FinalizeRecoveredUpload(ctx context.Context, id, objectID s
 		if v.State != "reserved" || v.ExpiresAt > time.Now().Unix() {
 			return nodeConflict("recovery requires an expired upload")
 		}
-		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, true, &result)
+		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, true, false, &result)
 	})
 	return
 }
 
-func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID string, actualSize int64, etag string, a store.AdminAudit, physicalProof bool, result *store.GlobalMedia) error {
+func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID string, actualSize int64, etag string, a store.AdminAudit, physicalProof, s3Proof bool, result *store.GlobalMedia) error {
 	node, err := readNode(ctx, q, r.lock())
 	if err != nil {
 		return err
@@ -355,6 +376,13 @@ func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID
 	if v.MediaID != objectID || v.ExpectedBytes != actualSize {
 		return nodeConflict("uploaded object identity or size does not match its reservation")
 	}
+	member, err := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), v.MemberID))
+	if err != nil {
+		return err
+	}
+	if (member.Kind == "S3" || member.Transport == "S3") != s3Proof {
+		return nodeConflict("S3 uploads require the exact provider completion proof")
+	}
 	if v.State == "complete" {
 		*result, err = scanGlobal(q.QueryRowContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.media_id=?", v.MediaID))
 		if err != nil {
@@ -367,10 +395,6 @@ func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID
 	}
 	if v.State != "reserved" || !physicalProof && v.ExpiresAt <= time.Now().Unix() {
 		return nodeConflict("upload reservation missing or expired")
-	}
-	member, err := scanMember(q.QueryRowContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members WHERE member_id=?"+r.lock(), v.MemberID))
-	if err != nil {
-		return err
 	}
 	if member.Reserved < v.ExpectedBytes || member.Allocation-member.Used < actualSize {
 		return nodeConflict("upload capacity reservation is inconsistent")
@@ -435,6 +459,9 @@ func (r *Repository) ReleaseCleanedUpload(ctx context.Context, id string, a stor
 		if member.Reserved < v.ExpectedBytes {
 			return nodeConflict("upload capacity reservation is inconsistent")
 		}
+		if member.Kind == "S3" || member.Transport == "S3" {
+			return nodeConflict("S3 reservations require exact provider abort reconciliation")
+		}
 		if _, err = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE member_id=?", v.ExpectedBytes, time.Now().Unix(), v.MemberID); err != nil {
 			return err
 		}
@@ -454,7 +481,7 @@ func (r *Repository) ExpiredUploads(ctx context.Context, limit int) ([]store.Upl
 	if limit < 1 || limit > 500 {
 		limit = 50
 	}
-	rows, err := r.db.QueryContext(ctx, "SELECT "+uploadColumns+" FROM cluster_upload_sessions WHERE state='reserved' AND expires_at<=? ORDER BY updated_at,upload_id LIMIT ?", time.Now().Unix(), limit)
+	rows, err := r.db.QueryContext(ctx, "SELECT "+uploadColumns+" FROM cluster_upload_sessions WHERE state='reserved' AND expires_at<=? AND storage_member_id NOT IN (SELECT member_id FROM s3_members) ORDER BY updated_at,upload_id LIMIT ?", time.Now().Unix(), limit)
 	if err != nil {
 		return nil, err
 	}

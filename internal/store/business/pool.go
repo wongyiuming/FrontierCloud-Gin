@@ -84,6 +84,9 @@ func (r *Repository) registerFollower(ctx context.Context, q queryer, v store.Re
 	} else if err != nil {
 		return err
 	}
+	if current.Kind == "S3" {
+		return nodeConflict("a native relationship cannot replace S3 storage")
+	}
 	var mediaUsed, recordingUsed int64
 	if err = q.QueryRowContext(ctx, "SELECT COALESCE(SUM(size_bytes),0) FROM global_media_objects WHERE storage_member_id=? AND state IN ('active','pending_delete','renaming')", v.PeerID).Scan(&mediaUsed); err != nil {
 		return err
@@ -276,6 +279,9 @@ func (r *Repository) ConfigureMember(ctx context.Context, id string, c store.Res
 		if err != nil {
 			return err
 		}
+		if member.Kind == "S3" {
+			return nodeConflict("S3 configuration uses its revision-bound adapter")
+		}
 		if id == node.ID {
 			if !c.Storage.Enabled || c.Backup.Enabled {
 				return nodeConflict("Master Local storage is mandatory and cannot be a backup target")
@@ -327,6 +333,13 @@ func (r *Repository) ConfigureMember(ctx context.Context, id string, c store.Res
 	})
 }
 func (r *Repository) MemberConfiguration(ctx context.Context, id string) (c store.ResourceConfiguration, err error) {
+	var kind string
+	if err = r.db.QueryRowContext(ctx, "SELECT member_kind FROM cluster_storage_members WHERE member_id=?", id).Scan(&kind); err != nil {
+		return
+	}
+	if kind == "S3" {
+		return c, nodeConflict("S3 storage has no native worker or backup configuration")
+	}
 	var enabled, backup int
 	err = r.db.QueryRowContext(ctx, "SELECT s.storage_enabled,s.allocated_bytes,COALESCE(b.enabled,0) FROM cluster_storage_members s LEFT JOIN cluster_backup_members b ON b.member_id=s.member_id WHERE s.member_id=?", id).Scan(&enabled, &c.Storage.Allocation, &backup)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -471,6 +484,14 @@ func (r *Repository) Members(ctx context.Context) ([]store.StorageMember, error)
 	}
 	for i := range result {
 		v := &result[i]
+		if v.Kind == "S3" {
+			member, err := r.s3Member(ctx, r.db, v.ID, "")
+			if err != nil {
+				return nil, err
+			}
+			*v = member.StorageMember
+			continue
+		}
 		v.Draining, err = r.migrationDraining(ctx, r.db, v.ID)
 		if err != nil {
 			return nil, err

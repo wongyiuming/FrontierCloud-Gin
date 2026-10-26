@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 func TestPreparedParameterlessRetryReachesConsentWithoutDockerOrReleaseNetwork(t *testing.T) {
@@ -35,7 +36,7 @@ func TestPreparedParameterlessRetryReachesConsentWithoutDockerOrReleaseNetwork(t
 			}
 			target := strings.Repeat("b", 40)
 			write(operator.ReceiptFile, operator.Receipt{Version: 1, Role: "master", Database: "sqlite", Project: "fixture", Revision: target, State: "upgrade_fenced", Files: []string{"docker-compose.yaml"}})
-			plan := operator.UpgradePlan{Version: 1, Target: target, Generation: 7, RecoveryScope: "upgrade-state"}
+			plan := operator.UpgradePlan{Version: 1, Target: target, Generation: migrations.Generation, RecoveryScope: "upgrade-state"}
 			raw, err := json.Marshal(plan)
 			if err != nil {
 				t.Fatal(err)

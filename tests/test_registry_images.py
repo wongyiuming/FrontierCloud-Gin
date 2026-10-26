@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 import urllib.error
 
-from scripts.registry_images import ImageUnavailable, ManifestUnknown, SOURCE, fetch, publication_plan, publication_probe, resolve, ensure
+from scripts.registry_images import ImageUnavailable, ManifestUnknown, SOURCE, SCHEMA_GENERATION, fetch, publication_plan, publication_probe, resolve, ensure
 
 SHA = 'a' * 40
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +22,7 @@ def response(value, digest=None):
 def publication_fixture(component='web', configuration=None):
     config = configuration or {'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': {
         'frontiercloud.revision': SHA, 'frontiercloud.component': component,
-        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': '7',
+        'frontiercloud.runtime': 'go', 'frontiercloud.schema-generation': SCHEMA_GENERATION,
         'frontiercloud.release-manifest-version': '1', 'org.opencontainers.image.source': SOURCE,
         'org.opencontainers.image.revision': SHA}}}
     raw = json.dumps(config).encode()

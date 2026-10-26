@@ -16,7 +16,8 @@ require exact-source proof. Bootstrap history alone is not release proof.
 - Bounded catalog caching with SQL-commit and managed-file mutation invalidation.
 - Synchronized/fullscreen lyrics, explicit lyric relations, and non-destructive same-name auto-link.
 - Karaoke entry from media playback, guest preview, account recordings, and storage quota.
-- Master/storage storage placement using Local, Direct, or Relay transport.
+- Master/storage storage placement using Local, Direct, or Relay transport, plus
+  optional [private S3 storage](docs/s3-storage.md) with direct browser transfers.
 - Transactional upload, visibility, priority, same-parent folder rename, and recovery-aware deletion.
 - [Browser media encryption](docs/browser-media-encryption.md), explicit per-selection
   storage modes, session-scoped key envelopes and authenticated streaming decryption.
