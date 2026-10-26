@@ -142,6 +142,12 @@ Resume retains only small upload metadata and plaintext block hashes. Encrypted
 resume may retain ciphertext in browser OPFS, without the file key. Selecting a
 different file, expired authorization or a provider error must not silently
 restart as plaintext or attach different bytes to the existing upload.
+Browser resume uses localStorage and the native Web Locks API to serialize each
+record change across tabs. Each update rereads the latest shared records;
+completion or cancellation in one tab cannot discard another tab's task.
+Missing browser storage/locking support or a failed write stops admission and
+preserves existing records and retained ciphertext. Encrypted uploads also
+require browser OPFS support.
 
 ## Credential changes and backups
 

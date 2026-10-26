@@ -87,16 +87,19 @@
         } finally { new Uint8Array(raw).fill(0); }
     }
     function sourceGrant(data, startedAt) {
+        const invalid = message => Object.assign(new Error(message), {status: 403});
         const ttl = data.source_expires_in ?? data.expires_in;
         if (!Number.isInteger(ttl) || ttl < 1 || ttl > 300 || typeof data.object_id !== 'string' || !data.object_id)
-            throw new Error('S3 读取授权无效');
-        const url = new URL(data.source_url);
+            throw invalid('S3 读取授权无效');
+        let url;
+        try { url = new URL(data.source_url); }
+        catch (_) { throw invalid('S3 读取地址无效'); }
         if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.href.length > 16384)
-            throw new Error('S3 读取地址无效');
+            throw invalid('S3 读取地址无效');
         const signed = data.source_headers;
         if (!signed || Array.isArray(signed) || Object.keys(signed).length !== 1
             || typeof signed['If-Match'] !== 'string' || !/^"[^"\r\n]{1,1024}"$/.test(signed['If-Match']))
-            throw new Error('S3 读取身份约束缺失');
+            throw invalid('S3 读取身份约束缺失');
         return {transport: 'S3', object_id: data.object_id, source_url: url.href, source_headers: signed,
             source_head_url: data.source_head_url, source_head_headers: data.source_head_headers,
             size_bytes: data.size_bytes, content_type: data.content_type, filename: data.filename,
@@ -114,8 +117,9 @@
             const data = await jsonRequest('/source', {file_path: filePath, object_id: descriptor.object_id});
             grant = sourceGrant(data, startedAt);
             if (!Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < 1 || grant.size_bytes > 10 * 1024 ** 3
-                || grant.object_id !== descriptor.object_id || expectedFileId && grant.object_id !== expectedFileId)
-                throw new Error('文件已替换，请刷新目录后重新选择');
+                || grant.object_id !== descriptor.object_id || expectedFileId && grant.object_id !== expectedFileId) {
+                const error = new Error('文件已替换，请刷新目录后重新选择'); error.status = 409; throw error;
+            }
         } else {
             const activeSession = await getSession();
             const data = await jsonRequest('/key', {session_id: activeSession.session_id, file_path: filePath,

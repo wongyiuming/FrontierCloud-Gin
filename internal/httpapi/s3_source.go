@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -19,6 +20,70 @@ import (
 type s3SourceBody struct {
 	FilePath string `json:"file_path"`
 	ObjectID string `json:"object_id"`
+}
+
+const s3SourceGrantWindow = time.Minute
+const s3SourceCookieGrants = 256
+const s3SourceIPGrants = 1024
+const s3SourceGlobalGrants = 4096
+const s3SourceAdmissionEntries = 8192
+
+type s3SourceWindow struct {
+	count int
+	until time.Time
+}
+
+// Source grants cover album metadata probes, playback and grant renewal. They
+// have their own browser, real-client IP and process budgets; none consumes the
+// much smaller ECDH creation allowance. Every counter and its expiry is bounded.
+type s3SourceAdmission struct {
+	mu      sync.Mutex
+	windows map[string]s3SourceWindow
+	now     func() time.Time
+}
+
+func (a *s3SourceAdmission) allow(ip, binding string) bool {
+	if ip == "" || binding == "" {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	now := time.Now()
+	if a.now != nil {
+		now = a.now()
+	}
+	if a.windows == nil {
+		a.windows = make(map[string]s3SourceWindow)
+	}
+	for key, window := range a.windows {
+		if !window.until.After(now) {
+			delete(a.windows, key)
+		}
+	}
+	keys := [3]string{"global", "ip:" + ip, "cookie:" + binding}
+	limits := [3]int{s3SourceGlobalGrants, s3SourceIPGrants, s3SourceCookieGrants}
+	needed := 0
+	for i, key := range keys {
+		window, exists := a.windows[key]
+		if exists && window.count >= limits[i] {
+			return false
+		}
+		if !exists {
+			needed++
+		}
+	}
+	if len(a.windows)+needed > s3SourceAdmissionEntries {
+		return false
+	}
+	for _, key := range keys {
+		window, exists := a.windows[key]
+		if !exists {
+			window.until = now.Add(s3SourceGrantWindow)
+		}
+		window.count++
+		a.windows[key] = window
+	}
+	return true
 }
 
 func decodeS3Source(c *gin.Context, body *s3SourceBody) bool {

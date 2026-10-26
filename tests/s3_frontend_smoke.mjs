@@ -95,4 +95,64 @@ reset(); badHeaders = true;
 await assert.rejects(context.uploadS3Parts({upload_id: 'u1'}, file, () => {}), /请求头/);
 assert.equal(transfers.length, 0);
 assert(!source.includes('/session/${encodeURIComponent(reservation.upload_id)}/s3'));
+
+// Independent tabs share durable records, never one tab's in-memory snapshot.
+const shared = new Map();
+let storageDenied = false, tail = Promise.resolve();
+const storage = {
+    getItem: key => shared.get(key) ?? null,
+    setItem(key, value) { if (storageDenied) throw new Error('quota'); shared.set(key, value); },
+};
+const locks = {request(_name, callback) {
+    const result = tail.then(callback); tail = result.catch(() => {}); return result;
+}};
+const tabs = [];
+function tab() {
+    const listeners = new Map(), cleaned = [];
+    const value = {console, URL, AbortController, Uint8Array, Blob, crypto: webcrypto,
+        window: {localStorage: storage, navigator: {locks},
+            addEventListener(name, callback) { listeners.set(name, callback); },
+            FrontierMediaCrypto: {async forgetRetainedUpload(name) { cleaned.push(name); }}},
+        document: {getElementById() { return null; }}, $() { return null; },
+        uploadInterrupted: false, uploadRunning: false,
+    };
+    vm.createContext(value); vm.runInContext(uploader, value);
+    value.listeners = listeners; value.cleaned = cleaned; tabs.push(value); return value;
+}
+const task = id => ({id, name: `${id}.mp3`, originalSize: 1, hashes: [checksums[0]], cipherName: `123-${id}`});
+async function put(value, entry) {
+    value.entry = structuredClone(entry);
+    return vm.runInContext('s3Tasks.set(entry.id, entry); saveS3Tasks({put: entry})', value);
+}
+const key = 'frontiercloud-s3-upload-resume-v1';
+const stored = () => JSON.parse(storage.getItem(key) || '[]');
+const a = tab(), b = tab();
+await Promise.all([put(a, task('a')), put(b, task('b'))]);
+assert.deepEqual(stored().map(value => value.id).sort(), ['a', 'b'], 'one tab must not erase another tab recovery record');
+await vm.runInContext("saveS3Tasks({cancel: 'a'})", a);
+await put(b, task('c'));
+assert.equal(stored().find(value => value.id === 'a').cancel_requested, true, 'stale tabs preserve cancellation');
+await vm.runInContext("forgetS3Task('a')", a);
+await vm.runInContext("saveS3Tasks({cancel: 'a'})", b);
+assert.deepEqual(stored().map(value => value.id).sort(), ['b', 'c'], 'stale mutations never resurrect a removed task');
+assert.deepEqual(a.cleaned, ['123-a']);
+const reloaded = tab();
+assert.equal(vm.runInContext('s3Tasks.size', reloaded), 2, 'reload preserves both remaining recovery records');
+storageDenied = true;
+await assert.rejects(vm.runInContext("forgetS3Task('b')", a), /保存恢复/);
+assert(stored().some(value => value.id === 'b'));
+assert(!a.cleaned.includes('123-b'), 'failed persistence must retain resumable ciphertext');
+storageDenied = false;
+for (const id of ['d', 'e', 'f', 'g', 'h', 'i']) await put(a, task(id));
+await assert.rejects(put(b, task('j')), /8 个/, 'the limit is checked against the current shared records');
+assert.equal(stored().length, 8);
+b.listeners.get('storage')?.({key, storageArea: storage});
+assert.equal(vm.runInContext('s3Tasks.size', b), 8, 'storage changes refresh other tabs');
+const noLock = tab(); noLock.window.navigator.locks = undefined;
+await assert.rejects(put(noLock, task('k')), /锁/, 'unsupported synchronization fails before erasing records');
+assert.equal(stored().length, 8);
+const corrupt = storage.getItem(key); storage.setItem(key, '{broken');
+await assert.rejects(vm.runInContext("saveS3Tasks({cancel: 'b'})", a), /恢复信息/);
+assert.equal(storage.getItem(key), '{broken', 'invalid shared metadata is never overwritten by a stale tab');
+storage.setItem(key, corrupt);
 console.log('s3-frontend-smoke-ok (bounded two-part upload, durable resume, failure retention, no credential relay)');

@@ -9,8 +9,9 @@ const source = name => fs.readFileSync(`${directory}/${name}`, 'utf8');
 const payload = new Uint8Array(2 * 1024 * 1024 + 19); payload.fill(81);
 const etag = '"opaque-provider-etag"';
 let elapsed = 0, pageMessage, worker, tamper = false, wrongObject = false;
-let providerPayload = payload, grantOverride = null;
+let providerPayload = payload, grantOverride = null, sourceOverride = null;
 let holdTransfer = false, faultCount = 0;
+let readFailure = null;
 let backendCalls = [], providerCalls = [], maxRead = 0;
 const events = new Map();
 const client = {id: 'tab', postMessage(data, ports) {
@@ -47,8 +48,25 @@ worker = {...shared, CryptoKey: key.constructor, location: new URL('https://mast
         const range = /^bytes=(\d+)-(\d+)$/.exec(init.headers.Range); assert(range);
         const start = Number(range[1]), end = Number(range[2]); maxRead = Math.max(maxRead, end - start + 1);
         assert(end - start + 1 <= 1024 * 1024 + (grantOverride ? 16 : 0), 'source is fetched in bounded chunks');
-        return new Response(providerPayload.slice(start, end + 1), {status: 206, headers: {
-            'Content-Range': `bytes ${start}-${end}/${providerPayload.length}`, 'Content-Length': String(end - start + 1),
+        let body = providerPayload.slice(start, end + 1), contentRange = `bytes ${start}-${end}/${providerPayload.length}`;
+        if (readFailure?.start === start) {
+            const failure = readFailure; readFailure = null;
+            if (failure.kind === 'fetch') throw new TypeError('temporary S3 fetch interruption');
+            if (failure.kind === 'replace') { elapsed += 31000; wrongObject = true; }
+            if (failure.kind === 'status') return new Response(null, {status: failure.status});
+            if (failure.kind === 'range') contentRange = `bytes ${start + 1}-${end + 1}/${providerPayload.length}`;
+            if (failure.kind === 'oversize') body = new Uint8Array(body.length + 1);
+            if (failure.kind === 'body') {
+                let partial = false;
+                body = new ReadableStream({pull(output) {
+                    if (!partial) { partial = true; output.enqueue(new Uint8Array([81])); }
+                    else output.error(new TypeError('temporary S3 body interruption'));
+                }}, {highWaterMark: 0});
+            }
+            if (failure.kind === 'short') body = body.subarray(0, body.length - 1);
+        }
+        return new Response(body, {status: 206, headers: {
+            'Content-Range': contentRange, 'Content-Length': String(end - start + 1),
             ETag: tamper ? '"replaced"' : etag,
         }});
     },
@@ -68,7 +86,7 @@ const page = {...shared, isSecureContext: true, location: new URL('https://maste
             source_url: 'https://objects.example/get?signed=get', source_headers: {'If-Match': etag},
             source_head_url: 'https://objects.example/head?signed=head',
             source_head_headers: {'If-Match': etag, 'X-Amz-Checksum-Mode': 'ENABLED'},
-            expires_in: 30, expires_at: 1700000030});
+            expires_in: 30, expires_at: 1700000030, ...sourceOverride});
     },
 };
 page.window = page; vm.createContext(page);
@@ -106,13 +124,82 @@ const abort = new AbortController(); response = await read({signal: abort.signal
 const cancelled = response.arrayBuffer(); setTimeout(() => abort.abort(), 5);
 await assert.rejects(cancelled, /cancelled/); holdTransfer = false;
 assert.equal(faultCount, beforeCancel, 'ordinary seek/navigation cancellation is not an integrity fault');
+for (const failure of [{kind: 'fetch'}, {kind: 'body'}, {kind: 'short'}, {kind: 'status', status: 503},
+    {kind: 'status', status: 429}]) {
+    const before = faultCount;
+    readFailure = {...failure, start: 0}; response = await read();
+    await assert.rejects(response.arrayBuffer());
+    assert.equal(faultCount, before, `${failure.kind}/${failure.status || ''} must not poison playback`);
+    assert(!page.FrontierMediaCrypto.failureFor(catalog[0].url), 'a transient read remains eligible for the existing retry guard');
+    response = await read({headers: {Range: 'bytes=0-'}});
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), payload);
+}
+// Exercise the shipped continuous-player retry wrapper against the actual worker,
+// including a failure after one complete chunk has already reached the player.
+const grantFetch = page.fetch;
+const mediaRequests = [];
+page.fetch = async (input, init = {}) => {
+    if (!new URL(String(input), page.location).pathname.startsWith('/__fc_media/')) return grantFetch(input, init);
+    mediaRequests.push(new Headers(init.headers).get('Range'));
+    return read(init);
+};
+page.PLAYER_KIND = 'audio'; page.playerSwitchSequence = 1;
+vm.runInContext(fs.readFileSync('static/js/player-directory-label.js', 'utf8'), page);
+for (const kind of ['fetch', 'body']) {
+    const before = faultCount, beforeRequests = mediaRequests.length;
+    const previousResumes = page.frontierCloudContinuousFetchRetry.status().resume_count;
+    const beforeProvider = providerCalls.length;
+    readFailure = {kind, start: 1048576};
+    response = await page.fetch(catalog[0].url, {credentials: 'same-origin'});
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), payload,
+        `${kind} interruption must recover without duplicated or omitted bytes`);
+    assert.equal(faultCount, before);
+    assert.deepEqual(mediaRequests.slice(beforeRequests), [null, 'bytes=1048576-'],
+        'retry starts at the exact bytes already delivered to the player');
+    assert.equal(providerCalls.slice(beforeProvider).filter(row => row.init.headers.Range === 'bytes=1048576-2097151').length, 2,
+        'the incomplete worker chunk is retried from its start without advancing the player offset');
+    assert.equal(page.frontierCloudContinuousFetchRetry.status().resume_count, previousResumes + 1);
+}
+page.fetch = grantFetch;
+for (const failure of [{kind: 'status', status: 401}, {kind: 'status', status: 403},
+    {kind: 'status', status: 404}, {kind: 'status', status: 412}, {kind: 'status', status: 416},
+    {kind: 'range'}, {kind: 'oversize'}]) {
+    const before = faultCount;
+    readFailure = {...failure, start: 0}; response = await read();
+    await assert.rejects(response.arrayBuffer());
+    assert.equal(faultCount, before + 1, `${failure.kind}/${failure.status || ''} must remain a terminal authorization/integrity fault`);
+    assert(page.FrontierMediaCrypto.failureFor(catalog[0].url), 'the player retry guard retains verified faults');
+    page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
+}
 tamper = true;
 response = await read({headers: {Range: 'bytes=0-1'}});
 await assert.rejects(response.arrayBuffer(), /对象|授权/);
+assert(page.FrontierMediaCrypto.failureFor(catalog[0].url), 'verified ETag replacement stays terminal');
+page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
 assert(!JSON.stringify(backendCalls).includes('signed='), 'bearer URLs never pass through business authorization requests');
-tamper = false; wrongObject = true; elapsed += 31000;
+tamper = false;
+readFailure = {kind: 'replace', start: 0}; response = await read();
+await assert.rejects(response.arrayBuffer(), /替换/);
+assert(page.FrontierMediaCrypto.failureFor(catalog[0].url), 'verified replacement during source refresh stays terminal');
+page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
 response = await read({headers: {Range: 'bytes=0-1'}});
-assert.equal(response.status, 502); assert.match(await response.text(), /替换/);
+assert.equal(response.status, 409); assert.match(await response.text(), /替换/);
+wrongObject = false;
+for (const override of [{expires_in: 0}, {source_url: 'invalid URL'}, {source_url: 'http://objects.example/get'},
+    {source_headers: {}}, {size_bytes: 0}]) {
+    sourceOverride = override; page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
+    const beforeProvider = providerCalls.length;
+    response = await read();
+    assert.equal(response.status, override.size_bytes === 0 ? 409 : 403,
+        'verified invalid source authorization/identity is terminal, not a network retry');
+    assert.equal(providerCalls.length, beforeProvider, 'an invalid grant never reads provider bytes');
+}
+sourceOverride = {source_head_url: 'http://objects.example/head'};
+page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
+const beforeInvalidHead = providerCalls.length;
+response = await read({method: 'HEAD'}); assert.equal(response.status, 403);
+assert.equal(providerCalls.length, beforeInvalidHead, 'invalid HEAD authorization fails before provider access');
+sourceOverride = null; page.FrontierMediaCrypto.resetFault('music/a/test.mp3');
 // The same signed-header transport wraps authenticated ciphertext without
 // falling back to a native media-element redirect or exposing a file key.
 const common = page.FrontierCryptoCommon;
@@ -129,7 +216,13 @@ for (let index = 0; index < 2; index += 1) {
 grantOverride = {transport: 'S3', object_id: 'cipher-object', source_url: 'https://objects.example/get?signed=get',
     source_headers: {'If-Match': etag}, encryption: metadata, key, deadline: 1700000000000 + elapsed + 30000};
 catalog[0].url = catalog[0].url.replace(/\/[^/?]+\?object=.*/, '/' + encodeURIComponent('music/encrypted.mp3') + '?object=' + metadata.file_id);
+const beforeEncryptedTransient = faultCount;
+readFailure = {kind: 'status', status: 503, start: 0};
+response = await read({headers: {Range: 'bytes=0-1'}});
+await assert.rejects(response.arrayBuffer());
+assert.equal(faultCount, beforeEncryptedTransient, 'an encrypted S3 provider 503 is not an ETag/integrity failure');
+assert(!page.FrontierMediaCrypto.failureFor(catalog[0].url));
 response = await read({headers: {Range: 'bytes=1048550-1048600'}});
 assert.equal(response.status, 206);
 assert.deepEqual(new Uint8Array(await response.arrayBuffer()), plaintext.slice(1048550, 1048601));
-console.log(`s3-media-worker-smoke-ok (${directory}; signed If-Match, HEAD, bounded Range, expiry, replacement refusal)`);
+console.log(`s3-media-worker-smoke-ok (${directory}; signed If-Match, HEAD, bounded Range, expiry, replacement refusal, transient exact-offset recovery)`);

@@ -27,19 +27,28 @@
     });
 
     function storageFacts(source = {}) {
-        const total = Number(source.physical_total_bytes || 0);
-        const free = Number(source.physical_free_bytes || 0);
+        const total = Number(source.physical_total_bytes);
+        const free = Number(source.physical_free_bytes);
+        const physicalKnown = source.physical_capacity_known !== false
+            && source.physical_total_bytes != null && source.physical_free_bytes != null
+            && Number.isFinite(total) && Number.isFinite(free) && total >= 0 && free >= 0 && free <= total;
         return {
+            physicalKnown,
             total,
-            physicalUsed: Math.max(0, total - free),
+            physicalUsed: physicalKnown ? total - free : null,
             allocated: Number(source.current_allocated_bytes ?? source.allocated_bytes ?? 0),
             used: Number(source.project_used_bytes ?? source.used_bytes ?? 0),
         };
     }
 
+    function physicalStorageText(facts) {
+        return facts.physicalKnown ? `${gib(facts.physicalUsed)} / ${gib(facts.total)}` : '物理容量未知';
+    }
+
     function storageText(source = {}) {
         const facts = storageFacts(source);
-        return `物理 used / all ${gib(facts.physicalUsed)} / ${gib(facts.total)} · 已使用 / 已分配 ${gib(facts.used)} / ${gib(facts.allocated)}`;
+        const physical = facts.physicalKnown ? `物理 used / all ${physicalStorageText(facts)}` : physicalStorageText(facts);
+        return `${physical} · 已使用 / 已分配 ${gib(facts.used)} / ${gib(facts.allocated)}`;
     }
 
     function relativeTime(stamp) {
@@ -263,7 +272,7 @@
         const poolFacts = storageFacts(pool);
         overview.append(
             overviewCard('存储节点', `${online} / ${followers.length}`, online === followers.length ? '全部在线' : '存在离线或降级节点', 'good'),
-            overviewCard('Storage', `${gib(poolFacts.physicalUsed)} / ${gib(poolFacts.total)}`, `物理 used / all · 已使用 / 已分配 ${gib(poolFacts.used)} / ${gib(poolFacts.allocated)}`, 'storage'),
+            overviewCard('Storage', physicalStorageText(poolFacts), `${poolFacts.physicalKnown ? '物理 used / all · ' : ''}已使用 / 已分配 ${gib(poolFacts.used)} / ${gib(poolFacts.allocated)}`, 'storage'),
             overviewCard('Backup', `${backupHealthy} / ${backupEnabled}`, backupEnabled ? '健康 / 已启用备份节点' : '尚未启用备份节点', 'backup'),
         );
     }
@@ -294,8 +303,8 @@
         const heading = make('div', 'node-resource-heading');
         heading.append(make('strong', '', 'Storage'), pill(member.storage_enabled ? 'Enabled' : 'Disabled', member.storage_enabled ? 'info' : 'muted'));
         const facts = storageFacts(member);
-        section.append(heading, make('div', 'node-metric-primary', `${gib(facts.physicalUsed)} / ${gib(facts.total)}`), kv([
-            ['物理 used / all', `${gib(facts.physicalUsed)} / ${gib(facts.total)}`],
+        section.append(heading, make('div', 'node-metric-primary', physicalStorageText(facts)), kv([
+            ['物理 used / all', physicalStorageText(facts)],
             ['已使用 / 已分配', `${gib(facts.used)} / ${gib(facts.allocated)}`],
         ]), syncLine(observed?.sync?.storage || (member.member_kind === 'MasterLocal' ? 'effective' : 'awaiting')),
         make('div', 'node-note', '物理表示该媒体文件系统已用 / 总容量；已使用 / 已分配表示 FrontierCloud 项目占用 / 分配配额。'));

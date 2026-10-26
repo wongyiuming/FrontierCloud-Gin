@@ -134,10 +134,14 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
     const pendingIdentity = identity + (revalidate ? ':revalidate' : '');
     if (pendingGrants.has(pendingIdentity)) return pendingGrants.get(pendingIdentity);
     const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId, revalidate).then(grant => {
-        if (grant.encryption) common.validate(grant.encryption);
+        if (grant.encryption) {
+            try { common.validate(grant.encryption); }
+            catch (error) { if (grant.transport === 'S3') error.status = 422; throw error; }
+        }
         else if (grant.transport !== 'S3' || !Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < 1 || grant.size_bytes > 10 * 1024 ** 3
-            || typeof grant.object_id !== 'string' || !grant.object_id || expectedFileId && grant.object_id !== expectedFileId)
-            throw new Error('媒体对象描述无效');
+            || typeof grant.object_id !== 'string' || !grant.object_id || expectedFileId && grant.object_id !== expectedFileId) {
+            const error = new Error('媒体对象描述无效'); error.status = 422; throw error;
+        }
         if (grant.transport === 'S3') validateS3Source(grant);
         if (grant.encryption && !(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
             || grant.deadline <= common.monotonicNow() || grant.deadline > common.monotonicNow() + 900000) {
@@ -185,6 +189,10 @@ async function readChunk(grant, index, signal, revalidate) {
             ...(grant.transport === 'S3' ? {mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer'} : {}),
             cache: 'no-store', signal,
         });
+        if (grant.transport === 'S3' && !response.ok) {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('S3 读取请求失败'); error.status = response.status; throw error;
+        }
         if (grant.transport === 'S3' && response.headers.get('ETag') !== grant.source_headers['If-Match']) {
             await response.body?.cancel().catch(() => {});
             const error = new Error('S3 对象身份校验失败'); error.status = 422; throw error;
@@ -218,29 +226,40 @@ async function readChunk(grant, index, signal, revalidate) {
 }
 
 function validateS3Source(grant) {
-    const url = new URL(grant.source_url);
+    let url;
+    try { url = new URL(grant.source_url); }
+    catch (error) { error.status = 403; throw error; }
     const headers = grant.source_headers;
     if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.href.length > 16384
         || !headers || Array.isArray(headers) || Object.keys(headers).length !== 1
         || typeof headers['If-Match'] !== 'string' || !/^"[^"\r\n]{1,1024}"$/.test(headers['If-Match'])
-        || grant.deadline > common.monotonicNow() + 300000) throw new Error('S3 读取授权无效');
+        || grant.deadline > common.monotonicNow() + 300000) {
+        const error = new Error('S3 读取授权无效'); error.status = 403; throw error;
+    }
 }
 async function s3Range(grant, start, end, signal, head = false) {
     validateS3Source(grant);
     const target = head ? grant.source_head_url : grant.source_url;
     const signed = head ? grant.source_head_headers : grant.source_headers;
     if (head) {
-        const url = new URL(target);
+        let url;
+        try { url = new URL(target); }
+        catch (error) { error.status = 403; throw error; }
         if (url.protocol !== 'https:' || url.username || url.password || url.hash
             || url.href.length > 16384 || !signed || Array.isArray(signed)
             || Object.entries(signed).some(([name, value]) => name !== 'If-Match'
                 && !(name === 'X-Amz-Checksum-Mode' && value === 'ENABLED'))
-            || signed['If-Match'] !== grant.source_headers['If-Match'])
-            throw new Error('S3 HEAD 授权无效');
+            || signed['If-Match'] !== grant.source_headers['If-Match']) {
+            const error = new Error('S3 HEAD 授权无效'); error.status = 403; throw error;
+        }
     }
     const response = await fetch(target, {method: head ? 'HEAD' : 'GET',
         headers: {...signed, ...(!head ? {Range: `bytes=${start}-${end}`} : {})},
         credentials: 'omit', mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store', signal});
+    if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        const error = new Error('S3 读取请求失败'); error.status = response.status; throw error;
+    }
     const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
     const exact = head ? response.status === 200 && Number(response.headers.get('Content-Length')) === grant.size_bytes
         : response.status === 206 && range && Number(range[1]) === start && Number(range[2]) === end && Number(range[3]) === grant.size_bytes
@@ -275,8 +294,9 @@ async function serveS3(request, grant, token, filePath, download, expectedFileId
                 if (offset > selected.end) { output.close(); return; }
                 if (grant.deadline <= common.monotonicNow() + 10000) {
                     const fresh = await getGrant(token, filePath, expectedFileId, fallbackClientId);
-                    if (fresh.encryption || fresh.object_id !== identity || fresh.source_headers?.['If-Match'] !== etag || fresh.size_bytes !== size)
-                        throw new Error('S3 对象已变化，请重新选择');
+                    if (fresh.encryption || fresh.object_id !== identity || fresh.source_headers?.['If-Match'] !== etag || fresh.size_bytes !== size) {
+                        const error = new Error('S3 对象已变化，请重新选择'); error.status = 409; throw error;
+                    }
                     Object.assign(grant, fresh);
                 }
                 const end = Math.min(selected.end, offset + common.CHUNK_SIZE - 1);
@@ -287,7 +307,9 @@ async function serveS3(request, grant, token, filePath, download, expectedFileId
             } catch (error) {
                 const cancelled = request.signal.aborted || error.name === 'AbortError';
                 controller.abort();
-                if (!cancelled) {
+                // A rejected/short body is a transport interruption. Only
+                // proven access or object failures may stop the player's retry.
+                if (!cancelled && (error.fatal || [401, 403, 404, 409, 412, 416, 422].includes(error.status))) {
                     const client = await self.clients.get(capabilities.get(token)?.clientId || '');
                     client?.postMessage({type: 'fc-crypto-fault', token, file_path: filePath, error: 'S3 媒体授权或对象校验失败，请重新选择'});
                 }

@@ -377,12 +377,12 @@ verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 
-The current runtime uses database generation 7. Its additive migrations
+The current runtime uses database generation 8. Its additive migrations
 preserve existing business data and record durable resource migration facts and
-peer object bindings, plus bounded paged plan records. Older binaries reject newer
+peer object bindings, bounded paged plan records and Master-owned S3 state. Older binaries reject newer
 database generations. Recovery archives preserve their source generation;
 restoration uses the matching source images. The operator supports the explicitly
-implemented 6-to-7 upgrade in addition to same-generation upgrades. See the
+implemented generation-6/7-to-8 upgrades in addition to same-generation upgrades. See the
 [schema contract](../migrations/README.md) before selecting target images.
 
 Normal `foc upgrade` selects the verified release, refreshes the operator when

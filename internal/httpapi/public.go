@@ -35,7 +35,7 @@ type Public struct {
 	brand              *brand.Service
 	crypto             *mediacrypto.Manager
 	cryptoSessionLimit cryptoSessionAdmission
-	cryptoSourceLimit  cryptoSessionAdmission
+	cryptoSourceLimit  s3SourceAdmission
 	control            *node.Service
 }
 

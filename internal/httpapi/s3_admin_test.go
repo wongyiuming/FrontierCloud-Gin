@@ -585,7 +585,7 @@ func TestS3HTTPPublicSourceAdmissionIndependentAndBounded(t *testing.T) {
 	f.enable(t, f.add(t))
 	row := f.publish(t, "music/artist/plain.mp3", nil)
 	body := fmt.Sprintf(`{"file_path":%q,"object_id":%q}`, row.Path, row.ObjectID)
-	for i := 0; i < cryptoSessionCookieCreations; i++ {
+	for i := 0; i < s3SourceCookieGrants; i++ {
 		if w := f.call("POST", "/api/v1/media/crypto/source", body, true, false, true); w.Code != 200 {
 			t.Fatal("source window", i, w.Code, w.Body.String())
 		}
@@ -593,7 +593,7 @@ func TestS3HTTPPublicSourceAdmissionIndependentAndBounded(t *testing.T) {
 	if w := f.call("POST", "/api/v1/media/crypto/source", body, true, false, true); w.Code != 429 || w.Header().Get("Retry-After") != "60" {
 		t.Fatal("source limiter", w.Code)
 	}
-	if len(f.public.cryptoSessionLimit.windows) != 0 || len(f.public.cryptoSourceLimit.windows) > cryptoSessionAdmissionEntries {
+	if len(f.public.cryptoSessionLimit.windows) != 0 || len(f.public.cryptoSourceLimit.windows) > s3SourceAdmissionEntries {
 		t.Fatal("shared or unbounded ECDH/source state")
 	}
 }

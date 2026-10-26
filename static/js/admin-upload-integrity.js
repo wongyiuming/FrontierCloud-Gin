@@ -230,23 +230,70 @@ const s3Transfers = new Set();
 for (const event of ['pagehide', 'offline']) window.addEventListener?.(event, () => {
     for (const controller of s3Transfers) controller.abort();
 });
-try {
-    const stored = JSON.parse(window.localStorage?.getItem(S3_TASK_KEY) || '[]');
-    if (Array.isArray(stored) && stored.length <= 8) for (const task of stored) {
-        if (typeof task?.id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(task.id)
+function readS3Tasks() {
+    if (!window.localStorage) throw new Error('无法读取恢复信息');
+    return decodeS3Tasks(window.localStorage.getItem(S3_TASK_KEY) || '[]');
+}
+function decodeS3Tasks(raw) {
+    if (raw.length > 1024 * 1024) throw new Error('恢复信息无效');
+    const stored = JSON.parse(raw);
+    if (!Array.isArray(stored) || stored.length > 8) throw new Error('恢复信息无效');
+    const tasks = new Map();
+    for (const task of stored) {
+        if (!(typeof task?.id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(task.id)
             && typeof task.name === 'string' && task.name.length <= 512
             && Number.isSafeInteger(task.originalSize) && task.originalSize > 0 && task.originalSize <= 10 * 1024 ** 3
             && Array.isArray(task.hashes) && task.hashes.length === Math.ceil(task.originalSize / S3_PART_BYTES)
-            && task.hashes.every(hash => typeof hash === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(hash))) s3Tasks.set(task.id, task);
+            && task.hashes.every(hash => typeof hash === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(hash))
+            && (task.cipherName === undefined || typeof task.cipherName === 'string'
+                && /^[a-zA-Z0-9_-]{1,160}$/.test(task.cipherName))
+            && (task.cancel_requested === undefined || typeof task.cancel_requested === 'boolean'))
+            || tasks.has(task.id)) throw new Error('恢复信息无效');
+        tasks.set(task.id, {id: task.id, name: task.name, originalSize: task.originalSize, hashes: task.hashes,
+            ...(task.cipherName ? {cipherName: task.cipherName} : {}),
+            ...(task.cancel_requested ? {cancel_requested: true} : {})});
     }
-} catch (_) { /* Invalid or unavailable local metadata never authorizes a resume. */ }
-function saveS3Tasks() {
-    try {
-        if (!window.localStorage) throw new Error('unavailable');
-        window.localStorage.setItem(S3_TASK_KEY, JSON.stringify([...s3Tasks.values()]));
-    }
-    catch (_) { throw new Error('无法保存恢复信息，请释放浏览器站点存储空间后重试'); }
+    return tasks;
+}
+function observeS3Tasks(tasks) {
+    s3Tasks.clear();
+    for (const [id, task] of tasks) s3Tasks.set(id, task);
+}
+try { observeS3Tasks(readS3Tasks()); }
+catch (_) { /* Invalid or unavailable local metadata never authorizes a resume. */ }
+window.addEventListener?.('storage', event => {
+    if (event.key !== null && event.key !== S3_TASK_KEY) return;
+    try { observeS3Tasks(readS3Tasks()); renderS3Tasks(); }
+    catch (_) { /* Preserve the last observation; never overwrite invalid shared data. */ }
+});
+async function saveS3Tasks(change) {
+    if (!window.navigator?.locks?.request) throw new Error('S3 恢复需要支持浏览器存储锁，请更新浏览器');
+    // Hold one origin-wide lock while rereading and changing a single record.
+    // A stale tab never publishes its in-memory snapshot or resurrects a removal.
+    const removed = await window.navigator.locks.request(S3_TASK_KEY, () => {
+        let tasks;
+        try { tasks = readS3Tasks(); }
+        catch (_) { throw new Error('无法读取恢复信息，请先检查浏览器站点存储'); }
+        let previous;
+        if (change.put) {
+            if (tasks.has(change.put.id)) throw new Error('恢复任务已存在，请刷新页面后重试');
+            if (tasks.size >= 8) throw new Error('待恢复 S3 任务已达 8 个，请先恢复或取消旧任务');
+            tasks.set(change.put.id, change.put);
+        } else if (change.cancel) {
+            const task = tasks.get(change.cancel);
+            if (task) task.cancel_requested = true;
+        } else if (change.remove) {
+            previous = tasks.get(change.remove);
+            tasks.delete(change.remove);
+        } else throw new Error('恢复信息变更无效');
+        const validated = decodeS3Tasks(JSON.stringify([...tasks.values()]));
+        try { window.localStorage.setItem(S3_TASK_KEY, JSON.stringify([...validated.values()])); }
+        catch (_) { throw new Error('无法保存恢复信息，请释放浏览器站点存储空间后重试'); }
+        observeS3Tasks(validated);
+        return previous;
+    });
     renderS3Tasks();
+    return removed;
 }
 const s3Base = id => `/api/v1/media/admin/upload/s3/${encodeURIComponent(id)}`;
 const s3Post = (base, body = {}) => api(base, {method: 'POST', headers: requestHeaders(), body: JSON.stringify(body)});
@@ -261,9 +308,8 @@ async function s3FileHashes(file) {
     return hashes;
 }
 async function forgetS3Task(id) {
-    const task = s3Tasks.get(id);
+    const task = await saveS3Tasks({remove: id});
     if (task?.cipherName) await window.FrontierMediaCrypto?.forgetRetainedUpload(task.cipherName);
-    s3Tasks.delete(id); saveS3Tasks();
 }
 function renderS3Tasks() {
     const host = $('uploadProgress');
@@ -310,8 +356,7 @@ function renderS3Tasks() {
             try {
                 await api(s3Base(task.id), {method: 'DELETE', headers: requestHeaders(false)});
                 // A 202 is pending, never proof that provider bytes are gone.
-                task.cancel_requested = true;
-                saveS3Tasks();
+                await saveS3Tasks({cancel: task.id});
             } catch (_) { label.textContent = `${task.name} · 清理请求未确认，请稍后重试`; cancel.disabled = false; }
         };
         row.append(label, resume, cancel, select); section.append(row);
@@ -538,14 +583,12 @@ runUploadTask = async function runUploadTaskWithReservationCleanup(fileList, rel
                     try {
                         if (uploadInterrupted) throw new Error('上传已中断，请重新选择文件重试');
                         if (reservation.transport === 'S3') {
-                            if (s3Tasks.size >= 8) throw new Error('待恢复 S3 任务已达 8 个，请先恢复或取消旧任务');
                             if (encrypted && (!encrypted.retainedName || typeof encrypted.retain !== 'function'))
                                 throw new Error('浏览器加密恢复组件需要更新，请刷新页面后重试');
                             const hashes = await s3FileHashes(file);
-                            const task = {id: reservation.upload_id, name: displayName, originalSize: file.size, hashes,
+                            const task = {id: reservation.upload_id, name: displayName.slice(0, 512), originalSize: file.size, hashes,
                                 ...(encrypted ? {cipherName: encrypted.retainedName} : {})};
-                            s3Tasks.set(task.id, task);
-                            try { saveS3Tasks(); } catch (error) { s3Tasks.delete(task.id); throw error; }
+                            await saveS3Tasks({put: task});
                             if (encrypted) encrypted.retain();
                             result = await uploadS3Parts(reservation, outgoingFile, transferProgress);
                             await forgetS3Task(task.id);

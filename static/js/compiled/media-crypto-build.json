@@ -51,24 +51,24 @@
   "files": [
     {
       "file": "media-crypto-common.js",
-      "source_sha256": "cc4a0dde2e88ed6b57bcf9e2db3284b93b3dbd704ca0edd7f1d9e75246c09627",
-      "compiled_sha256": "4277b1e6e53eb9ac23b2723d9015ea935ea4a4ac3efd7fde8da6f21c9e6c8e18",
-      "source_bytes": 6596,
-      "compiled_bytes": 7433
+      "source_sha256": "71d771e2f805858419cb1643d5291118e8bf355687f589caa93b82424761253b",
+      "compiled_sha256": "199689fda839526d4cfa064664065034b00afbc46443aca0fd4d60bd64525226",
+      "source_bytes": 6677,
+      "compiled_bytes": 7507
     },
     {
       "file": "media-crypto.js",
-      "source_sha256": "8a4bbd5678a2afc904208007d800065e198e36a400326934bccb26d6ba20ef8b",
-      "compiled_sha256": "83e13a2a2cc4a96398cbfb2e3b5c84897d6e6959466132c39d6a0803709e04c6",
-      "source_bytes": 28036,
-      "compiled_bytes": 30769
+      "source_sha256": "908f51e779546e0c0a74ebe882b957c546e7e729d1a3339f789a1bb58492bb00",
+      "compiled_sha256": "b65e6b610b0eef69496614176bacc01ec6d24b864901b4aa7aaf8d20abfe81cc",
+      "source_bytes": 28253,
+      "compiled_bytes": 30923
     },
     {
       "file": "media-crypto-sw.js",
-      "source_sha256": "9238b403230f7509c1552b55192062fe19c233d46730b6c469622b9e29a2404a",
-      "compiled_sha256": "105d46d6683958a9d5362ec051ffbe0839ef87799ae9b4a04e786b35452a9ad2",
-      "source_bytes": 27582,
-      "compiled_bytes": 33491
+      "source_sha256": "f1358b1d38d5531376900da1c0fcfcd5a1f293fbffb7b8a8a3cc364b6f1897bc",
+      "compiled_sha256": "d2ecd0369db38e703eb6e2dff70bd8ad03b47436059f85a7397e895a11bcb416",
+      "source_bytes": 28738,
+      "compiled_bytes": 34365
     }
   ]
 }
