@@ -23,7 +23,10 @@
             </section>
             <section id="globePanel" class="orbit-panel" aria-label="媒体目录">
                 <div class="globe-toolbar">
-                    <span id="globeHint">媒体目录</span>
+                    <div class="path-navigation">
+                        <a href="{{BACK_URL}}" class="back-btn">← 返回上级</a>
+                        <span id="globeHint">媒体目录</span>
+                    </div>
                     <button id="globeToggle" class="globe-toggle" type="button" aria-pressed="false">列表视图</button>
                 </div>
                 <div id="globeStage" class="globe-stage" role="region" aria-label="九宫格目录，左右滑动翻页" tabindex="0">

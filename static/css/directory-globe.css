@@ -45,6 +45,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; c
 .frontier-covers .orbit-intro, .frontier-covers .page-brand-suffix { display: none; }
 .frontier-covers .globe-toolbar { margin: auto; }
 .frontier-covers #globeHint { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.path-navigation { display: flex; flex: 1 1 auto; align-items: center; gap: 16px; min-width: 0; }
+.path-navigation #globeHint { min-width: 0; }
+.path-navigation .back-btn { flex: 0 0 auto; min-height: 48px; }
 .frontier-covers .globe-stage { height: auto; min-height: 0; width: 100%; margin: 0 auto; touch-action: auto; cursor: default; border-radius: 0; }
 .frontier-covers .card-grid { position: relative; inset: auto; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .frontier-covers .card-grid::-webkit-scrollbar { display: none; }
