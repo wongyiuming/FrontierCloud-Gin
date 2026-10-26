@@ -189,10 +189,11 @@
     }
     async function load(entry, signal) {
         signal?.throwIfAborted();
-        if (entry.native_metadata === true && !entry.encryption) return nativeMetadata(entry, signal);
+        if (entry.native_metadata === true && !entry.encryption && entry.transport !== 'S3') return nativeMetadata(entry, signal);
         if (!window.FrontierMediaCrypto || !window.FrontierCryptoCommon) throw new Error('浏览器解密组件未加载');
-        window.FrontierCryptoCommon.validate(entry.encryption);
-        const size = entry.encryption.plaintext_size;
+        if (entry.encryption) window.FrontierCryptoCommon.validate(entry.encryption);
+        const size = entry.encryption?.plaintext_size ?? entry.size_bytes ?? entry.size;
+        if (!Number.isSafeInteger(size) || size < 1 || size > 10 * 1024 ** 3) throw new Error('媒体长度无效');
         if (size < 10) return {};
         const source = {...entry};
         await window.FrontierMediaCrypto.prepareCatalog([source]);
@@ -226,11 +227,11 @@
         return result;
     }
     function metadata(entry, {priority = false, signal} = {}) {
-        if ((!entry?.encryption && entry?.native_metadata !== true) || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
+        if ((!entry?.encryption && entry?.native_metadata !== true && entry?.transport !== 'S3') || !/\.mp3$/i.test(entry.media_path || entry.path || '')) return Promise.resolve({});
         // Native catalog entries must reauthorize after each catalog refresh.
         // Encrypted identities retain descriptor-bound reuse after replacement.
-        const key = entry.native_metadata === true && !entry.encryption ? entry
-            : JSON.stringify([entry.media_path || entry.path, entry.resource_id || entry.media_id, entry.encryption]);
+        const key = entry.native_metadata === true && !entry.encryption && entry.transport !== 'S3' ? entry
+            : JSON.stringify([entry.media_path || entry.path, entry.object_id || entry.resource_id || entry.media_id, entry.encryption]);
         if (!cache.has(key)) {
             if (cache.size >= 128) cache.delete(cache.keys().next().value);
             const promise = limited(() => load(entry, signal), priority).catch(error => { cache.delete(key); throw error; });
@@ -240,7 +241,7 @@
     }
     async function decorate(entries, onUpdate = () => {}) {
         await Promise.all(entries.map(async entry => {
-            if (!entry?.encryption && entry?.native_metadata !== true) return;
+            if (!entry?.encryption && entry?.native_metadata !== true && entry?.transport !== 'S3') return;
             try {
                 const tags = await metadata(entry);
                 for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) entry[field] = tags[field];

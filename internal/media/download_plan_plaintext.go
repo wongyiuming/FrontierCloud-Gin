@@ -26,6 +26,14 @@ func (d *Download) BrowserPlan(limit int) ([]DownloadEntry, error) {
 	pending := make([]DownloadEntry, 0, batchSize)
 	seen := map[string]bool{}
 	total, encrypted := 0, false
+	browserOnly := false
+	globalFacts := map[string]store.GlobalMedia{}
+	for _, row := range d.globals {
+		globalFacts[row.ID] = row
+		if row.Transport == "S3" {
+			browserOnly = true
+		}
+	}
 	flush := func() error {
 		if len(pending) == 0 {
 			return nil
@@ -67,6 +75,10 @@ func (d *Download) BrowserPlan(limit int) ([]DownloadEntry, error) {
 		}
 		for _, entry := range pending {
 			entry.Encryption = metadata[entry.MediaID]
+			if row, ok := globalFacts[entry.MediaID]; ok {
+				entry.Transport = row.Transport
+				entry.ObjectID = row.ObjectID
+			}
 			if entry.Encryption != nil {
 				encrypted = true
 				if entry.Encryption.CiphertextSize != entry.Bytes {
@@ -116,7 +128,7 @@ func (d *Download) BrowserPlan(limit int) ([]DownloadEntry, error) {
 		if !ownedObjectID.MatchString(row.ID) {
 			return nil, mediacrypto.ErrMetadata
 		}
-		if row.RelationshipID == nil {
+		if row.RelationshipID == nil && row.Transport != "S3" {
 			info, err := d.service.safeInfo(row.Path)
 			if err != nil {
 				return nil, err
@@ -188,7 +200,7 @@ func (d *Download) BrowserPlan(limit int) ([]DownloadEntry, error) {
 	if err := flush(); err != nil {
 		return nil, err
 	}
-	if !encrypted && total > limit {
+	if !encrypted && !browserOnly && total > limit {
 		return []DownloadEntry{}, nil
 	}
 	if total > limit {

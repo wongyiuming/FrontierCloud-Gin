@@ -14,7 +14,7 @@ fixture; a live precopy or a hardlink tree is NOT recovery proof.
 `follower-migration snapshot` hashes every row, canonical DDL, physical file,
 mode and secret under the authoritative MySQL global read lock. It requires
 the exact original Follower ID and the tool's current schema generation
-(`migrations.Generation`, currently 7). Older-generation inventories remain
+(`migrations.Generation`). Older-generation inventories remain
 historical evidence; they are not current-generation compatibility proof. Perform any supported generation upgrade separately under
 maintenance with independent recovery backups before this read-only workflow. Its separate
 frontiercloud-offline-mysql-follower-v1 format cannot be substituted with a

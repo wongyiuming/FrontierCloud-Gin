@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-const Generation = 7
+const Generation = 8
 const JournalName = "create-schema-migration-journal"
 const JournalChecksum = "aee46be69d8c5b005cbee58ebfd37feb41d3431eb1fb23bb8339c9076147c03e"
 
@@ -55,3 +55,9 @@ const PeerBindingsChecksum = "1fda21be7bc2c0b5f1b14bfc6f74e352a1bc070688c5409ad0
 
 const MigrationPlansName = "paged-master-migration-plans"
 const MigrationPlansChecksum = "e190dd09f369fea46adc941a3a43addbd87fd211261f5da0ea9ec384297f85cd"
+
+const S3Name = "master-owned-s3-durable-multipart"
+
+// SHA256 of "sqlite\n" + additive SQLite DDL + "\nmysql\n" + additive MySQL
+// DDL, joining each backend's generation-8 statements by one newline.
+const S3Checksum = "fd063b0ff95182337eb1418efc844705d90bf703880d1b274e6b215b4001a943"

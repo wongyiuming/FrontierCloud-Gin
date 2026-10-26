@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/release"
+	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
 type autoEvidence struct {
@@ -81,7 +82,7 @@ func (i *autoImages) DiscoverOperator(context.Context, string) (release.ImagePro
 }
 func (i *autoImages) ProveUpgradeCandidate(_ context.Context, target, component, arch string) (release.ImageProof, error) {
 	i.proved++
-	return release.ImageProof{Revision: target, Platform: "linux/" + arch, Generation: 7}, i.failure
+	return release.ImageProof{Revision: target, Platform: "linux/" + arch, Generation: migrations.Generation}, i.failure
 }
 
 func TestAutomaticSelectionPinsLatestPublishedAndExplainsNewerBuild(t *testing.T) {

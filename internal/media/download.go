@@ -26,6 +26,17 @@ type Download struct {
 
 func (d *Download) Close() { d.release.Do(d.lease) }
 
+// RequiresBrowserSource is a bounded catalog fact used before success audit
+// or response headers. It never opens media or contacts a storage provider.
+func (d *Download) RequiresBrowserSource() bool {
+	for _, row := range d.globals {
+		if row.Transport == "S3" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) Download(ctx context.Context, paths []string) (*Download, error) {
 	release, err := s.acquire(ctx, false)
 	if err != nil {
@@ -96,6 +107,11 @@ func (s *Service) Download(ctx context.Context, paths []string) (*Download, erro
 }
 
 func (d *Download) Open(name string) (*os.File, os.FileInfo, error) {
+	for _, row := range d.globals {
+		if row.Path == name && row.Transport == "S3" {
+			return nil, nil, ErrBrowserSource
+		}
+	}
 	if err := d.ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -122,6 +138,11 @@ func (d *Download) Open(name string) (*os.File, os.FileInfo, error) {
 }
 
 func (d *Download) ZIP(writer io.Writer) error {
+	for _, row := range d.globals {
+		if row.Transport == "S3" {
+			return ErrBrowserSource
+		}
+	}
 	z := zip.NewWriter(writer)
 	seen := map[string]bool{}
 	buffer := make([]byte, 64*1024)

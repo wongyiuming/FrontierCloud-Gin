@@ -14,13 +14,16 @@ import (
 // Audit one issued browser download plan, rather than its playback or Range
 // reads. Plain-only plans retain the existing attachment download audit.
 func (a *Admin) auditEncryptedDownloadPlan(c *gin.Context, download *media.Download, entries []media.DownloadEntry) error {
-	encrypted := 0
+	encrypted, s3Files := 0, 0
 	for _, entry := range entries {
 		if entry.Encryption != nil {
 			encrypted++
 		}
+		if entry.Transport == "S3" {
+			s3Files++
+		}
 	}
-	if encrypted == 0 {
+	if encrypted == 0 && s3Files == 0 {
 		return nil
 	}
 	if a.auth == nil {
@@ -55,14 +58,19 @@ func (a *Admin) auditEncryptedDownloadPlan(c *gin.Context, download *media.Downl
 		}
 	}
 	sum := sha256.Sum256(complete)
+	kind := "encrypted_download_plan"
+	if encrypted == 0 {
+		kind = "s3_download_plan"
+	}
 	detail, err := json.Marshal(struct {
 		Kind             string `json:"kind"`
 		Files            int    `json:"files"`
 		EncryptedFiles   int    `json:"encrypted_files"`
+		S3Files          int    `json:"s3_files,omitempty"`
 		SourcePathsTotal int    `json:"source_paths_total"`
 		SourcePathsOmit  int    `json:"source_paths_omitted"`
 		SourceSHA256     string `json:"source_sha256"`
-	}{"encrypted_download_plan", len(entries), encrypted, len(paths), omitted, hex.EncodeToString(sum[:])})
+	}{kind, len(entries), encrypted, s3Files, len(paths), omitted, hex.EncodeToString(sum[:])})
 	if err != nil {
 		return err
 	}

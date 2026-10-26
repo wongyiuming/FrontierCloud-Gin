@@ -242,23 +242,23 @@ automatically. The old image receipt, new image receipt, backup and journal are
 recovery evidence, not permission to delete the current database.
 
 The admitted paths are same-generation preparation and the explicit generation
-6 → 7 forward migration. Unknown generations and other transitions are refused.
+6/7 → 8 forward migrations. Unknown generations and other transitions are refused.
 Existing generation-4/5 deployments without operator receipts use the separately
 approved maintainer path: preserve their original Compose/project/mount selection,
 close the native gate and stop all writers, verify a complete cold recovery point,
-then invoke the published generation-7 runtime's `prepare-release` with the exact
+then invoke the published generation-8 runtime's `prepare-release` with the exact
 `--from-generation 4` (or `5`), original `--confirm-node-id`,
-`--confirm-generation 7` and verified `--backup-sha256`. That command checks the
+`--confirm-generation 8` and verified `--backup-sha256`. That command checks the
 exact source generation's complete transaction roster before the retained
-additive DDL, then checks generation-7 idleness and identity. It keeps the gate
+additive DDL, then checks generation-8 idleness and identity. It keeps the gate
 closed. This does not grant `fc backup/restore/upgrade` generation-4/5 receipt
 compatibility or authorize initialization of an existing deployment. Generation
 3, absent/malformed tables, unknown journals and unfinished writes are refused.
-For 6 → 7, the source generation-6 image supplies the quiescent runtime facts;
-the archive retains `schema_generation: 6`. The generation-7 target independently
-checks the original identity and generation-6 transaction roster before applying
-the defined additive DDL, and then validates the generation-7 state. The receipt
-keeps the generation-6 recovery image set. No failure restores old images
+For 6/7 → 8, the matching source image supplies the quiescent runtime facts;
+the archive retains its actual source `schema_generation` (6 or 7). The generation-8 target independently
+checks the original identity and exact source-generation transaction roster before applying
+the defined additive DDL, and then validates the generation-8 state. The receipt
+keeps the source-generation recovery image set. No failure restores old images
 automatically or claims to undo DDL. Restoring a backup requires the matching
 recorded release and explicit source-offline/target-empty recovery controls. Any
 writes made after a successful opening are outside the earlier backup's recovery

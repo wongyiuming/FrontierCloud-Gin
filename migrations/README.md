@@ -1,9 +1,9 @@
 # Shared database schema
 
-The current schema generation is 7 (`migrations/schema.go`). Both backends
-embed their `0007-schema.json` snapshot. The operator archive/upgrade path accepts
-source generation 6 or 7; the lower-level release-preparation command also has
-explicit 4/5-to-7 migration logic. That does not make those generations supported
+The current schema generation is 8 (`migrations/schema.go`). Both backends
+embed their `0008-schema.json` snapshot. The operator archive/upgrade path accepts
+source generation 6, 7 or 8; the lower-level release-preparation command also has
+explicit 4/5-to-8 migration logic. That does not make those generations supported
 by `foc upgrade`. See [upgrade boundaries](../docs/operator-upgrade.md).
 
 Historical generation 6 has one logical model and two physical snapshots:
@@ -96,6 +96,15 @@ parent. Preview creation does not drain nodes, reserve capacity or change owners
 Historical task representations remain readable; SQL snapshots, journal identity
 and forward-only generation checks remain authoritative. See the
 [paged planning contract](../docs/resource-migration-planning.md).
+
+Generation 7 -> 8 adds Master-owned S3 members, immutable object mappings and
+durable multipart/probe/deletion facts. Existing business rows and historical
+schema assets remain unchanged. SQLite applies the additive DDL atomically;
+MySQL replays partial DDL before committing the generation/journal together.
+Older runtimes refuse generation 8. Recovery archives preserve the source
+generation and matching images; changing an image alone cannot reverse DDL.
+See the [S3 adapter contract](../docs/s3-storage.md) for credential, grant and
+backup boundaries.
 
 Gin/Go implements business repositories, independent migration/health commands,
 and both database dialects. Default deployment is Gin + SQLite; the optional

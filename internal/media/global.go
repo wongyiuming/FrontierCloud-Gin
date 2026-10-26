@@ -168,7 +168,7 @@ func (s *Service) globalCatalog(ctx context.Context, kind, name, session string,
 			return nil, err
 		}
 		params := url.Values{"file_path": {row.Path}, "resource_id": {row.ID}}
-		item := Track{MediaPath: row.Path, Title: strings.TrimSuffix(path.Base(row.Path), path.Ext(row.Path)), Artist: "前沿娱乐", Type: row.Kind, URL: "/api/v1/media/stream?" + params.Encode(), Cover: "/favicon.ico", MediaID: row.ID, ResourceID: row.ID, PlaybackStats: row.PlaybackStats, KaraokeID: handle}
+		item := Track{MediaPath: row.Path, Title: strings.TrimSuffix(path.Base(row.Path), path.Ext(row.Path)), Artist: "前沿娱乐", Type: row.Kind, URL: "/api/v1/media/stream?" + params.Encode(), Cover: "/favicon.ico", MediaID: row.ID, ResourceID: row.ID, ObjectID: row.ObjectID, Transport: row.Transport, SizeBytes: row.Bytes, PlaybackStats: row.PlaybackStats, KaraokeID: handle}
 		has := row.HasLyrics
 		item.HasLyrics = &has
 		items = append(items, item)
@@ -202,7 +202,38 @@ func (s *Service) resolveGlobal(ctx context.Context, id, name string) (store.Glo
 		return row, nil, os.ErrNotExist
 	}
 	var relation *store.Relationship
-	if row.RelationshipID != nil {
+	if row.Transport == "S3" {
+		// S3 is a Master-owned adapter with no native peer or local volume.
+		// Recheck its durable proof and read authority without issuing a grant
+		// or contacting the provider during metadata/context resolution.
+		if row.RelationshipID != nil {
+			return row, nil, os.ErrNotExist
+		}
+		repository, ok := s.pool.(store.S3Repository)
+		if !ok {
+			return row, nil, ErrUnavailable
+		}
+		member, err := repository.S3Member(ctx, row.MemberID)
+		if errors.Is(err, store.ErrNodeState) {
+			err = ErrUnavailable
+		}
+		if err != nil {
+			return row, nil, err
+		}
+		if member.Kind != "S3" || member.Transport != "S3" || member.RelationshipID != nil || member.CleanupOnly || member.SealedCredentials == "" || member.ProbeState != "ready" || member.ProbeRevision != member.Revision || member.CredentialExpiresAt != 0 && member.CredentialExpiresAt <= time.Now().Unix() {
+			return row, nil, ErrUnavailable
+		}
+		object, err := repository.S3Object(ctx, row.ID)
+		if errors.Is(err, store.ErrNodeState) {
+			err = ErrUnavailable
+		}
+		if err != nil {
+			return row, nil, err
+		}
+		if object.State != "active" || object.Media.State != "active" || object.Media.ID != row.ID || object.Media.MemberID != row.MemberID || object.Media.ObjectID != row.ObjectID || object.Media.Path != row.Path || object.Media.Bytes != row.Bytes || object.Media.ETag != row.ETag || object.Proof.MemberID != row.MemberID || object.Proof.MediaID != row.ID || object.Proof.ObjectID != row.ObjectID || object.Proof.Bytes != row.Bytes || object.Proof.ETag != row.ETag {
+			return row, nil, os.ErrNotExist
+		}
+	} else if row.RelationshipID != nil {
 		v, e := s.nodes.Relationship(ctx, *row.RelationshipID)
 		if e != nil {
 			return row, nil, e
@@ -259,6 +290,9 @@ func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID str
 		return Delivery{}, err
 	}
 	result := Delivery{ResourceID: row.ID, OwnerID: row.MemberID, ObjectID: row.ObjectID}
+	if row.Transport == "S3" {
+		return Delivery{}, ErrBrowserSource
+	}
 	if relation == nil {
 		local, err := s.OwnedStream(ctx, row.ObjectID)
 		if err != nil {

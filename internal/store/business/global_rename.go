@@ -29,7 +29,7 @@ func decodeGlobalRename(id, state string, raw []byte) (op store.GlobalRenameOper
 	}
 	seen := map[string]bool{}
 	for _, v := range op.Media {
-		if seen[v.ID] || !nodeHashPattern.MatchString(v.ID) || !nodeHashPattern.MatchString(v.ObjectID) || !nodeIDPattern.MatchString(v.MemberID) || !strings.HasPrefix(v.Path, op.Old+"/") || !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: v.Path, Kind: v.Kind}, Bytes: v.Bytes}) || v.Bytes < 0 || v.Bytes > store.MaxStorageAllocation || len(v.ETag) > 128 || strings.ContainsAny(v.ETag, "\r\n\x00") || v.MemberID != op.MasterID && (v.RelationshipID == nil || !nodeIDPattern.MatchString(*v.RelationshipID)) {
+		if seen[v.ID] || !nodeHashPattern.MatchString(v.ID) || !nodeHashPattern.MatchString(v.ObjectID) || !nodeIDPattern.MatchString(v.MemberID) || !strings.HasPrefix(v.Path, op.Old+"/") || !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: v.Path, Kind: v.Kind}, Bytes: v.Bytes}) || v.Bytes < 0 || v.Bytes > store.MaxStorageAllocation || len(v.ETag) > 128 || strings.ContainsAny(v.ETag, "\r\n\x00") || v.MemberID != op.MasterID && v.Transport != "S3" && (v.RelationshipID == nil || !nodeIDPattern.MatchString(*v.RelationshipID)) || v.Transport == "S3" && v.RelationshipID != nil {
 			return op, nodeConflict("invalid rename placement manifest")
 		}
 		seen[v.ID] = true
@@ -202,6 +202,16 @@ func (r *Repository) PrepareGlobalRename(ctx context.Context, old, target string
 				return nodeConflict("directory has pending mutation")
 			}
 			if v.MemberID == n.ID {
+				continue
+			}
+			if v.Transport == "S3" {
+				object, err := r.s3Object(ctx, q, v.ID, r.lock())
+				if err != nil {
+					return err
+				}
+				if object.State != "active" {
+					return nodeConflict("S3 object has pending cleanup")
+				}
 				continue
 			}
 			if v.RelationshipID == nil || v.Health != "online" {

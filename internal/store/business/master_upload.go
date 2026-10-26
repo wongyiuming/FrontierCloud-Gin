@@ -52,7 +52,7 @@ func (r *Repository) CompleteMasterUpload(ctx context.Context, operation string,
 			}
 		}
 		var result store.GlobalMedia
-		if err = r.finalizeUpload(ctx, q, operation, o.ID, size, etag, a, true, &result); err != nil {
+		if err = r.finalizeUpload(ctx, q, operation, o.ID, size, etag, a, true, false, &result); err != nil {
 			return err
 		}
 		_, err = q.ExecContext(ctx, "UPDATE cluster_storage_members SET physical_free_bytes=?,updated_at=? WHERE member_id=?", free, time.Now().Unix(), n.ID)

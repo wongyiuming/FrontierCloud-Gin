@@ -110,6 +110,16 @@ func (s *Service) retryGlobalRename(ctx context.Context, op store.GlobalRenameOp
 	}
 	sort.Strings(owners)
 	for _, owner := range owners {
+		if groups[owner][0].Transport == "S3" {
+			// Keys are random immutable identities, independent of logical paths.
+			// SQL has validated the owned proof and journal before this point.
+			for _, v := range groups[owner] {
+				if v.Transport != "S3" || v.RelationshipID != nil {
+					return store.ErrNodeState
+				}
+			}
+			continue
+		}
 		if owner == row.ID {
 			if err := s.moveGlobalRenameLocal(ctx, op, groups[owner]); err != nil {
 				return err

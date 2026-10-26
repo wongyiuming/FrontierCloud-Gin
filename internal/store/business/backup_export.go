@@ -46,6 +46,9 @@ func (r *Repository) ExportBusinessSnapshot(ctx context.Context, emit func(strin
 	if generation != migrations.Generation {
 		return store.ErrBackupState
 	}
+	if err := checkS3BusinessBackup(ctx, tx); err != nil {
+		return err
+	}
 	// A v2 artifact has no replay journals. Refuse a snapshot whose capacity or
 	// namespace still depends on an omitted intent, rather than losing it.
 	for _, query := range []string{
@@ -106,6 +109,9 @@ func exportBackupTable(ctx context.Context, tx *sql.Tx, table string, emit func(
 				return err
 			}
 			value[column.Name()] = normalized
+		}
+		if !projectS3BackupRow(table, value) {
+			continue
 		}
 		if err := emit(table, value); err != nil {
 			return err

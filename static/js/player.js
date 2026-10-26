@@ -491,7 +491,7 @@ function checkAndPreloadNext(currentTime) {
     const start = duration > 0 ? Math.min(PRELOAD_START_SECONDS, duration / 4) : PRELOAD_START_SECONDS;
     if (currentTime < start) return;
     const next = currentMediaList[nextMediaIndex()];
-    if (next.encryption || next.encrypted) return;
+    if (next.encryption || next.encrypted || next.transport === 'S3') return;
     // Keep speculative memory bounded; video continues to use normal streaming.
     if (next.type !== 'audio') return;
     let attempt = 0;
@@ -1360,7 +1360,7 @@ function observePlaylistMetadata(list) {
                     void paintPlayerThumbnail(media, entry.target.querySelector?.('img'));
                 } else visibleArtworkTracks.delete(media);
             }
-            if ((!media?.encryption && media?.native_metadata !== true)
+            if ((!media?.encryption && media?.native_metadata !== true && media?.transport !== 'S3')
                 || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
             if (entry.isIntersecting) visibleMetadataTracks.add(media);
             else visibleMetadataTracks.delete(media);
@@ -1397,7 +1397,7 @@ function reuseNativeAlbumCover(media) {
 }
 
 function loadSelectedMetadata(media, priority = true) {
-    if ((!media?.encryption && media?.native_metadata !== true)
+    if ((!media?.encryption && media?.native_metadata !== true && media?.transport !== 'S3')
         || !window.FrontierMusicMetadata) return Promise.resolve(true);
     if (metadataTracks.has(media)) return metadataPromises.get(media) || Promise.resolve(true);
     if (!playerArtworkReady()) return Promise.resolve(null);
@@ -1442,7 +1442,7 @@ function loadSelectedMetadata(media, priority = true) {
 function applyMediaCatalog(entries) {
     if (!Array.isArray(entries)) return;
     const generation = ++cryptoCatalogSequence;
-    if (entries.some(media => media.encryption || media.encrypted) && !cryptoPreparedCatalogs.has(entries)) {
+    if (entries.some(media => media.encryption || media.encrypted || media.transport === 'S3') && !cryptoPreparedCatalogs.has(entries)) {
         if (!window.FrontierMediaCrypto) {
             document.getElementById('mediaList').textContent = '浏览器解密组件未加载';
             return;
@@ -1545,7 +1545,7 @@ window.addEventListener('resize', () => {
 function selectMedia(index) {
     cancelPlayerArtwork();
     const media = currentMediaList?.[index];
-    if (media?.encryption || media?.encrypted) window.FrontierMediaCrypto?.resetFault(media.media_path || media.path);
+    if (media?.encryption || media?.encrypted || media?.transport === 'S3') window.FrontierMediaCrypto?.resetFault(media.media_path || media.path);
     const targetElement = document.querySelector(`.media-item[data-index="${index}"]`);
     const items = document.querySelectorAll('.media-item');
     items.forEach(item => item.classList.remove('active'));

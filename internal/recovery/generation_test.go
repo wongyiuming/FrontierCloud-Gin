@@ -9,21 +9,25 @@ import (
 )
 
 func TestArchiveKeepsExplicitSupportedSourceGeneration(t *testing.T) {
-	if migrations.Generation != 7 {
-		t.Skip("explicit generation-7 recovery boundary")
+	if migrations.Generation != 8 {
+		t.Skip("explicit generation-8 recovery boundary")
 	}
-	_, archive, m, sources := fixture(t)
-	m.SchemaGeneration = 6
-	r, e := recovery.Create(context.Background(), archive, m, sources)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if r.Manifest.SchemaGeneration != 6 {
-		t.Fatal("backup relabelled old database with operator generation")
-	}
-	checked, e := recovery.Check(context.Background(), archive, r.SHA256)
-	if e != nil || checked.Manifest.SchemaGeneration != 6 {
-		t.Fatal(checked.Manifest.SchemaGeneration, e)
+	for _, generation := range []int{6, 7} {
+		t.Run(string(rune('0'+generation)), func(t *testing.T) {
+			_, archive, m, sources := fixture(t)
+			m.SchemaGeneration = generation
+			r, e := recovery.Create(context.Background(), archive, m, sources)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if r.Manifest.SchemaGeneration != generation {
+				t.Fatal("backup relabelled old database with operator generation")
+			}
+			checked, e := recovery.Check(context.Background(), archive, r.SHA256)
+			if e != nil || checked.Manifest.SchemaGeneration != generation {
+				t.Fatal(checked.Manifest.SchemaGeneration, e)
+			}
+		})
 	}
 }
 func TestArchiveRejectsUndefinedOldAndFutureGeneration(t *testing.T) {

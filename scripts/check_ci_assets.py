@@ -14,7 +14,7 @@ if issues:
     raise SystemExit("\n".join(issues))
 for path in (root / "protocol").rglob("*.json"):
     json.loads(path.read_text(encoding="utf-8"))
-for generation, tables in ((2, 34), (3, 36), (4, 36), (5, 45), (6, 46)):
+for generation, tables in ((2, 34), (3, 36), (4, 36), (5, 45), (6, 46), (7, 49), (8, 54)):
     documents = [json.loads((root / "migrations" / kind / f"{generation:04d}-schema.json").read_text(encoding="utf-8"))
                  for kind in ("sqlite", "mysql")]
     assert all(document["generation"] == generation for document in documents)
@@ -47,4 +47,24 @@ for kind in ("sqlite", "mysql"):
         digest = hashlib.sha256(current[-1].encode()).hexdigest()
         constant = re.search(r'const PeerBindingsChecksum = "([a-f0-9]{64})"', (root / "migrations/schema.go").read_text()).group(1)
         assert digest == constant
+s3_additive = {}
+for kind in ("sqlite", "mysql"):
+    previous = json.loads((root / "migrations" / kind / "0007-schema.json").read_text(encoding="utf-8"))["statements"]
+    current = json.loads((root / "migrations" / kind / "0008-schema.json").read_text(encoding="utf-8"))["statements"]
+    assert current[:len(previous)] == previous, "S3 migration must preserve every generation-7 statement"
+    additions = current[len(previous):]
+    names = {re.match(r"CREATE TABLE IF NOT EXISTS (\w+)", value).group(1)
+             for value in additions if value.startswith("CREATE TABLE")}
+    assert names == {"s3_members", "s3_uploads", "s3_upload_parts", "s3_objects", "s3_probe_journal"}
+    s3_additive[kind] = "\n".join(additions)
+    if kind == "mysql":
+        probe = next(value for value in additions if value.startswith("CREATE TABLE IF NOT EXISTS s3_probe_journal "))
+        part = next(value for value in additions if value.startswith("CREATE TABLE IF NOT EXISTS s3_upload_parts "))
+        catalog = next(value for value in current if value.startswith("CREATE TABLE IF NOT EXISTS global_media_objects "))
+        assert "etag VARCHAR(512) NOT NULL" in probe, "probe cleanup must preserve provider ETags"
+        assert "etag VARCHAR(128) NOT NULL" in part and "etag VARCHAR(128) NOT NULL" in catalog
+digest = hashlib.sha256(("sqlite\n" + s3_additive["sqlite"] + "\nmysql\n" + s3_additive["mysql"]).encode()).hexdigest()
+constant = re.search(r'const S3Checksum = "([a-f0-9]{64})"',
+                     (root / "migrations/schema.go").read_text(encoding="utf-8")).group(1)
+assert digest == constant, "S3 journal checksum differs from canonical backend DDL"
 print("Protocol JSON and canonical SQLite schema assets passed; full acceptance remains external")

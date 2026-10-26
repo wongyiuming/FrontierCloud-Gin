@@ -149,7 +149,7 @@ func TestBackupPreflightExactGenerationTypedRowsGeneratedColumnReferencesAndClea
 		data := encodedPreflight(records)
 		directory := t.TempDir()
 		report, err := Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), directory)
-		if err != nil || !report.LogicalValid || report.RestoreReady || report.Generation != testGeneration || report.Rows["media_objects"] != 2 || len(report.Rows) != 25 || report.Lyrics != 1 || len(report.PendingGates) != 4 {
+		if err != nil || !report.LogicalValid || report.RestoreReady || report.Generation != testGeneration || report.Rows["media_objects"] != 2 || len(report.Rows) != 27 || report.Lyrics != 1 || len(report.PendingGates) != 4 {
 			t.Fatal(report, err)
 		}
 		checkScratchEmpty(t, directory)

@@ -22,6 +22,8 @@ type TreeItem struct {
 	Media               bool                  `json:"media"`
 	Hideable            bool                  `json:"hideable"`
 	MediaID             string                `json:"media_id,omitempty"`
+	ObjectID            string                `json:"object_id,omitempty"`
+	SizeBytes           *int64                `json:"size_bytes,omitempty"`
 	MemberID            string                `json:"storage_member_id,omitempty"`
 	Transport           string                `json:"transport,omitempty"`
 	NodeHealth          string                `json:"node_health,omitempty"`

@@ -275,6 +275,9 @@ func (r *Repository) migrationCatalogHeader(ctx context.Context, q queryer, sour
 	if e != nil {
 		return c, e
 	}
+	if c.Source.Kind == "S3" || c.Source.Transport == "S3" || c.Target.Kind == "S3" || c.Target.Transport == "S3" {
+		return c, store.ErrMigrationState
+	}
 	c.Source.Draining, e = r.migrationDraining(ctx, q, source)
 	if e != nil {
 		return c, e

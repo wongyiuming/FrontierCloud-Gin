@@ -40,6 +40,10 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 			"SELECT COUNT(*) FROM migration_drains",
 			"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('deleted','aborted')",
 			"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
+			"SELECT COUNT(*) FROM s3_members",
+			"SELECT COUNT(*) FROM s3_objects WHERE state<>'deleted'",
+			"SELECT COUNT(*) FROM s3_uploads WHERE state NOT IN ('published','aborted') OR create_uncertain<>0",
+			"SELECT COUNT(*) FROM s3_probe_journal WHERE state<>'settled'",
 		}
 		if old.Role != "Standalone" {
 			queries = append(queries, "SELECT COUNT(*) FROM karaoke_recordings WHERE state<>'deleted'")
@@ -53,6 +57,14 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 		}
 		if reads != 0 {
 			return store.ErrMigrationState
+		}
+		for _, table := range []string{"s3_uploads", "s3_upload_parts", "s3_objects", "s3_probe_journal"} {
+			if err := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table+" WHERE grant_until>?", time.Now().Unix()).Scan(&reads); err != nil {
+				return err
+			}
+			if reads != 0 {
+				return nodeConflict("S3 grants must settle before identity reset")
+			}
 		}
 		for _, query := range queries {
 			var count int64

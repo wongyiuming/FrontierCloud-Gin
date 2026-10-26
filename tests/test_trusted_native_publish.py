@@ -62,7 +62,7 @@ def oci_payload(component='web', revision=REVISION, mutate=None):
     labels = {'org.opencontainers.image.source': publisher.registry_images.SOURCE,
               'org.opencontainers.image.revision': revision, 'frontiercloud.revision': revision,
               'frontiercloud.component': component, 'frontiercloud.runtime': 'go',
-              'frontiercloud.schema-generation': '7', 'frontiercloud.release-manifest-version': '1'}
+              'frontiercloud.schema-generation': publisher.registry_images.SCHEMA_GENERATION, 'frontiercloud.release-manifest-version': '1'}
     configuration = {'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': labels}}
     if mutate: mutate(configuration)
     config = encoded(configuration)

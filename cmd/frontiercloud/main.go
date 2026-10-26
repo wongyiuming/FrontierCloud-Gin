@@ -24,11 +24,13 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/s3media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 	storecontract "github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/stun"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
 	"path/filepath"
 )
 
@@ -247,6 +249,13 @@ func serve() error {
 	defer controlTransport.Close()
 	controlService := node.NewService(database.Nodes(), identity, controlTransport)
 	mediaService.ConfigureCluster(database.Nodes(), database.Pool(), controlService)
+	if settings.DeploymentMode != config.DeploymentStorage {
+		repository, ok := database.Pool().(storecontract.S3Repository)
+		if !ok { return errors.New("business runtime requires the durable S3 repository") }
+		private, err := vault.OpenExisting(settings.SecretsDirectory)
+		if err != nil { return err }
+		mediaService.ConfigureS3(s3media.New(repository, database.Nodes(), private))
+	}
 	recordingsRoot, err := os.OpenRoot(filepath.Join(settings.DataRoot, "recordings"))
 	if err != nil {
 		return err
@@ -351,6 +360,11 @@ func serve() error {
 	go func() { defer close(deletionDone); mediaService.RunGlobalDeletes(shutdown) }()
 	uploadRecoveryDone := make(chan struct{})
 	go func() { defer close(uploadRecoveryDone); mediaService.RunUploadRecovery(shutdown) }()
+	s3RecoveryDone := make(chan struct{})
+	go func() {
+		defer close(s3RecoveryDone)
+		if settings.DeploymentMode != config.DeploymentStorage { mediaService.RunS3Recovery(shutdown) }
+	}()
 	recordingDone := make(chan struct{})
 	go func() {
 		defer close(recordingDone)
@@ -367,6 +381,7 @@ func serve() error {
 		<-publisherDone
 		<-deletionDone
 		<-uploadRecoveryDone
+		<-s3RecoveryDone
 		<-recordingDone
 		<-backupDone
 		<-controlDone

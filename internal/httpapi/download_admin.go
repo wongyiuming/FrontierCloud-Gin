@@ -22,6 +22,10 @@ func (a *Admin) download(c *gin.Context) {
 		return
 	}
 	defer download.Close()
+	if download.RequiresBrowserSource() {
+		browserSourceRequired(c)
+		return
+	}
 	source, _ := json.Marshal(paths)
 	kind := "zip"
 	if len(download.Items) == 1 && !download.Items[0].Directory {

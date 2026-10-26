@@ -7,6 +7,7 @@ production inspection or a new execution of every acceptance gate.
 | --- | --- | --- |
 | Roles | Standalone, one Master, Direct / Relay storage | No independent storage business site, multi-Master or automatic failover. |
 | Nodes | Compact summaries; manually expand resource, certificate, backup and retirement details | Data refresh preserves expansion only for the current page session. |
+| S3 storage | Optional Master-owned private bucket adapters; music/video upload, playback and managed download | Logical capacity, no physical-capacity observation, native pairing, recording, Compute or business Backup. See [S3 contract](s3-storage.md). |
 | Node resource migration | Independent planning/task/progress/control module | Whole-parent cutover; no Master data relay or Master Local endpoint. |
 | Continuous audio | Compatible MP3 uses one MSE session, rolling buffering and interrupted-read retry | No 128 MiB total-track cap; other formats retain browser/single-track limits. |
 | Artwork | Visible queue metadata on demand; best-effort small player thumbnails | Pictures must not block playback; large covers keep original image quality. |

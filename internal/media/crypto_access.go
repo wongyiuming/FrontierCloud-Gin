@@ -283,6 +283,8 @@ type DownloadEntry struct {
 	URL        string                `json:"url"`
 	Bytes      int64                 `json:"size_bytes"`
 	Encryption *mediacrypto.Metadata `json:"encryption,omitempty"`
+	Transport  string                `json:"transport,omitempty"`
+	ObjectID   string                `json:"object_id,omitempty"`
 	Snapshot   string                `json:"-"`
 }
 
@@ -343,8 +345,13 @@ func (d *Download) Plan(limit int) ([]DownloadEntry, error) {
 		return nil
 	}
 	for _, row := range d.globals {
+		before := len(entries)
 		if err := add(row.Path, row.ID, row.Bytes, globalDownloadRevision(row)); err != nil {
 			return nil, err
+		}
+		if len(entries) > before {
+			entries[len(entries)-1].Transport = row.Transport
+			entries[len(entries)-1].ObjectID = row.ObjectID
 		}
 	}
 	var visit func(string) error

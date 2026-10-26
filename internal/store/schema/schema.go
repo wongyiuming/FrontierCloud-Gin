@@ -74,6 +74,9 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 		if _, err := conn.ExecContext(ctx, "INSERT INTO ip_security_projection(singleton) VALUES (1)"); err != nil {
 			return err
 		}
+		if err := writeS3Journal(ctx, conn); err != nil {
+			return err
+		}
 		if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema(singleton, generation, created_at) VALUES (1, ?, ?)", migrations.Generation, time.Now().Unix()); err != nil {
 			return err
 		}
@@ -233,6 +236,26 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 			}
 			generation = 7
 		}
+		if generation == 7 {
+			if err := checkS3Journal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := prepareS3Schema(ctx, conn, backend, statements, true); err != nil {
+				return fmt.Errorf("migrate Master S3 journals: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writeS3Journal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=8 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 8
+		}
 		if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)
 		}
@@ -246,6 +269,12 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 		if len(match) == 2 && !tables[match[1]] {
 			return fmt.Errorf("incomplete schema: missing table %s", match[1])
 		}
+	}
+	if err := checkS3Journal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := prepareS3Schema(ctx, conn, backend, statements, false); err != nil {
+		return fmt.Errorf("verify Master S3 journals: %w", err)
 	}
 	_, err = conn.ExecContext(ctx, "COMMIT")
 	return err

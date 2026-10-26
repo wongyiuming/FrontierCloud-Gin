@@ -4,6 +4,11 @@ An upload is a reservation, a byte transfer and a confirmed publication, not
 one database INSERT. Refresh/close can interrupt transfer or lose finalize.
 Browser `finally` is best-effort only; it is not run reliably on page teardown.
 
+The native Local/Direct/Relay lifecycle is detailed below. Optional S3 uses a
+separate durable multipart journal, bounded recovery batches and grant-settlement
+fences; see the [S3 recovery contract](s3-storage.md#object-identity-and-failure-recovery).
+Neither path treats a browser close or elapsed time as proof of provider absence.
+
 ## Recovery rules
 
 The Master retains the existing 30-minute reservation deadline. A background

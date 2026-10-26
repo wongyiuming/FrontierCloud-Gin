@@ -23,6 +23,9 @@ func (s *Service) reconcileExpiredUpload(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	if v.Member.Transport == "S3" || v.Member.Kind == "S3" {
+		return store.ErrNodeState
+	}
 	if v.State != "reserved" || v.ExpiresAt > time.Now().Unix() {
 		return nil
 	}

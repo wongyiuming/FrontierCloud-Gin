@@ -78,7 +78,9 @@
                 const {done, value} = await reader.read();
                 if (done) break;
                 length += value.byteLength;
-                if (length > maximum) throw new Error('存储响应超过加密分块边界');
+                if (length > maximum) {
+                    const error = new Error('存储响应超过加密分块边界'); error.status = 422; throw error;
+                }
                 chunks.push(value);
             }
         } catch (error) {

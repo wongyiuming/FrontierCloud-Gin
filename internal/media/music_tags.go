@@ -332,6 +332,9 @@ func (s *Service) musicMetadata(ctx context.Context, name, id string) (MusicTags
 		if row.Kind != "audio" || !strings.HasSuffix(strings.ToLower(row.Path), ".mp3") {
 			return MusicTags{}, ErrPath
 		}
+		if row.Transport == "S3" {
+			return MusicTags{}, nil
+		}
 		if repository, ok := s.repository.(store.EncryptionRepository); ok {
 			meta, e := repository.Encryption(ctx, row.ID)
 			if e != nil {
@@ -404,7 +407,9 @@ func (s *Service) musicMetadata(ctx context.Context, name, id string) (MusicTags
 }
 func (s *Service) DecorateMusicTracks(ctx context.Context, tracks []Track) {
 	for i := range tracks {
-		tracks[i].NativeMetadata = tracks[i].Type == "audio" && tracks[i].Encryption == nil && strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3")
+		plainMP3 := tracks[i].Type == "audio" && tracks[i].Encryption == nil && strings.HasSuffix(strings.ToLower(tracks[i].MediaPath), ".mp3")
+		tracks[i].NativeMetadata = plainMP3 && tracks[i].Transport != "S3"
+		tracks[i].BrowserMetadata = plainMP3 && tracks[i].Transport == "S3"
 	}
 }
 

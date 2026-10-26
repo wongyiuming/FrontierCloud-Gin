@@ -35,6 +35,7 @@ type Public struct {
 	brand              *brand.Service
 	crypto             *mediacrypto.Manager
 	cryptoSessionLimit cryptoSessionAdmission
+	cryptoSourceLimit  s3SourceAdmission
 	control            *node.Service
 }
 
@@ -263,7 +264,9 @@ func (p *Public) stream(c *gin.Context) {
 func (p *Public) deliver(c *gin.Context, name, id string) {
 	delivery, err := p.media.Delivery(c.Request.Context(), name, id, c.GetString("request_id"), c.GetString("trace_id"), p.settings.NginxMedia)
 	if err != nil {
-		if errors.Is(err, media.ErrUnavailable) {
+		if errors.Is(err, media.ErrBrowserSource) {
+			browserSourceRequired(c)
+		} else if errors.Is(err, media.ErrUnavailable) {
 			noStore(c)
 			c.Header("Retry-After", "30")
 			detail(c, 503, err.Error())

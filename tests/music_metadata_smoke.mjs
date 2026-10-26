@@ -331,4 +331,26 @@ for (const canvas of [undefined, class {getContext() { return {}; }}, class {get
     assert.equal(legacy.window.FrontierMusicMetadata.canThumbnail(), false, 'missing canvas/encoder/2D context skips optional artwork');
     assert.equal(await legacy.window.FrontierMusicMetadata.thumbnail('/api/v1/media/cover?legacy'), null);
 }
-console.log('music-metadata-smoke-ok: ID3, bounded retry and isolated small-artwork rendering');
+{
+    const requests = [];
+    const data = new Uint8Array(200); data.set(ascii('TAG'), 72); data.set(ascii('S3 title'), 75);
+    const object = {media_path: 'music/s3.mp3', transport: 'S3', object_id: 'owned-object', size_bytes: data.length};
+    const s3 = {window: {addEventListener() {}, FrontierCryptoCommon: {
+        validate() { throw new Error('plaintext needs no encryption metadata'); },
+        async boundedBytes(response, size) { const bytes = new Uint8Array(await response.arrayBuffer()); assert.equal(bytes.length, size); return bytes; }},
+        FrontierMediaCrypto: {async prepareCatalog(entries) {
+            assert.equal(entries[0].object_id, 'owned-object'); entries[0].url = '/__fc_media/signed-header-route';
+        }}},
+        TextEncoder, TextDecoder, Uint8Array, DataView, Blob, URL, URLSearchParams, AbortController, setTimeout, clearTimeout,
+        fetch: async (url, options) => {
+            assert.equal(url, '/__fc_media/signed-header-route'); requests.push(url);
+            const range = /^bytes=(\d+)-(\d+)$/.exec(options.headers.Range);
+            const start = Number(range[1]), end = Number(range[2]);
+            return new Response(data.slice(start, end + 1), {status: 206, headers: {
+                'Content-Range': `bytes ${start}-${end}/${data.length}`, 'Content-Length': String(end - start + 1)}});
+        }};
+    vm.runInNewContext(fs.readFileSync(new URL('../static/js/music-metadata.js', import.meta.url), 'utf8'), s3);
+    const metadata = await s3.window.FrontierMusicMetadata.metadata(object);
+    assert.equal(metadata.title, 'S3 title'); assert.equal(requests.length, 2);
+}
+console.log('music-metadata-smoke-ok: ID3, bounded retry, S3 SW metadata and isolated small-artwork rendering');

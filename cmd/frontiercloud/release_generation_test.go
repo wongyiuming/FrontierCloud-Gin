@@ -16,14 +16,18 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
-func TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity(t *testing.T) {
-	if migrations.Generation != 7 {
-		t.Skip("explicit generation-7 migration acceptance")
+func TestPrepareReleaseExplicitPriorGenerationsUseRealDDLAndKeepIdentity(t *testing.T) {
+	if migrations.Generation != 7 && migrations.Generation != 8 {
+		t.Skip("explicit generation-7 and generation-8 migration acceptance")
 	}
 	if runtime.GOOS == "windows" {
 		t.Skip("native secret ownership initialization requires Unix")
 	}
-	for _, sourceGeneration := range []int{4, 5, 6} {
+	sources := []int{4, 5, 6}
+	if migrations.Generation == 8 {
+		sources = append(sources, 7)
+	}
+	for _, sourceGeneration := range sources {
 		for _, kind := range []string{"success", "unconfirmed", "busy-source"} {
 			t.Run(fmt.Sprintf("%d-%s", sourceGeneration, kind), func(t *testing.T) {
 				ctx := context.Background()
@@ -83,13 +87,13 @@ func TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity(t *t
 				if kind == "unconfirmed" {
 					confirmation = strings.Repeat("f", 32)
 				}
-				e = prepareReleaseCommand([]string{"--confirm-generation", "7", "--from-generation", fmt.Sprint(sourceGeneration), "--confirm-node-id", confirmation, "--backup-sha256", strings.Repeat("a", 64)})
+				e = prepareReleaseCommand([]string{"--confirm-generation", fmt.Sprint(migrations.Generation), "--from-generation", fmt.Sprint(sourceGeneration), "--confirm-node-id", confirmation, "--backup-sha256", strings.Repeat("a", 64)})
 				var generation int
 				if err := db.Database().QueryRowContext(ctx, "SELECT generation FROM frontiercloud_schema WHERE singleton=1").Scan(&generation); err != nil {
 					t.Fatal(err)
 				}
 				if kind == "success" {
-					if e != nil || generation != 7 {
+					if e != nil || generation != migrations.Generation {
 						t.Fatal("forward migration failed", generation, e)
 					}
 				} else {
@@ -105,6 +109,25 @@ func TestPrepareReleaseExplicitPriorGenerationsTo7UseRealDDLAndKeepIdentity(t *t
 					t.Fatal("schema preparation opened public runtime", e)
 				}
 			})
+		}
+	}
+}
+
+func TestPrepareReleaseSourceAdmissionIsExplicit(t *testing.T) {
+	if migrations.Generation != 8 {
+		t.Skip("explicit generation-8 source admission")
+	}
+	for _, source := range []int{1, 2, 3, 9, 10} {
+		if supportedReleaseSource(source) {
+			t.Fatal("undefined source generation admitted", source)
+		}
+		if err := prepareReleaseCommand([]string{"--confirm-generation", "8", "--from-generation", fmt.Sprint(source), "--confirm-node-id", strings.Repeat("a", 32), "--backup-sha256", strings.Repeat("b", 64)}); err == nil {
+			t.Fatal("undefined source reached runtime preparation", source)
+		}
+	}
+	for _, source := range []int{4, 5, 6, 7, 8} {
+		if !supportedReleaseSource(source) {
+			t.Fatal("retained explicit migration path was dropped", source)
 		}
 	}
 }

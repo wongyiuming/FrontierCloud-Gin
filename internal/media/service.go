@@ -38,6 +38,7 @@ type Service struct {
 	pool             store.PoolRepository
 	control          *node.Service
 	owned            store.OwnedStorageRepository
+	s3               s3Control
 	catalog          *catalogCache
 	controlLeaseMu   sync.Mutex
 	controlLeaseFile *os.File
@@ -54,17 +55,21 @@ type Category struct {
 	URL  string `json:"url"`
 }
 type Track struct {
-	MediaPath      string                `json:"media_path"`
-	Title          string                `json:"title"`
-	Artist         string                `json:"artist"`
-	Album          string                `json:"album,omitempty"`
-	Type           string                `json:"type"`
-	URL            string                `json:"url"`
-	Cover          string                `json:"cover"`
-	MediaID        string                `json:"media_id"`
-	ResourceID     string                `json:"resource_id,omitempty"`
-	Encryption     *mediacrypto.Metadata `json:"encryption,omitempty"`
-	NativeMetadata bool                  `json:"native_metadata,omitempty"`
+	MediaPath       string                `json:"media_path"`
+	Title           string                `json:"title"`
+	Artist          string                `json:"artist"`
+	Album           string                `json:"album,omitempty"`
+	Type            string                `json:"type"`
+	URL             string                `json:"url"`
+	Cover           string                `json:"cover"`
+	MediaID         string                `json:"media_id"`
+	ResourceID      string                `json:"resource_id,omitempty"`
+	Encryption      *mediacrypto.Metadata `json:"encryption,omitempty"`
+	NativeMetadata  bool                  `json:"native_metadata,omitempty"`
+	BrowserMetadata bool                  `json:"browser_metadata,omitempty"`
+	Transport       string                `json:"transport,omitempty"`
+	ObjectID        string                `json:"object_id,omitempty"`
+	SizeBytes       int64                 `json:"size_bytes,omitempty"`
 	store.PlaybackStats
 	HasLyrics *bool  `json:"has_lyrics,omitempty"`
 	KaraokeID string `json:"karaoke_id"`
@@ -430,8 +435,12 @@ func (s *Service) localCatalog(ctx context.Context, kind, name, session string, 
 		if hidden(file, h) {
 			continue
 		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
 		objects = append(objects, store.MediaObject{Path: file, Kind: objectKind})
-		items = append(items, Track{MediaPath: file, Title: strings.TrimSuffix(entry.Name(), path.Ext(entry.Name())), Artist: "前沿娱乐", Type: objectKind, URL: "/api/v1/media/stream?file_path=" + quotePath(file), Cover: "/favicon.ico"})
+		items = append(items, Track{MediaPath: file, Title: strings.TrimSuffix(entry.Name(), path.Ext(entry.Name())), Artist: "前沿娱乐", Type: objectKind, URL: "/api/v1/media/stream?file_path=" + quotePath(file), Cover: "/favicon.ico", Transport: "Local", SizeBytes: info.Size()})
 	}
 	ids, err := s.repository.EnsureObjects(ctx, objects)
 	if err != nil {
@@ -448,6 +457,7 @@ func (s *Service) localCatalog(ctx context.Context, kind, name, session string, 
 	for i := range items {
 		item := &items[i]
 		item.MediaID = ids[item.MediaPath]
+		item.ObjectID = item.MediaID
 		item.PlaybackStats = stats[item.MediaID]
 		if kind == "music" {
 			if _, err := s.lyricFor(ctx, store.MediaObject{ID: item.MediaID, Path: item.MediaPath, Kind: "audio"}); err != nil {
