@@ -436,6 +436,7 @@
         const header = make('header', 'node-card-header');
         const title = make('div', 'node-card-title');
         title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : relation?.peer_endpoint || '存储节点'), make('small', '', member.member_kind === 'MasterLocal' ? '本机资源' : member.transport || relation?.mode || 'Storage'));
+        if (member.member_kind === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${member.member_id || '未知'}`));
         const badges = make('div', 'node-card-badges');
         badges.append(pill(member.member_kind === 'MasterLocal' ? 'LOCAL' : String(relation?.status || 'UNKNOWN').toUpperCase(), member.member_kind === 'MasterLocal' ? 'info' : relation?.status === 'online' ? 'good' : 'bad'), pill(member.transport || relation?.mode || 'Local', 'muted'));
         header.append(title, badges);
@@ -620,12 +621,21 @@
     function renderRows(node, observed, s3) {
         const body = $('nodeRelationships'); body.replaceChildren();
         const localCertificate = node.certificate ? {local: true, relationship_id: node.node_id, summary: {certificate: node.certificate}} : null;
-        const relations = new Map((node.relationships || []).map(item => [item.peer_id, item]));
+        const relations = new Map();
+        for (const relation of node.relationships || []) {
+            if (!relations.has(relation.peer_id)) relations.set(relation.peer_id, []);
+            relations.get(relation.peer_id).push(relation);
+        }
+        const memberRelation = member => {
+            const matches = relations.get(member.member_id) || [];
+            const current = member.relationship_id ? matches.filter(item => item.relationship_id === member.relationship_id) : matches;
+            return current.length === 1 ? current[0] : null;
+        };
         const observedMembers = new Map((observed.members || []).map(item => [item.member_id, item]));
         if (node.storage_pool) {
             for (const member of node.storage_pool.members || []) {
                 if (member.member_id === 'auto' || member.member_kind === 'Auto' || member.member_kind === 'S3') continue;
-                body.append(memberCard(member, relations.get(member.member_id), observedMembers.get(member.member_id), localCertificate));
+                body.append(memberCard(member, memberRelation(member), observedMembers.get(member.member_id), localCertificate));
             }
 
         }
@@ -633,7 +643,11 @@
         if (localCertificate && !(node.storage_pool?.members || []).some(member => member.member_kind === 'MasterLocal')) {
             const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
             const card = make('article', 'node-card');
-            const header = make('header', 'node-card-header'); header.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`));
+            const header = make('header', 'node-card-header');
+            const title = make('div', 'node-card-title');
+            title.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`));
+            if (node.role === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${node.node_id || '未知'}`));
+            header.append(title);
             collapsibleNodeCard(card, header, node.node_id, '本机证书', () => {
                 const grid = make('div', 'node-card-grid'); grid.append(certificatePanel(localCertificate)); return [grid];
             });

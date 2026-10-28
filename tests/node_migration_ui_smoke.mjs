@@ -22,8 +22,9 @@ const calls = [];
 const plan = {plan_id: '5'.repeat(32), request_id: '6'.repeat(32), state: 'ready', source: {member_id: task.source_id, transport: 'Direct'}, target: {member_id: task.target_id, transport: 'Relay'}, review_sha256: 'a'.repeat(64), unit_count: 1, object_count: 1, total_bytes: 10, verified_objects: 1, verified_bytes: 10, objects: [{resource_kind: 'media', physical_path: '<plan onerror=alert(1)>', parent_path: 'music/unit', size_bytes: 10}], blockers: [], source_residuals: [], complete: true};
 let confirm = false;
 let prompted = "wrong-source";
+let promptText = '';
 let execution = null;
-const context = vm.createContext({document, window: {confirm: () => confirm, prompt: () => prompted}, crypto: webcrypto, Uint8Array, Date, console, setTimeout, setInterval, clearInterval,
+const context = vm.createContext({document, window: {confirm: () => confirm, prompt: text => { promptText = text; return prompted; }}, crypto: webcrypto, Uint8Array, URL, Date, console, setTimeout, setInterval, clearInterval,
     requestHeaders: () => ({'X-CSRF-Token': 'fixture'}),
     api: async (path, options = {}) => {
         calls.push({path, options});
@@ -82,15 +83,31 @@ const release = calls.filter(call => call.options.method === 'POST').at(-1);
 assert.match(release.path, /\/release-drain$/);
 assert.equal(JSON.parse(release.options.body).confirm_source_id, task.source_id);
 assert.equal(JSON.parse(release.options.body).revision, task.revision);
-const nodes = {relationships: [{peer_id: task.source_id, state: 'active'}, {peer_id: task.target_id, state: 'active'}, {peer_id: '8'.repeat(32), state: 'retiring'}], storage_pool: {members: [
-    {member_id: task.source_id, member_kind: 'Follower', transport: 'Direct', health: 'online', storage_enabled: 1, writable: 1},
+const nodes = {relationships: [
+    {relationship_id: '0'.repeat(32), peer_id: task.source_id, state: 'revoked', peer_endpoint: 'https://old.example'},
+    {relationship_id: 'a'.repeat(32), peer_id: task.source_id, state: 'active', peer_endpoint: 'https://source.example:8443'},
+    {peer_id: task.target_id, state: 'active', peer_endpoint: 'https://target.example'},
+    {peer_id: '8'.repeat(32), state: 'retiring', peer_endpoint: 'https://retiring.example'}], storage_pool: {members: [
+    {member_id: task.source_id, relationship_id: 'a'.repeat(32), member_kind: 'Follower', transport: 'Direct', health: 'online', storage_enabled: 1, writable: 1},
     {member_id: task.target_id, member_kind: 'Follower', transport: 'Relay', health: 'online', storage_enabled: 1, writable: 1},
     {member_id: '9'.repeat(32), member_kind: 'Local', transport: 'Local', health: 'online'},
     {member_id: '8'.repeat(32), member_kind: 'Follower', transport: 'Direct', health: 'online', storage_enabled: 1, writable: 1},
+    {member_id: '7'.repeat(32), member_kind: 'S3', transport: 'S3', health: 'online', storage_enabled: 1, writable: 1},
 ]}};
 let planning = context.window.testMigrationPlanPanel(nodes);
 assert.match(text(planning), /Master Local 不支持/);
 assert.match(text(planning), /退役处理中/);
+assert.match(text(planning), new RegExp(`source\\.example:8443 · ${task.source_id}`));
+assert.match(text(planning), new RegExp(`target\\.example · ${task.target_id}`));
+assert(!text(planning).includes('old.example'), 'only the exact current relationship may supply a display endpoint');
+const mappedQueue = context.window.testMigrationPanel(page(), nodes);
+assert.match(text(mappedQueue), new RegExp(`source\\.example:8443 · ${task.source_id}`));
+assert.match(text(mappedQueue), new RegExp(`target\\.example · ${task.target_id}`));
+const ambiguous = {...nodes, storage_pool: {members: nodes.storage_pool.members.map(member => member.member_id === task.source_id ? {...member, relationship_id: null} : member)}};
+const ambiguousPlan = context.window.testMigrationPlanPanel(ambiguous);
+const ambiguousOptions = all(ambiguousPlan).filter(item => item.tag === 'option' && item.value === task.source_id);
+assert(ambiguousOptions.every(item => item.disabled && item.textContent.includes(`NodeID ${task.source_id}`)), 'an ambiguous relationship must not be guessed');
+assert(all(planning).filter(item => item.tag === 'option' && item.value === '7'.repeat(32)).every(item => item.disabled), 'S3 migration remains unavailable on this baseline');
 assert(all(planning).filter(item => item.tag === 'option' && item.value === '8'.repeat(32)).every(item => item.disabled));
 assert(all(planning).filter(item => item.tag === 'option' && item.value === task.target_id).every(item => !item.disabled));
 const selects = all(planning).filter(item => item.tag === 'select');
@@ -106,11 +123,23 @@ prompted = 'wrong confirmation';
 let starts = calls.filter(call => call.path.endsWith('/start')).length;
 await button(planning, '确认并开始迁移').onclick();
 assert.equal(calls.filter(call => call.path.endsWith('/start')).length, starts);
+prompted = 'true';
+await button(planning, '确认并开始迁移').onclick();
+assert.equal(calls.filter(call => call.path.endsWith('/start')).length, starts, 'confirmation is case-sensitive');
 prompted = `${task.source_id} -> ${task.target_id}`;
 await button(planning, '确认并开始迁移').onclick();
+assert.equal(calls.filter(call => call.path.endsWith('/start')).length, starts, 'the old long string does not authorize this confirmation');
+nodes.relationships[1].peer_endpoint = 'https://renamed.example:8443';
+prompted = 'True';
+await button(planning, '确认并开始迁移').onclick();
 const start = calls.filter(call => call.path.endsWith('/start')).at(-1);
+assert.match(promptText, /请输入 True/);
+assert.match(promptText, new RegExp(`renamed\\.example:8443 · ${task.source_id}`));
+assert.match(promptText, new RegExp(`target\\.example · ${task.target_id}`));
 assert.deepEqual(Object.keys(JSON.parse(start.options.body)).sort(), ['confirm_source_id', 'confirm_target_id', 'review_sha256']);
 assert.equal(JSON.parse(start.options.body).review_sha256, plan.review_sha256);
+assert.equal(JSON.parse(start.options.body).confirm_source_id, task.source_id);
+assert.equal(JSON.parse(start.options.body).confirm_target_id, task.target_id);
 assert.equal(start.options.headers['X-CSRF-Token'], 'fixture');
 plan.state = 'failed'; plan.error_code = 'physical_observation_changed_or_unavailable'; plan.error_stage = 'source_content';
 planning = context.window.testMigrationPlanPanel(nodes);

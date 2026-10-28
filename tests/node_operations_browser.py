@@ -28,9 +28,10 @@ def run(output):
       object_count:20,total_bytes:200,verified_objects:20,verified_bytes:200,objects:[],
       blockers:[],source_residuals:[],complete:false,next:'b'.repeat(64)};
     window.nodes={role:'Master',node_id:'4'.repeat(32),protocol:2,app_version:'fixture',certificate:{state:'ready',mode:'automatic',hostname:'fixture.localhost'},
-      relationships:[{relationship_id:'6'.repeat(32),peer_id:sourceID,state:'active',status:'online',direction:'downstream'},
-      {relationship_id:'7'.repeat(32),peer_id:targetID,state:'active',status:'online',direction:'downstream'}],
-      storage_pool:{members:[{member_id:'auto',member_kind:'Auto',transport:'Automatic'}, {member_id:sourceID,member_kind:'Follower',transport:'Direct',health:'online',storage_enabled:1,writable:1},
+      relationships:[{relationship_id:'6'.repeat(32),peer_id:sourceID,state:'active',status:'online',direction:'downstream',peer_endpoint:'https://source.example:8443'},
+      {relationship_id:'7'.repeat(32),peer_id:targetID,state:'active',status:'online',direction:'downstream',peer_endpoint:'https://target.example'},
+      {relationship_id:'0'.repeat(32),peer_id:sourceID,state:'revoked',status:'offline',direction:'downstream',peer_endpoint:'https://old.example'}],
+      storage_pool:{members:[{member_id:'auto',member_kind:'Auto',transport:'Automatic'}, {member_id:sourceID,relationship_id:'6'.repeat(32),member_kind:'Follower',transport:'Direct',health:'online',storage_enabled:1,writable:1},
       {member_id:targetID,member_kind:'Follower',transport:'Relay',health:'online',storage_enabled:1,writable:1},
       {member_id:'8'.repeat(32),member_kind:'MasterLocal',transport:'Local',health:'online'}]}};
     window.requestHeaders=()=>({'X-CSRF-Token':'browser-fixture'});
@@ -56,6 +57,7 @@ def run(output):
       if(path.includes('/migrations/'+task.task_id)) return {task:{...task},objects:[],object_stages:[],unit_stages:[],complete:true};
       if(path.includes('/nodes/migrations')) return {tasks:[{...task}],complete:true};
       if(path.endsWith('/observability')) return {members:[],relationships:[]};
+      if(path==='/api/v1/media/admin/nodes/s3' && !options.method) return {members:[]};
       if(path==='/api/v1/media/admin/nodes') return nodes;
       throw Error('unexpected fixture API '+path);
     };
@@ -75,6 +77,7 @@ def run(output):
         page.add_script_tag(content=(source / 'static/js/node-migrations.js').read_text())
         original_order = page.locator('[data-admin-module]').evaluate_all('(x)=>x.map(e=>e.dataset.adminModule)')
         page.locator('#nodesRefresh').click()
+        expect(page.locator('#nodeOperationStatus')).to_have_text('已刷新')
         expect(page.locator('#nodeRelationships')).not_to_contain_text('target_unavailable')
         assert not page.evaluate("calls.some(x=>x.path.includes('/nodes/migrations'))")
         page.locator('#migrationsRefresh').click()
@@ -83,6 +86,12 @@ def run(output):
         expect(page.locator('.node-card-title strong').filter(has_text='auto')).to_have_count(0)
         expect(page.locator('#nodeRelationships')).not_to_contain_text('Automatic')
         expect(page.locator('#nodeRelationships .node-card-grid')).to_have_count(0)
+        source_card = page.locator('#nodeRelationships .node-card').filter(has=page.locator('.node-card-title strong', has_text='source.example'))
+        expect(source_card.locator('.node-member-id')).to_have_text('NodeID ' + '2' * 32)
+        target_card = page.locator('#nodeRelationships .node-card').filter(has=page.locator('.node-card-title strong', has_text='target.example'))
+        expect(target_card.locator('.node-member-id')).to_have_text('NodeID ' + '3' * 32)
+        expect(page.locator('#nodeIdentity')).not_to_contain_text('4' * 32)
+        expect(page.locator('#nodeRelationships')).not_to_contain_text('old.example')
         toggles = page.locator('#nodeRelationships .node-details-toggle')
         for index in range(toggles.count()):
             expect(toggles.nth(index)).to_have_attribute('aria-expanded', 'false')
@@ -90,12 +99,16 @@ def run(output):
         page.locator('#nodesRefresh').click()
         expect(page.locator('#nodeRelationships .node-details-toggle[aria-expanded="false"]')).to_have_count(0)
         local_card = page.locator('.node-card').filter(has=page.locator('.node-card-title strong', has_text='Master Local'))
+        expect(local_card.locator('.node-member-id')).to_have_count(0)
+        expect(local_card).not_to_contain_text('8' * 32)
         expect(local_card.locator('.node-card-grid')).to_contain_text('本机证书')
         expect(local_card.locator('.node-card-grid > .node-resource-panel')).to_have_count(4)
         planner = page.locator('.node-resource-panel').filter(has=page.get_by_text('整节点迁移计划', exact=True))
         if planner.count() == 0:
             planner = page.locator('.node-resource-panel').filter(has=page.get_by_role('button', name='生成只读迁移计划', exact=True))
         expect(planner).to_contain_text('Master Local 不支持')
+        expect(planner.locator('select').nth(0).locator('option[value="' + '2' * 32 + '"]')).to_have_text('source.example:8443 · ' + '2' * 32 + ' · Direct')
+        expect(planner.locator('select').nth(1).locator('option[value="' + '3' * 32 + '"]')).to_have_text('target.example · ' + '3' * 32 + ' · Relay')
         planner.locator('select').nth(0).select_option('2' * 32)
         planner.locator('select').nth(1).select_option('3' * 32)
         planner.get_by_role('button', name='生成只读迁移计划', exact=True).click()
@@ -105,7 +118,15 @@ def run(output):
         page.once('dialog', lambda dialog: dialog.accept('wrong'))
         planner.get_by_role('button', name='确认并开始迁移', exact=True).click()
         assert page.evaluate("calls.filter(x=>x.path.endsWith('/start')).length") == 0
-        page.once('dialog', lambda dialog: dialog.accept('2' * 32 + ' -> ' + '3' * 32))
+        page.once('dialog', lambda dialog: dialog.accept('true'))
+        planner.get_by_role('button', name='确认并开始迁移', exact=True).click()
+        assert page.evaluate("calls.filter(x=>x.path.endsWith('/start')).length") == 0
+        def confirm_migration(dialog):
+            assert '请输入 True' in dialog.message
+            assert 'source.example:8443 · ' + '2' * 32 in dialog.message
+            assert 'target.example · ' + '3' * 32 in dialog.message
+            dialog.accept('True')
+        page.once('dialog', confirm_migration)
         planner.get_by_role('button', name='确认并开始迁移', exact=True).click()
         expect(planner).to_contain_text('started')
         page.get_by_role('button', name='重试', exact=True).click()
@@ -166,6 +187,7 @@ def run(output):
         page.locator('#nodeRelationships .node-details-toggle').click()
         expect(page.locator('#nodeRelationships .node-card-grid')).to_contain_text('本机证书')
         expect(page.locator('#nodeRelationships .node-card')).to_have_count(1)
+        expect(page.locator('#nodeRelationships .node-member-id')).to_have_text('NodeID ' + '4' * 32)
         page.locator('#migrationsRefresh').evaluate('button => button.click()')
         expect(page.locator('#migrationContent')).to_contain_text('请在主节点管理资源迁移')
         page.locator('#nodeRelationships .node-card').screenshot(path=str(output / 'node-local-certificate-follower-card.png'))
