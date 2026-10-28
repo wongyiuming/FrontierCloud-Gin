@@ -35,6 +35,31 @@
         return grid;
     }
 
+    // A historical task may outlive a node relationship. Resolve an endpoint
+    // only when it is unambiguously bound to the member's current identity.
+    function memberRelationship(node, member) {
+        if (!member || typeof member.member_id !== 'string') return null;
+        const matches = (node?.relationships || []).filter(item => item.peer_id === member.member_id);
+        const current = member.relationship_id ? matches.filter(item => item.relationship_id === member.relationship_id) : matches;
+        return current.length === 1 ? current[0] : null;
+    }
+
+    function memberLabel(node, id) {
+        const member = (node?.storage_pool?.members || []).find(item => item.member_id === id);
+        if (member?.member_kind === 'S3') return `S3 · ${id}`;
+        if (member?.member_kind === 'MasterLocal') return `Master Local · ${id}`;
+        if (member?.member_kind !== 'Follower') return `NodeID ${id}`;
+        const relation = memberRelationship(node, member);
+        let host = '';
+        if (typeof relation?.peer_endpoint === 'string') {
+            try {
+                const endpoint = new URL(relation.peer_endpoint);
+                if (endpoint.protocol === 'https:' && !endpoint.username && !endpoint.password) host = endpoint.host;
+            } catch (_) { /* A missing or malformed endpoint is not an identity. */ }
+        }
+        return host ? `${host} · ${id}` : `NodeID ${id}`;
+    }
+
     async function action(work, defaultMessage = '已完成') {
         try {
             setStatus('处理中');
@@ -65,12 +90,12 @@
             select.children[0].value = '';
             for (const member of members) {
                 const reasons = [];
-                const relationship = (node.relationships || []).find(value => value.peer_id === member.member_id);
+                const relationship = memberRelationship(node, member);
                 if (member.member_kind !== 'Follower') reasons.push('Master Local 不支持');
                 if (member.member_kind === 'Follower' && relationship?.state !== 'active') reasons.push(relationship?.state === 'retiring' ? '退役处理中' : '节点关系未生效');
                 if (member.health !== 'online') reasons.push('离线或不健康');
                 if (key === 'target' && (!member.storage_enabled || !member.writable || member.draining)) reasons.push('不可写或排空中');
-                const option = make('option', '', `${member.member_id} · ${member.transport || member.member_kind}${reasons.length ? ' · ' + reasons.join('、') : ''}`);
+                const option = make('option', '', `${memberLabel(node, member.member_id)} · ${member.transport || member.member_kind}${reasons.length ? ' · ' + reasons.join('、') : ''}`);
                 option.value = member.member_id; option.disabled = member.member_kind !== 'Follower' || relationship?.state !== 'active'; select.append(option);
             }
             select.value = migrationSelection[key];
@@ -89,7 +114,7 @@
         controls.append(generate); section.append(controls);
         const plan = migrationPlan;
         if (!plan) return section;
-        section.append(kv([['计划', plan.plan_id], ['状态', plan.state], ['源 → 目标类型', `${plan.source.transport || '?'} → ${plan.target.transport || '?'}`], ['归属单元 / 对象', `${plan.unit_count} / ${plan.object_count}`], ['实际字节', dataSize(plan.total_bytes)], ['已校验', `${plan.verified_objects} 个 / ${dataSize(plan.verified_bytes)}`], ['目标已用 / 预留', `${dataSize(plan.target.used_bytes)} / ${dataSize(plan.target.reserved_bytes)}`], ['目标最小可用 / 额外需求', `${dataSize(plan.target_physical_free)} / ${dataSize(plan.additional_target_bytes)}`], ['计划到期', localTime(plan.expires_at)]]));
+        section.append(kv([['计划', plan.plan_id], ['状态', plan.state], ['源节点', memberLabel(node, plan.source.member_id)], ['目标节点', memberLabel(node, plan.target.member_id)], ['源 → 目标类型', `${plan.source.transport || '?'} → ${plan.target.transport || '?'}`], ['归属单元 / 对象', `${plan.unit_count} / ${plan.object_count}`], ['实际字节', dataSize(plan.total_bytes)], ['已校验', `${plan.verified_objects} 个 / ${dataSize(plan.verified_bytes)}`], ['目标已用 / 预留', `${dataSize(plan.target.used_bytes)} / ${dataSize(plan.target.reserved_bytes)}`], ['目标最小可用 / 额外需求', `${dataSize(plan.target_physical_free)} / ${dataSize(plan.additional_target_bytes)}`], ['计划到期', localTime(plan.expires_at)]]));
         section.append(make('p', 'node-note', 'Direct/Relay 可以跨类型迁移，源与目标均须连接同一 Master；迁移数据仅从源节点直传目标节点，任何情况下都不经 Master 中转；无法直连时停止并保留断点。只读盘点不执行写入探测，目标发布仍须通过本机事务。备份和源端残留需单独处理，迁移不会自动退役节点。'));
         if (plan.error_code) {
             const stages = {catalog: '资源清单', source_inventory: '源节点盘点', target_inventory: '目标节点盘点', source_content: '源文件校验', seal: '计划复核', admission: '任务准入'};
@@ -103,8 +128,7 @@
         controls.append(button('刷新计划', async () => { migrationPlan = await api(`/api/v1/media/admin/nodes/migration-plans/${encodeURIComponent(plan.plan_id)}`); }));
         if (!plan.complete) controls.append(button('下一页计划对象', async () => { migrationPlan = await api(`/api/v1/media/admin/nodes/migration-plans/${encodeURIComponent(plan.plan_id)}?after=${encodeURIComponent(plan.next)}`); }));
         if (plan.state === 'ready') controls.append(button('确认并开始迁移', async () => {
-            const confirmation = `${plan.source.member_id} -> ${plan.target.member_id}`;
-            if (window.prompt(`请输入 ${confirmation}，确认整节点迁出。\n开始后源节点进入排空，后台重新检查源字节、目标冲突和容量；旧计划变化将被拒绝。`) !== confirmation) return '未发送开始请求';
+            if (window.prompt(`请输入 True，确认整节点迁出。\n源：${memberLabel(node, plan.source.member_id)}\n目标：${memberLabel(node, plan.target.member_id)}\n开始后源节点进入排空，后台重新检查源字节、目标冲突和容量；旧计划变化将被拒绝。`) !== 'True') return '未发送开始请求';
             migrationPlan = await post(`/migration-plans/${encodeURIComponent(plan.plan_id)}/start`, {review_sha256: plan.review_sha256, confirm_source_id: plan.source.member_id, confirm_target_id: plan.target.member_id});
             return '执行前复核已开始；持久任务创建后将在下方显示';
         }));
@@ -112,7 +136,7 @@
         return section;
     }
 
-    function migrationPanel(page) {
+    function migrationPanel(page, node) {
         const section = make('section', 'node-resource-panel');
         section.append(make('strong', '', migrationQueueView ? '资源迁移任务 · 队列与待处理项' : '资源迁移任务 · 历史'));
         section.append(button(migrationQueueView ? '查看全部历史' : '查看任务队列', async () => { migrationQueueView = !migrationQueueView; migrationCursor = {time: 0, id: ''}; }));
@@ -121,7 +145,7 @@
         for (const task of (page.tasks || []).slice(0, 16)) {
             const card = make('article', 'node-config-box');
             card.append(make('strong', '', `${task.task_id} · ${task.error_code === 'waiting_business_traffic' ? '等待业务低峰' : labels[task.state] || task.state}`));
-            card.append(kv([['源节点', task.source_id], ['目标节点', task.target_id], ['对象数', task.object_count], ['已提交 / 全部', `${dataSize(task.committed_bytes)} / ${dataSize(task.total_bytes)}`]]));
+            card.append(kv([['源节点', memberLabel(node, task.source_id)], ['目标节点', memberLabel(node, task.target_id)], ['对象数', task.object_count], ['已提交 / 全部', `${dataSize(task.committed_bytes)} / ${dataSize(task.total_bytes)}`]]));
             if (task.error_code === 'waiting_business_traffic') card.append(make('p', 'node-note', '正在静默等待业务低峰；断点已保留，持续低流量后自动续跑。手动暂停仍需手动恢复。'));
             else if (task.error_code) card.append(make('p', 'node-note', `失败原因：${task.error_code}。核对节点连接、容量与任务检查点后重试；迁移禁止通过 Master 中转。`));
             const detail = migrationViews.get(task.task_id);
@@ -196,7 +220,7 @@
                 migrationViews.set(task.task_id, {at: Date.now(), value});
             }
             while (migrationViews.size > 64) migrationViews.delete(migrationViews.keys().next().value);
-            $('migrationContent').replaceChildren(migrationPlanPanel(node), migrationPanel(migrations));
+            $('migrationContent').replaceChildren(migrationPlanPanel(node), migrationPanel(migrations, node));
         });
         refreshQueue = current.catch(() => {});
         return current;
