@@ -201,7 +201,7 @@
         const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
         const card = make('article', 'node-card'), header = make('header', 'node-card-header');
         const title = make('div', 'node-card-title');
-        title.append(make('strong', '', member.name || member.location?.bucket || 'S3 存储'), make('small', '', member.location?.endpoint || '地址不可用'), make('small', 'node-member-id', `NodeID ${member.member_id || '未知'}`));
+        title.append(make('strong', '', member.name || member.location?.bucket || 'S3 存储'), make('small', '', member.location?.endpoint || '地址不可用'));
         const badges = make('div', 'node-card-badges');
         const state = member.cleanup_only ? '仅清理' : member.probe_state === 'ready' ? '检查通过' : member.probe_state === 'running' ? '检查中' : '待检查';
         badges.append(pill('S3', 'muted'), pill(member.storage_enabled ? '已启用' : '未启用', member.storage_enabled ? 'good' : 'muted'), pill(state, member.cleanup_only ? 'warn' : 'muted'));
@@ -435,7 +435,8 @@
         const card = make('article', 'node-card');
         const header = make('header', 'node-card-header');
         const title = make('div', 'node-card-title');
-        title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : relation?.peer_endpoint || '存储节点'), make('small', '', member.member_kind === 'MasterLocal' ? '本机资源' : member.transport || relation?.mode || 'Storage'), make('small', 'node-member-id', `NodeID ${member.member_id || '未知'}`));
+        title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : relation?.peer_endpoint || '存储节点'), make('small', '', member.member_kind === 'MasterLocal' ? '本机资源' : member.transport || relation?.mode || 'Storage'));
+        if (member.member_kind === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${member.member_id || '未知'}`));
         const badges = make('div', 'node-card-badges');
         badges.append(pill(member.member_kind === 'MasterLocal' ? 'LOCAL' : String(relation?.status || 'UNKNOWN').toUpperCase(), member.member_kind === 'MasterLocal' ? 'info' : relation?.status === 'online' ? 'good' : 'bad'), pill(member.transport || relation?.mode || 'Local', 'muted'));
         header.append(title, badges);
@@ -644,7 +645,9 @@
             const card = make('article', 'node-card');
             const header = make('header', 'node-card-header');
             const title = make('div', 'node-card-title');
-            title.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`), make('small', 'node-member-id', `NodeID ${node.node_id || '未知'}`)); header.append(title);
+            title.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`));
+            if (node.role === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${node.node_id || '未知'}`));
+            header.append(title);
             collapsibleNodeCard(card, header, node.node_id, '本机证书', () => {
                 const grid = make('div', 'node-card-grid'); grid.append(certificatePanel(localCertificate)); return [grid];
             });
@@ -656,7 +659,7 @@
     async function refresh() {
         const current = refreshQueue.then(async () => {
             const {node, observability, s3} = await loadData();
-            $('nodeIdentity').textContent = `${node.role} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''} · NodeID ${node.node_id || '未知'}`;
+            $('nodeIdentity').textContent = `${node.role} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
             visible('nodePromotion', node.role === 'Standalone'); visible('nodePairing', node.role !== 'Standalone');
             visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
             $('nodePairPackage').readOnly = false;
