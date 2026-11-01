@@ -198,7 +198,7 @@ def exercise_player(browser, fixture, folder, mode, site, images, record):
         page.wait_for_function('() => typeof art!=="undefined" && art && currentMediaList.length===2', timeout=45000)
         page.evaluate('()=>{window.FrontierPlayerLayout?.expand();selectMedia(currentMediaList.findIndex(t=>t.media_path.endsWith("/01-long.mp3")));}')
         page.wait_for_function('() => currentMediaList[currentIndex].media_path.endsWith("/01-long.mp3") && art.currentTime>.2 && art.duration>8000 && frontierCloudContinuousAudio.status().active && !art.video.error', timeout=45000)
-        assert page.evaluate('(encrypted)=>currentMediaList.every(t=>!!t.encryption===encrypted && (encrypted ? !t.native_metadata : t.native_metadata===true))', mode == 'encrypted')
+        assert page.evaluate('(encrypted)=>currentMediaList.every(t=>!!t.encryption===encrypted)', mode == 'encrypted')
         proof['above_128mib'] = True
         ranged = page.evaluate('''async()=>{const response=await fetch(currentMediaList[0].url,{headers:{Range:'bytes=0-31'}});
             return {status:response.status,bytes:[...new Uint8Array(await response.arrayBuffer())],range:response.headers.get('Content-Range')};}''')
@@ -217,24 +217,42 @@ def exercise_player(browser, fixture, folder, mode, site, images, record):
         page.wait_for_function('() => currentIndex===1 && art.currentTime>.1 && !art.video.paused && !art.video.error', timeout=45000)
         assert page.evaluate('art.video===nativeMSEVideo && art.url===nativeMSESource && art.video.currentSrc===nativeMSECurrentSrc && frontierCloudContinuousAudio.status().active && !frontierCloudContinuousAudio.status().pipeline_error')
         proof['automatic_mse'] = True
-        # Observe normal selected/visible metadata work before making any
-        # explicit tag call. This catches permanently starved visible queues.
-        page.wait_for_function('() => currentMediaList.every(t=>["Long original","Next original"].includes(t.title) && t.cover && t.cover!=="/favicon.ico")', timeout=30000)
+        # Player labels come from filenames and it never loads artwork parsing.
+        assert page.evaluate('''()=>typeof FrontierMusicMetadata==='undefined' &&
+            currentMediaList.map(t=>t.title).join(',')==='01-long,02-next' &&
+            document.querySelectorAll('.media-item img').length===0''')
+        assert not any(item['path'] in ('/api/v1/media/metadata', '/api/v1/media/cover') for item in responses)
         proof['visible_metadata'] = True
-        metadata = page.evaluate('''async()=>Promise.all(currentMediaList.map(async item=>{
-            let bytes;if(item.encryption){const url=FrontierMediaCrypto.virtualUrl(item.media_path,false,item.encryption.file_id);
-                const response=await fetch(url,{headers:{Range:'bytes=0-16383'},cache:'no-store'});
-                if(response.status!==206)throw Error('plaintext tag range failed');
-                bytes=FrontierMusicMetadata.parse(new Uint8Array(await response.arrayBuffer())).picture.bytes;
-            }else{const response=await fetch(item.cover);if(!response.ok)throw Error('original cover failed');bytes=new Uint8Array(await response.arrayBuffer());}
-            const dimensions=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve([image.naturalWidth,image.naturalHeight]);
-                image.onerror=()=>reject(Error('original picture decode failed'));image.src=item.cover;});
-            return {path:item.media_path,title:item.title,dimensions,sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('')};
-        }))''')
-        assert [row['title'] for row in metadata] == ['Long original', 'Next original']
+        # Exercise the shared parser on the category page, where artwork is used.
+        category = context.new_page()
+        parent = folder.rsplit('/', 1)[0]
+        category.goto(fixture['origin'] + '/api/v1/media/music/category?' + urlencode({'path': parent}), wait_until='domcontentloaded')
+        name = folder.split('/')[-1]
+        category.wait_for_function('(name)=>[...document.querySelectorAll("a.card")].some(c=>c.title===name)', arg=name, timeout=45000)
+        category.get_by_title(name, exact=True).scroll_into_view_if_needed()
+        category.wait_for_function('(name)=>!![...document.querySelectorAll("a.card")].find(c=>c.title===name)?.querySelector("img")?.naturalWidth', arg=name, timeout=45000)
+        shown = category.get_by_title(name, exact=True).locator('img').evaluate('''async image=>{
+            const bytes=await (await fetch(image.src)).arrayBuffer();
+            return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');}''')
+        assert shown == digest(images[0]), 'category rendered a different original picture'
+        metadata = category.evaluate('''async path=>{
+            const response=await fetch('/api/v1/media/catalog/artwork?'+new URLSearchParams({path}));
+            if(!response.ok)throw Error('category candidates unavailable');
+            const candidates=(await response.json()).metadata_tracks;
+            return Promise.all(candidates.map(async item=>{
+                const tags=await FrontierMusicMetadata.metadata(item);
+                if(Object.keys(tags).join(',')!=='cover')throw Error('category exposed text tags');
+                const imageResponse=await fetch(tags.cover);if(!imageResponse.ok)throw Error('original cover failed');
+                const bytes=new Uint8Array(await imageResponse.arrayBuffer());
+                const dimensions=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve([image.naturalWidth,image.naturalHeight]);
+                    image.onerror=()=>reject(Error('original picture decode failed'));image.src=tags.cover;});
+                return {path:item.media_path,dimensions,sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('')};
+            }));
+        }''', folder)
+        category.close()
         assert [row['sha256'] for row in metadata] == [digest(image) for image in images]
         assert all(row['dimensions'] == [64, 64] for row in metadata)
-        proof.update(original_pictures=True, metadata=metadata, real_tail_seek=True, whole_track_elapsed=False)
+        proof.update(original_pictures=True, metadata=metadata, rendered_picture_sha256=shown, real_tail_seek=True, whole_track_elapsed=False)
         page.evaluate('()=>art.pause()')
         assert not errors, 'player page script error'
         proof['page_errors'] = errors
@@ -556,17 +574,19 @@ def run_fixture(path, workspace, audio):
             albums, placements, karaoke_ids = [], {}, []
             for site, mode in (('primary', 'plain'), ('primary', 'encrypted'), ('direct', 'plain'), ('direct', 'encrypted'), ('relay', 'plain'), ('relay', 'encrypted')):
                 name = 'native-' + fixture['nonce'][:12] + '-' + site + '-' + mode
-                folder = 'music/' + name
+                folder = 'music/' + name + '/Album'
                 files = output / name
                 files.mkdir(mode=0o700)
+                album = files / 'Album'
+                album.mkdir(mode=0o700)
                 for source in (output / 'album').iterdir():
-                    os.link(source, files / source.name)
+                    os.link(source, album / source.name)
                 admin.evaluate('''async()=>{currentPath='music';document.getElementById('mediaSearch').value='';await renderTree();await refreshStoragePool();}''')
                 admin.select_option('#uploadSiteType', site)
                 choose_upload(admin, '#uploadFolder', mode, files, 2)
                 record['inputs'].append({'action': 'GUI folder upload', 'site_type': site, 'storage_mode': mode, 'path': folder,
-                    'files': [{'name': file.name, 'bytes': file.stat().st_size} for file in sorted(files.iterdir())]})
-                assert (files / '01-long.mp3').stat().st_size > 128 * 1024**2
+                    'files': [{'name': file.name, 'bytes': file.stat().st_size} for file in sorted(album.iterdir())]})
+                assert (album / '01-long.mp3').stat().st_size > 128 * 1024**2
                 placements[folder] = observe_address(admin, folder, fixture, site, mode)
                 albums.append(folder)
                 playback = exercise_player(browser, fixture, folder, mode, site, images, record)
@@ -589,10 +609,11 @@ def run_fixture(path, workspace, audio):
             exercise_lyrics_and_karaoke(browser, fixture, albums[-1], karaoke_ids[-1], record)
             # Remove only this test's known paths through the normal managed
             # business API, so the unchanged later retirement checks start clean.
+            roots = [folder.rsplit('/', 1)[0] for folder in albums]
             deleted = admin.evaluate('''async paths=>await api('/api/v1/media/admin/delete',{
-                method:'POST',headers:requestHeaders(),body:JSON.stringify({paths})})''', albums)
+                method:'POST',headers:requestHeaders(),body:JSON.stringify({paths})})''', roots)
             assert deleted.get('deleted') == 12 and not deleted.get('pending_delete'), 'managed fixture cleanup did not converge'
-            for folder in albums:
+            for folder in roots:
                 remaining = admin.evaluate('''async folder=>{
                     const response=await fetch('/api/v1/media/admin/tree?'+new URLSearchParams({path:folder}));
                     if(response.status===404)return [];if(!response.ok)throw Error('cleanup read failed');return (await response.json()).items;

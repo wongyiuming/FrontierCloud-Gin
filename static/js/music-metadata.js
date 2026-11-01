@@ -1,9 +1,7 @@
 (() => {
     'use strict';
     const TAG_LIMIT = 8 * 1024 * 1024, IMAGE_LIMIT = 4 * 1024 * 1024, IMAGE_BUDGET = 32 * 1024 * 1024;
-    const cache = new Map(), pictures = new Map(), pictureBlobs = new Map();
-    const thumbnails = new Map();
-    let thumbnailTail = Promise.resolve(), thumbnailCapability;
+    const cache = new Map(), pictures = new Map();
     let imageBytes = 0, active = 0;
     const queue = [];
     const ascii = bytes => String.fromCharCode(...bytes);
@@ -15,15 +13,6 @@
         const out = [];
         for (let i = 0; i < bytes.length; i++) { out.push(bytes[i]); if (bytes[i] === 255 && bytes[i + 1] === 0) i++; }
         return Uint8Array.from(out);
-    }
-    function text(bytes, encoding = bytes[0], offset = 1) {
-        if (encoding > 3 || bytes.length < offset) return '';
-        try {
-            const label = ['windows-1252', 'utf-16le', 'utf-16be', 'utf-8'][encoding];
-            let data = bytes.subarray(offset), decoder = label;
-            if (encoding === 1 && data[0] === 254 && data[1] === 255) { decoder = 'utf-16be'; data = data.subarray(2); }
-            return new TextDecoder(decoder).decode(data).replace(/\0.*$/s, '').trim().slice(0, 4096);
-        } catch (_) { return ''; }
     }
     function terminator(bytes, offset, wide) {
         for (let i = offset; i < bytes.length; i += wide ? 2 : 1) {
@@ -70,14 +59,13 @@
             if (length <= 0 || length > data.length - width) break;
             const flags = version === 2 ? 0 : data[9];
             let body = data.subarray(width, width + length); data = data.subarray(width + length);
+            if (name !== 'APIC' && name !== 'PIC') continue;
             if ((version === 3 && (flags & 224)) || (version === 4 && (flags & 76))) continue;
             if (version === 4 && ((flags & 2) || (bytes[5] & 128))) body = unSync(body);
             if (version === 4 && (flags & 1)) {
                 if (body.length < 4 || syncSafe(body.subarray(0, 4)) !== body.length - 4) continue;
                 body = body.subarray(4);
             }
-            const field = {TIT2: 'title', TT2: 'title', TPE1: 'artist', TP1: 'artist', TALB: 'album', TAL: 'album'}[name];
-            if (field) result[field] = text(body);
             if (name === 'APIC' || name === 'PIC') {
                 const candidate = picture(body, version);
                 if (candidate && (!result.picture || candidate.front)) result.picture = candidate;
@@ -174,8 +162,7 @@
             }
             const value = JSON.parse(new TextDecoder().decode(await metadataBytes(response)));
             if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(field =>
-                !['title', 'artist', 'album', 'cover'].includes(field) || typeof value[field] !== 'string'
-                || value[field].length > (field === 'cover' ? 64 * 1024 : 8192))) throw new Error('音乐标签响应无效');
+                field !== 'cover' || typeof value[field] !== 'string' || value[field].length > 64 * 1024)) throw new Error('音乐标签响应无效');
             if (value.cover) {
                 const cover = new URL(value.cover, window.location.href);
                 if (!value.cover.startsWith('/api/v1/media/cover?') || cover.origin !== window.location.origin
@@ -206,21 +193,13 @@
                 const bytes = new Uint8Array(length + 10); bytes.set(header); bytes.set(body, 10); result = parse(bytes);
             }
         }
-        if (size >= 128 && (!result.title || !result.artist || !result.album)) {
-            const tail = await range(source.url, size - 128, size - 1, size, signal);
-            if (ascii(tail.subarray(0, 3)) === 'TAG') {
-                result.title ||= text(tail.subarray(3, 33), 0, 0);
-                result.artist ||= text(tail.subarray(33, 63), 0, 0);
-                result.album ||= text(tail.subarray(63, 93), 0, 0);
-            }
-        }
         if (result.picture) {
             const image = result.picture;
             const digest = await crypto.subtle.digest('SHA-256', image.bytes);
             const identity = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
             if (!pictures.has(identity) && imageBytes + image.bytes.length <= IMAGE_BUDGET) {
                 const blob = new Blob([image.bytes], {type: image.mime}), url = URL.createObjectURL(blob);
-                pictures.set(identity, url); pictureBlobs.set(url, blob); imageBytes += image.bytes.length;
+                pictures.set(identity, url); imageBytes += image.bytes.length;
             }
             result.cover = pictures.get(identity); delete result.picture;
         }
@@ -239,119 +218,10 @@
         }
         return cache.get(key);
     }
-    async function decorate(entries, onUpdate = () => {}) {
-        await Promise.all(entries.map(async entry => {
-            if (!entry?.encryption && entry?.native_metadata !== true && entry?.transport !== 'S3') return;
-            try {
-                const tags = await metadata(entry);
-                for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) entry[field] = tags[field];
-                if (Object.keys(tags).length) onUpdate(entry);
-            } catch (_) { /* Metadata failure keeps existing display and playback. */ }
-        }));
-    }
-    // Only the audio player's small queue artwork opts into this browser-side view.
-    // Originals and encrypted source bytes are never rewritten or uploaded.
-    function canThumbnail() {
-        if (thumbnailCapability === undefined) {
-            try {
-                const canvas = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1) : null;
-                thumbnailCapability = typeof createImageBitmap === 'function'
-                    && typeof canvas?.convertToBlob === 'function' && Boolean(canvas.getContext('2d'));
-            } catch (_) { thumbnailCapability = false; }
-        }
-        return thumbnailCapability;
-    }
-    function thumbnail(source, {signal, admit = () => true} = {}) {
-        const url = new URL(source, window.location.href);
-        if (url.origin !== window.location.origin || !['blob:', 'http:', 'https:'].includes(url.protocol)) {
-            return Promise.reject(new Error('Unsupported artwork source'));
-        }
-        if (thumbnails.has(source)) return thumbnails.get(source);
-        if (thumbnails.size >= 128 || !canThumbnail() || typeof window.requestIdleCallback !== 'function') {
-            return Promise.resolve(null);
-        }
-        // A separate serial channel cannot consume either encrypted metadata slot.
-        const controller = new AbortController();
-        const abort = () => controller.abort();
-        if (signal?.aborted) controller.abort();
-        signal?.addEventListener('abort', abort, {once: true});
-        // Includes queue age: old work expires while waiting, not after all predecessors finish.
-        const timeout = setTimeout(abort, 2000);
-        let rejectCancelled;
-        const cancelled = new Promise((_resolve, reject) => {
-            rejectCancelled = () => reject(new Error('Artwork cancelled'));
-            controller.signal.addEventListener('abort', rejectCancelled, {once: true});
-            if (controller.signal.aborted) rejectCancelled();
-        });
-        const work = thumbnailTail.then(async () => {
-            let bitmap;
-            try {
-                controller.signal.throwIfAborted();
-                if (!admit()) return null;
-                // No deadline may force artwork onto a busy main thread.
-                await new Promise((resolve, reject) => {
-                    const cancelled = () => { window.cancelIdleCallback(id); reject(new Error('Artwork cancelled')); };
-                    const id = window.requestIdleCallback(deadline => {
-                        controller.signal.removeEventListener('abort', cancelled);
-                        if (deadline.timeRemaining() < 8) reject(new Error('No artwork idle budget'));
-                        else resolve();
-                    });
-                    controller.signal.addEventListener('abort', cancelled, {once: true});
-                    if (controller.signal.aborted) cancelled();
-                });
-                controller.signal.throwIfAborted();
-                if (!admit()) return null;
-                let original = pictureBlobs.get(source);
-                if (!original) {
-                    if (url.protocol === 'blob:') throw new Error('Unknown artwork blob');
-                    // A cold cache skips the picture; it must never download an original for this tiny view.
-                    const response = await fetch(url.href, {signal: controller.signal, credentials: 'same-origin', priority: 'low', mode: 'same-origin', cache: 'only-if-cached'});
-                    if (!response.ok) throw new Error('Artwork unavailable');
-                    const reader = response.body.getReader(), chunks = [];
-                    let length = 0, complete = false;
-                    try {
-                        while (true) {
-                            const {value, done} = await reader.read();
-                            if (done) { complete = true; break; }
-                            length += value.byteLength;
-                            if (length > IMAGE_LIMIT) throw new Error('Artwork exceeds budget');
-                            chunks.push(value);
-                        }
-                    } finally {
-                        if (!complete) await reader.cancel().catch(() => {});
-                        reader.releaseLock();
-                    }
-                    original = new Blob(chunks);
-                }
-                bitmap = await createImageBitmap(original);
-                controller.signal.throwIfAborted();
-                const scale = Math.min(1, 96 / Math.max(bitmap.width, bitmap.height));
-                const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * scale)), Math.max(1, Math.round(bitmap.height * scale)));
-                canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-                const blob = await canvas.convertToBlob({type: 'image/webp', quality: 0.85});
-                controller.signal.throwIfAborted();
-                if (blob.size > 64 * 1024) throw new Error('Thumbnail exceeds budget');
-                return URL.createObjectURL(blob);
-            } finally { bitmap?.close(); }
-        });
-        thumbnailTail = work.catch(() => {});
-        const pending = Promise.race([work, cancelled]);
-        const cleanup = () => {
-            clearTimeout(timeout); signal?.removeEventListener('abort', abort);
-            controller.signal.removeEventListener('abort', rejectCancelled);
-        };
-        pending.then(cleanup, cleanup);
-        thumbnails.set(source, pending);
-        const forget = () => { if (thumbnails.get(source) === pending) thumbnails.delete(source); };
-        pending.then(value => { if (!value) forget(); }, forget);
-        return pending;
-    }
     window.addEventListener('pagehide', event => {
         if (event.persisted) return;
         for (const url of pictures.values()) URL.revokeObjectURL(url);
-        pictures.clear(); pictureBlobs.clear(); cache.clear(); imageBytes = 0;
-        for (const pending of thumbnails.values()) pending.then(url => URL.revokeObjectURL(url), () => {});
-        thumbnails.clear();
+        pictures.clear(); cache.clear(); imageBytes = 0;
     });
-    window.FrontierMusicMetadata = {metadata, decorate, parse, thumbnail, canThumbnail};
+    window.FrontierMusicMetadata = {metadata, parse};
 })();

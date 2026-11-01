@@ -159,16 +159,16 @@ func TestAuthorizedWarmMusicMetadataBypassesBusyHeavySlots(t *testing.T) {
 	root, _, service := deleteFixture(t)
 	ctx := context.Background()
 	name := "music/artist/song.mp3"
-	if err := os.WriteFile(filepath.Join(root, name), tagFixture(3, tagFrame(3, "TIT2", []byte("\x03Cached title"))), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, name), tagFixture(3, tagFrame(3, "APIC", append([]byte("\x03image/jpeg\x00\x03\x00"), []byte{255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0}...))), 0600); err != nil {
 		t.Fatal(err)
 	}
 	first, err := service.MusicMetadata(ctx, name, "")
-	if err != nil || first.Title != "Cached title" {
+	if err != nil || len(first.Picture) == 0 {
 		t.Fatal(first, err)
 	}
 	service.metadataSlots <- struct{}{}
 	service.metadataSlots <- struct{}{}
-	if cached, err := service.MusicMetadata(ctx, name, ""); err != nil || cached.Title != first.Title {
+	if cached, err := service.MusicMetadata(ctx, name, ""); err != nil || !bytes.Equal(cached.Picture, first.Picture) {
 		t.Fatal("cached original artwork competed with heavy reads", cached, err)
 	}
 	if err := os.Remove(filepath.Join(root, name)); err != nil {
@@ -197,7 +197,7 @@ func TestSelectedMusicMetadataNeverReadsEncryptedPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	tags, err := service.MusicMetadata(ctx, name, ids[name])
-	if err != nil || tags.Title != "" || tags.Artist != "" || tags.Album != "" || len(tags.Picture) != 0 || len(service.tagsCache) != 0 {
+	if err != nil || len(tags.Picture) != 0 || len(service.tagsCache) != 0 {
 		t.Fatal("encrypted bytes entered native metadata cache", tags, err)
 	}
 	object, err := db.Media().(store.EncryptionRepository).Encryption(ctx, ids[name])

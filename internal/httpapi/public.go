@@ -247,7 +247,6 @@ func (p *Public) catalog(c *gin.Context) {
 	for i := range entries {
 		entries[i].Encryption = metadata[entries[i].MediaID]
 	}
-	p.media.DecorateMusicTracks(c.Request.Context(), entries)
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": entries})
 }
@@ -436,7 +435,7 @@ func (p *Public) template(c *gin.Context, name string) (string, error) {
 	if name == "category.html" || name == "audio-player.html" || name == "video-player.html" {
 		content = strings.Replace(content, "<script", `<script src="`+p.assets["js/business-navigation.js"]+`"></script>`+"\n<script", 1)
 	}
-	if name == "category.html" || name == "audio-player.html" {
+	if name == "category.html" {
 		content = strings.Replace(content, "<script", `<script src="`+p.assets["js/music-metadata.js"]+`"></script>`+"\n<script", 1)
 	}
 	if name == "audio-player.html" || name == "video-player.html" {
