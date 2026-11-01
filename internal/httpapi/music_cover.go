@@ -46,11 +46,6 @@ func (p *Public) musicMetadata(c *gin.Context) {
 		return
 	}
 	value := gin.H{}
-	for key, text := range map[string]string{"title": tags.Title, "artist": tags.Artist, "album": tags.Album} {
-		if text != "" {
-			value[key] = text
-		}
-	}
 	if len(tags.Picture) != 0 {
 		value["cover"] = "/api/v1/media/cover?" + url.Values{"file_path": {name}, "resource_id": {id}}.Encode()
 	}
