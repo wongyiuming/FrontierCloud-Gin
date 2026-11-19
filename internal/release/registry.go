@@ -75,6 +75,9 @@ func (r *RegistryClient) get(ctx context.Context, path, token string) ([]byte, h
 	if err != nil {
 		return nil, nil, 0, imageRequestFailure(ctx, err)
 	}
+	if err = ctx.Err(); err != nil {
+		return nil, nil, 0, err
+	}
 	if len(body) > 4<<20 {
 		return nil, nil, 0, ErrImageIntegrity
 	}

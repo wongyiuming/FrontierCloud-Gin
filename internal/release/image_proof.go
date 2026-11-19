@@ -79,6 +79,9 @@ func (r *RegistryClient) imageRead(ctx context.Context, prefix, suffix string, t
 		if e != nil {
 			return nil, nil, imageRequestFailure(ctx, e)
 		}
+		if e = ctx.Err(); e != nil {
+			return nil, nil, e
+		}
 		if len(body) > 4<<20 {
 			return nil, nil, ErrImageIntegrity
 		}

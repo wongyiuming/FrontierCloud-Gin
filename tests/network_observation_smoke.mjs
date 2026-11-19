@@ -32,8 +32,17 @@ function harness(embedded, sharedLocks, stallReport = false, hidden = false) {
         window, navigator: sharedLocks ? {locks: sharedLocks} : {},
         document: {hidden, addEventListener(name, fn) {events.set(name, fn);}, getElementById: () => embedded ? {textContent: JSON.stringify({stun_urls: [...urls, urls[0]], interval_ms: 45000})} : null},
         CustomEvent: class {},
-        AbortController,
-        fetch(_url, options) {reports.push(JSON.parse(options.body)); return stallReport ? new Promise(() => {}) : Promise.resolve({});},
+        AbortController, AbortSignal, performance,
+        location: {pathname: '/'},
+        HTMLMediaElement: class {},
+        fetch(url, options) {
+            if (url.endsWith('/project-diagnostics')) {
+                assert.equal(options.method, undefined, 'inactive diagnostics must only check status');
+                return Promise.resolve({ok: true, json: async () => ({enabled: false})});
+            }
+            reports.push(JSON.parse(options.body));
+            return stallReport ? new Promise(() => {}) : Promise.resolve({});
+        },
         RTCPeerConnection: class {
             constructor(config) {this.config = config; this.listeners = new Map(); this.closed = false; peers.push(this); live++; maximumLive = Math.max(maximumLive, live);}
             createDataChannel() {}

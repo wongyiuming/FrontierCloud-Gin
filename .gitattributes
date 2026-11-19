@@ -4,6 +4,7 @@ scripts/foc text eol=lf
 *.awk text eol=lf
 *.go text eol=lf
 nginx/patches/*.patch text eol=lf
+nginx/traffic/config text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
 

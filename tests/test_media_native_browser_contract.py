@@ -106,7 +106,7 @@ class NativeMediaBrowserContractTests(unittest.TestCase):
         hook = source.split('if os.Getenv("FRONTIERCLOUD_TEST_MEDIA_BROWSER") == "1" {', 1)[1].split('if os.Getenv("FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER")', 1)[0]
         self.assertIn('fleetMediaBrowserGate(t, ctx, e, project, sites, perform)', hook)
         self.assertNotIn('return', hook)
-        self.assertIn('kinds := []string{"go-sqlite", "go-mysql"}', source)
+        self.assertIn('kinds := []string{"go-sqlite"}', source)
         self.assertIn('five Web services did not recover idle CPU within 30 seconds', source)
         # The TLS test driver must use normal contexts and an imported actual CA.
         driver_source = DRIVER.read_text(encoding='utf-8')

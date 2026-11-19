@@ -17,17 +17,27 @@ const document = {
     createElement: tag => new Element(tag), createTextNode: text => ({textContent: text}),
 };
 let respond;
+let inventoryAvailable = false;
 const calls = [];
 const context = vm.createContext({document, window: {}, Date, console, setTimeout, setInterval, clearInterval,
     requestHeaders: () => ({'X-CSRF-Token': 'fixture'}),
-    api: async (path, options) => { calls.push({path, options}); return await respond(); },
+    api: async (path, options) => {
+        if (path.endsWith('/nodes')) return {role: 'Master', retirement_inventory_available: inventoryAvailable};
+        if (!options) return {};
+        calls.push({path, options});
+        return await respond();
+    },
 });
 // Execute the complete module; expose only the panel factory in this fixture.
 const source = fs.readFileSync('static/js/nodes.js', 'utf8');
-vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'window.testRetirementPanel = retirementPanel; window.testDisableRefresh = () => { refresh = async () => {}; };})();'), context);
+vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'window.testRetirementPanel = retirementPanel; window.testLoadData = loadData; window.testDisableRefresh = () => { refresh = async () => {}; };})();'), context);
 const panelFor = () => context.window.testRetirementPanel({member_id: '2'.repeat(32)}, {relationship_id: '1'.repeat(32)});
 const all = element => [element, ...element.children.flatMap(all)];
 const text = element => all(element).map(item => item.textContent || '').join('\n');
+await context.window.testLoadData();
+assert.equal(all(panelFor()).filter(item => item.tag === 'button').length, 0);
+inventoryAvailable = true;
+await context.window.testLoadData();
 let release;
 respond = () => new Promise(resolve => { release = resolve; });
 let panel = panelFor();

@@ -20,6 +20,9 @@ func TestImageReadsPreserveCancellationAcrossRegistryTokenAndRedirect(t *testing
 					started := make(chan struct{})
 					server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 						if body {
+							// A canceled response must remain incomplete even if the
+							// server returns before the client reads the cancellation.
+							w.Header().Set("Content-Length", "2")
 							fmt.Fprint(w, "{")
 							w.(http.Flusher).Flush()
 						}

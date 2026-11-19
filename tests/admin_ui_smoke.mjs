@@ -210,7 +210,10 @@ assert(adminHtml.includes('{{NODES_JS_URL}}'));
 assert(adminHtml.includes('id="randomKey"'));
 assert(adminHtml.includes('id="temporaryKeyForm"'));
 assert(adminHtml.includes('id="permanentBanForm"'));
-assert(adminHtml.match(/class="module-heading"/g).length === 12);
+const moduleIDs = [...adminHtml.matchAll(/data-admin-module="([^"]+)"/g)].map(match => match[1]);
+assert.deepEqual(moduleIDs, ['key', 'priority', 'security', 'lyrics', 'network', 'nodes',
+    'nodeRouting', 'nodeBackups', 'nodeSettings', 'migrations', 'logs', 'users', 'media']);
+assert.equal(adminHtml.match(/class="module-heading"/g).length, moduleIDs.length);
 assert(adminHtml.includes('data-admin-module="migrations"'));
 assert(adminHtml.includes('data-admin-module="priority"'));
 assert(adminHtml.includes('媒体资源排序策略'));

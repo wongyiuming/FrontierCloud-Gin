@@ -38,9 +38,10 @@ class SecurityUIContractTests(unittest.TestCase):
         script = (ROOT / "static" / "js" / "admin.js").read_text(encoding="utf-8")
         style = (ROOT / "static" / "css" / "admin.css").read_text(encoding="utf-8")
 
-        self.assertGreaterEqual(html.count('class="module-heading"'), 6)
-        self.assertEqual(html.count('class="admin-module'), 9)
-        self.assertEqual(html.count('data-admin-module="migrations"'), 1)
+        self.assertEqual(html.count('class="module-heading"'), html.count('class="admin-module'))
+        self.assertEqual(html.count('aria-expanded="true"'), 1)
+        for module in ('security', 'nodeRouting', 'nodeBackups', 'nodeSettings', 'migrations', 'logs'):
+            self.assertEqual(html.count(f'data-admin-module="{module}"'), 1)
         self.assertIn("function expandAdminModule(target)", script)
         self.assertIn("module === target && shouldExpand", script)
         self.assertIn('id="permanentBanForm"', html)

@@ -44,13 +44,13 @@ not a claim that every historical patch has been audited or the release is ready
 12. The separate backup module's single card no longer occupies a narrow column.
 13. SQLite IP security UI no longer instructs the operator to query MySQL.
 14. Admin public-view/return links follow the selected ingress, not stale Master.
-15. Narrow K歌 layouts no longer overflow or overlap header controls.
+15. Narrow karaoke layouts no longer overflow or overlap header controls.
 
 Evidence for these counts is the completed staging image receipts and browser
 acceptance records, not draft source or total diff size. In particular the
 November 12 cache/lyrics receipt records warm crypto transfer bytes = 0 and a
 474ms warm music DOM; the November 13 browser runs cover ingress round trips,
-logos, lyrics, directory ZIP CRC, disclosure/polling, and five K歌 widths.
+logos, lyrics, directory ZIP CRC, disclosure/polling, and five karaoke viewport widths.
 
 ## Not counted as delivered functionality
 

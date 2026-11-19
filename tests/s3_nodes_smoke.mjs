@@ -10,7 +10,14 @@ class Element {
     }
     set id(value) { this._id = value; elements.set(value, this); }
     get id() { return this._id; }
-    append(...children) { this.children.push(...children); }
+    append(...children) {
+        for (const child of children) child.parent = this;
+        this.children.push(...children);
+    }
+    remove() {
+        if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this);
+        if (this.id) elements.delete(this.id);
+    }
     replaceChildren(...children) { this.children = children; }
     before(value) { panel.append(value); }
     after(value) { panel.append(value); }
@@ -34,9 +41,10 @@ let pool = {members: [native, member], physical_total_bytes: null, physical_free
 let s3Unavailable = false;
 let s3Gate = null;
 let s3Mode = 'legacy';
-const context = {document: {getElementById: id => id === 'nodeS3Creation' ? (elements.get(id) || null) : node(id), createElement: tag => new Element(tag), createTextNode: text => ({textContent: text})},
+const dynamicIDs = new Set(['nodeS3Creation', 'nodeRoutingCards', 'nodeBackupCards', 'nodeSettingsCards']);
+const context = {document: {getElementById: id => dynamicIDs.has(id) ? (elements.get(id) || null) : node(id), createElement: tag => new Element(tag), createTextNode: text => ({textContent: text})},
     console, Date, Map, Set, AbortController, setTimeout, setInterval, clearInterval,
-    requestHeaders: () => ({'X-CSRF-Token': 'control-only'}), window: {confirm: () => true},
+    requestHeaders: () => ({'X-CSRF-Token': 'control-only'}), window: {confirm: () => true, getSelection: () => ''},
     async api(url, options = {}) {
         requests.push({url, ...options});
         if (url.endsWith('/nodes')) return {role: 'Master', node_id: 'private-master-id', app_version: '1', protocol: 1,
@@ -65,7 +73,7 @@ const card = node('nodeRelationships').children.find(value => walk(value).some(c
 assert(walk(card).some(value => value.textContent === '上海对象存储'));
 assert(walk(card).some(value => value.textContent === 'https://s3.example.cn'));
 assert(!walk(card).some(value => value.textContent?.includes('private-storage-id')));
-const toggle = walk(card).find(value => value.className === 'node-details-toggle');
+const toggle = walk(card).find(value => value.tagName === 'HEADER');
 assert.equal(toggle.attributes['aria-expanded'], 'false'); toggle.onclick();
 assert.equal(toggle.attributes['aria-expanded'], 'true');
 assert(walk(card).some(value => value.textContent?.includes('物理容量未知')));
@@ -150,7 +158,7 @@ member.storage_enabled = false;
 const selectedS3Details = async () => {
     await node('nodesRefresh').onclick();
     const row = node('nodeRelationships').children.find(value => walk(value).some(child => child.textContent === member.name));
-    const detailsToggle = walk(row).find(value => value.className === 'node-details-toggle');
+    const detailsToggle = walk(row).find(value => value.tagName === 'HEADER');
     if (detailsToggle.attributes['aria-expanded'] === 'false') detailsToggle.onclick();
     return walk(row);
 };
