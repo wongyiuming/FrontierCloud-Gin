@@ -134,7 +134,7 @@ func TestExistingBusinessTreeInitializationRequiresOfflineBinding(t *testing.T) 
 	if err = run(); err == nil {
 		t.Fatal("wrong generation accepted")
 	}
-	if _, err = db.ExecContext(ctx, `UPDATE frontiercloud_schema SET generation=12 WHERE singleton=1`); err != nil {
+	if _, err = db.ExecContext(ctx, `UPDATE frontiercloud_schema SET generation=? WHERE singleton=1`, migrations.Generation); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.ExecContext(ctx, `UPDATE frontiercloud_schema_migrations SET checksum='invalid' WHERE generation=12`); err != nil {
