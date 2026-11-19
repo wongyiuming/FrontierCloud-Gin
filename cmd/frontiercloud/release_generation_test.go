@@ -131,3 +131,25 @@ func TestPrepareReleaseSourceAdmissionIsExplicit(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareReleaseGeneration13RefusesInPlaceUpgradeFromEarlierSchema(t *testing.T) {
+	if migrations.Generation != 13 {
+		t.Skip("generation-13 release admission")
+	}
+	root := filepath.Join(t.TempDir(), "untouched")
+	t.Setenv("DATA_ROOT", root)
+	t.Setenv("SQLITE_PATH", filepath.Join(root, "frontiercloud.db"))
+	for _, source := range []string{"8", "12"} {
+		err := prepareReleaseCommand([]string{
+			"--confirm-generation", "13", "--from-generation", source,
+			"--confirm-node-id", strings.Repeat("a", 32),
+			"--backup-sha256", strings.Repeat("b", 64),
+		})
+		if err == nil || err.Error() != "source generation has no defined upgrade/recovery path" {
+			t.Fatalf("generation %s was not refused before preparing the deployment: %v", source, err)
+		}
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatalf("refused preparation touched the target: %v", err)
+	}
+}
