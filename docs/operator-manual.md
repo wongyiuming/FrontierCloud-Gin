@@ -310,6 +310,22 @@ Import it in Master Admin within five minutes. Do not attach it to diagnostics.
 Restarting a paired node preserves its identity. Master Admin separately enables
 Storage/Backup and allocates logical capacity.
 
+## HTTPS management behind Nginx
+
+For a Master using the bundled Nginx edge, set
+`PUBLIC_INGRESS_TRUSTED_PROXY_NETWORKS` to the address or narrow CIDR of
+that edge on the private network it shares with Web. Use a stable private
+address so a Compose recreation preserves the trust boundary. For example,
+an edge with private address `172.30.251.10` uses `172.30.251.10/32`.
+`ADMIN_ORIGIN` must match the directly reachable HTTPS management origin.
+
+An empty ingress proxy list refuses forwarded HTTPS assertions. Where Nginx
+terminates TLS, a healthy homepage or certificate therefore does not verify
+Admin login, the ingress handoff, or selected uploads. Check the HTTPS login
+page from the management origin and confirm an authorized upload in a
+disposable rehearsal before cutover. Grant proxy trust only to the managed
+edge network or address.
+
 ## Backup and restore
 
 Bulk backup, archive verification, restoration and upgrade commands run until
