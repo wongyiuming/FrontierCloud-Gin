@@ -70,77 +70,70 @@ func TestPythonDeploymentEntrypointsRemoved(t *testing.T) {
 
 // Opt-in output from the real Docker Compose parser, never a replacement YAML
 // parser that merely assumes how anchors/interpolation/overrides will merge.
-func TestActualComposeSQLiteAndMySQLSelection(t *testing.T) {
+func TestActualComposeSQLiteSelection(t *testing.T) {
 	dir := os.Getenv("FRONTIERCLOUD_TEST_COMPOSE_JSON_DIR")
 	if dir == "" {
 		t.Skip("actual Compose configurations not selected")
 	}
-	for _, kind := range []string{"sqlite", "mysql"} {
-		t.Run(kind, func(t *testing.T) {
-			data, err := os.ReadFile(filepath.Join(dir, kind+".json"))
-			if err != nil || len(data) > 4*1024*1024 {
-				t.Fatal("bounded real Compose output required", err)
+	data, err := os.ReadFile(filepath.Join(dir, "sqlite.json"))
+	if err != nil || len(data) > 4*1024*1024 {
+		t.Fatal("bounded real Compose output required", err)
+	}
+	var spec struct {
+		Name     string                    `json:"name"`
+		Services map[string]composeService `json:"services"`
+	}
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name == "" {
+		t.Fatal("project identity missing")
+	}
+	cache := spec.Services["redis"]
+	memory, memoryErr := cache.MemoryLimit.Int64()
+	if memoryErr != nil || memory != 256*1024*1024 || !reflect.DeepEqual(cache.Command, []string{"redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"}) {
+		t.Fatal("Redis memory/security-counter eviction boundary changed", cache)
+	}
+	for _, name := range []string{"web", "secrets-init", "media-init"} {
+		s, ok := spec.Services[name]
+		if !ok || strings.Contains(strings.ToLower(s.Image), "python") || len(s.Command) != 1 {
+			t.Fatal("native service contract", name, s)
+		}
+		want := map[string]string{"web": "serve", "secrets-init": "init-secrets", "media-init": "init-media"}[name]
+		if s.Command[0] != want {
+			t.Fatal("service delegates to a script", name)
+		}
+		component := name
+		if name == "secrets-init" || name == "media-init" {
+			component = "web"
+		}
+		if s.Build.Dockerfile != "" || s.Image != "ghcr.io/wongyiuming/frontiercloud-gin-"+component+":"+os.Getenv("FRONTIERCLOUD_REVISION") {
+			t.Fatal("immutable image revision missing", name)
+		}
+	}
+	web := spec.Services["web"]
+	if _, found := spec.Services["updater"]; found {
+		t.Fatal("retired updater deployed")
+	}
+	if web.User != "10001:10001" || len(web.CapAdd) != 0 || !reflect.DeepEqual(web.CapDrop, []string{"ALL"}) {
+		t.Fatal("native Web privilege boundary changed")
+	}
+	for _, service := range spec.Services {
+		for _, volume := range service.Volumes {
+			if volume.Target == "/run/frontiercloud-updater" || volume.Target == "/var/run/docker.sock" || volume.Target == "/run/frontiercloud-maintenance" {
+				t.Fatal("retired updater authority mounted")
 			}
-			var spec struct {
-				Name     string                    `json:"name"`
-				Services map[string]composeService `json:"services"`
-			}
-			if err := json.Unmarshal(data, &spec); err != nil {
-				t.Fatal(err)
-			}
-			if spec.Name == "" {
-				t.Fatal("project identity missing")
-			}
-			cache := spec.Services["redis"]
-			memory, memoryErr := cache.MemoryLimit.Int64()
-			if memoryErr != nil || memory != 256*1024*1024 || !reflect.DeepEqual(cache.Command, []string{"redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"}) {
-				t.Fatal("Redis memory/security-counter eviction boundary changed", cache)
-			}
-			for _, name := range []string{"web", "secrets-init", "media-init"} {
-				s, ok := spec.Services[name]
-				if !ok || strings.Contains(strings.ToLower(s.Image), "python") || len(s.Command) != 1 {
-					t.Fatal("native service contract", name, s)
-				}
-				want := map[string]string{"web": "serve", "secrets-init": "init-secrets", "media-init": "init-media"}[name]
-				if s.Command[0] != want {
-					t.Fatal("service delegates to a script", name)
-				}
-				component := name
-				if name == "secrets-init" || name == "media-init" {
-					component = "web"
-				}
-				if s.Build.Dockerfile != "" || s.Image != "ghcr.io/wongyiuming/frontiercloud-gin-"+component+":"+os.Getenv("FRONTIERCLOUD_REVISION") {
-					t.Fatal("immutable image revision missing", name)
-				}
-			}
-			web := spec.Services["web"]
-			if _, found := spec.Services["updater"]; found {
-				t.Fatal("retired updater deployed")
-			}
-			if web.User != "10001:10001" || len(web.CapAdd) != 0 || !reflect.DeepEqual(web.CapDrop, []string{"ALL"}) {
-				t.Fatal("native Web privilege boundary changed")
-			}
-			for _, service := range spec.Services {
-				for _, volume := range service.Volumes {
-					if volume.Target == "/run/frontiercloud-updater" || volume.Target == "/var/run/docker.sock" || volume.Target == "/run/frontiercloud-maintenance" {
-						t.Fatal("retired updater authority mounted")
-					}
-				}
-			}
-			if web.Environment["DB_TYPE"] != kind || web.Environment["SQLITE_PATH"] != "/app/data/frontiercloud.db" || web.Environment["DATA_ROOT"] != "/app/data" {
-				t.Fatal("selected store/data volume mismatch")
-			}
-			if !reflect.DeepEqual(web.Healthcheck.Test, []string{"CMD", "/app/frontiercloud", "healthcheck"}) {
-				t.Fatal("health probe delegates outside native binary")
-			}
-			_, mysql := spec.Services["mysql"]
-			dependency, depends := web.DependsOn["mysql"]
-			if kind == "sqlite" && (mysql || depends) {
-				t.Fatal("SQLite launches/requires MySQL")
-			}
-			if kind == "mysql" && (!mysql || !depends || dependency.Condition != "service_healthy" || web.Environment["MYSQL_HOST"] != "mysql") {
-				t.Fatal("MySQL overlay omitted required healthy store")
-			}
-		})
+		}
+	}
+	if web.Environment["DB_TYPE"] != "sqlite" || web.Environment["SQLITE_PATH"] != "/app/data/frontiercloud.db" || web.Environment["DATA_ROOT"] != "/app/data" {
+		t.Fatal("selected store/data volume mismatch")
+	}
+	if !reflect.DeepEqual(web.Healthcheck.Test, []string{"CMD", "/app/frontiercloud", "healthcheck"}) {
+		t.Fatal("health probe delegates outside native binary")
+	}
+	_, mysql := spec.Services["mysql"]
+	_, depends := web.DependsOn["mysql"]
+	if mysql || depends {
+		t.Fatal("SQLite launches/requires MySQL")
 	}
 }

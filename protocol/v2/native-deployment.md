@@ -2,10 +2,8 @@
 
 The root `Dockerfile` and `docker-compose.yaml` select native Go. The retained
 `Dockerfile.gin` build alias is identical. The duplicate `docker-compose.gin.yaml`
-is no longer shipped; foc still recognizes that filename in existing deployments. The default
-SQLite profile has no MySQL service, volume or dependency; the optional
-`docker-compose.gin-mysql.yaml` overlay adds MySQL and its healthy dependency.
-The root has only these two business selections and the independent
+is no longer shipped; foc still recognizes that filename in existing deployments. SQLite is the only
+supported database for business and the independent
 `docker-compose.storage.yaml` appliance. Direct and Relay use that same storage
 file with different environment settings. The separate foc-only installer lives in
 `deploy/compose.foc.yaml` in source; its public operator-bundle path remains
@@ -20,15 +18,6 @@ adds `-f docker-compose.storage.yaml`. Native data/identity admission and its
 runtime receipts remain mandatory independently of operator registration.
 Python deployment is prohibited. Retired app/ and Python application entrypoints have been removed. Python scripts and test drivers remain outside native images. Database selection is not permission to overwrite an existing cluster's database, identity or physical ownership.
 
-In `.env`, select the runtime/database combination:
-
-| Runtime / database | `COMPOSE_FILE` |
-| --- | --- |
-| Go / SQLite (default) | `docker-compose.yaml` |
-| Go / MySQL | `docker-compose.yaml:docker-compose.gin-mysql.yaml` |
-
-Use `;` instead of `:` as the separator on Windows. An external MySQL deployment
-can select `DB_TYPE=mysql` and a stable `MYSQL_HOST` without the service overlay.
 Use a distinct `COMPOSE_PROJECT_NAME`, `DATA_DIRECTORY`, database and secrets
 volume for acceptance fixtures. These are optional overrides, not fresh-start
 requirements. Normal HTTPS startup needs only TLS_ENABLED and SERVER_NAME,
@@ -55,14 +44,12 @@ Nginx and coturn retain their established protocol roles.
 
 Before the first native database writer, the data root stores a fsynced
 `.native-store` binding under a retained cross-process lease inode. The binding
-fingerprints SQLite's absolute path or MySQL's stable host/port/database, never a
-password, credential or user. Credential rotation therefore does not switch the
-store. A subsequent different selection fails before opening/initializing an
+fingerprints the absolute SQLite path. A subsequent different selection fails before opening/initializing an
 empty database. If an older vault exists without a binding, native admission
 must first decrypt the identity in the selected *existing* store. Missing or
 unrelated identity, unknown binding bytes and symlinks fail closed.
 
-Changing `.env` is not a database migration. Host aliases and SQLite paths must
+Changing `.env` is not a database migration. SQLite paths must
 remain stable; intentional data migration requires separately verified offline
 transfer. A failed first connection may leave the intended binding; it must not
 silently select an unrelated store on the next attempt.
@@ -70,15 +57,16 @@ silently select an unrelated store on the next attempt.
 ## Evidence and remaining boundary
 
 `scripts/test-go-deployment.sh` parses actual Docker Compose JSON and checks
-commands, permissions, source labels, optional database dependency and project
+commands, permissions, source labels, database isolation and project
 selection and rejects updater/Docker/control mounts in normal deployment.
-Historical audit evidence remains preserved; current acceptance uses independent native fleets and the host-side operator. Web has no
-Python interpreter and MySQL does not create an authoritative SQLite DB.
+Current acceptance uses independent native fleets and the host-side operator.
+Previous runs remain available as audit evidence.
 
 Compose build labels by themselves do not prove that a mutable build context
 matches the supplied SHA. Reviewed production artifacts require immutable Git
 archive builds and exact CI evidence; an operator transition retains this boundary.
-Development acceptance now uses five native nodes (one Master, two Direct, two Relay), repeated for Gin/SQLite and Gin/MySQL. It runs only on the development host, never hosted CI. Historical migration admission and physical ownership proof remain separate requirements; see docs/go-only-completion.md.
+Development acceptance uses five native SQLite nodes (one Master, two Direct,
+two Relay) on the development host.
 
 ## Native role restart provenance
 

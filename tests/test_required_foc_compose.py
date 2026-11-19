@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class RequiredFocComposeTests(unittest.TestCase):
     def test_root_entries_are_deployments_and_legacy_installer_still_ships(self):
         files = {p.name for p in ROOT.glob('*compose*.yaml')}
-        self.assertEqual(files, {'docker-compose.yaml', 'docker-compose.gin-mysql.yaml',
+        self.assertEqual(files, {'docker-compose.yaml',
                                  'docker-compose.storage.yaml'})
         self.assertTrue((ROOT / 'deploy/compose.foc.yaml').is_file())
         for name in ('Dockerfile', 'Dockerfile.gin', 'ci/Dockerfile.web'):
@@ -58,11 +58,11 @@ class ActualOptionalOperatorGraphTests(unittest.TestCase):
         probe = subprocess.run(['docker', 'compose', 'version'], capture_output=True, text=True, timeout=15)
         if probe.returncode:
             self.skipTest('real Docker Compose plugin unavailable')
-        for transport, database in (('business', 'sqlite'), ('business', 'mysql'),
+        for transport, database in (('business', 'sqlite'),
                                     ('direct', 'sqlite'), ('relay', 'sqlite')):
             with self.subTest(transport=transport, database=database), tempfile.TemporaryDirectory() as temp:
                 directory = Path(temp)
-                for name in ('docker-compose.yaml', 'docker-compose.gin-mysql.yaml', 'docker-compose.storage.yaml'):
+                for name in ('docker-compose.yaml', 'docker-compose.storage.yaml'):
                     shutil.copyfile(ROOT / name, directory / name)
                 (directory / 'empty.env').write_text('')
                 env = {key: value for key, value in os.environ.items()
@@ -75,8 +75,6 @@ class ActualOptionalOperatorGraphTests(unittest.TestCase):
                 filename = 'docker-compose.yaml' if transport == 'business' else 'docker-compose.storage.yaml'
                 command = ['docker', 'compose', '--project-directory', str(directory),
                            '--env-file', str(directory / 'empty.env'), '-f', str(directory / filename)]
-                if database == 'mysql':
-                    command += ['-f', str(directory / 'docker-compose.gin-mysql.yaml')]
 
                 def config(*args):
                     return subprocess.check_output(command + list(args), text=True, env=env, timeout=30)
@@ -100,4 +98,4 @@ class ActualOptionalOperatorGraphTests(unittest.TestCase):
                 for initializer in ('secrets-init', 'media-init', 'certificate-init'):
                     self.assertIn(initializer, names)
                 if transport == 'business':
-                    self.assertEqual('mysql' in names, database == 'mysql')
+                    self.assertNotIn('mysql', names)

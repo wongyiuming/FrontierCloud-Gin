@@ -14,7 +14,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
-	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
@@ -89,27 +88,21 @@ func maintenanceCommand(arguments []string, output io.Writer) error {
 
 // Inspection must not create or initialize an absent authoritative store.
 func openExistingStore(ctx context.Context, settings config.Config) (store.Store, error) {
-	if settings.DatabaseType == config.DatabaseSQLite {
-		info, err := os.Stat(settings.SQLitePath)
-		if err != nil || !info.Mode().IsRegular() {
-			return nil, errors.New("existing SQLite store required for maintenance inspection")
-		}
-		db, err := sqlitestore.OpenReadOnly(ctx, settings.SQLitePath)
-		if err != nil {
+	info, err := os.Stat(settings.SQLitePath)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, errors.New("existing SQLite store required for maintenance inspection")
+	}
+	db, err := sqlitestore.OpenReadOnly(ctx, settings.SQLitePath)
+	if err != nil {
+		return nil, err
+	}
+	if settings.DeploymentMode == config.DeploymentStorage {
+		if err := db.OpenFileBackupsReadOnly(filepath.Join(settings.DataRoot, ".cold-backups")); err != nil {
+			db.Close()
 			return nil, err
 		}
-		if settings.DeploymentMode == config.DeploymentStorage {
-			if err := db.OpenFileBackupsReadOnly(filepath.Join(settings.DataRoot, ".cold-backups")); err != nil {
-				db.Close()
-				return nil, err
-			}
-		}
-		return db, nil
 	}
-	return mysqlstore.OpenContext(ctx, mysqlstore.Config{
-		Host: settings.MySQLHost, Port: settings.MySQLPort, Database: settings.MySQLDatabase,
-		User: settings.MySQLUser, PasswordFile: settings.MySQLPasswordFile,
-	})
+	return db, nil
 }
 
 // Initializers/migrations are writers too: acquire the same native lifecycle

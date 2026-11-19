@@ -57,6 +57,9 @@ func RestoreCheck(ctx context.Context, input, target, expected string) (recovery
 		}
 		return r, e
 	}
+	if r.Manifest.Database != "sqlite" {
+		return r, errors.New("restore requires a SQLite archive")
+	}
 	if r.Manifest.Scope == recovery.UpgradeStateScope {
 		return r, errors.New("upgrade-state archive excludes media and lyrics; original business mounts are required and fresh restoration is refused")
 	}
@@ -79,9 +82,7 @@ func RestoreCheck(ctx context.Context, input, target, expected string) (recovery
 		return r, e
 	}
 	required := uint64(r.Manifest.Bytes) + (1 << 30)
-	if r.Manifest.Database == "mysql" {
-		required += uint64(r.Manifest.Bytes) * 2
-	}
+
 	if free < required {
 		return r, errors.New("restore filesystem lacks space for material, staging and database import")
 	}
@@ -95,6 +96,9 @@ func PrepareRestore(ctx context.Context, target, project string, report recovery
 	var empty Receipt
 	if !report.Verified || !composeProject.MatchString(project) {
 		return nil, empty, errors.New("verified recovery report and explicit valid target project required")
+	}
+	if report.Manifest.Database != "sqlite" {
+		return nil, empty, errors.New("restore requires a SQLite archive")
 	}
 	root, e := filepath.Abs(target)
 	if e != nil {

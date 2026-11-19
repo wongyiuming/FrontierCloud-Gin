@@ -17,13 +17,12 @@ import (
 
 const (
 	DatabaseSQLite     = "sqlite"
-	DatabaseMySQL      = "mysql"
 	DeploymentBusiness = "business"
 	DeploymentStorage  = "only_stroge"
 )
 
 // Config is the Go deployment contract. Defaults preserve frontend behavior
-// while selecting SQLite unless DB_TYPE explicitly requests MySQL.
+// with SQLite as the database.
 type Config struct {
 	DeploymentMode         string
 	StorageEndpoint        string
@@ -31,11 +30,6 @@ type Config struct {
 	StoragePort            int
 	DatabaseType           string
 	SQLitePath             string
-	MySQLHost              string
-	MySQLPort              int
-	MySQLDatabase          string
-	MySQLUser              string
-	MySQLPasswordFile      string
 	RedisURL               string
 	MediaCatalogCacheTTL   int
 	HTTPAddress            string
@@ -94,27 +88,19 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if err := validateRetiredPublicPorts(getenv); err != nil {
 		return Config{}, err
 	}
-	port, err := integer(getenv("MYSQL_PORT"), 3306)
-	if err != nil || port < 1 || port > 65535 {
-		return Config{}, errors.New("MYSQL_PORT must be an integer from 1 to 65535")
-	}
+	var err error
 	value := Config{
-		DeploymentMode:    normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
-		StorageEndpoint:   strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
-		StorageTransport:  normalized(getenv("STORAGE_TRANSPORT"), "direct"),
-		DatabaseType:      normalized(getenv("DB_TYPE"), DatabaseSQLite),
-		SQLitePath:        fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
-		MySQLHost:         fallback(getenv("MYSQL_HOST"), "mysql"),
-		MySQLPort:         port,
-		MySQLDatabase:     fallback(getenv("MYSQL_DATABASE"), "office_automation"),
-		MySQLUser:         fallback(getenv("MYSQL_USER"), "media_admin"),
-		MySQLPasswordFile: fallback(getenv("MYSQL_PASSWORD_FILE"), "/run/frontiercloud-secrets/mysql_password"),
-		RedisURL:          fallback(getenv("REDIS_URL"), "redis://redis:6379/0"),
-		HTTPAddress:       fallback(getenv("HTTP_ADDR"), ":8000"),
-		DataRoot:          fallback(getenv("DATA_ROOT"), "/app/data"),
-		StaticRoot:        fallback(getenv("STATIC_ROOT"), "/app/static"),
-		SecretsDirectory:  fallback(getenv("SECRETS_DIR"), "/run/frontiercloud-secrets"),
-		ServerName:        strings.ToLower(strings.TrimSpace(fallback(getenv("SERVER_NAME"), "localhost"))),
+		DeploymentMode:   normalized(getenv("DEPLOYMENT_MODE"), DeploymentBusiness),
+		StorageEndpoint:  strings.TrimSpace(getenv("STORAGE_ENDPOINT")),
+		StorageTransport: normalized(getenv("STORAGE_TRANSPORT"), "direct"),
+		DatabaseType:     normalized(getenv("DB_TYPE"), DatabaseSQLite),
+		SQLitePath:       fallback(getenv("SQLITE_PATH"), "/data/frontiercloud.db"),
+		RedisURL:         fallback(getenv("REDIS_URL"), "redis://redis:6379/0"),
+		HTTPAddress:      fallback(getenv("HTTP_ADDR"), ":8000"),
+		DataRoot:         fallback(getenv("DATA_ROOT"), "/app/data"),
+		StaticRoot:       fallback(getenv("STATIC_ROOT"), "/app/static"),
+		SecretsDirectory: fallback(getenv("SECRETS_DIR"), "/run/frontiercloud-secrets"),
+		ServerName:       strings.ToLower(strings.TrimSpace(fallback(getenv("SERVER_NAME"), "localhost"))),
 	}
 	value.SecurityExemptNetworks = strings.Split(fallback(getenv("SECURITY_EXEMPT_NETWORKS"), "127.0.0.0/8,::1/128"), ",")
 	value.SecurityContact = strings.TrimSpace(getenv("SECURITY_CONTACT"))
@@ -260,8 +246,8 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		}
 		*p = absolute
 	}
-	if value.DatabaseType != DatabaseSQLite && value.DatabaseType != DatabaseMySQL {
-		return Config{}, fmt.Errorf("DB_TYPE must be %q or %q", DatabaseSQLite, DatabaseMySQL)
+	if value.DatabaseType != DatabaseSQLite {
+		return Config{}, fmt.Errorf("DB_TYPE must be %q", DatabaseSQLite)
 	}
 	if value.DatabaseType == DatabaseSQLite && strings.TrimSpace(value.SQLitePath) == "" {
 		return Config{}, errors.New("SQLITE_PATH is required when DB_TYPE=sqlite")

@@ -59,7 +59,7 @@ class StorageDeploymentContract(unittest.TestCase):
 
     def test_storage_uses_explicit_network_profile_sqlite_and_no_proxy_acceleration(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
-        for required in ("DEPLOYMENT_MODE: only_stroge", "DB_TYPE: sqlite", 'TLS_ENABLED: ${TLS_ENABLED:-true}',
+        for required in ("DEPLOYMENT_MODE: only_stroge", 'DB_TYPE: ${DB_TYPE:-sqlite}', 'TLS_ENABLED: ${TLS_ENABLED:-true}',
                          'NGINX_MEDIA_ACCEL: "false"', 'HTTP_ADDR: :${STORAGE_PORT:-443}',
                          'STORAGE_TRANSPORT: ${STORAGE_TRANSPORT:-direct}'):
             self.assertIn(required, text)

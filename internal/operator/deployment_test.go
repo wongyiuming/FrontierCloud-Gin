@@ -148,8 +148,35 @@ func TestInstallPinsOneRevisionAndInfrastructureBeforeStarting(t *testing.T) {
 	}
 }
 
+func TestInstallRejectsMySQLBeforeChangingDeployment(t *testing.T) {
+	for _, role := range []string{"master", "storage"} {
+		t.Run(role, func(t *testing.T) {
+			if _, err := New(t.TempDir(), role, "mysql"); err == nil {
+				t.Fatal("MySQL installation selection accepted")
+			}
+		})
+	}
+	d, runner := fixture(t)
+	runner.config.Services["web"].Environment["DB_TYPE"] = "mysql"
+	images := &fakeImages{}
+	if _, err := d.Install(context.Background(), "", "amd64", fakeEvidence{true}, images); err == nil {
+		t.Fatal("MySQL Compose configuration accepted")
+	}
+	if len(images.calls) != 0 {
+		t.Fatal("image proof requested before database refusal")
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, " pull ") || strings.Contains(call, " up ") || strings.Contains(call, " exec ") {
+			t.Fatal("deployment changed after database refusal", call)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(d.Directory, ReceiptFile)); !os.IsNotExist(err) {
+		t.Fatal("refused deployment wrote a receipt", err)
+	}
+}
+
 func TestExistingGinComposeReceiptRetainsItsFiles(t *testing.T) {
-	for _, database := range []string{"sqlite", "mysql"} {
+	for _, database := range []string{"sqlite"} {
 		t.Run(database, func(t *testing.T) {
 			d, err := New(t.TempDir(), "master", database)
 			if err != nil {

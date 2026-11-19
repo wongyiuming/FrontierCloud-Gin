@@ -29,7 +29,6 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/s3media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 	storecontract "github.com/wongyiuming/FrontierCloud-Gin/internal/store"
-	mysqlstore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/mysql"
 	sqlitestore "github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/stun"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
@@ -183,14 +182,6 @@ func command(arguments []string) error {
 		return cleanupBackupCacheCommand(arguments[1:], os.Stdout)
 	case "maintenance":
 		return maintenanceCommand(arguments[1:], os.Stdout)
-	case "master-migration":
-		return masterMigrationCommand(arguments[1:], os.Stdout)
-	case "master-to-sqlite":
-		return masterToSQLiteCommand(arguments[1:], os.Stdout)
-	case "follower-migration":
-		return followerMigrationCommand(arguments[1:], os.Stdout)
-	case "follower-to-sqlite":
-		return followerToSQLiteCommand(arguments[1:], os.Stdout)
 	case "adopt-storage":
 		return adoptStorageCommand(arguments[1:], os.Stdout)
 	case "adopt-recordings":
@@ -725,24 +716,15 @@ func healthAddress(address string) (string, error) {
 }
 
 func openStore(settings config.Config) (storecontract.Store, error) {
-	if settings.DatabaseType == config.DatabaseSQLite {
-		db, err := sqlitestore.Open(settings.SQLitePath)
-		if err != nil {
+	db, err := sqlitestore.Open(settings.SQLitePath)
+	if err != nil {
+		return nil, err
+	}
+	if settings.DeploymentMode == config.DeploymentStorage {
+		if err := db.ConfigureFileBackups(filepath.Join(settings.DataRoot, ".cold-backups")); err != nil {
+			db.Close()
 			return nil, err
 		}
-		if settings.DeploymentMode == config.DeploymentStorage {
-			if err := db.ConfigureFileBackups(filepath.Join(settings.DataRoot, ".cold-backups")); err != nil {
-				db.Close()
-				return nil, err
-			}
-		}
-		return db, nil
 	}
-	return mysqlstore.Open(mysqlstore.Config{
-		Host:         settings.MySQLHost,
-		Port:         settings.MySQLPort,
-		Database:     settings.MySQLDatabase,
-		User:         settings.MySQLUser,
-		PasswordFile: settings.MySQLPasswordFile,
-	})
+	return db, nil
 }

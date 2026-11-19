@@ -37,8 +37,6 @@ def command(args, directory=None, timeout=180, *, input_bytes=None):
 
 def compose(directory, *args):
     files = ['docker-compose.yaml']
-    if (directory / 'docker-compose.gin-mysql.yaml').exists():
-        files.append('docker-compose.gin-mysql.yaml')
     receipt_file = directory / '.fc-deployment.json'
     if receipt_file.exists():
         receipt = json.loads(receipt_file.read_text())
@@ -245,8 +243,6 @@ def run(args):
         legacy = before + '\n  secrets-init:\n' + after.split('\n  secrets-init:\n', 1)[1]
         legacy = legacy.replace('    depends_on:\n      foc-host-init: {condition: service_completed_successfully}\n', '')
         compose_file.write_text(legacy)
-    if args.database == 'mysql':
-        shutil.copyfile(source / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')
     # Use an isolated loopback address and the canonical stack. No global host
     # interface, firewall, SELinux or IPv6 setting is changed.
     address = '127.0.0.27'
@@ -254,7 +250,7 @@ def run(args):
         with socket.socket() as check:
             check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             check.bind((address, port))
-    (directory / '.env').write_text(f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\nDB_TYPE={args.database}\nMYSQL_DATABASE={prefix.replace("-", "_")}\n')
+    (directory / '.env').write_text(f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=localhost\nPUBLIC_BIND_ADDRESS={address}\nDB_TYPE={args.database}\n')
     web_image = json.loads(command(['docker', 'image', 'inspect', args.image]))[0]['Id']
     edge_image = json.loads(command(['docker', 'image', 'inspect', args.edge_image]))[0]['Id']
     source_revision = REVISION
@@ -265,7 +261,6 @@ def run(args):
         assert '@sha256:' in args.image and '@sha256:' in args.edge_image
     raw = command(['docker', 'compose', '--project-directory', str(directory), '-f',
                    str(directory / 'docker-compose.yaml'),
-                   *(['-f', str(directory / 'docker-compose.gin-mysql.yaml')] if args.database == 'mysql' else []),
                    'config', '--format', 'json'])
     configuration = json.loads(raw)
     overrides = {}
@@ -282,9 +277,6 @@ def run(args):
                 command(['docker', 'pull', image])
             image = json.loads(command(['docker', 'image', 'inspect', image]))[0]['Id']
         overrides[name] = {'image': image}
-        if name == 'mysql':
-            overrides[name].update(cpus=1, mem_limit='768m', memswap_limit='768m',
-                                  command=['--skip-log-bin', '--innodb-buffer-pool-size=64M', '--performance-schema=OFF', '--max-connections=64'])
         if name == 'nginx':
             # Host loopback publication is a test boundary. Nginx itself must
             # listen on its container interface, as the production contract
@@ -308,7 +300,7 @@ def run(args):
                'database': args.database, 'revision': source_revision, 'reviewed_source_sha': REVISION,
                'created_at': '2026-10-12T00:00:00Z', 'selection_sha256': fingerprint(configuration),
                'images': {}, 'service_images': {name: value['image'] for name, value in overrides.items()},
-               'compose_files': ['docker-compose.yaml'] + (['docker-compose.gin-mysql.yaml'] if args.database == 'mysql' else []), 'state': 'ready'}
+               'compose_files': ['docker-compose.yaml'], 'state': 'ready'}
     (directory / '.fc-deployment.json').write_text(json.dumps(receipt))
     if args.state_restore or args.automatic_upgrade:
         effective = json.loads(compose(directory, 'config', '--format', 'json'))
@@ -430,7 +422,7 @@ def run(args):
                 if isinstance(states, dict):
                     states = [states]
                 assert all(item['State'] in ('exited', 'created', 'dead')
-                           for item in states if item['Service'] != 'mysql')
+                           for item in states)
                 result.update(status='passed', scope='actual native upgrade preparation failure and retained recovery point',
                               no_production_operation=True, database=args.database)
                 success = True
@@ -466,8 +458,7 @@ def run(args):
             os.chmod(directory_probe / 'probe', 0o600)
         state_archive = directory / 'default-state.tar'
         state_report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
-                                           '--freeze', '--output', str(state_archive),
-                                           *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
+                                           '--freeze', '--output', str(state_archive)], timeout=700))
         assert state_report['integrity_verified']
         assert state_report['manifest']['scope'] == 'upgrade-state'
         assert not state_report['manifest']['complete_cluster']
@@ -481,19 +472,14 @@ def run(args):
             shutil.rmtree(directory_probe)
             for receipt_name in ('.native-store', '.native-runtime'):
                 (data / receipt_name).unlink()
-            if args.database == 'sqlite':
-                sqlite_path = configuration['services']['web']['environment']['SQLITE_PATH']
-                (data / Path(sqlite_path).relative_to('/app/data')).unlink()
-            else:
-                compose(directory, 'exec', '-T', 'mysql', 'sh', '-c',
-                        'MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_root_password) exec mysql -u root -e "DROP DATABASE $MYSQL_DATABASE"')
+            sqlite_path = configuration['services']['web']['environment']['SQLITE_PATH']
+            (data / Path(sqlite_path).relative_to('/app/data')).unlink()
             recovery_directory = directory.parent / ('ordinary-state-' + directory.name)
             state = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state',
                                         '--file', str(state_archive), '--sha256', state_report['sha256'],
                                         '--confirm-node-id', before_fact['node_id'],
                                         '--recovery-directory', str(recovery_directory),
-                                        '--confirm-source-offline', '--confirm-state-loss',
-                                        *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=800))
+                                        '--confirm-source-offline', '--confirm-state-loss'], timeout=800))
             assert state['phase'] == 'prepared_fenced'
             assert admin_key_path.read_bytes() == original_admin_key
             opened = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state-open',
@@ -515,8 +501,7 @@ def run(args):
             return result
         archive = directory / 'recovery.tar'
         report = json.loads(command([str(args.binary), '--directory', str(directory), 'backup', 'create',
-                                     '--freeze', '--include-business-files', '--output', str(archive),
-                                     *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
+                                     '--freeze', '--include-business-files', '--output', str(archive)], timeout=700))
         assert report['integrity_verified'] and not report['restored_business_verified']
         assert report['manifest']['node_id'] == before_fact['node_id']
         assert 'runtime_secrets/admin_key' in report['manifest']['key_references']
@@ -598,7 +583,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--database', choices=('sqlite', 'mysql'), default='sqlite')
+    parser.add_argument('--database', choices=('sqlite',), default='sqlite')
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--image', required=True)
     parser.add_argument('--edge-image', required=True)

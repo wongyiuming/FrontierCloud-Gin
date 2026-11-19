@@ -69,7 +69,9 @@ func (c *runnerFaultCaller) Call(ctx context.Context, rel store.Relationship, pa
 		}
 	}
 	result, e := c.client.Call(ctx, rel, path, value)
-	if e == nil && c.losePublicationCheckpoint != nil && strings.HasSuffix(path, "/status") && result["peer_state"] == "published" {
+	checkpoint, _ := result["checkpoint"].(map[string]any)
+	if e == nil && c.losePublicationCheckpoint != nil && strings.HasSuffix(path, "/status") &&
+		result["peer_state"] == "published" && checkpoint["state"] == "published" {
 		c.losePublicationCheckpoint()
 		c.losePublicationCheckpoint = nil
 		return nil, errors.New("injected SQL receipt saved without final byte checkpoint")

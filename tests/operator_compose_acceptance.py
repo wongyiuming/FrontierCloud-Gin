@@ -18,10 +18,10 @@ def tree(directory):
 
 def run(source, binary, workspace):
     results = []
-    for role, database, transport in (('master', 'sqlite', ''), ('master', 'mysql', ''),
+    for role, database, transport in (('master', 'sqlite', ''),
                                        ('storage', 'sqlite', 'direct'), ('storage', 'sqlite', 'relay')):
         directory = Path(tempfile.mkdtemp(prefix='fc-doctor-', dir=workspace))
-        for name in ('docker-compose.yaml', 'docker-compose.gin-mysql.yaml', 'docker-compose.storage.yaml'):
+        for name in ('docker-compose.yaml', 'docker-compose.storage.yaml'):
             shutil.copyfile(source / name, directory / name)
         project = directory.name
         environment = f'COMPOSE_PROJECT_NAME={project}\nTLS_ENABLED=false\nSERVER_NAME=storage.invalid\n'
@@ -29,8 +29,6 @@ def run(source, binary, workspace):
             port = 443 if transport == 'direct' else 8443
             endpoint = 'https://storage.invalid' + ('' if port == 443 else ':8443')
             environment += f'TLS_ENABLED=true\nSTORAGE_TRANSPORT={transport}\nSTORAGE_PORT={port}\nSTORAGE_ENDPOINT={endpoint}\n'
-        if database == 'mysql':
-            environment += 'DB_TYPE=mysql\n'
         (directory / '.env').write_text(environment)
         before = tree(directory)
         completed = subprocess.run([str(binary), '--directory', str(directory), '--role', role,
@@ -51,8 +49,6 @@ def run(source, binary, workspace):
             assert completed.returncode == 2
         compose = ['docker', 'compose', '--project-directory', str(directory), '-f',
                    str(directory / ('docker-compose.storage.yaml' if role == 'storage' else 'docker-compose.yaml'))]
-        if database == 'mysql':
-            compose += ['-f', str(directory / 'docker-compose.gin-mysql.yaml')]
         configuration = json.loads(subprocess.check_output(compose + ['config', '--format', 'json'], text=True))
         assert all('build' not in service for service in configuration['services'].values())
         assert configuration['services']['web']['image'].startswith('ghcr.io/wongyiuming/frontiercloud-gin-web:')

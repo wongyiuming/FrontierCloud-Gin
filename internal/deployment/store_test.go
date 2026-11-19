@@ -42,7 +42,7 @@ func TestSelectionIsDurableBeforeInitializationAndCannotSwitch(t *testing.T) {
 	if err := Bind(context.Background(), changed, nil); !errors.Is(err, ErrSelection) {
 		t.Fatal("different file admitted", err)
 	}
-	changed.DatabaseType, changed.MySQLHost, changed.MySQLPort, changed.MySQLDatabase = "mysql", "mysql", 3306, "fc"
+	changed.DatabaseType = "mysql"
 	if err := Bind(context.Background(), changed, nil); !errors.Is(err, ErrSelection) {
 		t.Fatal("backend switch admitted", err)
 	}
@@ -134,21 +134,5 @@ func TestUnsafeBindingLockAndCancellationPreserveBytes(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(c.DataRoot, Binding)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("cancelled selector published")
-	}
-}
-
-func TestMySQLCredentialsDoNotChangeDatabaseSelection(t *testing.T) {
-	c := fixture(t)
-	c.DatabaseType, c.MySQLHost, c.MySQLPort, c.MySQLDatabase = "mysql", "MYSQL", 3306, "fc"
-	if err := Bind(context.Background(), c, nil); err != nil {
-		t.Fatal(err)
-	}
-	c.MySQLHost, c.MySQLUser, c.MySQLPasswordFile = "mysql", "rotated", "new-private-key"
-	if err := Bind(context.Background(), c, nil); err != nil {
-		t.Fatal("credential rotation blocked", err)
-	}
-	c.MySQLDatabase = "different"
-	if err := Bind(context.Background(), c, nil); !errors.Is(err, ErrSelection) {
-		t.Fatal("new database admitted", err)
 	}
 }

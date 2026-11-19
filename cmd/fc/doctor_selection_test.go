@@ -12,7 +12,7 @@ import (
 )
 
 func TestDoctorSelectsInstalledRoleAndDatabaseBeforeCompose(t *testing.T) {
-	for _, selection := range [][2]string{{"storage", "sqlite"}, {"master", "mysql"}} {
+	for _, selection := range [][2]string{{"storage", "sqlite"}, {"master", "sqlite"}} {
 		t.Run(selection[0]+"-"+selection[1], func(t *testing.T) {
 			root := t.TempDir()
 			dep, err := operator.New(root, selection[0], selection[1])
@@ -38,7 +38,7 @@ func TestDoctorSelectsInstalledRoleAndDatabaseBeforeCompose(t *testing.T) {
 			if _, err = doctorDeployment(root, "invalid", "sqlite", true, false); err == nil {
 				t.Fatal("conflicting explicit role accepted")
 			}
-			if _, err = doctorDeployment(root, selection[0], "invalid", false, true); err == nil {
+			if _, err = doctorDeployment(root, selection[0], "mysql", false, true); err == nil {
 				t.Fatal("conflicting explicit database accepted")
 			}
 			after, err := os.ReadFile(path)

@@ -27,7 +27,7 @@ local CA. No production CLI trust override is introduced. The test network has
 no published service ports, and the CA is started before its trust file is
 mounted into the consumers.
 
-The success cases cover Master SQLite, Master MySQL, Direct Storage and Relay
+The success cases cover Master SQLite, Direct Storage and Relay
 Storage. Each starts from empty native data, requires fresh certificate issuance
 and matching serving bytes, then recreates serving containers and verifies the
 same NodeID, database generation, native vault key and version receipt. Master

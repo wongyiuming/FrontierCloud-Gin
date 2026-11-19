@@ -207,7 +207,7 @@ func (d *Deployment) RegisterCompose(ctx context.Context, arch string, evidence 
 		return result, errors.New("running Compose images lack reviewed main and exact-source CI proof")
 	}
 	r := Receipt{Version: ConfigurationVersion, Role: d.Role, Project: cfg.Name, Database: cfg.Services["web"].Environment["DB_TYPE"], Revision: revision, SourceSHA: fmtString(proof["ci_sha"]), CreatedAt: time.Now().UTC().Format(time.RFC3339), SelectionHash: selectionHash(cfg), Images: map[string]release.ImageProof{}, ServiceImages: map[string]string{}, Files: append([]string(nil), d.Files...), State: "ready"}
-	if r.Database != "sqlite" && r.Database != "mysql" || d.Role == "storage" && r.Database != "sqlite" {
+	if r.Database != "sqlite" {
 		return result, errors.New("unsupported Compose database selection")
 	}
 	for name, service := range cfg.Services {

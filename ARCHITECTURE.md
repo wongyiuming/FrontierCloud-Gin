@@ -243,7 +243,7 @@ Media catalog ordering is `file priority descending -> managed path -> stable me
 Equal priorities must keep the same order across page loads, playback sessions,
 Local/Master catalogs and cache hits. Session IDs never seed a shuffle.
 
-Catalog ordering is cached server-side. A cache hit must not cause a new MySQL sort query; changing priority or a directory name must invalidate the catalog generation.
+Catalog ordering is cached server-side. A cache hit must not cause a new SQLite sort query; changing priority or a directory name must invalidate the catalog generation.
 
 ## 7. Lyrics
 
@@ -418,7 +418,7 @@ registry/DNS observations do not establish public inbound reachability or write
 permission. Diagnostics use allowlisted facts, excluding arbitrary raw peer
 summaries, errors, credentials, pairing envelopes and signed URLs.
 
-Only Gin/Go may serve business APIs or provide operator CLI commands. Default deployment is Gin + SQLite; the sole database alternative is Gin + MySQL. Changing DB_TYPE is not a database migration. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
+Only Gin/Go may serve business APIs or provide operator CLI commands. SQLite is the sole database engine for all deployment roles. Explicit alternative database selections are rejected. Preserve historical keys, IDs, passwords, tokens, node relationships and backup serialization when adopting existing data; preserving data formats does not authorize a Python runtime.
 
 No Python application or illustrative application source is retained. Python is supported only as a test/script driver; tests call real Gin HTTP endpoints or inspect native source contracts, never import FastAPI/application services. No Python application, tests or Python drivers are packaged into the production Web runtime. Allowlisted POSIX foc launcher/installer scripts remain part of its operator bundle.
 
@@ -439,7 +439,7 @@ exceptions and manual DNS/no-mail tasks. These changes are not a penetration-tes
 certification. See docs/validation-and-promotion.md for
 the exact budgets and release-scoped security evidence.
 
-Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), repeated for SQLite/MySQL on the Master; all storage appliances use embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. Fresh-install alias promotion waits for verified public component publication. Deployers pin manifest digests and validate runtime/schema/source/platform before use.
+Heavy acceptance runs only on the prepared development host: five native nodes (one Master, two Direct storage nodes, two Relay storage nodes), all using embedded SQLite. No mixed Python/Go fleet or Python application acceptance remains. Hosted test CI has an explicit three-minute hard limit per parallel job, no serial test-job chains, Docker builds, fleet, real database, or real-browser jobs. A timeout is a failure, not permission to extend the limit. A separate exact-test-success-gated compilation workflow publishes public exact-SHA Web/Nginx runtime images, with parallel ten-minute jobs and no acceptance work. Fresh-install alias promotion waits for verified public component publication. Deployers pin manifest digests and validate runtime/schema/source/platform before use.
 Production pull/proof failures stop and never compile. Explicit immutable-source
 development builds are separate from installation and upgrade.
 

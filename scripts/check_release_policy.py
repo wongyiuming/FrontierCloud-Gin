@@ -61,11 +61,11 @@ require('FROM golang:1.26.8-bookworm' in web,
         "Native builder base must remain patch-pinned")
 for token, path in (('FROM nginx:1.30.4-alpine', "nginx/Dockerfile"),
                     ('image: redis:7.4.11-alpine', "docker-compose.yaml"),
-                    ('image: mysql:8.4.11', "docker-compose.gin-mysql.yaml"),
                     ('image: coturn/coturn:4.17.2-r0-alpine', "docker-compose.yaml")):
     require(token in read(path), f"Patch-pinned runtime base missing: {path}")
 require('ARG FRONTIERCLOUD_RUNTIME=go' in read("nginx/Dockerfile"), "Edge defaults must be native")
-require('  mysql:' not in compose and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
+require('  mysql:' not in compose and 'MYSQL_' not in compose
+        and 'DB_TYPE: ${DB_TYPE:-sqlite}' in compose,
         "Default native SQLite must not require MySQL")
 require('command: [init-secrets]' in compose and 'command: [init-media]' in compose
         and '  build:' not in compose, "Initializers must be native")
@@ -93,7 +93,7 @@ for path in (ROOT / "tests").glob("*.py"):
                     for node in ast.walk(tree)),
             f"Test dynamically loads Python application code: {path.name}")
 fleet = read("internal/nativeacceptance/native_matrix_real_test.go")
-require('const fleetNodeCount = 5' in fleet and 'go-sqlite' in fleet and 'go-mysql' in fleet,
+require('const fleetNodeCount = 5' in fleet and 'go-sqlite' in fleet and 'go-mysql' not in fleet,
         "Acceptance requires five native nodes and both database combinations")
 require('python-' not in fleet.lower() and 'referenceWeb' not in fleet,
         "Native fleet must not select a Python runtime")

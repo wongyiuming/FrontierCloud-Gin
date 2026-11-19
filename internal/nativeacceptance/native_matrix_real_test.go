@@ -187,7 +187,7 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 		t.Fatal("explicit newly created native matrix workspace required")
 	}
 	duration := 45 * time.Minute
-	kinds := []string{"go-sqlite", "go-mysql"}
+	kinds := []string{"go-sqlite"}
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
@@ -201,7 +201,7 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 		t.Fatal("private driver ownership required", err)
 	}
 	selected := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER")
-	if selected != "" && selected != "go-sqlite" && selected != "go-mysql" {
+	if selected != "" && selected != "go-sqlite" {
 		t.Fatal("unknown native matrix Master selection")
 	}
 	for _, kind := range kinds {
@@ -337,9 +337,6 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 		// Bounds apply only to disposable fixture services, never deployed nodes.
 		host["Memory"] = int64(256 << 20)
-		if service == "mysql" {
-			host["Memory"] = int64(512 << 20)
-		}
 		if service == "redis" {
 			host["Memory"] = int64(128 << 20)
 		}
@@ -383,26 +380,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	native := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE")
 	edge := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_EDGE_IMAGE")
 
-	commonSecrets := filepath.Join(root, "mysql-secrets")
-	if err := os.Mkdir(commonSecrets, 0755); err != nil {
-		t.Fatal(err)
-	}
-	initializer := create("common-init", native, []string{"init-secrets"}, nil, []string{commonSecrets + ":/run/frontiercloud-secrets"}, "0:0", sharedEndpoint("common-init"), nil)
-	if err := e.Wait(ctx, initializer.ID); err != nil {
-		t.Fatal(err)
-	}
-	var mysql Container
-	if kind == "go-mysql" {
-		mysql = create("mysql", "mysql:8.4.11", nil, []string{"MYSQL_DATABASE=fc_fleet_0", "MYSQL_USER=media_admin", "MYSQL_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_password", "MYSQL_ROOT_PASSWORD_FILE=/run/frontiercloud-secrets/mysql_root_password"}, []string{commonSecrets + ":/run/frontiercloud-secrets:ro"}, "", sharedEndpoint("mysql"), []string{"CMD-SHELL", "MYSQL_PWD=$(cat /run/frontiercloud-secrets/mysql_password) mysql -h 127.0.0.1 -u media_admin -e 'SELECT 1' fc_fleet_0"})
-		if err := e.Healthy(ctx, mysql.ID); err != nil {
-			t.Fatal("private MySQL initialization", err)
-		}
-	}
 	redisContainer := create("redis", "redis:7.4.11-alpine", []string{"redis-server", "--appendonly", "yes"}, nil, nil, "", sharedEndpoint("redis"), nil)
-	password, err := os.ReadFile(filepath.Join(commonSecrets, "mysql_password"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	sites := make([]*fleetSite, siteCount)
 	for i := range sites {
 		runtime, database := "go", "sqlite"
@@ -422,7 +400,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		domain := label + ".fleet.invalid"
 		privateName := project + "-" + label
 		newNetwork(privateName)
-		env := []string{"DB_TYPE=" + database, "DATA_ROOT=/app/data", "SQLITE_PATH=/app/data/frontiercloud.db", "MYSQL_HOST=mysql", "MYSQL_DATABASE=fc_fleet_" + big.NewInt(int64(i)).String(), "MYSQL_USER=media_admin", "REDIS_URL=redis://redis:6379/" + big.NewInt(int64(i)).String(), "TLS_ENABLED=true", "SERVER_NAME=" + domain, "SSL_CERT_FILE=/certs/ca.pem"}
+		env := []string{"DB_TYPE=" + database, "DATA_ROOT=/app/data", "SQLITE_PATH=/app/data/frontiercloud.db", "REDIS_URL=redis://redis:6379/" + big.NewInt(int64(i)).String(), "TLS_ENABLED=true", "SERVER_NAME=" + domain, "SSL_CERT_FILE=/certs/ca.pem"}
 		// Docker may allocate 192.168/10.x after its 172.16/12 pool fills.
 		// Trust only this node's actual private Nginx/Web network, not every
 		// private network or client-supplied forwarding header.
@@ -456,9 +434,6 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			if err := e.Wait(ctx, init.ID); err != nil {
 				t.Fatal(label, command, err)
 			}
-		}
-		if err := os.WriteFile(filepath.Join(folder, "secrets", "mysql_password"), password, 0600); err != nil {
-			t.Fatal(err)
 		}
 		private, runtimeDir, published := filepath.Join(folder, "certificate-state"), filepath.Join(folder, "certificate-runtime"), filepath.Join(folder, "certificate-published")
 		mounts := []string{private + ":/var/lib/frontiercloud-certificate", runtimeDir + ":/run/frontiercloud-certificate", published + ":/run/frontiercloud-tls"}
@@ -952,7 +927,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 	}
 	t.Log("real native five-node certificate observation and sequential UDP STUN passed", kind)
-	// Exercise both native database profiles, including private key/credential
+	// Exercise the native SQLite profile, including private key/credential
 	// rotation and durable revocation receipt before an independent new pair.
 	for _, index := range []int{1, 2} {
 		follower, old := sites[index], relations[index-1]
@@ -995,7 +970,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		perform(master, "POST", "/nodes/"+fresh+"/mode", map[string]any{"mode": "Direct"})
 		perform(master, "POST", "/nodes/"+fresh+"/resources", map[string]any{"storage_enabled": true, "storage_capacity_gib": 1, "backup_enabled": false})
 	}
-	t.Log("real native matrix SQLite/MySQL revocation and re-pair passed", kind)
+	t.Log("real native matrix SQLite revocation and re-pair passed", kind)
 	// This is business/control acceptance, not fleet release execution. Native
 	// sites use the normal manual availability control.
 	// Admin actions must never defeat native offline fences.
@@ -1345,20 +1320,12 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 	}
 	stateServices := []Container{redisContainer}
-	if mysql.ID != "" {
-		stateServices = append(stateServices, mysql)
-	}
 	for _, service := range stateServices {
 		if err := e.Stop(ctx, service.ID); err != nil {
 			t.Fatal("private state-service stop failed", err)
 		}
 		if err := e.Start(ctx, service.ID); err != nil {
 			t.Fatal("private state-service restart failed", err)
-		}
-	}
-	if mysql.ID != "" {
-		if err := e.Healthy(ctx, mysql.ID); err != nil {
-			t.Fatal("private MySQL restart not healthy", err)
 		}
 	}
 	for i, site := range sites {
@@ -1386,7 +1353,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("native matrix heartbeat did not recover after Web/Redis/MySQL restart")
+			t.Fatal("native matrix heartbeat did not recover after Web/Redis restart")
 		}
 		time.Sleep(time.Second)
 	}
@@ -1395,7 +1362,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		t.Fatal("recordings/session lost after real restart")
 	}
 	fleetRange(t, ctx, sites, "/api/v1/karaoke/account/recordings/"+recordings[0]+"/stream", "", []byte("disposable native matrix recording payload"))
-	t.Log("real native matrix durable-role Web, Redis and MySQL restart preserved identity, relationships, sessions and recordings", kind)
+	t.Log("real native matrix durable-role Web and Redis restart preserved identity, relationships, sessions and recordings", kind)
 	code, _, err := master.request(ctx, "POST", "/api/v1/media/admin/crypto/key", map[string]any{"session_id": browserCrypto.grant.SessionID, "file_path": encryptedFixtures[0].name})
 	if err != nil || code != 401 {
 		t.Fatal("real native Master restart retained an invalidated in-memory crypto session", code, err)

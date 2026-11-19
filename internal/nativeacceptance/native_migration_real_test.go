@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/migrationdata"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
@@ -71,13 +70,13 @@ func TestRealNativeMatrixFleetMigrations(t *testing.T) {
 	}
 	selected := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_MASTER")
 	combination := os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MIGRATION_CASE")
-	if selected != "" && selected != "go-sqlite" && selected != "go-mysql" {
+	if selected != "" && selected != "go-sqlite" {
 		t.Fatal("unknown database selection")
 	}
 	if combination != "" && combination != "dd" && combination != "dr" && combination != "rd" && combination != "rr" {
 		t.Fatal("unknown migration selection")
 	}
-	for _, kind := range []string{"go-sqlite", "go-mysql"} {
+	for _, kind := range []string{"go-sqlite"} {
 		if selected != "" && selected != kind {
 			continue
 		}
@@ -308,21 +307,6 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		fixtures[i].targetPath = object.TargetPath
 	}
 	networkBefore := map[string][2]uint64{}
-	mysqlContainer := ""
-	var mysqlNetworkBefore [2]uint64
-	if master.database == "mysql" {
-		web, err := e.Inspect(ctx, master.web)
-		if err != nil {
-			t.Fatal("private Master network ownership unavailable")
-		}
-		project := web.label("com.docker.compose.project")
-		database, err := e.Inspect(ctx, project+"-mysql")
-		if project == "" || err != nil || database.label("com.docker.compose.project") != project || database.label("com.docker.compose.service") != "mysql" {
-			t.Fatal("private SQL network counterpart ownership unavailable")
-		}
-		mysqlContainer = database.ID
-		mysqlNetworkBefore = fleetMigrationNetworkBytes(t, ctx, e, mysqlContainer)
-	}
 	for _, site := range []*fleetSite{master, sites[sourceIndex], sites[targetIndex]} {
 		networkBefore[site.web] = fleetMigrationNetworkBytes(t, ctx, e, site.web)
 	}
@@ -412,27 +396,12 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 		}
 	}
 	masterBytes := networkAfter[master.web][0] - networkBefore[master.web][0] + networkAfter[master.web][1] - networkBefore[master.web][1]
-	masterControlBytes, sqlCounterpartBytes := masterBytes, uint64(0)
-	if mysqlContainer != "" {
-		after := fleetMigrationNetworkBytes(t, ctx, e, mysqlContainer)
-		if after[0] < mysqlNetworkBefore[0] || after[1] < mysqlNetworkBefore[1] {
-			t.Fatal("private SQL network counters reset")
-		}
-		// This fresh database serves only its Master and the SELECT-only test
-		// observer. SQL metadata is not migration payload. Keep the observer's
-		// bounded accounting tolerance explicit rather than hiding SQL traffic.
-		sqlCounterpartBytes = after[0] - mysqlNetworkBefore[0] + after[1] - mysqlNetworkBefore[1]
-		if sqlCounterpartBytes > masterBytes+1<<20 {
-			t.Fatal("private SQL network accounting mismatch")
-		}
-		masterControlBytes = masterBytes - min(masterBytes, sqlCounterpartBytes)
-	}
 	sourceTx := networkAfter[sites[sourceIndex].web][1] - networkBefore[sites[sourceIndex].web][1]
 	targetRx := networkAfter[sites[targetIndex].web][0] - networkBefore[sites[targetIndex].web][0]
-	if masterControlBytes >= uint64(status.Task.TotalBytes)/4 || sourceTx < uint64(status.Task.TotalBytes) || targetRx < uint64(status.Task.TotalBytes) {
-		t.Fatal("migration payload was not confined to peer data path", masterControlBytes, sourceTx, targetRx, status.Task.TotalBytes)
+	if masterBytes >= uint64(status.Task.TotalBytes)/4 || sourceTx < uint64(status.Task.TotalBytes) || targetRx < uint64(status.Task.TotalBytes) {
+		t.Fatal("migration payload was not confined to peer data path", masterBytes, sourceTx, targetRx, status.Task.TotalBytes)
 	}
-	t.Logf("direct-only native network proof: master total=%d SQL counterpart=%d control=%d source tx=%d target rx=%d payload=%d", masterBytes, sqlCounterpartBytes, masterControlBytes, sourceTx, targetRx, status.Task.TotalBytes)
+	t.Logf("direct-only native network proof: master=%d source tx=%d target rx=%d payload=%d", masterBytes, sourceTx, targetRx, status.Task.TotalBytes)
 	checkedParents := map[string]bool{}
 	owned := map[string]media.TreeItem{}
 	for _, fixture := range fixtures {
@@ -593,16 +562,6 @@ func fleetMigrationScenario(t *testing.T, ctx context.Context, e *Engine, sites 
 func fleetMigrationOwnershipDatabase(t *testing.T, master *fleetSite) *sql.DB {
 	t.Helper()
 	driver, dsn := "sqlite", "file:"+filepath.Join(master.root, "data", "frontiercloud.db")+"?mode=ro"
-	if master.database == "mysql" {
-		password, err := os.ReadFile(filepath.Join(master.root, "secrets", "mysql_password"))
-		if err != nil {
-			t.Fatal("private ownership observer credential unavailable")
-		}
-		config := mysql.NewConfig()
-		config.User, config.Passwd, config.Net, config.Addr, config.DBName = "media_admin", strings.TrimSpace(string(password)), "tcp", "mysql:3306", "fc_fleet_0"
-		config.Timeout, config.ReadTimeout = 5*time.Second, 5*time.Second
-		driver, dsn = "mysql", config.FormatDSN()
-	}
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		t.Fatal("private ownership observer unavailable")

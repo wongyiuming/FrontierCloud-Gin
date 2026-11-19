@@ -192,13 +192,8 @@ func New(directory, role, database string) (*Deployment, error) {
 		return nil, errors.New("role must be master or storage")
 	}
 	files := []string{file}
-	if database == "mysql" {
-		if role != "master" {
-			return nil, errors.New("Storage requires embedded SQLite")
-		}
-		files = append(files, "docker-compose.gin-mysql.yaml")
-	} else if database != "sqlite" {
-		return nil, errors.New("database must be sqlite or mysql")
+	if database != "sqlite" {
+		return nil, errors.New("database must be sqlite")
 	}
 	return &Deployment{Directory: root, Role: role, Files: files}, nil
 }
@@ -277,6 +272,12 @@ func (d *Deployment) Config(ctx context.Context, pinned bool) (Config, error) {
 	if json.Unmarshal(raw, &cfg) != nil || cfg.Name == "" || cfg.Services["web"].Image == "" {
 		return cfg, errors.New("invalid Compose configuration")
 	}
+	if database := strings.ToLower(strings.TrimSpace(cfg.Services["web"].Environment["DB_TYPE"])); database != "" && database != "sqlite" {
+		return cfg, errors.New("database must be sqlite")
+	}
+	if _, exists := cfg.Services["mysql"]; exists {
+		return cfg, errors.New("MySQL service is unsupported")
+	}
 	for _, s := range cfg.Services {
 		if len(s.Build) > 0 && string(s.Build) != "null" {
 			return cfg, errors.New("ordinary installation forbids build definitions")
@@ -305,6 +306,8 @@ func selectionHash(cfg Config) string {
 	services := map[string]any{}
 	for name, s := range cfg.Services {
 		env := map[string]string{}
+		// Older SQLite Compose files included unused MySQL environment fields.
+		// Keep hashing them when present so existing SQLite receipts still match.
 		for _, key := range []string{"DEPLOYMENT_MODE", "DB_TYPE", "SQLITE_PATH", "DATA_ROOT", "SECRETS_DIR", "MYSQL_HOST", "MYSQL_PORT", "MYSQL_DATABASE", "SERVER_NAME", "TLS_ENABLED", "STORAGE_TRANSPORT", "STORAGE_ENDPOINT", "STORAGE_PORT"} {
 			if v, ok := s.Environment[key]; ok {
 				env[key] = v
@@ -462,6 +465,9 @@ func exclusiveJSONOrSame(path string, value any) error {
 	return nil
 }
 func (d *Deployment) ValidateReceipt(ctx context.Context, r Receipt) (Config, error) {
+	if r.Database != "sqlite" {
+		return Config{}, errors.New("deployment receipt must select SQLite")
+	}
 	cfg, err := d.Config(ctx, true)
 	if err != nil {
 		return cfg, err

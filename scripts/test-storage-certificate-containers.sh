@@ -35,7 +35,7 @@ PY
   *) return 1;; esac
 }
 trap cleanup EXIT
-paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx docker-compose.yaml docker-compose.gin-mysql.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md)
+paths=(Dockerfile Dockerfile.gin go.mod go.sum cmd internal migrations protocol static nginx docker-compose.yaml docker-compose.storage.yaml .env.example .env.storage.example docs/operator-manual.md)
 if git cat-file -e "$revision:deploy/compose.foc.yaml" 2>/dev/null; then
   paths+=(deploy/compose.foc.yaml)
 else

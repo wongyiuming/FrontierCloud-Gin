@@ -17,7 +17,7 @@ entire reciprocal Master/Storage roster, including Backup-only nodes:
   --freeze-all --output /private/new-recovery-set
 ```
 
-MySQL requires `--confirm-external-writers-stopped`. The tool checks exact
+Recovery sets require SQLite for every member. The tool checks exact
 NodeIDs and mutual active protocol-2 relationships before freezing anything.
 Missing, duplicate, foreign and pending relationships block the operation.
 It then freezes the Master first, stops every member's deployment writers, and
@@ -36,8 +36,7 @@ source node's identity onto another existing node.
 Unclassified volumes or bind mounts block complete-set publication. Partial
 output and closed native fences are retained on failure; no recursive cleanup
 or automatic reopening occurs. The common lease interval covers native writers
-on this engine, not unrelated external MySQL writers. The explicit MySQL
-confirmation remains necessary.
+on this engine.
 
 Verification and material extraction are separate:
 

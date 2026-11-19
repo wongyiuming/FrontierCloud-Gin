@@ -170,7 +170,7 @@ def main():
     engine('image', 'tag', args.image, candidate_alias)
 
     fixtures = []
-    for profile, database in (('business', 'sqlite'), ('business', 'mysql'), ('direct', 'sqlite'), ('relay', 'sqlite')):
+    for profile, database in (('business', 'sqlite'), ('direct', 'sqlite'), ('relay', 'sqlite')):
         name = profile + '-' + database
         print('START', name, flush=True)
         directory = work / name
@@ -180,13 +180,10 @@ def main():
         (control / 'ca.pem').touch()
         filename = 'docker-compose.yaml' if profile == 'business' else 'docker-compose.storage.yaml'
         shutil.copyfile(ROOT / filename, directory / filename)
-        shutil.copyfile(ROOT / 'docker-compose.gin-mysql.yaml', directory / 'docker-compose.gin-mysql.yaml')
         domain = 'business.fixture.test' if profile == 'business' else 'storage.fixture.test'
         port = 8443 if profile == 'relay' else 443
         (directory / '.env').write_text('COMPOSE_PROJECT_NAME=foc-required-' + name + '\nTLS_ENABLED=true\nSERVER_NAME=' + domain + '\nDB_TYPE=' + database + '\nSTORAGE_TRANSPORT=' + profile + '\nSTORAGE_PORT=' + str(port) + '\nSTORAGE_ENDPOINT=https://' + domain + (':8443' if port == 8443 else '') + '\n')
         command = ['compose', '--project-directory', str(directory), '-f', str(directory / filename)]
-        if database == 'mysql':
-            command += ['-f', str(directory / 'docker-compose.gin-mysql.yaml')]
         cfg = json.loads(engine(*command, '--profile', 'operator', 'config', '--format', 'json'))
         for service, spec in cfg['services'].items():
             # Dedicated private networks permit all fresh profiles to remain
@@ -215,9 +212,6 @@ def main():
             cfg['services']['nginx']['networks'] = {'default': {'aliases': [domain]}}
         # Fold private CA and image substitutions into the canonical fixture file
         # so registration still verifies the exact selected Compose-file roster.
-        if database == 'mysql':
-            cfg['services']['mysql'].update(cpus=1, mem_limit='768m', memswap_limit='768m')
-            (directory / 'docker-compose.gin-mysql.yaml').write_text('{}\n')
         (directory / filename).write_text(json.dumps(cfg))
         ACTIVE_COMMANDS.append((args.node, command))
         engine(*command, 'up', '-d', '--pull', 'never', 'certificate-agent')
@@ -239,7 +233,7 @@ def main():
     # Only after every runtime topology has proved fresh startup independently,
     # register the running private candidate through the compiled proof fixture.
     for name, directory, command, identity, fingerprint in fixtures:
-        database = 'mysql' if name == 'business-mysql' else 'sqlite'
+        database = 'sqlite'
         spec = {'directory': str(directory), 'role': 'master' if name.startswith('business-') else 'storage', 'database': database,
                 'installer_revision': BOOTSTRAP_REVISION, 'config_digests': {'web': image_id(args.image), 'nginx': image_id(args.edge_image), 'installer': image_id(BOOTSTRAP_IMAGE)}}
         specfile = directory / 'registration-spec.json'

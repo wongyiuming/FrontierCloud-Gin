@@ -19,7 +19,7 @@ import tempfile
 import uuid
 
 SOURCE = Path(__file__).resolve().parents[1]
-FILES = ('docker-compose.yaml', 'docker-compose.gin-mysql.yaml', 'docker-compose.storage.yaml')
+FILES = ('docker-compose.yaml', 'docker-compose.storage.yaml')
 
 
 def call(args, **kwargs):
@@ -50,8 +50,6 @@ def inventory(project):
 
 def compose_command(directory, role, database):
     files = ['docker-compose.storage.yaml' if role == 'storage' else 'docker-compose.yaml']
-    if database == 'mysql':
-        files.append('docker-compose.gin-mysql.yaml')
     command = ['docker', 'compose', '--project-directory', str(directory)]
     for file in files:
         command += ['-f', str(directory / file)]
@@ -287,9 +285,6 @@ def private_install(args, work, path_env, name, role, database, profile, case, w
                         f'    volumes:\n      - {control / "ca.pem"}:/etc/ssl/certs/ca-certificates.crt:ro\n')
         if name == 'stun':
             overlay += '    ports: !reset []\n'
-        if name == 'mysql':
-            overlay += ('    cpus: 1\n    mem_limit: 768m\n    memswap_limit: 768m\n'
-                        '    command: [--skip-log-bin, --innodb-buffer-pool-size=64M, --performance-schema=OFF, --max-connections=64]\n')
     (directory / 'private-runtime.yaml').write_text(overlay)
     spec = {'directory': str(directory), 'role': role, 'database': database, 'profile': profile,
             'case': case, 'images': mappings}
@@ -320,7 +315,7 @@ def main():
     parser.add_argument('--edge-image', required=True)
     parser.add_argument('--guards-only', action='store_true')
     parser.add_argument('--skip-guards', action='store_true')
-    parser.add_argument('--private-cases', nargs='+', choices=('master-sqlite', 'master-mysql', 'direct', 'relay', 'pull-failure', 'certificate-failure'))
+    parser.add_argument('--private-cases', nargs='+', choices=('master-sqlite', 'direct', 'relay', 'pull-failure', 'certificate-failure'))
     args = parser.parse_args()
     assert os.geteuid() == 0 and os.name == 'posix', 'isolated root Linux Docker development host required'
     for name in ('binary', 'operator_test_binary', 'certificate_test_binary', 'workspace', 'output'):
@@ -346,7 +341,6 @@ def main():
             result['private_installations'] = []
             for name, role, database, profile, case in (
                 ('master-sqlite', 'master', 'sqlite', 'business', 'success'),
-                ('master-mysql', 'master', 'mysql', 'business', 'success'),
                 ('direct', 'storage', 'sqlite', 'direct', 'success'),
                 ('relay', 'storage', 'sqlite', 'relay', 'success'),
                 ('pull-failure', 'storage', 'sqlite', 'direct', 'pull-failure'),

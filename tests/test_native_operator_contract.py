@@ -22,7 +22,7 @@ class NativeOperatorTests(unittest.TestCase):
         source = (ROOT / "internal/nativeacceptance/native_matrix_real_test.go").read_text()
         self.assertIn("const fleetNodeCount = 5", source)
         self.assertIn('"go-sqlite"', source)
-        self.assertIn('"go-mysql"', source)
+        self.assertNotIn('"go-mysql"', source)
         self.assertNotIn("UPDATER_PROJECT", source)
         self.assertNotIn("updater-control", source)
 

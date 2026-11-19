@@ -31,11 +31,10 @@ FRONTIERCLOUD_IMAGE_SOURCE=local bash scripts/build-native-images.sh "$revision"
 export FRONTIERCLOUD_REVISION="$revision"
 export PUBLIC_BIND_ADDRESS=127.0.0.1 WEBRTC_STUN_PORT=0
 export TLS_ENABLED=false SERVER_NAME=localhost DB_TYPE=sqlite
-for database in sqlite mysql; do
+for database in sqlite; do
   project="$prefix-$database"
   export COMPOSE_PROJECT_NAME="$project" DATA_DIRECTORY="$work/data-$database"
   files=(-f docker-compose.yaml)
-  if [[ "$database" == mysql ]]; then files+=(-f docker-compose.gin-mysql.yaml); fi
   files+=(-f tests/native-loopback.compose.yaml)
   compose() { docker compose --env-file /dev/null -p "$project" "${files[@]}" "$@"; }
   compose up -d --no-build --wait --wait-timeout 180
@@ -64,7 +63,6 @@ for database in sqlite mysql; do
   fi
   compose stop web
   compose restart redis
-  if [[ "$database" == mysql ]]; then compose restart mysql; fi
   compose up -d --no-build --wait --wait-timeout 180
   test "$(compose exec --interactive=false -T web sha256sum /app/data/.native-runtime | cut -d' ' -f1)" = "$receipt"
   curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 "http://$address/health/ready" >/dev/null

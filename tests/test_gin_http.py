@@ -47,9 +47,9 @@ class GinHTTPTests(unittest.TestCase):
                        SQLITE_PATH=str(cls.work / "data/frontiercloud.db"),
                        HTTP_ADDR=f"127.0.0.1:{port}", DB_TYPE=OPTIONS.database,
                        REDIS_URL=OPTIONS.redis_url, NGINX_MEDIA_ACCEL="false",
-                       MYSQL_HOST=OPTIONS.mysql_host, MYSQL_PORT=str(OPTIONS.mysql_port),
-                       MYSQL_USER="media_admin", MYSQL_DATABASE="fc_gin_http",
-                       MYSQL_PASSWORD_FILE=str(OPTIONS.mysql_password_file or cls.work / "unused"),
+
+
+
                        TLS_ENABLED="false", SERVER_NAME="localhost",
                        SECURITY_CONTACT="https://reports.example.test/security",
                        RELEASE_BRANCH="main", RELEASE_SOURCE_BRANCH="dev")
@@ -245,10 +245,10 @@ class GinHTTPTests(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
-    parser.add_argument("--database", choices=("sqlite", "mysql"), required=True)
+    parser.add_argument("--database", choices=("sqlite",), required=True)
     parser.add_argument("--redis-url", required=True)
-    parser.add_argument("--mysql-host", default="127.0.0.1")
-    parser.add_argument("--mysql-port", type=int, default=3306)
-    parser.add_argument("--mysql-password-file", type=Path)
+
+
+
     OPTIONS = parser.parse_args()
     unittest.main(argv=["test_gin_http"], verbosity=2)

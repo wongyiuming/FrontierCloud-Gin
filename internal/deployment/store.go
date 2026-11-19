@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
@@ -33,9 +32,6 @@ func fingerprint(c config.Config) (string, error) {
 			return "", ErrSelection
 		}
 		parts = []string{"sqlite", filepath.Clean(p)}
-	case config.DatabaseMySQL:
-		// User/password rotation does not change the selected database.
-		parts = []string{"mysql", strings.ToLower(c.MySQLHost), strconv.Itoa(c.MySQLPort), c.MySQLDatabase}
 	default:
 		return "", ErrSelection
 	}

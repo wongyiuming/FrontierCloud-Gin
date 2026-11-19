@@ -8,12 +8,12 @@ import (
 
 func TestDotEnvParsingAndEnvironmentPrecedence(t *testing.T) {
 	t.Chdir(t.TempDir())
-	payload := "\ufeff# ignored\nexport DB_TYPE=mysql\nMYSQL_HOST='database.local' # suffix\nSERVER_NAME=example.com # public\nREDIS_URL=\"redis://localhost:6379/2\"\nLOG_LEVEL=INFO\n"
+	payload := "\ufeff# ignored\nexport DB_TYPE=mysql\nSQLITE_PATH='/data/other.db' # suffix\nSERVER_NAME=example.com # public\nREDIS_URL=\"redis://localhost:6379/2\"\nLOG_LEVEL=INFO\n"
 	if err := os.WriteFile(".env", []byte(payload), 0600); err != nil {
 		t.Fatal(err)
 	}
 	file, err := readDotEnv(".env")
-	if err != nil || file["MYSQL_HOST"] != "database.local" || file["SERVER_NAME"] != "example.com" {
+	if err != nil || file["SQLITE_PATH"] != "/data/other.db" || file["SERVER_NAME"] != "example.com" {
 		t.Fatalf("parse: %v %v", file, err)
 	}
 	t.Setenv("DB_TYPE", "sqlite")
@@ -21,9 +21,9 @@ func TestDotEnvParsingAndEnvironmentPrecedence(t *testing.T) {
 	if err != nil || cfg.DatabaseType != "sqlite" {
 		t.Fatalf("environment did not override: %v", err)
 	}
-	t.Setenv("MYSQL_HOST", "")
+	t.Setenv("SQLITE_PATH", "")
 	cfg, err = Load()
-	if err != nil || cfg.MySQLHost != "mysql" {
+	if err != nil || cfg.SQLitePath != "/data/frontiercloud.db" {
 		t.Fatal("explicit empty env did not override .env")
 	}
 }

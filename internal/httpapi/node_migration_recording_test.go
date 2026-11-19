@@ -240,6 +240,9 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 			if e = engine.Run(ctx, plan.ID, strings.Repeat("d", 32)); e == nil {
 				t.Fatal("recording cutover failure ignored")
 			}
+			if checkpoint && fault.losePublicationCheckpoint != nil {
+				t.Fatal("recording publication checkpoint fault was not injected")
+			}
 			if _, e = repo.ControlMigration(ctx, plan.ID, "cancel", store.NodeAudit{}); e != nil {
 				t.Fatal(e)
 			}

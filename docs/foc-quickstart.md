@@ -51,8 +51,7 @@ stop; they are not treated as an unpublished version. Implicit downgrade is refu
 The operation verifies images, fences writes, captures state recovery material,
 prepares the target, verifies managed reads and opens service. Archives exclude
 media, lyrics and recording content: retain the original business mounts.
-Code rollback does not reverse DDL. MySQL confirmation also requires that external
-writers really have stopped.
+Code rollback does not reverse DDL.
 
 After interruption, repeat the command to inspect and continue its original
 resumable target. Failed fenced operations require [controlled recovery](operator-upgrade.md),
@@ -69,8 +68,7 @@ not forced opening or automatic database restoration.
 | `upgrade plan/apply/resume/open` | Deliberately staged operation or recovery, not daily parameter copying. |
 
 Older tools lacking parameterless upgrade need one explicit verified self-update
-to acquire it. Noninteractive upgrade may use `--yes`; MySQL additionally needs
-`--confirm-external-writers-stopped`, which cannot substitute for stopping writers.
+to acquire it. Noninteractive SQLite upgrade may use `--yes`.
 
 ## Status and limits
 

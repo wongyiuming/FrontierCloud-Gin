@@ -108,9 +108,9 @@ actual bootstrap CI completion and public image proofs before claiming initial
 activation. Do not direct-write main or reuse the historical bootstrap exception
 to bypass current exact-source validation, review or owner authorization.
 
-Run native unit/race, actual SQLite/MySQL business/API, deployment and operator upgrade tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
+Run native unit/race, actual SQLite business/API, deployment and operator upgrade tests on the development host. Python remains a test/script language, but application tests target Gin HTTP/native source; importing app, main, FastAPI or SQLAlchemy in tests is prohibited. Retired app/, main.py and Python updater references are removed. Preserve scripts/ and tests/ Python drivers; their use does not authorize a Python product runtime.
 
-The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers both database combinations; Master-only upgrade/rollback must leave storage versions and identities unchanged; whole-fleet release synchronization is retired. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
+The fleet is exactly five Go nodes: one Master, two Direct, two Relay. scripts/test-native-matrix.sh covers the SQLite fleet; Master-only upgrade/rollback must leave storage versions and identities unchanged; whole-fleet release synchronization is retired. These and real browser tests are development-host-only. Legacy data/token golden vectors are retained independently of Python runtime support.
 
 ## Release evidence
 

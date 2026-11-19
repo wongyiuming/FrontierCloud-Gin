@@ -46,7 +46,6 @@ docker run --rm --cpus=1 --memory=1g --memory-swap=1g -e GOMAXPROCS=1 -e CGO_ENA
 chmod 755 "$work/certificate.test"
 # Engine Create does not pull images. Provision the shared fixtures explicitly
 # so a fresh runner behaves like a development engine with cached images.
-docker pull mysql:8.4.11
 docker pull redis:7.4.11-alpine
 docker run --rm --memory=2g --cpus=2 -e GOMAXPROCS=2 -e GOFLAGS=-p=1 --name "$prefix-driver" --label "frontiercloud.acceptance=$prefix" \
   -v "$PWD:/src:ro" -v "$work:$work" \

@@ -1,6 +1,6 @@
 # FrontierCloud
 
-FrontierCloud is a self-hosted media browsing, continuous-audio playback, karaoke, cluster-storage, backup, and administration system. Go (Gin) provides the default business/control plane with SQLite; MySQL is the only database alternative. Python is used only for test and operational scripts; the retired application and display references have been removed. Browser JavaScript, Nginx, Redis and coturn retain their existing roles.
+FrontierCloud is a self-hosted media browsing, continuous-audio playback, karaoke, cluster-storage, backup, and administration system. Go (Gin) provides the default business/control plane with SQLite, the sole supported database. Python is used only for test and operational scripts; the retired application and display references have been removed. Browser JavaScript, Nginx, Redis and coturn retain their existing roles.
 
 The core product model is deliberately small: one business Master owns business truth, storage nodes provide Storage and/or Backup resources, and every managed media object has one complete physical owner.
 
@@ -87,16 +87,14 @@ docker compose exec -T web cat /run/frontiercloud-secrets/admin_key
 
 Use this deployment's own Compose directory and persistent secrets.
 
-The two supported `.env` deployment selections are documented in
-[Native deployment](protocol/v2/native-deployment.md). Changing the runtime or
-database selection does not migrate existing state. Historical Python cluster
+[Native deployment](protocol/v2/native-deployment.md) documents the supported
+SQLite deployment. Historical Python cluster
 volumes remain fenced until a separately verified offline adoption/migration;
 do not apply this quick start to an existing cluster.
 
 Preserving an existing storage identity and media requires the separate
 [offline storage handover](docs/storage-appliance.md), not
-reinitialization or re-pairing. Existing native MySQL Masters use the
-[separate SQLite conversion](docs/offline-master-to-sqlite.md).
+reinitialization or re-pairing.
 
 TLS_ENABLED=true always enables automatic certificate management. Nginx
 remains the business HTTPS entry; Storage uses Go HTTPS directly. Failed first
@@ -121,8 +119,7 @@ before touching an existing owned disk.
 
 Detailed configuration, generated-secret recovery, first Admin access, role initialization, and persistent-volume guidance live in [Deployment and Configuration](https://github.com/wongyiuming/FrontierCloud-Gin/wiki/Deployment-and-Configuration).
 
-The root has three Compose files: `docker-compose.yaml` for business deployment,
-`docker-compose.gin-mysql.yaml` as its optional MySQL overlay, and
+The root has `docker-compose.yaml` for business deployment and
 `docker-compose.storage.yaml` for either Direct or Relay. The `foc-host-init`
 service is available only through the explicit `operator` profile. To install
 the optional global tool for a running standard business deployment:
@@ -172,7 +169,7 @@ Operational and subsystem detail belongs in the separate GitHub Wiki (not tracke
 
 The published GitHub Wiki is available at [github.com/wongyiuming/FrontierCloud-Gin/wiki](https://github.com/wongyiuming/FrontierCloud-Gin/wiki).
 
-Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay), repeated for SQLite and MySQL. Hosted test CI stays within three minutes. A separate, success-gated image compilation workflow has ten-minute parallel component jobs; neither workflow runs fleet, database or browser acceptance.
+Development-host acceptance uses five Go nodes (one Master, two Direct, two Relay) using SQLite. Hosted test CI stays within three minutes. A separate, success-gated image compilation workflow has ten-minute parallel component jobs; neither workflow runs fleet, database or browser acceptance.
 
 ## Repository delivery
 

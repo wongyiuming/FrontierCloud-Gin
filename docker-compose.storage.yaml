@@ -9,7 +9,7 @@ x-storage-image: &storage-image
 
 x-storage-env: &storage-env
   DEPLOYMENT_MODE: only_stroge
-  DB_TYPE: sqlite
+  DB_TYPE: ${DB_TYPE:-sqlite}
   SQLITE_PATH: /app/data/frontiercloud.db
   DATA_ROOT: /app/data
   SECRETS_DIR: /run/frontiercloud-secrets

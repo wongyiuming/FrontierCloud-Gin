@@ -26,7 +26,7 @@ func run(args []string) (exitCode int) {
 	flags := flag.NewFlagSet("fc", flag.ContinueOnError)
 	directory := flags.String("directory", ".", "deployment bundle directory")
 	role := flags.String("role", "master", "doctor role: master or storage")
-	database := flags.String("database", "sqlite", "master database: sqlite or mysql")
+	database := flags.String("database", "sqlite", "database: sqlite")
 	structured := flags.Bool("json", false, "structured report")
 	revision := flags.String("revision", "", "published main revision; install and upgrade discover the latest published release by default")
 	ordered, err := globalArguments(args)

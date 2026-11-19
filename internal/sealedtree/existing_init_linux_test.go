@@ -225,7 +225,7 @@ func TestExistingBusinessTreeInitializationRequiresOfflineBinding(t *testing.T) 
 	if enabled, e := gate.Enabled(); e != nil || !enabled {
 		t.Fatal("maintenance unexpectedly reopened", e)
 	}
-	c.DatabaseType = config.DatabaseMySQL
+	c.DatabaseType = "mysql"
 	if err = run(); err == nil {
 		t.Fatal("MySQL tree runtime accepted")
 	}

@@ -15,7 +15,7 @@ import (
 
 const applicationID = 10001
 
-var secretNames = []string{"mysql_password", "mysql_root_password", "admin_key", "metrics_token"}
+var secretNames = []string{"admin_key", "metrics_token"}
 
 // InitializeSecrets preserves the Python initializer's durable volume contract.
 func InitializeSecrets(root string) error {
@@ -48,7 +48,6 @@ func InitializeSecrets(root string) error {
 	}
 
 	legacyUpgrade := !exists(initialized) && !exists(initializing) &&
-		validSecret(paths["mysql_password"]) && validSecret(paths["mysql_root_password"]) &&
 		validSecret(paths["admin_key"]) && !validSecret(paths["metrics_token"])
 	firstInitialization := !exists(initialized) && !legacyUpgrade
 	if firstInitialization && !exists(initializing) {

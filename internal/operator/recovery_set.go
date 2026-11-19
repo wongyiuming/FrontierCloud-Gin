@@ -246,6 +246,11 @@ func RestoreSetCheck(ctx context.Context, input, target, expected string) (recov
 	if e != nil {
 		return r, e
 	}
+	for _, member := range r.Manifest.Members {
+		if member.Database != "sqlite" {
+			return r, errors.New("restore requires SQLite archives for every member")
+		}
+	}
 	if target == "" {
 		return r, errors.New("absent restoration target required")
 	}
@@ -266,9 +271,6 @@ func RestoreSetCheck(ctx context.Context, input, target, expected string) (recov
 	required := uint64(1 << 30)
 	for _, member := range r.Manifest.Members {
 		required += uint64(member.Bytes)
-		if member.Database == "mysql" {
-			required += 2 * uint64(member.Bytes)
-		}
 	}
 	if free < required {
 		return r, errors.New("restoration filesystem lacks space for every member, staging and database imports")

@@ -13,10 +13,6 @@ x-app-environment: &app-environment
   SQLITE_PATH: ${SQLITE_PATH:-/app/data/frontiercloud.db}
   DATA_ROOT: /app/data
   SECRETS_DIR: /run/frontiercloud-secrets
-  MYSQL_HOST: ${MYSQL_HOST:-mysql}
-  MYSQL_PORT: ${MYSQL_PORT:-3306}
-  MYSQL_DATABASE: ${MYSQL_DATABASE:-office_automation}
-  MYSQL_USER: ${MYSQL_USER:-media_admin}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   SERVER_NAME: ${SERVER_NAME:-localhost}
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}

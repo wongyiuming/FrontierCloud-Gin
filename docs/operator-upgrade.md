@@ -50,7 +50,7 @@ To deliberately select an exact release, use
 The tool verifies the selected public release and deployment, displays version,
 database generation and state-backup capacity, and asks for one confirmation.
 After the capacity scan, it refreshes the release plan before requesting consent,
-so a long MySQL dump estimate does not consume the plan's one-hour validity.
+so capacity estimation does not consume the plan's one-hour validity.
 It manages the private plan and recovery archive in the registered deployment
 directory, invokes the existing apply checks, and opens only after preparation
 and managed read verification succeed. No plan filename, hash or NodeID needs
@@ -70,10 +70,7 @@ Release readiness is reported separately from registry access:
 | `image_publication_failed` | Newest exact publisher attempt did not succeed |
 | Publication succeeded but image verification failed | Successful publication does not prove that an image remains accessible; underlying missing, network, permission, platform or integrity error is retained |
 
-For MySQL, the interactive confirmation explicitly attests that external writers
-are stopped. Noninteractive use requires `--yes` and, for MySQL, the separate
-`--confirm-external-writers-stopped` attestation. The tool cannot infer external
-writer ownership. Declining confirmation leaves the upgrade unstarted.
+Noninteractive use requires `--yes`. Declining confirmation leaves the upgrade unstarted.
 
 Repeating the command with the same target detects a recorded resumable stage
 and requests consent to finish it using its existing plan and recovery point.
@@ -87,8 +84,8 @@ or opens a failed upgrade. Keep managed plan, backup and journal evidence.
 
 The following subcommands remain available for deliberate staged operations.
 
-Upgrade recovery always uses `upgrade-state`: SQLite database/WAL/SHM or a
-consistent MySQL dump, deployment configuration, identity keys, certificates,
+Upgrade recovery always uses `upgrade-state`: SQLite database/WAL/SHM,
+deployment configuration, identity keys, certificates,
 Redis and native lifecycle state. Media, lyrics and recording files remain in
 their original mounts and are never copied into the upgrade recovery point.
 The plan binds this scope into its approval digest; no media-exclusion flag is
@@ -103,25 +100,10 @@ For a `failed_fenced` preparation which has never begun public activation,
 `foc upgrade recover-state` restores the verified pre-upgrade database and state
 into the same retained mounts. It requires the original plan digest, exact NodeID,
 original archive SHA and a new private recovery directory. Current failed state
-is retained there before any restoration; no media bytes are captured. SQLite
-restores the archived database/WAL/SHM, and MySQL requires external-writer
-confirmation, retains a logical dump of the failed database, then explicitly
-recreates only the recorded database from the verified dump. Identity keys,
-including `data/media-keys/media-premaster.key`, configuration and certificate
-state are restored without replacing native lifecycle/control lease files.
-
-Before a MySQL database is dropped, recovery checks its server data volume's
-free space against the source table/index storage estimate recorded in the
-archive, an expansion allowance and remaining reserve. Historical state archives
-without that estimate cannot authorize destructive MySQL restoration. This
-estimate is independent of the compressed dump size and archive destination.
-On a continuing recovery, allocated private `.ibd` files in the recorded database
-directory can count as space reclaimed by the explicit database drop. Shared
-tablespaces and hard-linked files never count as reclaimed space.
-Recovery checks both root and application MySQL credentials against the archive
-and refuses drift before replacing any live state. Password
-rotation or loss of the server credential requires separately coordinated MySQL
-credential recovery; an application dump cannot restore server account state.
+is retained there before restoring the archived SQLite database/WAL/SHM. The
+archive excludes media bytes. Identity keys, including
+`data/media-keys/media-premaster.key`, configuration and certificate state are
+restored while native lifecycle/control lease files stay in place.
 
 Recovery validates the source generation, identity and original managed files
 and remains `prepared_fenced`. Its returned plan records `recovery_of` and a new
@@ -164,9 +146,7 @@ image proof checks, rejecting drift before stopping the source.
   --backup-output /private/new-pre-upgrade-recovery.tar
 ```
 
-MySQL additionally requires `--confirm-external-writers-stopped`. This is an
-operator attestation about writers outside FrontierCloud's native gate; the
-tool does not infer it from stopping Web. The archive path must be new and on
+The archive path must be new and on
 an accessible local filesystem outside the captured state roots.
 
 Apply pulls approved digest references before taking the site offline. It then
@@ -216,7 +196,7 @@ NodeID to reconcile an interrupted image-lock/receipt switch:
   --confirm-node-id SOURCE_NODE_ID
 ```
 
-MySQL also requires `--external-writers-stopped`. Resume admits only the recorded
+Resume admits only the recorded
 old/target receipt and approved image pins. It restores the native fence, verifies
 the original recovery archive and public target proof, then prepares the target.
 An already completed additive migration is inspected rather than replayed as an
@@ -277,7 +257,7 @@ hash verification and archive extraction with an injected Docker runner. They
 exercise stale/mismatched approvals, image proof drift, existing backup protection,
 configuration drift, preparation/read failures, retained backup bytes, maintenance
 ownership and explicit reopening. They do not represent a real released-image
-upgrade, schema rollback, TLS deployment, external MySQL coordination, five-node
+upgrade, schema rollback, TLS deployment, five-node
 recovery or browser acceptance. Those require the separate development-host
 Compose acceptance gate. The optional native adapter in
 `tests/operator_recovery_acceptance.py` performs actual Compose switching,

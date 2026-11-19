@@ -113,8 +113,6 @@ func composeDeployment(root string, labels map[string]string) (*operator.Deploym
 	}
 	if len(files) == 1 && files[0] == "docker-compose.storage.yaml" {
 		role = "storage"
-	} else if len(files) == 2 && (files[0] == "docker-compose.yaml" || files[0] == "docker-compose.gin.yaml") && files[1] == "docker-compose.gin-mysql.yaml" {
-		database = "mysql"
 	} else if len(files) != 1 || files[0] != "docker-compose.yaml" && files[0] != "docker-compose.gin.yaml" {
 		return nil, errors.New("automatic registration requires the standard Master or Storage Compose selection")
 	}
