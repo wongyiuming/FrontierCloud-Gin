@@ -118,10 +118,9 @@ explicit. See [one-command upgrade](operator-upgrade.md).
 For a separate read-only capacity inspection, run
 `foc backup plan --output /private/new-recovery.tar`.
 Ordinary `backup plan` and `backup create` also default to this state-only scope.
-Upgrade plans and archives always use `upgrade-state`: database/WAL/SHM or logical
-MySQL dump, configuration, keys, certificates, Redis and lifecycle state. Media,
-lyrics and recordings remain in their original mounts and are excluded without
-an extra flag. The capacity report sets `business_files_included` to false.
+The `upgrade-state` archive includes the SQLite database, WAL and SHM files,
+configuration, keys, certificates, Redis and lifecycle state. Media, lyrics and
+recordings remain in their original mounts and are excluded without an extra flag. The capacity report sets `business_files_included` to false.
 The media premaster at `data/media-keys/media-premaster.key` is identity/encryption
 state, not media content; it is included with its actual archive key reference.
 Native admission receipts `.native-store` and `.native-runtime` are validated
@@ -154,17 +153,15 @@ and mount selection, trusted archive SHA, exact NodeID, source-offline and
 state-loss confirmations. `--freeze` can stop and fence the selected deployment.
 The tool retains current database/key/state material, restores into the original
 business mounts, then remains fenced. `restore state-open` separately confirms
-the returned plan digest and NodeID after managed business reads pass. MySQL
-database absence is recorded before restoring the logical dump. Business files
-deleted or changed since capture cannot be supplied by a state-only archive.
+the returned plan digest and NodeID after managed business reads pass. A
+state-only archive cannot supply business files deleted or changed since capture.
 The read-only report counts actual capture roots, encoded manifest metadata, tar overhead, temporary
-configuration and MySQL dump bytes, growth allowance and a 512 MiB remaining reserve.
+configuration bytes, growth allowance and a 512 MiB remaining reserve.
 It rejects metadata above the archive's 16 MiB manifest limit. It does not hash
 files, create an archive or freeze writers. Runtime facts come from the existing
 Web process or a one-shot read-only offline command with image pulls disabled.
-MySQL sizing streams a
-read-only logical snapshot to a counter. A live estimate is not a reservation; apply
-repeats it after image pulls, before maintenance and under the offline boundary.
+Apply repeats the live estimate after image pulls, before maintenance and under
+the offline boundary.
 Pre-freeze capacity refusal leaves the source running. A later offline recheck
 failure preserves the fence. Recovery-set capture sums every member's archive and
 scratch bounds on the shared output filesystem before freezing any member.
@@ -235,9 +232,7 @@ an HTTPS endpoint with that port. Master must reach that endpoint. HTTP-01 still
 requires public TCP 80 during certificate issuance. Direct uses public 443.
 The legacy `only_stroge` role and environment names remain compatible.
 
-Use `./fc --database mysql install master` only with the reviewed MySQL overlay
-and an appropriate `.env`; MySQL is the only database alternative. Storage uses
-embedded SQLite. Database selection does not migrate existing data.
+All roles use embedded SQLite. An explicit `DB_TYPE` must be `sqlite`.
 
 Installation refuses existing containers, declared volumes, nonempty writable
 data mounts, identity/state files and prior receipts. Use a separate takeover or
@@ -321,7 +316,7 @@ Bulk backup, archive verification, restoration and upgrade commands run until
 completion or explicit operator cancellation; media size does not impose a
 fixed fifteen-minute deadline. Ctrl-C or SIGTERM requests cancellation. Keep
 the resulting fence and retained failure materials until their state is checked.
-Successful archive creation removes its private deployment/MySQL dump scratch
+Successful archive creation removes its private deployment scratch
 only after the archive and its directory are durable. Failed capture retains
 scratch for diagnosis; source data and prior recovery points are never cleanup
 targets.
@@ -331,8 +326,7 @@ media bytes, node private keys, media premaster, certificate state and complete
 node journals; they are not full disaster recovery points. Preserve those
 materials separately. SQLite WAL databases cannot be backed up by copying only
 the `.db`; use an approved snapshot or a genuinely stopped-writer boundary.
-MySQL requires a consistent logical export, never a hot data-directory copy.
-Cross-database/file recovery requires a defined frozen writer boundary for all
+Database and file recovery requires a defined frozen writer boundary for all
 nodes. Backup and migration must not overlap ownership commits.
 
 Current sealed SQLite namespaces use [encrypted business recovery points](business-recovery-points.md), checked on the retained Master with `verify-business-point`. The older `verify-backup` command inspects v2 JSONL artifacts only. Neither verification command replaces live state.
@@ -352,9 +346,8 @@ closed until all independent recovery checks are complete.
 
 The operator's deployment archive preserves local data, journals, identities,
 runtime secrets/premaster, certificate state, Redis state and locked deployment
-configuration. MySQL uses a bounded `mysqldump --single-transaction --quick`
-logical export instead of copying its hot data volume. Archives are uncompressed,
-streamed with bounded buffers, mode 0600, and contain private recovery material.
+configuration. The tool streams uncompressed archives with bounded buffers and
+mode 0600. They contain private recovery material.
 Store them in protected backup storage. The machine-readable manifest records
 scope, source NodeID, revision, generation, file/directory counts and sizes,
 actual SHA-256 values, key references, state classes and missing related-node
@@ -383,10 +376,8 @@ backup does not automatically reopen traffic. Without it, writers must already
 be stopped and native maintenance enabled. The native lifecycle lease covers
 the entire database/files capture and prevents conflicting native migrations,
 initializers and resume operations. Pending resource transactions block capture.
-MySQL additionally requires `--confirm-external-writers-stopped`; native leases
-do not stop unknown external database writers. Offline volume inspection requires
-authorized local Unix-socket Docker and filesystem access; remote engines are
-refused. Host operation locks prevent simultaneous install/restart/backup actions.
+Offline volume inspection requires authorized local Unix-socket Docker and
+filesystem access. Host operation locks prevent simultaneous install/restart/backup actions.
 
 `restore check` only reads, and never creates its target. `restore apply` validates
 the expected archive checksum and exact source NodeID, refuses any existing
@@ -438,10 +429,9 @@ containers block activation even with an operator confirmation.
 ./fc --directory /new/recovery-material/deployment restore open --confirm-node-id <source-node-id>
 ```
 
-Activation starts restored consumers without fresh identity/media initializers,
-imports MySQL's logical export into a new private target, verifies original
-identity/database generation, resumes only the native fence, and starts services
-behind manual maintenance. It checks readiness and actual managed file reads,
+Activation verifies the original identity and SQLite schema generation. It
+resumes only the native fence and starts services behind manual maintenance
+without running fresh identity or media initializers. It checks readiness and actual managed file reads,
 including ciphertext descriptor lengths. Only then does its persistent journal
 report business verification. `restore open` is separate, repeats verification,
 and removes only maintenance owned by this recovery. Preexisting administrator
@@ -453,8 +443,8 @@ listed member together and requires the complete reciprocal cluster roster.
 An extracted set cannot be activated or opened through a single-member command.
 Cross-host coordination is outside that local entry point; independently captured
 archives must not be described as one consistent cluster recovery point.
-Never regenerate identity as a recovery substitute. Actual isolated SQLite/MySQL HTTP Range/identity/priority
-verification is recorded in the development acceptance evidence.
+Never regenerate identity as a recovery substitute. Development acceptance
+records SQLite verification for HTTP Range, identity and media priority.
 
 ## Approved upgrades
 

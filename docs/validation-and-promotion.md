@@ -17,7 +17,7 @@ gates. Counts evolve and must not be summed into a fictional pass total.
 ## Development acceptance
 
 Keep heavyweight work off hosted CI. Use the authorized development host,
-isolated fixtures, verified private-CA HTTPS and SQLite/MySQL rounds. Execute
+isolated fixtures, verified private-CA HTTPS and SQLite fixtures. Execute
 heavy gates serially with a host-wide lock, memory headroom and explicit resource
 caps. Do not use production data or target URLs in fixture smoke tests.
 
@@ -26,12 +26,12 @@ Required scopes are:
 | Entry point | Scope |
 |---|---|
 | scripts/test-ci-source.sh | Lightweight policy/source checks and the JS smoke entry points listed by the script; <= 3 minutes |
-| scripts/test-native-api.sh | Python black-box driver against actual Gin binaries, both stores; must execute GinHTTPTests |
-| scripts/test-go-business.sh | Actual MySQL/Redis business, auth/API, observation, native drain, Nginx and Go race checks |
+| scripts/test-native-api.sh | Python black-box driver against actual Gin binaries using SQLite; must execute GinHTTPTests |
+| scripts/test-go-business.sh | Actual SQLite/Redis business, auth/API, observation, native drain, Nginx and Go race checks |
 | scripts/test-go-deployment.sh | Actual Compose selection, commands, permissions and immutable image identity |
 | scripts/test-native-default.sh | Fresh default bootstrap/restart, native processes, persistent identities and upstream address changes |
-| tests/operator_recovery_acceptance.py | Actual operator backup/restore/upgrade, both stores |
-| scripts/test-native-matrix.sh | Five Go nodes: one Master, two Direct, two Relay; both store combinations |
+| tests/operator_recovery_acceptance.py | Actual SQLite operator backup/restore/upgrade |
+| scripts/test-native-matrix.sh | Five Go nodes using SQLite: one Master, two Direct, two Relay |
 | tests/browser_ui_regression.py and tests/*browser.mjs | Real Chromium UI, cache, continuous playback and disconnect recovery |
 | tests/player_touch_seek_browser.py | Native touch seeking over short/wrapped lyrics and the player background, vertical lyric scrolling, mouse and control ownership at phone/tablet/desktop sizes |
 
@@ -104,10 +104,7 @@ Navigation for reviewing remaining historical assertions (not equivalence proof)
 | Backup recovery and schema/data integrity | internal/backup/*_test.go; internal/store/business/*_test.go |
 | Master release provenance and rollback | internal/release/verification_test.go, history_test.go; internal/operator/upgrade_test.go |
 
-The new catalog rollback fault test runs on both stores. Disposable MySQL
-business fixtures disable binary logging so a database-scoped test user can
-create its rejecting audit trigger without SUPER privileges. This is fixture
-configuration only; production users/configuration are never weakened for tests.
+The catalog rollback fault test runs against an isolated SQLite store.
 
 ## Promotion and deployment are separate
 
