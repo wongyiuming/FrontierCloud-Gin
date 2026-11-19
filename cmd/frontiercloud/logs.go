@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 	"log/slog"
 	"os"
 
@@ -13,6 +14,26 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/vault"
 )
+
+// Use a concrete fallback because slog's initial handler writes through log,
+// whose output is redirected to our archive handler by slog.SetDefault.
+func installArchiveLogger(sink logarchive.CaptureSink, fallback slog.Handler) func() {
+	previous := slog.Default()
+	output, flags := log.Writer(), log.Flags()
+	if fallback == nil {
+		fallback = slog.NewTextHandler(output, nil)
+	}
+	handler := &logarchive.Handler{Runtime: sink, Fallback: fallback}
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	return func() {
+		if slog.Default() == logger {
+			slog.SetDefault(previous)
+			log.SetOutput(output)
+			log.SetFlags(flags)
+		}
+	}
+}
 
 // Project logging reuses the existing Master DB, vault, node HTTPS clients and
 // traffic monitor. A logging failure must not make business startup dependent
@@ -56,9 +77,7 @@ func configureProjectLogs(settings config.Config, s runtimeHTTP, router *gin.Eng
 	logs := httpapi.NewProjectLogRuntime(catalog, s.Control, settings.AdminOrigin)
 	s.Control.ConfigureLogHeartbeat(&projectLogBridge{master: logs})
 	s.Control.ConfigureLogArchiveProtection(catalog.UsesNode)
-	previous := slog.Default().Handler()
-	handler := &logarchive.Handler{Runtime: logs, Fallback: previous}
-	slog.SetDefault(slog.New(handler))
+	restoreLogger := installArchiveLogger(logs, s.LogFallback)
 	logs.Start(context.Background())
 	closeCollector, collectorError := logarchive.OpenCollector(logs, os.Stdout)
 	if collectorError != nil {
@@ -68,9 +87,7 @@ func configureProjectLogs(settings config.Config, s runtimeHTTP, router *gin.Eng
 	httpapi.RegisterAdminLogs(router, a, s.Control, logs)
 	return func() error {
 		e := errors.Join(closeCollector(), logs.Close())
-		if slog.Default().Handler() == handler {
-			slog.SetDefault(slog.New(previous))
-		}
+		restoreLogger()
 		return e
 	}
 }

@@ -461,7 +461,7 @@ func serve() error {
 			runtime.WaitHTTP()
 		}()
 	}
-	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Owner: owner, Sealed: sealed, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
+	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Owner: owner, Sealed: sealed, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver, LogFallback: logging})
 	if err != nil {
 		return fmt.Errorf("register native HTTP runtime: %w", err)
 	}

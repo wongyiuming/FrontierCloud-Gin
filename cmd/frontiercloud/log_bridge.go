@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
-	"log/slog"
 	"os"
 	"time"
 
@@ -118,9 +117,7 @@ func configureStorageProjectLogs(settings config.Config, s runtimeHTTP) func() e
 	if repo, ok := s.Database.Pool().(interface{ ConfigureLogProducer(*logarchive.Producer) }); ok {
 		repo.ConfigureLogProducer(producer)
 	}
-	old := slog.Default().Handler()
-	handler := &logarchive.Handler{Runtime: producer, Fallback: old}
-	slog.SetDefault(slog.New(handler))
+	restoreLogger := installArchiveLogger(producer, s.LogFallback)
 	producer.Start(context.Background())
 	closeCollector, e := logarchive.OpenCollector(producer, os.Stdout)
 	if e != nil {
@@ -129,9 +126,7 @@ func configureStorageProjectLogs(settings config.Config, s runtimeHTTP) func() e
 	return func() error {
 		e := closeCollector()
 		producer.Close()
-		if slog.Default().Handler() == handler {
-			slog.SetDefault(slog.New(old))
-		}
+		restoreLogger()
 		return e
 	}
 }

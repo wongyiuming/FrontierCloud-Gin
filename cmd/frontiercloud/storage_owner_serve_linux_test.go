@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -154,14 +153,13 @@ func TestStorageOwnerPreparedServeRestart(t *testing.T) {
 				t.Fatalf("serve exited before listening: %v\n%s", err, raw)
 			default:
 			}
-			started, _ := os.ReadFile(log.Name())
-			if bytes.Contains(started, []byte("FrontierCloud Go runtime started")) {
-				conn, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
-				if e == nil {
-					conn.Close()
-					listening = true
-					break
-				}
+			// A storage node can suppress stdout until the Master supplies
+			// logging policy. Check the actual listener in either state.
+			conn, e := net.DialTimeout("tcp", address, 100*time.Millisecond)
+			if e == nil {
+				conn.Close()
+				listening = true
+				break
 			}
 			time.Sleep(25 * time.Millisecond)
 		}

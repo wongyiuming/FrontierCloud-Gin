@@ -41,6 +41,8 @@ type runtimeHTTP struct {
 	Security   *security.Service
 	Redis      *redis.Client
 	Resolver   *network.Resolver
+
+	LogFallback slog.Handler
 }
 
 type sealedMasterRuntime struct {
