@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,32 +20,65 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/certificate"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Service struct {
-	repo                store.NodeRepository
-	identity            *Identity
-	transport           ControlClient
-	pool                store.PoolRepository
-	volume              BusinessVolume
-	recordings          *os.Root
-	backupBuilder       *backup.Builder
-	backups             store.BackupRepository
-	wakeup              chan struct{}
-	certificateClient   certificate.Client
-	certificateStatus   func() certificate.View
-	certificateAudit    store.AdminRepository
-	certificateDispatch sync.Mutex
-	stunPort            atomic.Int64
-	storageTransport    string
-	retirementGate      *retirementRequestGate
-	traffic             *businesstraffic.Monitor
+	logPolicyMu  sync.Mutex
+	logHeartbeat interface {
+		Outgoing(context.Context, store.Relationship, map[string]any)
+		Incoming(context.Context, store.Relationship, map[string]any)
+	}
+	opaqueIngressTree       atomic.Pointer[sealedtree.SQLStore]
+	opaqueIngressMu         sync.RWMutex
+	repo                    store.NodeRepository
+	identity                *Identity
+	transport               ControlClient
+	pool                    store.PoolRepository
+	volume                  BusinessVolume
+	recordings              *os.Root
+	backupBuilder           *backup.Builder
+	backups                 store.BackupRepository
+	wakeup                  chan struct{}
+	certificateClient       certificate.Client
+	certificateStatus       func() certificate.View
+	certificateAudit        store.AdminRepository
+	certificateDispatch     sync.Mutex
+	stunPort                atomic.Int64
+	hostUsage               hostUsageSampler
+	storageTransport        string
+	retirementGate          *retirementRequestGate
+	traffic                 *businesstraffic.Monitor
+	peerIngressMu           sync.RWMutex
+	peerIngress             peerIngressState
+	masterAdminOrigin       string
+	nativeTransportReady    func(context.Context, store.Relationship, string) error
+	plainReadProbe          func(context.Context) error
+	opaqueReadProbe         func(context.Context) error
+	followerResourceOrigin  string
+	followerIngressOrigin   string
+	masterPolicyMu          sync.RWMutex
+	masterPolicy            masterResourceApplication
+	masterResourceOrigin    string
+	masterResourceReady     func(context.Context, store.PublicIngress, string, string) error
+	masterRelayObservation  func(context.Context, store.PublicIngress) error
+	ingressSelectionReady   func(context.Context) (IngressPrerequisiteLease, error)
+	peerIngressSelection    bool
+	opaqueOwnerRequestReady func(context.Context) (IngressPrerequisiteLease, error)
+	masterPublicOrigin      string
+	logArchiveProtect       func(context.Context, string) bool
 }
 
 // Startup-only: the HTTP process owns one monitor shared by control and data.
 func (s *Service) ConfigureBusinessTraffic(m *businesstraffic.Monitor) { s.traffic = m }
-func (s *Service) BusinessTraffic() businesstraffic.View               { return s.traffic.Snapshot() }
+func (s *Service) ConfigureLogHeartbeat(bridge interface {
+	Outgoing(context.Context, store.Relationship, map[string]any)
+	Incoming(context.Context, store.Relationship, map[string]any)
+}) {
+	s.logHeartbeat = bridge
+}
+func (s *Service) BusinessTraffic() businesstraffic.View { return s.traffic.Snapshot() }
 
 var ErrAuthentication = errors.New("invalid relationship authentication")
 
@@ -108,7 +142,13 @@ func (s *Service) ReceiveRevocation(ctx context.Context, relation store.Relation
 		if relation.Direction != "upstream" || s.volume == nil {
 			return store.ErrNodeState
 		}
-		return s.volume.WithPromotion(ctx, "Follower", func(store.NodePromotion) error { return s.emptyRecordings(ctx, apply) })
+		return s.withOwnerControlExclusive(ctx, func(ctx context.Context) error {
+			return s.volume.WithPromotion(ctx, "Follower", func(store.NodePromotion) error {
+				return s.emptyRecordings(ctx, func() error {
+					return s.repo.RevokeRelationship(ctx, relation.ID, true, store.NodeAudit{Actor: relation.PeerID})
+				})
+			})
+		})
 	}
 	if row.Role != "Master" || relation.Direction != "downstream" {
 		return store.ErrNodeState
@@ -211,14 +251,16 @@ func (s *Service) Promote(ctx context.Context, role, origin string, allocation i
 		return store.NodeIdentity{}, err
 	}
 	var result store.NodeIdentity
-	err = s.volume.WithPromotion(ctx, role, func(p store.NodePromotion) error {
-		p.Endpoint = endpoint
-		p.Allocation = allocation
-		apply := func() error { var err error; result, err = s.repo.PromoteIdentity(ctx, p, a); return err }
-		if role == "Follower" {
-			return s.emptyRecordings(ctx, apply)
-		}
-		return apply()
+	err = s.withOwnerControlExclusive(ctx, func(ctx context.Context) error {
+		return s.volume.WithPromotion(ctx, role, func(p store.NodePromotion) error {
+			p.Endpoint = endpoint
+			p.Allocation = allocation
+			apply := func() error { var err error; result, err = s.repo.PromoteIdentity(ctx, p, a); return err }
+			if role == "Follower" {
+				return s.emptyRecordings(ctx, apply)
+			}
+			return apply()
+		})
 	})
 	return result, err
 }
@@ -252,7 +294,11 @@ func resourceValue(raw any) (store.ResourceConfiguration, error) {
 // ReceiveHeartbeat never changes reachability. Only an outbound, authenticated
 // probe can mark the peer online; inbound probes apply desired configuration.
 func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relationship, value map[string]any) (map[string]any, error) {
-	if _, err := protocol.ReadCapabilities(value); err != nil {
+	if s.logHeartbeat != nil {
+		s.logHeartbeat.Incoming(ctx, relation, value)
+	}
+	capabilities, err := protocol.ReadCapabilities(value)
+	if err != nil {
 		return nil, err
 	}
 	if s.pool == nil || s.volume == nil {
@@ -288,7 +334,11 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 			return nil, err
 		}
 	}
-	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": protocol.AdvertisedCapabilities()}
+	// A rejected observation does not turn a healthy heartbeat into a failure.
+	if raw, present := value["public_ingress"]; present && relation.Direction == "upstream" {
+		s.observePeerIngress(ctx, relation, raw)
+	}
+	summary := map[string]any{"app_version": AppVersion, "protocol": protocol.Version, "capabilities": s.runtimeCapabilities()}
 	summary["stun_port"] = s.stunPort.Load()
 	if s.storageTransport != "" {
 		summary["storage_transport"] = s.storageTransport
@@ -297,6 +347,12 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 		summary["certificate"] = s.certificateStatus()
 	}
 	if relation.Direction == "upstream" {
+		if s.followerIngressOrigin != "" {
+			summary["public_ingress_candidate_origin"] = s.followerIngressOrigin
+		}
+		if s.followerResourceOrigin != "" {
+			summary["native_resource_origin"] = s.followerResourceOrigin
+		}
 		total, free, err := s.volume.PhysicalCapacity(ctx)
 		if err != nil {
 			return nil, err
@@ -308,6 +364,15 @@ func (s *Service) ReceiveHeartbeat(ctx context.Context, relation store.Relations
 		for k, v := range local {
 			summary[k] = v
 		}
+		if usage := s.hostUsage.sample(); len(usage) != 0 {
+			summary["host_usage"] = usage
+		}
+	}
+	if raw, present := value["native_transport_request"]; present && relation.Direction == "upstream" && slices.Contains(capabilities, "native-transport-apply-v1") {
+		summary["native_transport_result"] = s.acceptNativeTransportRequest(ctx, relation, raw)
+	}
+	if s.logHeartbeat != nil {
+		s.logHeartbeat.Outgoing(ctx, relation, summary)
 	}
 	return summary, nil
 }
@@ -330,7 +395,7 @@ func (s *Service) SignedIdentity(ctx context.Context, challenge string) (Envelop
 	if err != nil {
 		return Envelope{}, err
 	}
-	payload := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": protocol.AdvertisedCapabilities()}
+	payload := map[string]any{"node_id": row.ID, "role": row.Role, "endpoint": row.Endpoint, "public_key": public, "challenge": challenge, "protocol": protocol.Version, "app_version": AppVersion, "capabilities": s.runtimeCapabilities()}
 	if s.storageTransport != "" {
 		payload["storage_transport"] = s.storageTransport
 	}

@@ -40,7 +40,8 @@ func TestEndpointIPv6PreservesPrivateLANAndRejectsLocalTargets(t *testing.T) {
 }
 
 // This IPv4 case also runs unchanged against released 8fa2b4f transport.go:
-// the protocol-v2 wire shape and strict IP-SAN trust already work on old Master.
+// the protocol-v2 wire shape and strict IP-SAN trust work with the earlier
+// software version on the Master.
 func TestControlPublicIPIdentityCompatibility(t *testing.T) {
 	for _, test := range []struct{ name, host, origin string }{
 		{"IPv4", "124.220.156.46", "https://124.220.156.46"},

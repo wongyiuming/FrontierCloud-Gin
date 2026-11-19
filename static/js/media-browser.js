@@ -314,7 +314,13 @@
             const cached = cacheRead(config.cacheKey);
             if (cached) renderCategories(cached.entries);
         }
-        fetchCatalog(config.url, config.cacheKey, renderCategories).catch((error) => {
+        fetchCatalog(config.url, config.cacheKey, entries => {
+            if (!entries.length && config.emptyRedirect) {
+                window.location.replace(config.emptyRedirect);
+                return;
+            }
+            renderCategories(entries);
+        }).catch((error) => {
             const grid = document.getElementById('categoryGrid');
             if (grid && !grid.children.length) {
                 const empty = document.createElement('div');

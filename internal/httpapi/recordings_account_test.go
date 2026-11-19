@@ -16,6 +16,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -72,6 +73,14 @@ func TestRecordingAccountHTTPRealRedisPrivateCSRFSizeFinalizeAndUserDeletion(t *
 	if w := perform("POST", base+"/ticket", `{"size_bytes":8,"content_type":"audio/webm"}`, true, false); w.Code != 403 {
 		t.Fatal("missing CSRF", w.Code, w.Body.String())
 	}
+	master.public.opaqueTree = &sealedtree.SQLStore{}
+	if w := perform("POST", base+"/ticket", `{"size_bytes":8,"content_type":"audio/webm"}`, true, true); w.Code != 503 {
+		t.Fatal("opaque tree admitted legacy recording ticket", w.Code, w.Body.String())
+	}
+	if items, err := manager.List(ctx, u.ID); err != nil || len(items) != 0 {
+		t.Fatal("tree-gated ticket created a reservation", items, err)
+	}
+	master.public.opaqueTree = nil
 	ticket := func() recording.Ticket {
 		w := perform("POST", base+"/ticket", `{"size_bytes":8,"content_type":"audio/webm","title":"标题/安全"}`, true, true)
 		var value recording.Ticket

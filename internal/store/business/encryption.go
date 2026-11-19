@@ -75,7 +75,7 @@ func (r *Repository) CheckEncryptionKey(ctx context.Context, id string) error {
 	if !nodeHashPattern.MatchString(id) {
 		return mediacrypto.ErrPremaster
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		old, err := readEncryptionKeyID(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -104,6 +104,9 @@ func (r *Repository) putEncryption(ctx context.Context, q queryer, id string, me
 func (r *Repository) putEncryptionFor(ctx context.Context, q queryer, kind, id string, meta *mediacrypto.Metadata) error {
 	if meta == nil {
 		return nil
+	}
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
 	}
 	if kind == "media" && !nodeHashPattern.MatchString(id) || kind == "recording_lyric" && !nodeIDPattern.MatchString(id) || kind != "media" && kind != "recording_lyric" {
 		return mediacrypto.ErrMetadata
@@ -168,6 +171,9 @@ func retireEncryption(ctx context.Context, q queryer, id string) error {
 }
 
 func retireEncryptionFor(ctx context.Context, q queryer, kind, id string) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	if kind != "media" && kind != "recording_lyric" {
 		return mediacrypto.ErrMetadata
 	}

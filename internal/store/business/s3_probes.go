@@ -23,7 +23,7 @@ func (r *Repository) S3StartProbe(ctx context.Context, id string, revision int64
 		return result, err
 	}
 	probeID = probeID[:32]
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func (r *Repository) S3FinishProbe(ctx context.Context, id string, revision int6
 		!s3Opaque(proof.VersionID, 1024) || !s3Opaque(proof.ETag, 512) || proof.ChecksPassed && proof.NoMutation {
 		return result, nodeConflict("invalid S3 probe result")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func (r *Repository) S3ProbeMember(ctx context.Context, id string, revision int6
 	if !s3Code(code) {
 		return result, nodeConflict("invalid S3 probe code")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -275,6 +275,31 @@ func (r *Repository) S3RecoveryProbes(ctx context.Context, limit int) ([]store.S
 			return nil, err
 		}
 		result = append(result, v)
+	}
+	return result, rows.Err()
+}
+
+// S3PendingMemberProbes is an exact-member, bounded view for the selected
+// upload lifecycle. It never scans another member's journals or contacts S3.
+func (r *Repository) S3PendingMemberProbes(ctx context.Context, memberID string) ([]store.S3Probe, error) {
+	if !nodeIDPattern.MatchString(memberID) {
+		return nil, store.ErrNodeState
+	}
+	if err := s3Master(ctx, r.db, ""); err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, "SELECT "+s3ProbeColumns+" FROM s3_probe_journal WHERE member_id=? AND state<>'settled' ORDER BY updated_at,probe_id LIMIT 2", memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []store.S3Probe
+	for rows.Next() {
+		probe, err := scanS3Probe(rows)
+		if err != nil || probe.MemberID != memberID || len(result) != 0 {
+			return nil, store.ErrNodeState
+		}
+		result = append(result, probe)
 	}
 	return result, rows.Err()
 }

@@ -43,12 +43,14 @@ type fakeS3 struct {
 	uploads         map[string]fakeObject
 	parts           map[string][]Part
 	mode            string
+	rejectOrigin    string
 	requests        map[string]int
 	badSignatures   int
 	resolved        int
 	dials           []string
 	createdKey      string
 	createdMetadata map[string]string
+	versionList     http.HandlerFunc
 	client          *Client
 }
 
@@ -190,6 +192,9 @@ func (f *fakeS3) serve(w http.ResponseWriter, r *http.Request) {
 	if f.mode == "cors" {
 		w.Header().Del("Access-Control-Allow-Origin")
 	}
+	if f.rejectOrigin != "" && r.Header.Get("Origin") == f.rejectOrigin {
+		w.Header().Del("Access-Control-Allow-Origin")
+	}
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, HEAD")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
@@ -228,6 +233,8 @@ func (f *fakeS3) serve(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	upload := query.Get("uploadId")
 	switch {
+	case r.Method == http.MethodGet && query.Has("versions") && f.versionList != nil:
+		f.versionList(w, r)
 	case r.Method == http.MethodGet && query.Has("uploads"):
 		prefix := query.Get("prefix")
 		if prefix == "" || !strings.HasPrefix(prefix, f.client.config.Prefix+"/") || query.Get("max-uploads") != "128" {
@@ -553,6 +560,38 @@ func TestSignedSDKProbeCompleteCORSRangeAndCleanup(t *testing.T) {
 	}
 }
 
+func TestJournaledProbeChecksBothBrowserOrigins(t *testing.T) {
+	for _, rejected := range []string{"", "https://public.fixture.test"} {
+		t.Run(map[bool]string{true: "rejected", false: "accepted"}[rejected != ""], func(t *testing.T) {
+			f := newFakeS3(t, "path")
+			f.rejectOrigin = rejected
+			checkpoints := 0
+			report, err := f.client.TestKeyWithCheckpointOrigins(context.Background(), []string{"https://admin.fixture.test", "https://public.fixture.test"}, "probes/member1/two-origins", func(id string) error {
+				checkpoints++
+				if id != "fixture-upload" {
+					return ErrConfig
+				}
+				return nil
+			})
+			if rejected == "" {
+				if err != nil || !report.CORS || !report.Cleanup || !report.Write || !report.Head || !report.Read || !report.Range {
+					t.Fatal("two-origin probe", err)
+				}
+			} else if !errors.Is(err, ErrCORS) || !report.Cleanup || report.CORS {
+				t.Fatal("rejected origin accepted", err)
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if checkpoints != 1 || len(f.objects) != 0 || len(f.uploads) != 0 || f.badSignatures != 0 || f.requests["DELETE"] != 1 {
+				t.Fatal("probe did not use one journal and clean it", f.requests)
+			}
+			if rejected == "" && (f.requests["POST"] != 2 || f.requests["PUT"] != 2) {
+				t.Fatal("two-origin probe repeated create or omitted origin", f.requests)
+			}
+		})
+	}
+}
+
 func TestProbeFailureCleanupAndUnknownMutations(t *testing.T) {
 	for _, tc := range []struct {
 		mode               string
@@ -622,6 +661,14 @@ func TestGrantBindsChecksumSizeETagVersionAndExpiry(t *testing.T) {
 	u, _ = url.Parse(read.URL)
 	if u.Query().Get("versionId") != "version-id" || read.Headers["If-Match"] != `"opaque-etag"` || !strings.Contains(u.Query().Get("X-Amz-SignedHeaders"), "if-match") || !strings.HasPrefix(u.Query().Get("response-content-disposition"), "attachment; filename*=UTF-8''") {
 		t.Fatal("download grant lost object generation")
+	}
+	privateRead, err := f.client.PresignGet(context.Background(), "objects/immutable", "version-id", `"opaque-etag"`, "", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateURL, err := url.Parse(privateRead.URL)
+	if err != nil || privateURL.Query().Has("response-content-disposition") || privateRead.Headers["If-Match"] != `"opaque-etag"` || privateURL.Query().Get("versionId") != "version-id" {
+		t.Fatal("private source grant leaked a filename or lost object binding", err)
 	}
 	if _, err = f.client.PresignPart(context.Background(), "objects/immutable", "upload-id", 1281, 1, checksum, time.Minute); !errors.Is(err, ErrConfig) {
 		t.Fatal("oversized part count accepted")

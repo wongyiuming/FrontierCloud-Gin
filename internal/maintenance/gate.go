@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,11 @@ import (
 )
 
 const Marker = ".frontiercloud-native-maintenance"
+
+// OwnerImportHold prevents an ordinary resume or restart while a stopped
+// storage Owner has an unfinished legacy-media import. It contains no paths,
+// keys or other media metadata.
+const OwnerImportHold = ".frontiercloud-owner-import-hold"
 const markerContent = "frontiercloud-native-maintenance-v1\n"
 const runtimeLock = ".native-runtime.lock"
 const controlLock = ".native-maintenance-control.lock"
@@ -32,6 +39,11 @@ func Open(directory string) (*Gate, error) {
 	if err := os.MkdirAll(directory, 0750); err != nil {
 		return nil, err
 	}
+	return OpenExisting(directory)
+}
+
+// OpenExisting only opens a previously initialized data directory.
+func OpenExisting(directory string) (*Gate, error) {
 	info, err := os.Lstat(directory)
 	if err != nil {
 		return nil, err
@@ -48,30 +60,66 @@ func Open(directory string) (*Gate, error) {
 func (g *Gate) Close() error { return g.root.Close() }
 
 func (g *Gate) lease(ctx context.Context, name string, exclusive bool) (func(), error) {
+	release, _, err := g.leaseChecked(ctx, name, exclusive)
+	return release, err
+}
+
+func (g *Gate) leaseChecked(ctx context.Context, name string, exclusive bool) (func(), func() error, error) {
+	return g.leaseCheckedFile(ctx, name, exclusive, false)
+}
+
+func (g *Gate) leaseCheckedFile(ctx context.Context, name string, exclusive, existing bool) (func(), func() error, error) {
 	if info, err := g.root.Lstat(name); err == nil && !info.Mode().IsRegular() {
-		return nil, ErrState
+		return nil, nil, ErrState
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+		return nil, nil, err
 	}
-	f, err := g.root.OpenFile(name, os.O_CREATE|os.O_RDWR, 0600)
+	var f *os.File
+	var err error
+	if existing {
+		f, err = g.root.Open(name)
+	} else {
+		f, err = g.root.OpenFile(name, os.O_CREATE|os.O_RDWR, 0600)
+	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opened, err := f.Stat()
 	if err != nil {
 		f.Close()
-		return nil, err
+		return nil, nil, err
 	}
 	current, err := g.root.Lstat(name)
 	if err != nil || !current.Mode().IsRegular() || !os.SameFile(opened, current) {
 		f.Close()
-		return nil, ErrState
+		return nil, nil, ErrState
 	}
-	if err := fsutil.InheritOwner(f, g.root); err != nil {
-		f.Close()
-		return nil, err
+	if !existing {
+		if err := fsutil.InheritOwner(f, g.root); err != nil {
+			f.Close()
+			return nil, nil, err
+		}
 	}
-	return filelease.Acquire(ctx, f, exclusive)
+	release, err := filelease.Acquire(ctx, f, exclusive)
+	if err != nil {
+		return nil, nil, err
+	}
+	check := func() error {
+		current, e := g.root.Lstat(name)
+		if e != nil || !current.Mode().IsRegular() || !os.SameFile(opened, current) {
+			return ErrState
+		}
+		actual, e := f.Stat()
+		if e != nil || !actual.Mode().IsRegular() || !os.SameFile(opened, actual) {
+			return ErrState
+		}
+		return nil
+	}
+	if err = check(); err != nil {
+		release()
+		return nil, nil, err
+	}
+	return release, check, nil
 }
 
 // Any unexpected marker type/content fails closed, including directories and
@@ -155,6 +203,130 @@ func (g *Gate) Inspect(ctx context.Context, offline func(context.Context) error)
 	defer release()
 	return g.offline(ctx, offline)
 }
+
+// InspectSQLite holds the existing offline maintenance fence while checking
+// that a regular SQLite database belongs to this DATA_ROOT. It is a local
+// cooperative-process fence, not protection against raw SQL or other hosts.
+func (g *Gate) InspectSQLite(ctx context.Context, dataRoot, databasePath string, offline func(context.Context, func() error) error) error {
+	return g.inspectSQLite(ctx, dataRoot, databasePath, offline, false)
+}
+
+// InspectExistingSQLite holds the same exclusive offline fence, opening only
+// its existing lock files and leaving their contents untouched.
+func (g *Gate) InspectExistingSQLite(ctx context.Context, dataRoot, databasePath string, offline func(context.Context, func() error) error) error {
+	return g.inspectSQLite(ctx, dataRoot, databasePath, offline, true)
+}
+
+func (g *Gate) inspectSQLite(ctx context.Context, dataRoot, databasePath string, offline func(context.Context, func() error) error, existing bool) error {
+	if offline == nil {
+		return ErrState
+	}
+	return g.withSQLiteFence(ctx, dataRoot, databasePath, func(held context.Context, check func() error) error {
+		if err := offline(held, check); err != nil {
+			return err
+		}
+		return check()
+	}, existing)
+}
+
+func (g *Gate) withSQLiteFence(ctx context.Context, dataRoot, databasePath string, offline func(context.Context, func() error) error, existing bool) error {
+	if g == nil || g.root == nil || ctx == nil || offline == nil || dataRoot == "" || databasePath == "" {
+		return ErrState
+	}
+	releaseControl, checkControl, err := g.leaseCheckedFile(ctx, controlLock, true, existing)
+	if err != nil {
+		return err
+	}
+	defer releaseControl()
+	if enabled, e := g.Enabled(); e != nil || !enabled {
+		return ErrState
+	}
+	releaseRuntime, checkRuntime, err := g.leaseCheckedFile(ctx, runtimeLock, true, existing)
+	if err != nil {
+		return err
+	}
+	defer releaseRuntime()
+	var pinned, pinnedMarker os.FileInfo
+	check := func() error {
+		if checkControl() != nil || checkRuntime() != nil || ctx.Err() != nil {
+			return ErrState
+		}
+		for _, name := range []string{controlLock, runtimeLock} {
+			info, e := g.root.Lstat(name)
+			if e != nil || !privateSingleLink(info) {
+				return ErrState
+			}
+		}
+		enabled, err := g.Enabled()
+		if err != nil || !enabled {
+			return ErrState
+		}
+		marker, err := g.root.Lstat(Marker)
+		if err != nil || !privateSingleLink(marker) {
+			return ErrState
+		}
+		if pinnedMarker == nil {
+			pinnedMarker = marker
+		} else if !os.SameFile(pinnedMarker, marker) {
+			return ErrState
+		}
+		rootPath, err := filepath.Abs(g.root.Name())
+		if err != nil {
+			return ErrState
+		}
+		expectedRoot, err := filepath.Abs(dataRoot)
+		if err != nil || filepath.Clean(expectedRoot) != filepath.Clean(rootPath) {
+			return ErrState
+		}
+		rootInfo, err := os.Lstat(rootPath)
+		if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+			return ErrState
+		}
+		openedRoot, err := g.root.Stat(".")
+		if err != nil || !os.SameFile(rootInfo, openedRoot) {
+			return ErrState
+		}
+		absolute, err := filepath.Abs(databasePath)
+		if err != nil {
+			return ErrState
+		}
+		relative, err := filepath.Rel(rootPath, absolute)
+		if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			return ErrState
+		}
+		canonicalRoot, err := filepath.EvalSymlinks(rootPath)
+		if err != nil {
+			return ErrState
+		}
+		canonicalDB, err := filepath.EvalSymlinks(absolute)
+		if err != nil || filepath.Clean(canonicalDB) != filepath.Join(canonicalRoot, relative) {
+			return ErrState
+		}
+		info, err := os.Lstat(absolute)
+		if err != nil || !privateSingleLink(info) {
+			return ErrState
+		}
+		opened, err := g.root.Open(relative)
+		if err != nil {
+			return ErrState
+		}
+		defer opened.Close()
+		current, err := opened.Stat()
+		if err != nil || !privateSingleLink(current) || !os.SameFile(info, current) {
+			return ErrState
+		}
+		if pinned == nil {
+			pinned = current
+		} else if !os.SameFile(pinned, current) {
+			return ErrState
+		}
+		return nil
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	return offline(ctx, check)
+}
 func (g *Gate) offline(ctx context.Context, offline func(context.Context) error) error {
 	if offline == nil {
 		return ErrState
@@ -187,22 +359,63 @@ func (g *Gate) Resume(ctx context.Context, check func(context.Context) error) er
 		if check == nil {
 			return ErrState
 		}
+		if err := g.checkResumeHolds(); err != nil {
+			return err
+		}
 		if err := check(ctx); err != nil {
 			return err
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := g.root.Remove(Marker); err != nil {
+		return g.clearOfflineMarker()
+	})
+}
+
+// ResumeExistingSQLite verifies the pinned database and existing maintenance
+// locks through native marker removal. The caller's check runs under both
+// locks and must keep any dependent admission lease until this call returns.
+func (g *Gate) ResumeExistingSQLite(ctx context.Context, dataRoot, databasePath string, validate func(context.Context, func() error) error) error {
+	if validate == nil {
+		return ErrState
+	}
+	return g.withSQLiteFence(ctx, dataRoot, databasePath, func(held context.Context, check func() error) error {
+		if err := g.checkResumeHolds(); err != nil {
 			return err
 		}
-		if err := fsutil.SyncDirectory(g.root, "."); err != nil {
-			// A failed durability acknowledgement must not leave a knowingly open
-			// gate. Best-effort re-fence and surface BOTH failures.
-			return errors.Join(err, g.enable())
+		if err := validate(held, check); err != nil {
+			return err
 		}
-		return nil
-	})
+		if err := check(); err != nil {
+			return err
+		}
+		if err := g.checkResumeHolds(); err != nil {
+			return err
+		}
+		return g.clearOfflineMarker()
+	}, true)
+}
+
+func (g *Gate) checkResumeHolds() error {
+	if held, err := g.ownerImportHeld(); err != nil || held {
+		return ErrState
+	}
+	if held, err := g.TreeRecoveryHeld(); err != nil || held {
+		return ErrState
+	}
+	return nil
+}
+
+func (g *Gate) clearOfflineMarker() error {
+	if err := g.root.Remove(Marker); err != nil {
+		return err
+	}
+	if err := fsutil.SyncDirectory(g.root, "."); err != nil {
+		// A failed durability acknowledgement must not leave a knowingly open
+		// gate. Best-effort re-fence and surface both failures.
+		return errors.Join(err, g.enable())
+	}
+	return nil
 }
 
 type Runtime struct {
@@ -231,6 +444,14 @@ func (g *Gate) Runtime(parent context.Context) (*Runtime, error) {
 			return nil, err
 		}
 		return nil, ErrEnabled
+	}
+	if held, err := g.ownerImportHeld(); err != nil || held {
+		release()
+		return nil, ErrState
+	}
+	if held, err := g.TreeRecoveryHeld(); err != nil || held {
+		release()
+		return nil, ErrState
 	}
 	ctx, cancel := context.WithCancelCause(parent)
 	r := &Runtime{gate: g, ctx: ctx, cancel: cancel, release: release, done: make(chan struct{})}

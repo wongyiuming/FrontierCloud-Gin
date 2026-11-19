@@ -4,15 +4,65 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"time"
+
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
+
+// DeleteEmptySealedUser retires an account after every recording has completed
+// its own cleanup. The recording tombstones and audit references keep the old
+// account ID, while its original name and credentials are released.
+func (r *Repository) DeleteEmptySealedUser(ctx context.Context, tree *sealedtree.SQLStore, id string, expected *store.KaraokeUser, audit store.KaraokeAudit) (bool, error) {
+	if !nodeIDPattern.MatchString(id) || expected != nil && expected.ID != id {
+		return false, store.ErrUserMissing
+	}
+	var removed bool
+	err := r.withSelectedMutation(ctx, tree, func(c context.Context, q queryer, _ *sealedtree.CoordinatedMutation) error {
+		if err := r.accountMaster(c, q); err != nil {
+			return err
+		}
+		current, err := userLookup(q.QueryRowContext(c, "SELECT "+userColumns+" FROM karaoke_users WHERE user_id=?"+r.lock(), id))
+		if err != nil {
+			return err
+		}
+		if current == nil || current.Status == "deleted" {
+			return nil
+		}
+		if current.Status != "active" && current.Status != "banned" && current.Status != "deleting" ||
+			expected != nil && (current.Status != "active" || current.CreatedAt != expected.CreatedAt || current.PasswordHash != expected.PasswordHash) {
+			return store.ErrAccountConflict
+		}
+		var hasRecordings, migrating bool
+		if err = q.QueryRowContext(c, `SELECT EXISTS(SELECT 1 FROM karaoke_recordings WHERE user_id=? AND state<>'deleted'),
+			EXISTS(SELECT 1 FROM migration_scopes WHERE resource_kind='recording' AND parent_path=?)`, id, id).Scan(&hasRecordings, &migrating); err != nil {
+			return err
+		}
+		if current.Used != 0 || hasRecordings || migrating {
+			return store.ErrUserHasRecordings
+		}
+		result, err := q.ExecContext(c, `UPDATE karaoke_users SET username='已注销',username_key=?,password_hash='!',status='deleted',quota_bytes=0,updated_at=? WHERE user_id=? AND used_bytes=0`, "deleted:"+id, time.Now().Unix(), id)
+		if err != nil {
+			return err
+		}
+		if n, e := result.RowsAffected(); e != nil || n != 1 {
+			return store.ErrAccountConflict
+		}
+		audit.UserID, audit.Result = id, "success"
+		if err = r.karaokeAudit(c, q, audit); err != nil {
+			return err
+		}
+		removed = true
+		return nil
+	})
+	return removed && err == nil, err
+}
 
 func (r *Repository) StageUserDeletion(ctx context.Context, id string, a store.KaraokeAudit) (found bool, err error) {
 	if !nodeIDPattern.MatchString(id) {
 		return false, store.ErrUserMissing
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := r.accountMaster(ctx, q); err != nil {
 			return err
 		}
@@ -48,7 +98,7 @@ func (r *Repository) StageUserDeletion(ctx context.Context, id string, a store.K
 	return
 }
 func (r *Repository) FinishUserDeletion(ctx context.Context, id string, a store.KaraokeAudit) (complete bool, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		complete = false
 		if err := r.accountMaster(ctx, q); err != nil {
 			return err

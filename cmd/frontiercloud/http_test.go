@@ -27,6 +27,16 @@ func nativeHTTPFixture(t *testing.T) *gin.Engine {
 	return nativeHTTPFixtureMode(t, config.DeploymentBusiness)
 }
 func nativeHTTPFixtureMode(t *testing.T, mode string) *gin.Engine {
+	router, _ := nativeHTTPFixtureModeAndControl(t, mode)
+	return router
+}
+
+func nativeHTTPFixtureModeAndControl(t *testing.T, mode string) (*gin.Engine, *node.Service) {
+	router, control, _, _ := nativeHTTPFixtureServices(t, mode)
+	return router, control
+}
+
+func nativeHTTPFixtureServices(t *testing.T, mode string) (*gin.Engine, *node.Service, *sqlitestore.Store, *node.Identity) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -115,7 +125,7 @@ func nativeHTTPFixtureMode(t *testing.T, mode string) *gin.Engine {
 			t.Error(err)
 		}
 	})
-	return router
+	return router, control, db, identity
 }
 
 var namedPathParameter = regexp.MustCompile(`\{[^{}]+\}`)

@@ -3,6 +3,7 @@ package business_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -107,20 +108,33 @@ func TestColdBackupFilesPayloadRetentionReplayCorruptionAndInterruptedReceive(t 
 		t.Fatal(err)
 	}
 	defer readOnly.Close()
-	if err := readOnly.OpenFileBackupsReadOnly(dir); err != nil {
+	info, err := os.Lstat(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readOnly.Backups().ReadReadyBackup(ctx, rel.PeerID, 102, func(_ store.BackupManifest, r io.Reader) error {
-		got, err := io.ReadAll(r)
-		if !bytes.Equal(got, payload) {
-			t.Fatal("read-only recovery payload changed")
+	err = readOnly.OpenFileBackupsReadOnly(dir)
+	if info.Mode().Perm() != 0700 {
+		// Some filesystems, including Windows' Go mode emulation, cannot
+		// prove the required private mode. Refusal is the secure outcome.
+		if !errors.Is(err, store.ErrBackupState) {
+			t.Fatal("unverifiable private backup directory was accepted", err)
 		}
-		return err
-	}); err != nil {
-		t.Fatal("read-only cold proof failed", err)
-	}
-	if err := readOnly.Backups().BeginBackup(ctx, rel.ID, 104, store.NodeAudit{}); err == nil {
-		t.Fatal("read-only cold store admitted a writer")
+	} else {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readOnly.Backups().ReadReadyBackup(ctx, rel.PeerID, 102, func(_ store.BackupManifest, r io.Reader) error {
+			got, err := io.ReadAll(r)
+			if !bytes.Equal(got, payload) {
+				t.Fatal("read-only recovery payload changed")
+			}
+			return err
+		}); err != nil {
+			t.Fatal("read-only cold proof failed", err)
+		}
+		if err := readOnly.Backups().BeginBackup(ctx, rel.ID, 104, store.NodeAudit{}); err == nil {
+			t.Fatal("read-only cold store admitted a writer")
+		}
 	}
 	name := filepath.Join(dir, fmt.Sprintf("artifact.%s.102.%s", rel.PeerID, checksum))
 	if err := os.WriteFile(name, bytes.Repeat([]byte("x"), len(payload)), 0600); err != nil {

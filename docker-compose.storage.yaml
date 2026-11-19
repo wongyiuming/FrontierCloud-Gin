@@ -107,6 +107,7 @@ services:
     command: [certificate-agent]
     environment:
       <<: *storage-env
+      PROJECT_LOG_FORWARD: "1"
       GOMAXPROCS: "1"
       GOMEMLIMIT: 64MiB
       GOGC: "50"
@@ -115,7 +116,8 @@ services:
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
-    cpus: 0.05
+    # A 0.05-core cap starves the controller and its health probe on slow CPUs.
+    cpus: 0.20
     mem_limit: 128m
     memswap_limit: 128m
     pids_limit: 24
@@ -126,6 +128,7 @@ services:
       - certificate_state:/var/lib/frontiercloud-certificate
       - certificate_runtime:/run/frontiercloud-certificate
       - certificate_published:/run/frontiercloud-tls
+      - project_log_runtime:/run/frontiercloud-project-logs
     tmpfs: ["/tmp:size=16m,mode=1777"]
     stop_grace_period: 10s
     healthcheck:
@@ -161,6 +164,7 @@ services:
       - storage_secrets:/run/frontiercloud-secrets
       - certificate_published:/run/frontiercloud-tls:ro
       - certificate_runtime:/run/frontiercloud-certificate:ro
+      - project_log_runtime:/run/frontiercloud-project-logs
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
@@ -180,3 +184,6 @@ volumes:
   certificate_state:
   certificate_runtime:
   certificate_published:
+  project_log_runtime:
+    driver: local
+    driver_opts: {type: tmpfs, device: tmpfs, o: "size=1m,uid=10001,gid=10001,mode=0770"}

@@ -31,7 +31,7 @@ func (r *Repository) CheckRename(ctx context.Context, target string) error {
 // identities and playback event keys do not. The success audit is an atomic
 // idempotency marker, including when a commit acknowledgement was lost.
 func (r *Repository) CompleteRename(ctx context.Context, old, target, operation string, audit store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		return r.completeRename(ctx, q, old, target, operation, "", audit)
 	})
 }
@@ -46,6 +46,9 @@ func renameSource(old, target, operation, relationship string) string {
 }
 
 func (r *Repository) completeRename(ctx context.Context, q queryer, old, target, operation, relationship string, audit store.AdminAudit) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	source := renameSource(old, target, operation, relationship)
 	var found int
 	err := q.QueryRowContext(ctx, "SELECT 1 FROM admin_audit_log WHERE action='directory_rename' AND source_summary=? AND result='success' LIMIT 1"+r.lock(), source).Scan(&found)

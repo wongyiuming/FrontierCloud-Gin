@@ -27,6 +27,15 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 	}
 	traffic := businesstraffic.New(nil)
 	s.Control.ConfigureBusinessTraffic(traffic)
+	closeProjectLogs := configureStorageProjectLogs(settings, s)
+	closeLogReplica := func() error { return nil }
+	logsReady := false
+	defer func() {
+		if !logsReady {
+			closeLogReplica()
+			closeProjectLogs()
+		}
+	}()
 	router := httpapi.NewWithResolver(func(ctx context.Context) error {
 		if err := s.Database.Ping(ctx); err != nil {
 			return err
@@ -42,6 +51,8 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 	}
 	httpapi.RegisterNodeIdentity(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeControl(router, settings, s.Resolver, s.Control)
+	closeLogReplica = httpapi.RegisterLogReplica(router, settings, s.Resolver, s.Control)
+	httpapi.RegisterNodeIngressCandidateProbe(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeCertificate(router, settings, s.Resolver, s.Control)
 	httpapi.RegisterNodeMedia(router, settings, s.Resolver, s.Control, s.Media)
 	httpapi.RegisterNodeStorage(router, settings, s.Resolver, s.Control, s.Media)
@@ -68,8 +79,12 @@ func newStorageHTTP(settings config.Config, s runtimeHTTP) (*gin.Engine, func() 
 	}
 	httpapi.RegisterNodeRecordings(router, settings, s.Resolver, s.Control, s.Recordings)
 	httpapi.RegisterNodeBackups(router, settings, s.Resolver, s.Control, s.Database.Backups())
+	if err := installStorageSelectedOwner(settings, s, router); err != nil {
+		return nil, nil, errors.Join(err, closeRetirement(), closeBackupObservation(), closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
+	}
+	logsReady = true
 	return router, func() error {
-		return errors.Join(closeRetirement(), closeBackupObservation(), closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
+		return errors.Join(closeProjectLogs(), closeLogReplica(), closeRetirement(), closeBackupObservation(), closeContent(), closeInventory(), closeMigration(), closeRetirementGate())
 	}, nil
 }
 

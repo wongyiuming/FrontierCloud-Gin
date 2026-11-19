@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Install before registering internal routes. This lease is independent of the
+// Install before registering internal and selected Owner routes. This lease is independent of the
 // native media/recording mutation locks: an upload may take their exclusive locks
 // while holding this shared request lease without recursive locking.
 func RegisterNodeRetirementBarrier(router *gin.Engine, settings config.Config, control *node.Service) (func() error, error) {
@@ -16,7 +16,9 @@ func RegisterNodeRetirementBarrier(router *gin.Engine, settings config.Config, c
 		return nil, e
 	}
 	router.Use(func(c *gin.Context) {
-		if !strings.HasPrefix(c.Request.URL.Path, "/internal/v1/") || c.Request.URL.Path == "/internal/v1/retirement" {
+		path := c.Request.URL.Path
+		selectedOwner := path == "/api/v1/node/selected-upload" || path == "/api/v1/node/selected-upload/recover" || path == "/api/v1/node/selected-upload/cleanup"
+		if (!strings.HasPrefix(path, "/internal/v1/") && !selectedOwner) || path == "/internal/v1/retirement" {
 			c.Next()
 			return
 		}

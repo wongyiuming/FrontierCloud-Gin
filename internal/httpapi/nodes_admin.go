@@ -29,6 +29,8 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 			return
 		}
 		result["storage_pool"] = nil
+		result["reinitialize_available"] = a.public.opaqueTree == nil && result["role"] != "Standalone"
+		result["retirement_inventory_available"] = a.public.opaqueTree == nil
 		if result["role"] == "Master" {
 			pool, err := a.public.media.StoragePool(c.Request.Context())
 			if err != nil {
@@ -36,6 +38,7 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 				return
 			}
 			result["storage_pool"] = pool
+			result["migration_planning_available"] = a.migrationPlanningAvailable()
 		}
 		c.JSON(200, result)
 	})
@@ -47,7 +50,66 @@ func RegisterAdminNodes(router *gin.Engine, a *Admin, service *node.Service) {
 		}
 		c.JSON(200, result)
 	})
+	group.GET("/public-routing", func(c *gin.Context) {
+		ingress, policies, err := service.PublicRouting(c.Request.Context())
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(200, gin.H{"ingress": ingress, "master_public_origin": a.settings.PublicOrigin, "native_transport_policies": policies, "selection_enabled": service.IngressSelectionAvailable(c.Request.Context())})
+	})
 	writes := group.Group("", mutate)
+	writes.POST("/public-routing/select", func(c *gin.Context) {
+		var body struct {
+			MemberID     string `json:"member_id"`
+			Generation   *int64 `json:"generation"`
+			PublicOrigin string `json:"public_origin"`
+		}
+		if !decodeNodeAdmin(c, &body) {
+			return
+		}
+		if !node.ValidIdentifier(body.MemberID) || body.Generation == nil || *body.Generation < 1 {
+			invalid(c, "body", "member_id")
+			return
+		}
+		selected, err := service.SelectPublicIngressAtOrigin(c.Request.Context(), body.MemberID, *body.Generation, body.PublicOrigin, audit(c))
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(200, selected)
+	})
+	writes.POST("/public-routing/candidates/:member/check", func(c *gin.Context) {
+		origin, err := service.CheckPublicIngressCandidate(c.Request.Context(), c.Param("member"))
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(200, gin.H{"origin": origin, "proxy_check": "passed", "selection_enabled": service.IngressSelectionAvailable(c.Request.Context())})
+	})
+	writes.POST("/public-routing/transport/:member", func(c *gin.Context) {
+		var body struct {
+			Transport string `json:"configured_transport"`
+			Revision  *int64 `json:"revision"`
+		}
+		if !decodeNodeAdmin(c, &body) {
+			return
+		}
+		if body.Revision == nil || *body.Revision < 0 || (body.Transport != "Direct" && body.Transport != "Relay") {
+			invalid(c, "body", "configured_transport")
+			return
+		}
+		policy, err := service.ConfirmNativeTransport(c.Request.Context(), c.Param("member"), body.Transport, *body.Revision, audit(c))
+		if err != nil {
+			nodeAdminError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(200, policy)
+	})
 	group.GET("/:identifier/certificate", func(c *gin.Context) {
 		v, err := service.Certificate(c.Request.Context(), c.Param("identifier"), certificate.Request{Action: "status"}, audit(c))
 		if err != nil {
@@ -195,6 +257,15 @@ func decodeNodeAdmin(c *gin.Context, target any) bool {
 	return true
 }
 func nodeAdminError(c *gin.Context, err error) {
+	if errors.Is(err,node.ErrLogArchiveNodePinned){c.JSON(409,gin.H{"code":"log_archive_node_in_use","detail":"该节点仍承载日志或日志迁移任务；请先在日志管理中完成节点移动，期间不能改为中继"});return}
+	if errors.Is(err, node.ErrIngressEndpointUnprepared) {
+		c.JSON(409, gin.H{"code": "ingress_endpoint_unprepared", "detail": "该节点尚未准备并上报可验证的公共入口端点；请完成节点入口部署并等待心跳确认，当前入口未改变"})
+		return
+	}
+	if errors.Is(err, node.ErrResourceEndpointUnprepared) {
+		c.JSON(409, gin.H{"code": "direct_endpoint_unprepared", "detail": "该节点尚未准备并上报可验证的 Direct 资源端点；已保存的配置不等于已生效，请完成节点直连端点部署"})
+		return
+	}
 	message := "节点 HTTPS 验证或通信失败；请检查证书、网络及节点身份"
 	if errors.Is(err, store.ErrNodeState) || errors.Is(err, store.ErrStorageCapacity) {
 		message = err.Error()

@@ -30,9 +30,18 @@ func TestMusicTagsVersionsAndPicture(t *testing.T) {
 		apic = append(apic, jpeg...)
 		data := tagFixture(version, tagFrame(version, "TIT2", []byte{1, 255, 254, 0x60, 0x4f, 0x7d, 0x59}), tagFrame(version, "TPE1", append([]byte{3}, []byte("達明一派")...)), tagFrame(version, "TALB", []byte{3, 'M', 'o', 'r', 'e'}), tagFrame(version, "APIC", apic))
 		tags := readMusicTags(bytes.NewReader(data))
-		if tags.Title != "你好" || tags.Artist != "達明一派" || tags.Album != "More" || tags.MIME != "image/jpeg" || !bytes.Equal(tags.Picture, jpeg) {
+		if tags.MIME != "image/jpeg" || !bytes.Equal(tags.Picture, jpeg) {
 			t.Fatalf("version %d: %#v", version, tags)
 		}
+	}
+}
+func TestMusicTagsV22Picture(t *testing.T) {
+	jpeg := append([]byte{255, 216, 255, 224, 0, 16, 'J', 'F', 'I', 'F', 0}, make([]byte, 32)...)
+	body := append([]byte{3, 'J', 'P', 'G', 3, 0}, jpeg...)
+	frame := append([]byte{'P', 'I', 'C', byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}, body...)
+	tags := readMusicTags(bytes.NewReader(tagFixture(2, frame)))
+	if tags.MIME != "image/jpeg" || !bytes.Equal(tags.Picture, jpeg) {
+		t.Fatal("ID3v2.2 picture not preserved", tags)
 	}
 }
 func TestMusicTagsMalformedBoundedFallback(t *testing.T) {
@@ -69,29 +78,20 @@ func TestMusicTagsV24DataLengthIndicator(t *testing.T) {
 		return frame
 	}
 	tags := readMusicTags(bytes.NewReader(tagFixture(4, withIndicator("TIT2", []byte("\x03Indicator title"), false, false), withIndicator("APIC", art, false, true))))
-	if tags.Title != "Indicator title" || !bytes.Equal(tags.Picture, jpeg) {
+	if !bytes.Equal(tags.Picture, jpeg) {
 		t.Fatal("valid data length indicator lost metadata", tags)
 	}
-	tags = readMusicTags(bytes.NewReader(tagFixture(4, withIndicator("TIT2", []byte("\x03Invalid"), true, false))))
-	if tags.Title != "" {
+	tags = readMusicTags(bytes.NewReader(tagFixture(4, withIndicator("APIC", art, true, false))))
+	if len(tags.Picture) != 0 {
 		t.Fatal("malformed data length accepted", tags)
 	}
 }
 
-func TestMusicTagsLegacySuffixOnlyFillsMissingFields(t *testing.T) {
+func TestMusicTagsIgnoreTextAndLegacySuffix(t *testing.T) {
 	tail := make([]byte, 128)
-	copy(tail, "TAG")
-	copy(tail[3:33], "Legacy title")
-	copy(tail[33:63], "Legacy artist")
-	copy(tail[63:93], "Legacy album")
-	picture := []byte("original picture")
-	tags := legacyMusicTags(MusicTags{Title: "ID3v2 title", Picture: picture, MIME: "image/jpeg"}, tail)
-	if tags.Title != "ID3v2 title" || tags.Artist != "Legacy artist" || tags.Album != "Legacy album" || !bytes.Equal(tags.Picture, picture) || tags.MIME != "image/jpeg" {
-		t.Fatal("suffix overwrote preferred ID3v2 metadata", tags)
-	}
-	for _, invalid := range [][]byte{nil, tail[:127], append([]byte("BAD"), tail[3:]...)} {
-		if got := legacyMusicTags(MusicTags{}, invalid); got.Title != "" || got.Artist != "" || got.Album != "" {
-			t.Fatal("invalid suffix accepted", got)
-		}
+	copy(tail, "TAGLegacy title")
+	tags := readMusicTags(bytes.NewReader(append([]byte("no ID3v2 header"), tail...)))
+	if len(tags.Picture) != 0 || tags.MIME != "" {
+		t.Fatal("text-only tags must not produce artwork", tags)
 	}
 }

@@ -204,7 +204,7 @@ func (r *Repository) PromoteIdentity(ctx context.Context, p store.NodePromotion,
 	if p.Role == "Master" && (p.Allocation < store.GiB || p.Allocation > store.MaxStorageAllocation) {
 		return result, nodeConflict("Master requires a Local Storage Allocation of at least 1 GiB")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		var err error
 		result, err = readNode(ctx, q, r.lock())
 		if err != nil {
@@ -249,7 +249,7 @@ func (r *Repository) AdoptMasterLocal(ctx context.Context, physicalUsed, physica
 	if physicalUsed < 0 || physicalFree < 0 {
 		return nodeConflict("invalid physical capacity")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -264,7 +264,7 @@ func (r *Repository) ConfigureMember(ctx context.Context, id string, c store.Res
 	if !nodeIDPattern.MatchString(id) || !validConfiguration(c) {
 		return nodeConflict("invalid resource configuration")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -353,7 +353,10 @@ func (r *Repository) AcceptFollowerConfiguration(ctx context.Context, relationID
 	if !validConfiguration(c) || physicalFree < 0 {
 		return nodeConflict("invalid resource configuration")
 	}
-	return r.withRelation(ctx, relationID, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+	if matched, err := r.refreshUnchangedFollowerConfiguration(ctx, relationID, c, physicalFree); matched || err != nil {
+		return err
+	}
+	return r.withRelationWrite(ctx, relationID, r.ingressWrite, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
 		if node.Role != "Follower" || v.Direction != "upstream" || v.State != "active" {
 			return nodeConflict("only Follower accepts active upstream resource settings")
 		}
@@ -395,6 +398,66 @@ func (r *Repository) AcceptFollowerConfiguration(ctx context.Context, relationID
 		return err
 	})
 }
+
+// A heartbeat repeating the applied settings refreshes only observed disk
+// space. It can share the Owner fence with a stream; changes to settings
+// still wait for exclusive admission and revalidate the current state.
+func (r *Repository) refreshUnchangedFollowerConfiguration(ctx context.Context, relationID string, c store.ResourceConfiguration, physicalFree int64) (bool, error) {
+	r.ownerControlMu.RLock()
+	fenced := r.ownerControlAcquire != nil
+	r.ownerControlMu.RUnlock()
+	if !fenced {
+		return false, nil
+	}
+	lease, err := r.AcquireOwnerControlShared(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer lease.Release()
+	storageEnabled, backupEnabled := 0, 0
+	if c.Storage.Enabled {
+		storageEnabled = 1
+	}
+	if c.Backup.Enabled {
+		backupEnabled = 1
+	}
+	matched := false
+	err = r.withRelation(ctx, relationID, func(q queryer, node store.NodeIdentity, relation store.Relationship) error {
+		matched = false
+		if err := r.checkOwnerControlMarker(ctx, q, lease); err != nil {
+			return err
+		}
+		if node.Role != "Follower" || relation.Direction != "upstream" || relation.State != "active" {
+			return nodeConflict("only Follower accepts active upstream resource settings")
+		}
+		var member string
+		err := q.QueryRowContext(ctx, `SELECT s.member_id FROM cluster_storage_members s
+			JOIN cluster_compute_members c ON c.member_id=s.member_id
+			JOIN cluster_backup_members b ON b.member_id=s.member_id
+			WHERE s.member_id=? AND s.member_kind='Follower' AND s.transport='Local'
+			AND s.storage_enabled=? AND s.writable=? AND s.allocated_bytes=? AND s.health='online'
+			AND s.used_bytes<=s.allocated_bytes AND s.reserved_bytes<=s.allocated_bytes-s.used_bytes
+			AND c.enabled=0 AND c.worker_slots=0 AND c.available_slots=0 AND c.capabilities='[]'
+			AND b.enabled=? AND (b.enabled=1 OR b.state='disabled')`+r.lock(),
+			node.ID, storageEnabled, storageEnabled, c.Storage.Allocation, backupEnabled).Scan(&member)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err = q.ExecContext(ctx, "UPDATE cluster_storage_members SET physical_free_bytes=?,updated_at=? WHERE member_id=?", physicalFree, time.Now().Unix(), member); err != nil {
+			return err
+		}
+		if err = lease.Check(ctx); err != nil {
+			return err
+		}
+		matched = true
+		return nil
+	})
+	return matched, err
+}
+
 func (r *Repository) FollowerSummary(ctx context.Context, physicalFree, physicalTotal int64) (result map[string]any, err error) {
 	if physicalFree < 0 || physicalTotal < physicalFree {
 		return nil, nodeConflict("invalid physical capacity")
@@ -517,6 +580,10 @@ func (r *Repository) Members(ctx context.Context) ([]store.StorageMember, error)
 		err = r.db.QueryRowContext(ctx, "SELECT enabled,generation,last_success,lag_seconds,checksum,state,updated_at FROM cluster_backup_members WHERE member_id=?", v.ID).Scan(&enabled, &generation, &lastSuccess, &lag, &checksum, &state, &updated)
 		if err == nil {
 			v.Backup = map[string]any{"member_id": v.ID, "enabled": enabled, "generation": generation, "last_success": lastSuccess, "lag_seconds": lag, "checksum": checksum, "state": state, "updated_at": updated}
+			if state == "receiving" || state == "failed" || state == "ready" {
+				v.Backup["last_attempt"] = updated
+				v.Backup["last_attempt_state"] = state
+			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}

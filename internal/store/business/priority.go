@@ -2,19 +2,15 @@ package business
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"path"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
-	"golang.org/x/text/cases"
 )
 
 func (r *Repository) priorityIdentity(ctx context.Context, q queryer) (store.NodeIdentity, error) {
@@ -25,31 +21,6 @@ func (r *Repository) priorityIdentity(ctx context.Context, q queryer) (store.Nod
 		return store.NodeIdentity{Role: "Standalone"}, nil
 	}
 	return node, err
-}
-
-// Directory ties follow the public category comparator; media ties follow the
-// public playback comparator. The planner must use those exact comparators.
-func priorityTie(a, b store.PriorityEntry, kind string) bool {
-	if kind == "directory" {
-		fold := cases.Fold()
-		x, y := fold.String(a.Path), fold.String(b.Path)
-		if x != y {
-			return x < y
-		}
-	}
-	if a.Path != b.Path {
-		return a.Path < b.Path
-	}
-	return a.ID < b.ID
-}
-
-func priorityRevision(scope store.PriorityScope, items []store.PriorityEntry) string {
-	data, _ := json.Marshal(struct {
-		Path, Kind string
-		Items      []store.PriorityEntry
-	}{scope.Path, scope.Kind, items})
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
 }
 
 func (r *Repository) priorityOrder(ctx context.Context, q queryer, scope store.PriorityScope) (store.PriorityOrder, error) {
@@ -168,15 +139,7 @@ func (r *Repository) priorityOrder(ctx context.Context, q queryer, scope store.P
 		value := byID[o.ID]
 		result.Items = append(result.Items, store.PriorityEntry{ID: o.ID, Path: o.Path, Preference: value, ObjectKind: o.Kind})
 	}
-	sort.Slice(result.Items, func(i, j int) bool {
-		a, b := result.Items[i], result.Items[j]
-		if a.Preference != b.Preference {
-			return a.Preference > b.Preference
-		}
-		return priorityTie(a, b, scope.Kind)
-	})
-	result.Revision = priorityRevision(scope, result.Items)
-	return result, nil
+	return store.NewPriorityOrder(scope.Path, scope.Kind, result.Items), nil
 }
 
 func (r *Repository) PriorityOrder(ctx context.Context, scope store.PriorityScope) (result store.PriorityOrder, err error) {
@@ -184,113 +147,19 @@ func (r *Repository) PriorityOrder(ctx context.Context, scope store.PriorityScop
 	return
 }
 
-// Each canonical inversion needs one integer step. Expand a contiguous window
-// until those steps fit between its unchanged neighbours. Work is linear; no
-// catalog-wide unique renumbering, fractional ranks or new tie-break store.
-func planPriority(items []store.PriorityEntry, at int, kind string) error {
-	return planPriorityRange(items, at, kind, store.PriorityMinimum, store.PriorityMaximum)
-}
-
-func planPriorityRange(items []store.PriorityEntry, at int, kind string, minimum, maximum int) error {
-	n := len(items)
-	gap := make([]int, n)
-	for i := 1; i < n; i++ {
-		gap[i] = gap[i-1]
-		if !priorityTie(items[i-1], items[i], kind) {
-			gap[i]++
-		}
-	}
-	l, r := at, at
-	limits := func(l, r int) (int, int) {
-		hi, lo := maximum, minimum
-		if l > 0 {
-			hi = items[l-1].Preference - (gap[l] - gap[l-1])
-		}
-		if r+1 < n {
-			lo = items[r+1].Preference + (gap[r+1] - gap[r])
-		}
-		return hi, lo
-	}
-	for {
-		hi, lo := limits(l, r)
-		if hi-lo >= gap[r]-gap[l] {
-			for i := l; i <= r; i++ {
-				minimum := lo + gap[r] - gap[i]
-				items[i].Preference = max(minimum, min(hi, items[i].Preference))
-				if i < r {
-					hi = items[i].Preference - (gap[i+1] - gap[i])
-				}
-			}
-			return nil
-		}
-		if l == 0 && r == n-1 {
-			return store.ErrPriorityRange
-		}
-		leftGain, rightGain := -1, -1
-		if l > 0 {
-			upper, _ := limits(l-1, r)
-			leftGain = upper - hi - (gap[l] - gap[l-1])
-		}
-		if r+1 < n {
-			_, lower := limits(l, r+1)
-			rightGain = lo - lower - (gap[r+1] - gap[r])
-		}
-		if l > 0 && (r == n-1 || leftGain > rightGain || leftGain == rightGain && at-l <= r-at) {
-			l--
-		} else {
-			r++
-		}
-	}
-}
-
 func (r *Repository) MovePriority(ctx context.Context, scope store.PriorityScope, move store.PriorityMove, audit store.AdminAudit) (result store.PriorityOrder, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		current, e := r.priorityOrder(ctx, q, scope)
 		if e != nil {
 			return e
 		}
-		if move.Revision != current.Revision {
-			return store.ErrPriorityStale
-		}
-		if move.Path == "" || move.Before == move.Path || move.After == move.Path || (move.Before == "" && move.After == "") {
-			return store.ErrPriorityMove
-		}
-		items := make([]store.PriorityEntry, 0, len(current.Items))
-		var moved store.PriorityEntry
-		old := map[string]int{}
-		for _, v := range current.Items {
-			old[v.Path] = v.Preference
-			if v.Path == move.Path {
-				moved = v
-			} else {
-				items = append(items, v)
-			}
-		}
-		if moved.Path == "" {
-			return store.ErrPriorityMove
-		}
-		at := -1
-		for i := 0; i <= len(items); i++ {
-			before, after := "", ""
-			if i < len(items) {
-				before = items[i].Path
-			}
-			if i > 0 {
-				after = items[i-1].Path
-			}
-			if before == move.Before && after == move.After {
-				at = i
-				break
-			}
-		}
-		if at < 0 {
-			return store.ErrPriorityMove
-		}
-		items = append(items, store.PriorityEntry{})
-		copy(items[at+1:], items[at:])
-		items[at] = moved
-		if e := planPriority(items, at, scope.Kind); e != nil {
+		items, e := store.PlanPriorityMove(current, move)
+		if e != nil {
 			return e
+		}
+		old := make(map[string]int, len(current.Items))
+		for _, item := range current.Items {
+			old[item.Path] = item.Preference
 		}
 		paths := []string{}
 		changes := []map[string]any{}

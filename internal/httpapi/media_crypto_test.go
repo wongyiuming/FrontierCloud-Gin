@@ -207,6 +207,9 @@ func TestEncryptedUploadExplicitChoiceSessionReuseRangeAndVisibility(t *testing.
 	if w = upload("", ""); w.Code != 400 {
 		t.Fatal("missing mode accepted", w.Code, w.Body.String())
 	}
+	if w = upload("plain", ""); w.Code != 400 {
+		t.Fatal("plaintext mode accepted", w.Code, w.Body.String())
+	}
 	if w = upload("encrypted", prep.Preparation+"corrupt"); w.Code != 401 {
 		t.Fatal("tampered preparation accepted", w.Code, w.Body.String())
 	}
@@ -265,11 +268,18 @@ func TestEncryptedUploadExplicitChoiceSessionReuseRangeAndVisibility(t *testing.
 	if w.Code == 200 {
 		t.Fatal("hidden-file key issued")
 	}
+	bindingContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	bindingContext.Request = httptest.NewRequest("POST", "/api/v1/media/crypto/key", nil)
+	bindingContext.Request.AddCookie(cookie)
+	binding, err := p.browserBinding(bindingContext, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	w = perform("/api/v1/media/crypto/revoke", gin.H{}, cookie)
 	if w.Code != 200 {
 		t.Fatal(w.Code)
 	}
-	if _, err = p.crypto.Wrap("browser:"+cookie.Value, publicGrant.SessionID, prep.Encryption); err == nil {
+	if _, err = p.crypto.Wrap(binding, publicGrant.SessionID, prep.Encryption); err == nil {
 		t.Fatal("revoked browser still authorized")
 	}
 }

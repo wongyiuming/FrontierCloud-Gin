@@ -11,21 +11,23 @@ cleanup() {
   rm -rf -- "$work"
 }
 trap cleanup EXIT
-for mode in http tls empty pinned; do
+for mode in http tls empty pinned dual legacy-ipv6; do
   : > "$work/$mode.env"
   if [[ "$mode" != http ]]; then
     printf '%s\n' 'TLS_ENABLED=true' 'SERVER_NAME=business.fixture.test' > "$work/$mode.env"
   fi
   if [[ "$mode" == empty ]]; then
-    printf '%s\n' 'FRONTIERCLOUD_REVISION=' 'DB_TYPE=' 'COMPOSE_PROJECT_NAME=' 'WEBRTC_STUN_PORT=' 'DATA_DIRECTORY=' >> "$work/$mode.env"
+    printf '%s\n' 'FRONTIERCLOUD_REVISION=' 'DB_TYPE=' 'COMPOSE_PROJECT_NAME=' 'WEBRTC_STUN_PORT=' 'DATA_DIRECTORY=' 'MASTER_PUBLIC_IPV6=' 'MASTER_PUBLIC_IPV6_BIND_ADDRESS=' >> "$work/$mode.env"
   fi
   if [[ "$mode" == pinned ]]; then printf 'FRONTIERCLOUD_REVISION=%s\n' "$revision" >> "$work/$mode.env"; fi
+  if [[ "$mode" == dual ]]; then printf '%s\n' 'MASTER_PUBLIC_IPV6=true' 'MASTER_PUBLIC_IPV6_BIND_ADDRESS=::' >> "$work/$mode.env"; fi
+  if [[ "$mode" == legacy-ipv6 ]]; then printf '%s\n' 'PUBLIC_BIND_ADDRESS=::' >> "$work/$mode.env"; fi
   env -i PATH="$PATH" HOME="$HOME" docker compose --project-directory "$work" --env-file "$work/$mode.env" -f "$PWD/docker-compose.yaml" config --format json > "$work/$mode.json"
 done
 python3 - "$work" "$revision" <<'PY'
 import json, pathlib, sys
 root=pathlib.Path(sys.argv[1])
-for mode in ('http','tls','empty','pinned'):
+for mode in ('http','tls','empty','pinned','dual','legacy-ipv6'):
     config=json.loads((root/(mode+'.json')).read_text())
     assert config['name']=='frontiercloud-gin'
     services=config['services']
@@ -40,12 +42,21 @@ for mode in ('http','tls','empty','pinned'):
     assert not {'RELEASE_BRANCH','RELEASE_SOURCE_BRANCH','GITHUB_API_TOKEN','STAGING_CD'} & web.keys()
     assert web['TLS_ENABLED']==('false' if mode=='http' else 'true')
     assert services['nginx']['healthcheck']['test']==['CMD','/usr/local/bin/frontiercloud-tls-edge','ready']
-    assert {(p['target'],p['published']) for p in services['nginx']['ports']}=={(80,'80'),(443,'443')}
-    assert all(p['published']=='3478' for p in services['stun']['ports'])
+    primary = '::' if mode == 'legacy-ipv6' else '0.0.0.0'
+    addresses = [primary, '::'] if mode == 'dual' else [primary]
+    ports = [(p['target'], p['published'], p['protocol'], p['host_ip']) for p in services['nginx']['ports']]
+    assert sorted(ports) == sorted((port, str(port), 'tcp', address) for port in (80, 443) for address in addresses)
+    assert {(p['published'], p['protocol'], p['host_ip']) for p in services['stun']['ports']} == {('3478', 'tcp', primary), ('3478', 'udp', primary)}
+    networks = config['networks']
+    assert networks['master-public-edge'].get('enable_ipv6', False) == (mode == 'dual')
+    assert not networks['default'].get('enable_ipv6', False)
+    assert services['nginx']['networks']['master-public-edge']['gw_priority'] == 1
+    assert set(services['web']['networks']) == {'default'}
+    assert set(services['certificate-agent']['networks']) == {'default'}
     assert any(v.get('source')==str(root/'data') and v['target']=='/app/data' for v in services['web']['volumes'])
     for service in services.values():
         assert not {'SSL_CERT_PATH','SSL_KEY_PATH','STORAGE_TLS_CERT','STORAGE_TLS_KEY','ACME_WEBROOT','HTTP_PORT','HTTPS_PORT'} & service.get('environment',{}).keys()
-print('PASS: real Compose HTTP, two TLS values, empty defaults and exact-SHA pin; fixed ports and no builds')
+print('PASS: real Compose default, legacy IPv6-only and Master dual-stack bindings; fixed ports and no builds')
 PY
 # Actual first issuance/recreation/renewal uses production Compose on private
 # networks, a local CA in a test binary and no host-port remapping.

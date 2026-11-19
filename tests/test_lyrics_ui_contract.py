@@ -33,11 +33,13 @@ class LyricsUiContractTests(unittest.TestCase):
 
     def test_default_lyric_is_runtime_generated_and_startup_backfilled(self):
         lyrics = (ROOT / "internal/media/lyrics.go").read_text(encoding="utf-8")
+        projection = (ROOT / "internal/sourceauth/projection.go").read_text(encoding="utf-8")
         main = (ROOT / "internal/media/service.go").read_text(encoding="utf-8")
         deletion = (ROOT / "internal/media/delete.go").read_text(encoding="utf-8")
 
         self.assertIn("const defaultLyric = \"lyrics/default.lrc\"", lyrics)
-        self.assertIn("建设中，暂无歌词", lyrics)
+        self.assertIn("const defaultContent = sourceauth.DefaultLyricContent", lyrics)
+        self.assertIn(r'const DefaultLyricContent = "[00:00.00]建设中，暂无歌词\n"', projection)
         self.assertIn("ensureDefaultLyric", lyrics)
         self.assertIn("ensureDefaultLyric", main)
         self.assertIn("defaultLyric", deletion)

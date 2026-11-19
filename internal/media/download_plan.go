@@ -28,12 +28,21 @@ func (d *Download) PlanDelivery(id, snapshot, requestID, traceID string, nginx b
 		if row.Transport == "S3" {
 			return Delivery{}, ErrBrowserSource
 		}
-		_, relation, err := d.service.resolveGlobal(d.ctx, row.ID, row.Path)
+		actual, relation, err := d.service.resolveGlobal(d.ctx, row.ID, row.Path)
 		if err != nil {
 			return Delivery{}, err
 		}
+		// A renewed route may change transport, but must never authorize a
+		// different object or revision under the already issued plan.
+		if actual.ID != row.ID || actual.Path != row.Path || actual.Kind != row.Kind || actual.Bytes != row.Bytes || globalDownloadRevision(actual) != globalDownloadRevision(row) {
+			return Delivery{}, store.ErrNodeState
+		}
+		row = actual
 		if relation != nil {
 			return d.service.remoteDelivery(d.ctx, row, relation, requestID, traceID, nginx)
+		}
+		if row.Transport != "Local" {
+			return Delivery{}, ErrUnavailable
 		}
 		object, err := d.service.repository.ObjectByID(d.ctx, row.ObjectID)
 		if err != nil {

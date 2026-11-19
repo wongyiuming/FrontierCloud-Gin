@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
@@ -57,6 +59,12 @@ func (a *Admin) priorityOrder(c *gin.Context) {
 		invalid(c, "query", "scope")
 		return
 	}
+	if a.public.opaqueTree != nil {
+		if value, ok := a.readNativePriorityOrder(c, name, kind); ok {
+			c.JSON(200, value)
+		}
+		return
+	}
 	value, err := a.public.media.PriorityOrder(c.Request.Context(), name, kind)
 	if err != nil {
 		mediaAdminError(c, err)
@@ -84,6 +92,20 @@ func (a *Admin) movePriority(c *gin.Context) {
 		invalid(c, "body", "revision")
 		return
 	}
+	if a.public.opaqueTree != nil {
+		if !a.selectedAdminAllowed(c, true) {
+			return
+		}
+		ctx, cancel := selectedRuntimeContext(c)
+		defer cancel()
+		value, err := a.selectedUpload.MovePriority(ctx, session(c).Hash, body.Scope, body.Kind, body.PriorityMove)
+		if err != nil {
+			nativePriorityError(c, err)
+			return
+		}
+		c.JSON(200, value)
+		return
+	}
 	value, err := a.public.media.MovePriority(c.Request.Context(), body.Scope, body.Kind, body.PriorityMove, a.mutationAudit(c, "priority_reorder", []string{body.Path}))
 	if err != nil {
 		mediaAdminError(c, err)
@@ -100,6 +122,28 @@ func (a *Admin) renameDirectory(c *gin.Context) {
 	if !decodeAdmin(c, &body) {
 		return
 	}
+	if a.public.opaqueTree != nil {
+		if !a.selectedAdminAllowed(c, true) {
+			return
+		}
+		ctx, cancel := selectedRuntimeContext(c)
+		defer cancel()
+		result, err := a.selectedUpload.RenameDirectory(ctx, session(c).Hash, body.Path, body.NewName, a.mutationAudit(c, "directory_rename", []string{body.Path}))
+		if err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				err = os.ErrNotExist
+			case errors.Is(err, sealedtree.ErrInvalid):
+				err = media.ErrPath
+			case errors.Is(err, sealedtree.ErrConflict), errors.Is(err, sealedtree.ErrRevocationPending):
+				err = store.ErrNodeState
+			}
+			mediaAdminError(c, err)
+			return
+		}
+		c.JSON(200, result)
+		return
+	}
 	result, err := a.public.media.Rename(c.Request.Context(), body.Path, body.NewName, a.mutationAudit(c, "directory_rename", []string{body.Path}))
 	if err != nil {
 		mediaAdminError(c, err)
@@ -109,6 +153,10 @@ func (a *Admin) renameDirectory(c *gin.Context) {
 }
 
 func (a *Admin) tree(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedAdminTree(c)
+		return
+	}
 	value, err := a.public.media.Tree(c.Request.Context(), c.Query("path"))
 	if err != nil {
 		mediaAdminError(c, err)
@@ -120,6 +168,10 @@ func (a *Admin) tree(c *gin.Context) {
 func (a *Admin) treeSearch(c *gin.Context) {
 	query, ok := queryText(c, "q", 100)
 	if !ok {
+		return
+	}
+	if a.public.opaqueTree != nil {
+		a.selectedAdminTreeSearch(c, query)
 		return
 	}
 	value, err := a.public.media.Search(c.Request.Context(), query, c.Query("path"))
@@ -160,6 +212,10 @@ func (a *Admin) mediaPriorities(c *gin.Context) {
 		invalid(c, "query", "payload")
 		return
 	}
+	if a.public.opaqueTree != nil {
+		a.selectedPriorityCatalog(c, scope, query, kind, page, pageSize)
+		return
+	}
 	value, err := a.public.media.Priorities(c.Request.Context(), scope, query, kind, page, pageSize)
 	if err != nil {
 		mediaAdminError(c, err)
@@ -191,7 +247,12 @@ func (a *Admin) hide(c *gin.Context) {
 	if !hide {
 		action = "unhide"
 	}
-	if err := a.public.media.Hide(c.Request.Context(), body.Paths, hide, a.mutationAudit(c, action, body.Paths)); err != nil {
+	audit := a.mutationAudit(c, action, body.Paths)
+	if a.public.opaqueTree != nil {
+		a.selectedDirectoryVisibility(c, body.Paths, hide, audit)
+		return
+	}
+	if err := a.public.media.Hide(c.Request.Context(), body.Paths, hide, audit); err != nil {
 		mediaAdminError(c, err)
 		return
 	}
@@ -199,13 +260,18 @@ func (a *Admin) hide(c *gin.Context) {
 }
 
 func (a *Admin) delete(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.deleteSelectedMedia(c)
+		return
+	}
 	var body struct {
-		Paths []string `json:"paths"`
+		Paths   []string        `json:"paths"`
+		Targets json.RawMessage `json:"targets"`
 	}
 	if !decodeAdmin(c, &body) {
 		return
 	}
-	if len(body.Paths) == 0 || len(body.Paths) > a.settings.AdminMaxBatchFiles {
+	if body.Targets != nil || len(body.Paths) == 0 || len(body.Paths) > a.settings.AdminMaxBatchFiles {
 		detail(c, 400, "请选择合法对象")
 		return
 	}
@@ -238,6 +304,23 @@ func (a *Admin) delete(c *gin.Context) {
 }
 
 func (a *Admin) directoryPriorities(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		scope := c.Query("scope")
+		items := []media.DirectoryPreference{}
+		if scope != "" {
+			value, ok := a.readNativePriorityOrder(c, scope, "directory")
+			if !ok {
+				return
+			}
+			for _, item := range value.Items {
+				items = append(items, media.DirectoryPreference{Path: item.Path, Preference: item.Preference})
+			}
+		} else if !a.selectedAdminAllowed(c, false) {
+			return
+		}
+		c.JSON(200, gin.H{"items": items, "minimum": store.PriorityMinimum, "maximum": store.PriorityMaximum})
+		return
+	}
 	items, err := a.public.media.DirectoryPreferences(c.Request.Context(), c.Query("scope"))
 	if err != nil {
 		mediaAdminError(c, err)
@@ -255,6 +338,12 @@ func (a *Admin) directoryPriority(c *gin.Context) {
 		return
 	}
 	if !validPriority(c, body.Path, body.Value) {
+		return
+	}
+	if a.public.opaqueTree != nil {
+		if _, ok := a.setNativePriority(c, body.Path, "", *body.Value, true); ok {
+			c.JSON(200, gin.H{"directory_path": body.Path, "preference": *body.Value})
+		}
 		return
 	}
 	value, err := a.public.media.Preference(c.Request.Context(), body.Path, *body.Value, true, a.mutationAudit(c, "directory_priority", []string{body.Path}))
@@ -285,6 +374,12 @@ func (a *Admin) mediaPriority(c *gin.Context) {
 	if !validPriority(c, body.Path, body.Value) {
 		return
 	}
+	if a.public.opaqueTree != nil {
+		if value, ok := a.setNativePriority(c, body.Path, body.Resource, *body.Value, false); ok {
+			c.JSON(200, gin.H{"media_id": value.MediaID, "play_score": value.PlayScore, "preference": value.Preference})
+		}
+		return
+	}
 	if body.Resource != "" {
 		detail(c, 503, "Federated media runtime is not enabled on this node")
 		return
@@ -295,4 +390,47 @@ func (a *Admin) mediaPriority(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"media_id": value.MediaID, "play_score": value.PlayScore, "preference": value.Preference})
+}
+
+func (a *Admin) setNativePriority(c *gin.Context, path, resource string, value int, directory bool) (store.PlaybackResult, bool) {
+	if !a.selectedAdminAllowed(c, true) {
+		return store.PlaybackResult{}, false
+	}
+	ctx, cancel := selectedRuntimeContext(c)
+	defer cancel()
+	result, err := a.selectedUpload.SetPriority(ctx, session(c).Hash, path, resource, value, directory)
+	if err != nil {
+		nativePriorityError(c, err)
+		return store.PlaybackResult{}, false
+	}
+	return result, true
+}
+
+func nativePriorityError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		err = os.ErrNotExist
+	case errors.Is(err, sealedtree.ErrConflict):
+		err = store.ErrNodeState
+	}
+	mediaAdminError(c, err)
+}
+
+func (a *Admin) readNativePriorityOrder(c *gin.Context, scope, kind string) (store.PriorityOrder, bool) {
+	if !a.selectedAdminAllowed(c, false) {
+		return store.PriorityOrder{}, false
+	}
+	ctx, cancel := selectedRuntimeContext(c)
+	defer cancel()
+	var result store.PriorityOrder
+	err := a.selectedUpload.WithAdminTreeCatalog(ctx, session(c).Hash, func(tree *sealedtree.SQLStore, lease *sealedtree.TreeLease) error {
+		var err error
+		result, err = tree.NativePriorityOrderWithLease(ctx, lease, scope, kind)
+		return err
+	})
+	if err != nil {
+		nativePriorityError(c, err)
+		return store.PriorityOrder{}, false
+	}
+	return result, true
 }

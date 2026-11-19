@@ -25,14 +25,16 @@ func (s *Service) InitializeStorage(ctx context.Context, endpoint string) error 
 	if row.Role != "Standalone" || s.volume == nil {
 		return fmt.Errorf("%w: only_stroge cannot replace an existing business identity or endpoint", store.ErrNodeState)
 	}
-	return s.volume.WithPromotion(ctx, "Follower", func(p store.NodePromotion) error {
-		p.Endpoint = endpoint
-		return s.emptyRecordings(ctx, func() error {
-			result, err := s.repo.PromoteIdentity(ctx, p, store.NodeAudit{Actor: "local-storage-bootstrap"})
-			if err == nil {
-				s.identity.NodeIdentity = result
-			}
-			return err
+	return s.withOwnerControlExclusive(ctx, func(ctx context.Context) error {
+		return s.volume.WithPromotion(ctx, "Follower", func(p store.NodePromotion) error {
+			p.Endpoint = endpoint
+			return s.emptyRecordings(ctx, func() error {
+				result, err := s.repo.PromoteIdentity(ctx, p, store.NodeAudit{Actor: "local-storage-bootstrap"})
+				if err == nil {
+					s.identity.NodeIdentity = result
+				}
+				return err
+			})
 		})
 	})
 }

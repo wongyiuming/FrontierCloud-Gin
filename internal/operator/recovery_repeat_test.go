@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
@@ -103,6 +104,9 @@ func TestRestoredDeploymentCanBackUpAndRestoreItsActualBoundStateAgain(t *testin
 	if !secondReport.Manifest.CompleteCluster || len(secondReport.Manifest.Missing) != 0 {
 		t.Fatal(secondReport.Manifest.Missing)
 	}
+	if !slices.Contains(secondReport.Manifest.KeyReferences, adminKeyArchivePath) {
+		t.Fatal("repeated backup did not require the original AdminKey")
+	}
 	second := filepath.Join(t.TempDir(), "second")
 	if _, e = recovery.Apply(ctx, secondArchive, second, secondReport.SHA256, source.node); e != nil {
 		t.Fatal(e)
@@ -110,6 +114,14 @@ func TestRestoredDeploymentCanBackUpAndRestoreItsActualBoundStateAgain(t *testin
 	actual, e := os.ReadFile(filepath.Join(second, "runtime_secrets", "retained-proof"))
 	if e != nil || string(actual) != "bound-private-state" {
 		t.Fatal("repeated recovery lost the active secret bind", e)
+	}
+	originalKey, e := os.ReadFile(filepath.Join(source.secrets, "admin_key"))
+	if e != nil {
+		t.Fatal("could not read fixture AdminKey", e)
+	}
+	restoredKey, e := os.ReadFile(filepath.Join(second, filepath.FromSlash(adminKeyArchivePath)))
+	if e != nil || string(restoredKey) != string(originalKey) {
+		t.Fatal("repeated recovery changed the AdminKey", e)
 	}
 	raw, e := os.ReadFile(filepath.Join(second, "deployment", RecoveredCompose))
 	if e != nil {

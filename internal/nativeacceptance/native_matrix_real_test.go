@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -213,6 +214,18 @@ func TestRealNativeMatrixFleetControl(t *testing.T) {
 
 func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix, driver, kind string, migrationCase ...string) {
 	t.Helper()
+	sealedPeer := os.Getenv("FRONTIERCLOUD_TEST_SEALED_PEER_RESTART") == "1"
+	sealedRelay := sealedPeer && os.Getenv("FRONTIERCLOUD_TEST_SEALED_PEER_RELAY") == "1"
+	siteCount := fleetNodeCount
+	if sealedPeer {
+		if kind != "go-sqlite" || len(migrationCase) != 0 || os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_CGROUP") == "" || os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_NATIVE_BINARY") == "" || os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_NGINX_EXTRA") == "" {
+			t.Fatal("sealed peer test requires a bounded two-node SQLite fixture")
+		}
+		siteCount = 2
+		if sealedRelay {
+			siteCount = 3
+		}
+	}
 	project := prefix + "-" + kind
 	root := filepath.Join(base, kind)
 	if err := os.Mkdir(root, 0755); err != nil {
@@ -262,7 +275,16 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		var reply struct {
 			ID string `json:"Id"`
 		}
-		if err := e.call(ctx, "POST", "/networks/create", map[string]any{"Name": name, "Labels": map[string]string{"frontiercloud.acceptance": project}}, &reply); err != nil {
+		options := map[string]any{"Name": name, "Internal": sealedPeer, "Labels": map[string]string{"frontiercloud.acceptance": project}}
+		if sealedRelay {
+			// The host verifies these fixture-only subnets against its Docker
+			// IPAM and routes before launching this explicitly opted-in test.
+			if len(networks) >= 4 {
+				t.Fatal("unexpected Relay fixture network count")
+			}
+			options["IPAM"] = map[string]any{"Config": []map[string]string{{"Subnet": fmt.Sprintf("10.246.%d.0/24", 240+len(networks))}}}
+		}
+		if err := e.call(ctx, "POST", "/networks/create", options, &reply); err != nil {
 			t.Fatal(err)
 		}
 		networks = append(networks, reply.ID)
@@ -297,8 +319,22 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	create := func(service, image string, cmd, env, binds []string, user string, endpoints map[string]any, health []string) Container {
 		name := project + "-" + service
 		owner, canonical := project, service
+		if sealedPeer && image == os.Getenv("FRONTIERCLOUD_TEST_NATIVE_MATRIX_NATIVE_IMAGE") {
+			binds = append(append([]string(nil), binds...), os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_NATIVE_BINARY")+":/app/frontiercloud:ro")
+			for key, dest := range map[string]string{"FRONTIERCLOUD_TEST_FIXTURE_UPLOAD_SHA": "/app/static/js/upload-sha256.js", "FRONTIERCLOUD_TEST_FIXTURE_KARAOKE_HTML": "/app/static/media/karaoke.html"} {
+				if file := os.Getenv(key); file != "" {
+					if !filepath.IsAbs(file) {
+						t.Fatal("fixture asset requires absolute path")
+					}
+					binds = append(binds, file+":"+dest+":ro")
+				}
+			}
+		}
 
 		host := map[string]any{"Binds": binds, "NetworkMode": sharedName, "Tmpfs": map[string]string{"/tmp": "size=64m,mode=1777"}, "RestartPolicy": map[string]string{"Name": "no"}}
+		if sealedPeer {
+			host["CgroupParent"] = os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_CGROUP")
+		}
 		// Bounds apply only to disposable fixture services, never deployed nodes.
 		host["Memory"] = int64(256 << 20)
 		if service == "mysql" {
@@ -367,7 +403,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	if err != nil {
 		t.Fatal(err)
 	}
-	sites := make([]*fleetSite, fleetNodeCount)
+	sites := make([]*fleetSite, siteCount)
 	for i := range sites {
 		runtime, database := "go", "sqlite"
 		if i == 0 {
@@ -391,6 +427,9 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		// Trust only this node's actual private Nginx/Web network, not every
 		// private network or client-supplied forwarding header.
 		env = append(env, "TRUSTED_PROXY_NETWORKS="+strings.Join(networkCIDRs[privateName], ","))
+		if sealedPeer {
+			env = append(env, "PUBLIC_INGRESS_TRUSTED_PROXY_NETWORKS="+strings.Join(networkCIDRs[privateName], ","))
+		}
 		binds := []string{filepath.Join(folder, "data") + ":/app/data", filepath.Join(folder, "secrets") + ":/run/frontiercloud-secrets", certs + ":/certs:ro"}
 
 		if i == 0 {
@@ -398,7 +437,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 
 		} else {
 			port, profile := "8443", "relay"
-			if i <= 2 {
+			if i <= 2 && !(sealedRelay && i == 2) {
 				port, profile = "443", "direct"
 			}
 			endpoint := "https://" + domain
@@ -406,6 +445,9 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 				endpoint += ":" + port
 			}
 			env = append(env, "DEPLOYMENT_MODE=only_stroge", "STORAGE_TRANSPORT="+profile, "STORAGE_PORT="+port, "HTTP_ADDR=:"+port, "STORAGE_ENDPOINT="+endpoint, "NGINX_MEDIA_ACCEL=false")
+			if sealedPeer && !(sealedRelay && i == 2) {
+				env = append(env, "FOLLOWER_INGRESS_ORIGIN=https://"+domain, "FOLLOWER_RESOURCE_ORIGIN=https://"+domain)
+			}
 		}
 
 		for _, command := range []string{"init-secrets", "init-media"} {
@@ -497,7 +539,11 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			edgeEndpoints := sharedEndpoint(domain)
 			edgeImage := edge
 			edgeEndpoints[privateName] = map[string]any{"Aliases": []string{"edge", "nginx"}}
-			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", filepath.Join(folder, "certificate-published") + ":/run/frontiercloud-tls:ro", filepath.Join(folder, "traffic-runtime") + ":/run/frontiercloud-traffic", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}, "", edgeEndpoints, nil)
+			edgeBinds := []string{filepath.Join(folder, "data") + ":/app/data:ro", filepath.Join(folder, "maintenance") + ":/run/frontiercloud-maintenance:ro", filepath.Join(folder, "certificate-published") + ":/run/frontiercloud-tls:ro", filepath.Join(folder, "traffic-runtime") + ":/run/frontiercloud-traffic", filepath.Join(certs, "ca.pem") + ":/etc/ssl/certs/ca-certificates.crt:ro"}
+			if sealedPeer {
+				edgeBinds = append(edgeBinds, os.Getenv("FRONTIERCLOUD_TEST_FIXTURE_NGINX_EXTRA")+":/etc/nginx/transport/https/extra-servers.conf:ro")
+			}
+			create(label+"-edge", edgeImage, nil, []string{"TLS_ENABLED=true", "SERVER_NAME=" + domain, "INSTANCE_NAME=native matrix-fixture", "UPLOAD_INACTIVITY_TIMEOUT=300", "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx"}, edgeBinds, "", edgeEndpoints, nil)
 		}
 
 		jar, _ := cookiejar.New(nil)
@@ -576,14 +622,14 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 		}
 	}
 	perform(master, "POST", "/nodes/promote", map[string]any{"role": "Master", "endpoint": master.origin, "local_capacity_gib": 1})
-	relations := make([]string, fleetNodeCount-1)
+	relations := make([]string, siteCount-1)
 	for i, follower := range sites[1:] {
 		t.Log("pairing private follower", i+1, follower.runtime, follower.database)
 		pkg := perform(follower, "POST", "/nodes/pair-package", map[string]any{})
 		relation := perform(master, "POST", "/nodes/pair", map[string]any{"package": pkg})["relationship_id"].(string)
 		relations[i] = relation
 		mode := "Relay"
-		if i < 2 {
+		if i < 2 && !(sealedRelay && i == 1) {
 			mode = "Direct"
 		}
 		perform(master, "POST", "/nodes/"+relation+"/mode", map[string]any{"mode": mode})
@@ -593,7 +639,7 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 	for {
 		status := perform(master, "GET", "/nodes", nil)
 		rows, ok := status["relationships"].([]any)
-		ready := ok && len(rows) == fleetNodeCount-1
+		ready := ok && len(rows) == siteCount-1
 		for _, raw := range rows {
 			row := raw.(map[string]any)
 			ready = ready && row["state"] == "active" && row["status"] == "online"
@@ -605,6 +651,252 @@ func testFleetControl(t *testing.T, ctx context.Context, e *Engine, base, prefix
 			t.Fatal("four active native matrix followers did not establish outbound heartbeat")
 		}
 		time.Sleep(time.Second)
+	}
+	if sealedPeer {
+		masterID, okMaster := perform(master, "GET", "/nodes", nil)["node_id"].(string)
+		ownerID, okOwner := perform(sites[1], "GET", "/nodes", nil)["node_id"].(string)
+		if !okMaster || !okOwner || masterID == "" || ownerID == "" || masterID == ownerID {
+			t.Fatal("fixture identities unavailable")
+		}
+		var relayID string
+		if sealedRelay {
+			relayID, _ = perform(sites[2], "GET", "/nodes", nil)["node_id"].(string)
+			if relayID == "" || relayID == ownerID || relayID == masterID {
+				t.Fatal("Relay owner identity unavailable")
+			}
+		}
+		for _, site := range sites {
+			if err := e.Stop(ctx, site.web); err != nil {
+				t.Fatal("stop fixture Web", err)
+			}
+		}
+		offline := func(site *fleetSite, label string, args ...string) {
+			t.Helper()
+			service := create(label, native, args, site.environment, site.binds, "10001:10001", sharedEndpoint(label), nil)
+			if err := e.Wait(ctx, service.ID); err != nil {
+				t.Fatal("offline fixture", label, err)
+			}
+		}
+		offline(sites[1], "owner-maintenance-enter", "maintenance", "enter")
+		offline(sites[1], "owner-prepare", "storage-owner-prepare", ownerID)
+		offline(sites[1], "owner-maintenance-resume", "maintenance", "resume")
+		if sealedRelay {
+			offline(sites[2], "relay-maintenance-enter", "maintenance", "enter")
+			offline(sites[2], "relay-owner-prepare", "storage-owner-prepare", relayID)
+			offline(sites[2], "relay-maintenance-resume", "maintenance", "resume")
+		}
+		offline(master, "master-maintenance-enter", "maintenance", "enter")
+		offline(master, "master-tree-prepare", "sealed-tree-prepare", masterID)
+		offline(master, "master-maintenance-resume", "maintenance", "resume")
+		preparedSites := []*fleetSite{sites[1], master}
+		if sealedRelay {
+			preparedSites = append(preparedSites, sites[2])
+		}
+		for _, site := range preparedSites {
+			if err := e.Start(ctx, site.web); err != nil {
+				t.Fatal("restart prepared fixture Web", err)
+			}
+			if err := e.Healthy(ctx, site.web); err != nil {
+				t.Fatal("prepared fixture Web health", err)
+			}
+		}
+		// Legacy relationship mode is not an applied resource policy. Confirm
+		// the owner's actual Direct policy and wait for its signed application
+		// before reserving; do not turn a retry into policy inference.
+		initialRouting := perform(master, "GET", "/nodes/public-routing", nil)
+		policies, ok := initialRouting["native_transport_policies"].([]any)
+		if !ok {
+			t.Fatal("missing native policies")
+		}
+		var ownerRevision json.Number
+		for _, item := range policies {
+			policy, ok := item.(map[string]any)
+			if ok && policy["member_id"] == ownerID {
+				ownerRevision, _ = policy["revision"].(json.Number)
+			}
+		}
+		if ownerRevision == "" {
+			t.Fatal("missing explicit owner policy revision")
+		}
+		fleetJSON(t, ctx, master, "POST", "/api/v1/media/admin/nodes/public-routing/transport/"+ownerID, map[string]any{"configured_transport": "Direct", "revision": ownerRevision})
+		policyDeadline := time.Now().Add(45 * time.Second)
+		for {
+			routing := perform(master, "GET", "/nodes/public-routing", nil)
+			items, _ := routing["native_transport_policies"].([]any)
+			applied := false
+			for _, item := range items {
+				policy, ok := item.(map[string]any)
+				if ok && policy["member_id"] == ownerID && policy["state"] == "applied" && policy["applied_transport"] == "Direct" {
+					applied = true
+				}
+			}
+			if applied {
+				break
+			}
+			if time.Now().After(policyDeadline) {
+				t.Fatal("owner Direct policy was not applied")
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		uploaded := fleetUploadEncrypted(t, ctx, master, sites[1], ownerID)
+		var hiddenUploaded fleetEncryptedUpload
+		if os.Getenv("FRONTIERCLOUD_TEST_SEALED_HIDDEN") == "1" {
+			fleetPrepareHiddenDirectory(t, ctx, master)
+			hiddenUploaded = fleetUploadEncryptedMode(t, ctx, master, sites[1], ownerID, "DirectHidden", "hidden-song.mp3")
+			if os.Getenv("FRONTIERCLOUD_TEST_SEALED_ADMIN_TREE") == "1" {
+				fleetCheckAdminTree(t, ctx, master, ownerID, hiddenUploaded)
+			}
+		}
+		var relayUploaded fleetEncryptedUpload
+		if sealedRelay {
+			routing := perform(master, "GET", "/nodes/public-routing", nil)
+			policies, ok := routing["native_transport_policies"].([]any)
+			if !ok {
+				t.Fatal("missing Relay policy")
+			}
+			var revision json.Number
+			for _, item := range policies {
+				if policy, ok := item.(map[string]any); ok && policy["member_id"] == relayID {
+					revision, _ = policy["revision"].(json.Number)
+				}
+			}
+			if revision == "" {
+				t.Fatal("missing Relay revision")
+			}
+			fleetJSON(t, ctx, master, "POST", "/api/v1/media/admin/nodes/public-routing/transport/"+relayID, map[string]any{"configured_transport": "Relay", "revision": revision})
+			deadline := time.Now().Add(45 * time.Second)
+			for {
+				routing := perform(master, "GET", "/nodes/public-routing", nil)
+				items, _ := routing["native_transport_policies"].([]any)
+				applied := false
+				for _, item := range items {
+					if policy, ok := item.(map[string]any); ok && policy["member_id"] == relayID && policy["state"] == "applied" && policy["applied_transport"] == "Relay" {
+						applied = true
+					}
+				}
+				if applied {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("owner Relay policy was not applied")
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			relayUploaded = fleetUploadEncryptedMode(t, ctx, master, sites[2], relayID, "Relay", "relay-song.mp3")
+		}
+		routing := perform(master, "GET", "/nodes/public-routing", nil)
+		ingress, ok := routing["ingress"].(map[string]any)
+		if !ok || routing["selection_enabled"] != true {
+			t.Fatal("encrypted ingress selection unavailable")
+		}
+		generation, ok := ingress["generation"].(json.Number)
+		if !ok {
+			t.Fatal("missing ingress generation")
+		}
+		selected := perform(master, "POST", "/nodes/public-routing/select", map[string]any{"member_id": ownerID, "generation": generation})
+		if selected["node_id"] != ownerID {
+			t.Fatal("actual peer not selected")
+		}
+		// Master TLS SNI and peer HTTP Host intentionally differ. Nginx may
+		// forward only the signed prefix; an unsigned request must still fail.
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, master.origin+"/_fc_public_proxy/api/v1/media/catalog/categories?media_type=music", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		peerOrigin, err := url.Parse(sites[1].origin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = peerOrigin.Host
+		response, err := master.client.Do(req)
+		if err != nil {
+			t.Fatal("signed edge transport", err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatal("unsigned peer edge request", response.StatusCode)
+		}
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, master.origin+"/api/v1/media/catalog/categories?media_type=music", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = peerOrigin.Host
+		response, err = master.client.Do(req)
+		if response != nil {
+			response.Body.Close()
+		}
+		if err == nil {
+			t.Fatal("unrecognized Host reached regular Master routes")
+		}
+		checkCatalog := func() {
+			t.Helper()
+			status, _, err := sites[1].request(ctx, "GET", "/api/v1/media/catalog/categories?media_type=music", nil)
+			if err != nil || status != http.StatusOK {
+				t.Fatal("real peer catalog", status, err)
+			}
+		}
+		checkCatalog()
+		fleetCheckEncrypted(t, ctx, sites[1], uploaded)
+		if os.Getenv("FRONTIERCLOUD_TEST_SEALED_HIDDEN") == "1" {
+			fleetCheckHiddenDirectory(t, ctx, sites[1], hiddenUploaded)
+		}
+		if sealedRelay {
+			fleetCheckEncryptedMode(t, ctx, sites[1], relayUploaded, "Relay")
+		}
+		maintenanceMarker := filepath.Join(master.root, "data", ".frontiercloud-maintenance")
+		if err := os.WriteFile(maintenanceMarker, []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(maintenanceMarker)
+		blocked, _, _ := sites[1].request(ctx, "GET", "/api/v1/media/catalog/categories?media_type=music", nil)
+		if blocked == http.StatusOK {
+			t.Fatal("peer catalog bypassed Master maintenance")
+		}
+		if err := os.Remove(maintenanceMarker); err != nil {
+			t.Fatal(err)
+		}
+		checkCatalog()
+		restartSites := []*fleetSite{master, sites[1]}
+		if sealedRelay {
+			restartSites = append(restartSites, sites[2])
+		}
+		for _, site := range restartSites {
+			if err := e.Stop(ctx, site.web); err != nil {
+				t.Fatal("stop selected fixture", err)
+			}
+			if err := e.Start(ctx, site.web); err != nil {
+				t.Fatal("restart selected fixture", err)
+			}
+			if err := e.Healthy(ctx, site.web); err != nil {
+				t.Fatal("selected fixture restart health", err)
+			}
+			deadline := time.Now().Add(30 * time.Second)
+			for {
+				status, _, err := sites[1].request(ctx, "GET", "/api/v1/media/catalog/categories?media_type=music", nil)
+				if err == nil && status == http.StatusOK {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("real peer did not resume after restart", status, err)
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			current := perform(master, "GET", "/nodes/public-routing", nil)
+			observed, ok := current["ingress"].(map[string]any)
+			if !ok || observed["node_id"] != selected["node_id"] || observed["generation"] != selected["generation"] || observed["public_origin"] != selected["public_origin"] {
+				t.Fatal("restart changed the selected ingress or its generation")
+			}
+			fleetCheckEncrypted(t, ctx, sites[1], uploaded)
+			if os.Getenv("FRONTIERCLOUD_TEST_SEALED_HIDDEN") == "1" {
+				fleetCheckHiddenDirectory(t, ctx, sites[1], hiddenUploaded)
+			}
+			if sealedRelay {
+				fleetCheckEncryptedMode(t, ctx, sites[1], relayUploaded, "Relay")
+			}
+		}
+		checkCatalog()
+		t.Log("prepared encrypted tree, real selected peer and separate Web restarts passed")
+		return
 	}
 	t.Log("real private-CA native matrix fleet pairing/confirmation/configuration/heartbeat passed", kind, "2 Direct / 2 Relay")
 	if os.Getenv("FRONTIERCLOUD_TEST_MEDIA_BROWSER") == "1" {

@@ -14,7 +14,7 @@
     </aside>
     <div class="admin-mobile-toolbar">
         <button id="adminNavigationToggle" class="admin-navigation-toggle" type="button" aria-controls="adminNavigation" aria-expanded="false">功能导航</button>
-        <span>管理控制台</span><a href="/api/v1/media/">返回站点</a>
+        <span>管理控制台</span><a href="/api/v1/media/" data-public-site>返回站点</a>
     </div>
     <main class="admin-console">
         <section class="admin-module key-panel" data-admin-module="key">
@@ -117,7 +117,7 @@
                     </select>
                     <button type="submit">查询</button>
                 </form>
-                <div class="security-section-title">IP 状态摘要 · 明细请查询 MySQL</div>
+                <div class="security-section-title">IP 状态摘要</div>
                 <div id="banList" class="security-list"></div>
                 <div class="security-pagination">
                     <button id="securityPrev" type="button">上一页</button>
@@ -139,7 +139,7 @@
                 </div>
                 <div class="lyrics-toolbar">
                     <span id="lyricsModeStatus">请选择一份歌词</span>
-                    <button id="lyricsAutoLink" type="button">按同名一键关联</button>
+                    <button id="lyricsAutoLink" type="button" disabled>按同名一键关联</button>
                     <button id="lyricsRefresh" type="button">刷新</button>
                     <button id="lyricsSaveLink" class="hidden" type="button">保存关联</button>
                 </div>
@@ -188,18 +188,61 @@
             </div>
         </section>
         <section id="nodesPanel" class="admin-module nodes-panel" data-admin-module="nodes">
-            <button class="module-heading" type="button" aria-expanded="false"><span><strong>节点管理</strong><small>主节点控制存储配对、类型与额度</small></span><b>＋</b></button>
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>节点管理</strong><small>在线状态、CPU / 内存与容量</small></span><b>＋</b></button>
             <div class="module-content nodes-content">
-                <div class="nodes-toolbar"><strong id="nodeIdentity">尚未加载</strong><button id="nodesRefresh" type="button">刷新</button></div>
-                <div id="storagePoolSummary" class="nodes-pool-summary">Standalone 本地存储</div>
-                <div class="nodes-table-scroll"><table class="nodes-table"><thead><tr><th>节点 / HTTPS 地址</th><th>状态 / RTT / 心跳</th><th>Storage</th><th>Backup / Transport</th></tr></thead><tbody id="nodeRelationships"></tbody></table></div>
-                <details class="node-pairing-details"><summary>配对与初始化</summary>
-                <form id="nodePromotion" class="nodes-toolbar hidden"><select id="nodeRole" aria-label="节点角色"><option>Master</option></select><input id="nodeEndpoint" type="url" required placeholder="当前节点 HTTPS 根地址"><input id="masterLocalCapacity" type="number" min="1" max="10240" value="1" aria-label="Master 本地存储池额度 GiB" placeholder="Master Local GiB"><button type="submit">固定角色</button></form>
-                <div id="nodePairing" class="hidden"><div class="nodes-toolbar"><button id="nodeImportPair" type="button">导入存储节点密钥包</button></div><textarea id="nodePairPackage" rows="4" aria-label="一次性配对包" placeholder="配对包只用于建立当前关系，五分钟后过期"></textarea></div>
-                <form id="nodeReinitialize" class="nodes-toolbar hidden"><input id="nodeResetConfirmation" autocomplete="off" placeholder="输入当前节点 ID 确认重置"><button type="submit">重新初始化节点</button><span>撤销旧关系，保留媒体文件</span></form>
-                </details>
+                <header class="node-command">
+                    <div class="node-command-copy">
+                        <span class="node-eyebrow">集群 / 运维</span>
+                        <h2>集群概览</h2>
+                        <p id="nodeIdentity">尚未加载</p>
+                    </div>
+                    <button id="nodesRefresh" type="button">刷新</button>
+                </header>
+                <section class="node-ingress-card" aria-label="当前公共入口">
+                    <span class="node-eyebrow">当前公共入口</span>
+                    <strong id="nodeIngressAddress">等待加载</strong>
+                    <span id="nodeIngressStatus">公共站点的访问入口</span>
+                </section>
+                <div id="nodeFleetOverview" class="node-fleet-overview" aria-label="集群指标"></div>
+                <div id="storagePoolSummary" class="nodes-pool-summary">等待存储池数据</div>
+                <section class="node-inventory" aria-labelledby="nodeInventoryTitle">
+                    <div class="node-inventory-heading">
+                        <div><h3 id="nodeInventoryTitle">节点清单</h3><p>展开查看连接和容量；配置操作在节点设置中</p></div>
+                        <span id="nodeInventoryCount" aria-live="polite"></span>
+                    </div>
+                    <div class="node-inventory-filters">
+                        <label>搜索节点<input id="nodeInventorySearch" type="search" autocomplete="off" maxlength="255" placeholder="名称、地址或 NodeID"></label>
+                        <label>节点类型<select id="nodeInventoryType"><option value="all">全部类型</option><option value="local">本机</option><option value="follower">原生存储</option><option value="s3">S3 存储</option></select></label>
+                        <label>节点状态<select id="nodeInventoryStatus"><option value="all">全部状态</option><option value="ready">在线 / 就绪</option><option value="attention">需要关注</option><option value="offline">离线</option></select></label>
+                    </div>
+                    <div class="nodes-table-scroll"><table class="nodes-table" aria-label="集群节点"><thead><tr><th>节点</th></tr></thead><tbody id="nodeRelationships"></tbody></table></div>
+                    <p id="nodeInventoryEmpty" class="node-inventory-empty">等待节点数据</p>
+                </section>
+                <section class="node-setup" aria-labelledby="nodeSetupTitle">
+                    <h3 id="nodeSetupTitle">节点接入</h3>
+                    <details id="nodePairingSetup" class="node-pairing-details"><summary>配对与初始化</summary>
+                        <form id="nodePromotion" class="nodes-toolbar hidden"><select id="nodeRole" aria-label="节点角色"><option>Master</option></select><input id="nodeEndpoint" type="url" required placeholder="当前节点 HTTPS 根地址"><input id="masterLocalCapacity" type="number" min="1" max="10240" value="1" aria-label="Master 本地存储池额度 GiB" placeholder="Master Local GiB"><button type="submit">固定角色</button></form>
+                        <div id="nodePairing" class="hidden"><div class="nodes-toolbar"><button id="nodeImportPair" type="button">导入存储节点密钥包</button></div><textarea id="nodePairPackage" rows="4" aria-label="一次性配对包" placeholder="配对包只用于建立当前关系，五分钟后过期"></textarea></div>
+                        <form id="nodeReinitialize" class="nodes-toolbar hidden"><input id="nodeResetConfirmation" autocomplete="off" placeholder="输入当前节点 ID 确认重置"><button type="submit">重新初始化节点</button><span>撤销旧关系，保留媒体文件</span></form>
+                    </details>
+                </section>
                 <div id="nodeOperationStatus" role="status"></div>
             </div>
+        </section>
+
+        <section id="nodeRoutingPanel" class="admin-module nodes-panel" data-admin-module="nodeRouting">
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>公共入口与传输</strong><small>当前入口、入口切换与直连 / 中继策略</small></span><b>＋</b></button>
+            <div class="module-content nodes-content"><div id="nodeRoutingContent"></div><div id="nodeRoutingStatus" role="status"></div></div>
+        </section>
+
+        <section id="nodeBackupsPanel" class="admin-module nodes-panel" data-admin-module="nodeBackups">
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>备份恢复点</strong><small>备份健康、恢复点和失败状态</small></span><b>＋</b></button>
+            <div class="module-content nodes-content"><div id="nodeBackupsContent"></div><div id="nodeBackupsStatus" role="status"></div></div>
+        </section>
+
+        <section id="nodeSettingsPanel" class="admin-module nodes-panel" data-admin-module="nodeSettings">
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>节点设置</strong><small>资源配额、证书、节点接入与退役</small></span><b>＋</b></button>
+            <div class="module-content nodes-content"><div id="nodeSettingsContent"></div><div id="nodeSettingsStatus" role="status"></div></div>
         </section>
 
         <section id="migrationsPanel" class="admin-module nodes-panel" data-admin-module="migrations">
@@ -211,8 +254,26 @@
             </div>
         </section>
 
+        <section id="logsPanel" class="admin-module nodes-panel" data-admin-module="logs">
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>日志管理</strong><small>直连节点加密归档 · 浏览器解密查询</small></span><b>＋</b></button>
+            <div class="module-content nodes-content">
+                <p>主站保留最近12小时，总留存35天。归档和节点移动只在闲时执行。过期自动清理，不提供手动删除。</p>
+                <div class="nodes-toolbar"><select id="logDestination" aria-label="日志节点"><option value="">请选择直连日志节点</option></select><button id="logConfigure" type="button">启用日志节点</button><button id="logRefresh" type="button">刷新状态</button></div>
+                <div id="logHealth" role="status">尚未加载</div>
+                <form id="logQueryForm" class="log-query-form">
+                    <label>日期窗口<select id="logWindow"><option value="6">最近6小时</option><option value="24">最近1天</option><option value="72">最近3天</option><option value="168">最近7天</option><option value="custom">自定义日期</option></select></label>
+                    <label id="logStartLabel" hidden>开始日期<input id="logStart" type="date"></label><label id="logEndLabel" hidden>结束日期（含当天）<input id="logEnd" type="date"></label>
+                    <label>日志类型<select id="logType" required><option value="">请选择日志类型</option></select></label>
+                    <label>关键字<input id="logKeyword" type="search" maxlength="160" placeholder="仅在浏览器内搜索；窗口须小于12小时" disabled></label>
+                    <div class="nodes-toolbar"><button id="logQuery" type="submit" disabled>查询</button><button id="logCancel" type="button" disabled>取消并清空</button></div>
+                </form>
+                <p class="node-note">点击查询前不读取日志。时间按浏览器所在时区显示。近期日志每秒加密保存，最多5分钟合并封块；点击查询会封存当前类型的缓冲。查询分批读取，达到本次上限会明确提示。</p>
+                <div id="logQueryStatus" role="status">请选择日期与类型后查询</div><pre id="logResults" class="log-results" tabindex="0" aria-label="日志查询结果"></pre>
+            </div>
+        </section>
+
         <section id="usersPanel" class="admin-module users-panel" data-admin-module="users">
-            <button class="module-heading" type="button" aria-expanded="false"><span><strong>卡拉OK用户管理</strong><small>封禁、删除及空间配额；删除同时清除用户录音</small></span><b>＋</b></button>
+            <button class="module-heading" type="button" aria-expanded="false"><span><strong>卡拉OK用户管理</strong><small>管理封禁状态、账号注销和录音空间配额</small></span><b>＋</b></button>
             <div class="module-content">
                 <form id="usersFilterForm" class="nodes-toolbar"><input id="usersQuery" type="search" maxlength="64" placeholder="用户名（至少 2 个字符）"><button type="submit">查询</button><button id="usersRefresh" type="button">刷新</button></form>
                 <div id="usersSummary">尚未加载</div>
@@ -234,16 +295,17 @@
             <div class="upload-wrap">
                 <button id="uploadBtn">上传 ▾</button>
                 <div class="upload-menu">
-                    <button id="uploadFiles">上传文件</button>
-                    <button id="uploadFolder">上传文件夹</button>
-                    <button id="uploadLyrics">上传歌词</button>
-                    <button id="uploadLyricsFolder">上传歌词文件夹</button>
+                    <button id="uploadFiles" disabled>上传文件</button>
+                    <button id="uploadFolder" disabled>上传文件夹</button>
+                    <button id="uploadLyrics" disabled>上传歌词</button>
+                    <button id="uploadLyricsFolder" disabled>上传歌词文件夹</button>
                 </div>
             </div>
             <select id="uploadStorageMember" class="hidden" aria-label="上传目标存储成员"></select>
             <button id="download" disabled>下载</button>
             <button id="hide" disabled>隐藏</button>
             <button id="delete" disabled>删除</button>
+            <button id="retryDelete" class="hidden" disabled>继续删除</button>
             <input id="mediaSearch" class="media-search-input" type="search" maxlength="100" autocomplete="off" placeholder="请先进入 music、vido 或 lyrics 后搜索" disabled>
         </div>
 
@@ -260,6 +322,7 @@
         </section>
 
         <div class="selection" id="selection">未选择</div>
+        <div class="selection hidden" id="deleteStatus" role="status"></div>
         <div class="pathbar" id="pathbar">/</div>
         <div id="tree" class="tree"></div>
         </div>

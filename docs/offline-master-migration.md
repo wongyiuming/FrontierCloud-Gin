@@ -7,7 +7,7 @@
 
 
 This is an operator-only first-stage migration, **not** ordinary release
-promotion, a DB_TYPE switch, a new Master identity, or automatic failover. A
+promotion, a DB_TYPE switch, a Master identity change, or automatic failover. A
 normal native startup still rejects an unproven legacy Master/Follower.
 Deployment requires the owner's explicit migration authorization and successful
 tests of the exact immutable native source. Canonical branches are not merged

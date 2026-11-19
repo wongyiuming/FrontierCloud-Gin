@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 )
 
 func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) {
+	const plaintext = "ID3payload"
+	const storedSize = len(plaintext) + 16
 	ctx := context.Background()
 	transport := &clusterHTTP{routers: map[string]*gin.Engine{}}
 	mr, db, _, public, master := clusterFixture(t, "https://master.test", transport, false)
@@ -46,7 +49,8 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 	a := &Admin{public: public, settings: public.settings, network: resolver}
 	// Authentication and CSRF are tested through RegisterAdmin with real Redis.
 	// This fixture exercises the business handlers using an established session.
-	g := mr.Group("/api/v1/media/admin", func(c *gin.Context) { c.Set("admin_session", admin.Session{Hash: strings.Repeat("1", 64)}); c.Next() })
+	sessionHash := strings.Repeat("1", 64)
+	g := mr.Group("/api/v1/media/admin", func(c *gin.Context) { c.Set("admin_session", admin.Session{Hash: sessionHash}); c.Next() })
 	g.POST("/upload/session", a.reserveUpload)
 	g.PUT("/upload/session/:upload/bytes", a.uploadBytes)
 	g.POST("/upload/session/:upload/finalize", a.finalizeUpload)
@@ -62,8 +66,33 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 		mr.ServeHTTP(w, r)
 		return w
 	}
+	// Missing, malformed, unknown or ambiguous owner selection cannot create
+	// reservations or silently fall back to a different storage member.
+	for _, field := range []string{"member_id", "storage_member_id"} {
+		for _, requested := range []any{strings.Repeat("f", 32), "", nil, "auto", "https://follower.test"} {
+			request, _ := encryptedAdminUploadFixture(t, public, sessionHash, []byte(plaintext), gin.H{"site_type": "primary", "target_dir": "music/NoFallback", "filename": "song.mp3", field: requested})
+			body, _ := json.Marshal(request)
+			w := perform("POST", "/api/v1/media/admin/upload/session", string(body))
+			if w.Code != 409 {
+				t.Fatalf("explicit %s=%v was ignored: %d %s", field, requested, w.Code, w.Body.String())
+			}
+		}
+	}
+	var rejectedReservations, rejectedReservedBytes int64
+	if err := db.Database().QueryRow("SELECT COUNT(*) FROM cluster_upload_sessions").Scan(&rejectedReservations); err != nil || rejectedReservations != 0 {
+		t.Fatal("rejected explicit target created a reservation", rejectedReservations, err)
+	}
+	if err := db.Database().QueryRow("SELECT COALESCE(SUM(reserved_bytes),0) FROM cluster_storage_members").Scan(&rejectedReservedBytes); err != nil || rejectedReservedBytes != 0 {
+		t.Fatal("rejected explicit target changed capacity", rejectedReservedBytes, err)
+	}
 	for _, site := range []string{"primary", "direct", "relay"} {
+		identity, err := db.Nodes().ReadIdentity(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		memberID := identity.ID
 		if site != "primary" {
+			memberID = rel.PeerID
 			mode := "Direct"
 			if site == "relay" {
 				mode = "Relay"
@@ -72,14 +101,15 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 				t.Fatal(err)
 			}
 		}
-		body, _ := json.Marshal(map[string]any{"storage_mode": "plain", "site_type": site, "target_dir": "music/Upload-" + site, "filename": "song.mp3", "size_bytes": 10})
+		request, ciphertext := encryptedAdminUploadFixture(t, public, sessionHash, []byte(plaintext), gin.H{"storage_member_id": memberID, "site_type": "forged-unused-type", "target_dir": "music/Upload-" + site, "filename": "song.mp3"})
+		body, _ := json.Marshal(request)
 		w := perform("POST", "/api/v1/media/admin/upload/session", string(body))
 		var ticket media.UploadTicket
-		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil || ticket.Site != site {
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil || ticket.Site != site || ticket.MemberID != memberID {
 			t.Fatal("ticket", site, w.Code, w.Body.String())
 		}
 		if site == "direct" {
-			r := httptest.NewRequest("PUT", ticket.URL, strings.NewReader("ID3payload"))
+			r := httptest.NewRequest("PUT", ticket.URL, bytes.NewReader(ciphertext))
 			r.Header.Set("Origin", "https://master.test")
 			w = httptest.NewRecorder()
 			fr.ServeHTTP(w, r)
@@ -92,7 +122,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 			}
 			w = perform("POST", "/api/v1/media/admin/upload/session/"+ticket.ID+"/finalize", `{"object_id":"forged","etag":"fake"}`)
 		} else {
-			w = perform("PUT", ticket.URL, "ID3payload")
+			w = perform("PUT", ticket.URL, string(ciphertext))
 		}
 		if w.Code != 200 || !strings.Contains(w.Body.String(), ticket.MediaID) {
 			t.Fatal("publication", site, w.Code, w.Body.String())
@@ -109,7 +139,9 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 			t.Fatal("cancel removed completed catalog", err)
 		}
 	}
-	body := `{"storage_mode":"plain","site_type":"relay","target_dir":"music/CancelRemote","filename":"cancel.mp3","size_bytes":10}`
+	request, ciphertext := encryptedAdminUploadFixture(t, public, sessionHash, []byte(plaintext), gin.H{"storage_member_id": rel.PeerID, "target_dir": "music/CancelRemote", "filename": "cancel.mp3"})
+	bodyBytes, _ := json.Marshal(request)
+	body := string(bodyBytes)
 	w := perform("POST", "/api/v1/media/admin/upload/session", body)
 	var ticket media.UploadTicket
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil {
@@ -120,7 +152,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 		t.Fatal(err)
 	}
 	// Simulate physical upload followed by a lost response before Master commit.
-	if _, err := master.UploadStorage(ctx, v, strings.NewReader("ID3payload")); err != nil {
+	if _, err := master.UploadStorage(ctx, v, bytes.NewReader(ciphertext)); err != nil {
 		t.Fatal(err)
 	}
 	delete(transport.routers, "https://follower.test")
@@ -155,7 +187,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 		t.Fatal("ordinary deletion did not remove object", object, err)
 	}
 	var used, reserved int64
-	if err := fdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members").Scan(&used, &reserved); err != nil || used != 20 || reserved != 0 {
+	if err := fdb.Database().QueryRow("SELECT used_bytes,reserved_bytes FROM cluster_storage_members").Scan(&used, &reserved); err != nil || used != 2*int64(storedSize) || reserved != 0 {
 		t.Fatal("Follower quota", used, reserved, err)
 	}
 	w = perform("GET", "/api/v1/media/admin/storage-pool", "")
@@ -172,7 +204,7 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 		t.Fatal("offline durable delete", w.Code, w.Body.String())
 	}
 	var masterUsed int64
-	if err := db.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_kind='Follower'").Scan(&masterUsed); err != nil || masterUsed != 20 {
+	if err := db.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_kind='Follower'").Scan(&masterUsed); err != nil || masterUsed != 2*int64(storedSize) {
 		t.Fatal("uncertain bytes refunded", masterUsed, err)
 	}
 	if _, err := public.media.ReserveMasterUpload(ctx, "song.mp3", "music/Upload-direct", "", "relay", 10, 255, store.AdminAudit{}); err == nil {
@@ -182,10 +214,10 @@ func TestMasterSessionHTTPPrimaryDirectRelayFinalizeCancelAndPool(t *testing.T) 
 	if err := public.media.RetryGlobalDeletes(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_kind='Follower'").Scan(&masterUsed); err != nil || masterUsed != 10 {
+	if err := db.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members WHERE member_kind='Follower'").Scan(&masterUsed); err != nil || masterUsed != int64(storedSize) {
 		t.Fatal("Master cleanup quota", masterUsed, err)
 	}
-	if err := fdb.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members").Scan(&used); err != nil || used != 10 {
+	if err := fdb.Database().QueryRow("SELECT used_bytes FROM cluster_storage_members").Scan(&used); err != nil || used != int64(storedSize) {
 		t.Fatal("Follower cleanup quota", used, err)
 	}
 	w = perform("POST", "/api/v1/media/admin/directory/rename", `{"path":"music/Upload-relay","new_name":"Renamed-relay"}`)

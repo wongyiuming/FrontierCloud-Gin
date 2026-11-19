@@ -1,21 +1,21 @@
 # Browser media encryption contract
 
-Every file or folder selection requires a new explicit `plain` or `encrypted`
-decision. Closing the choice cancels that selection. Missing modes, changed
-descriptors and invalid preparation tokens are rejected by the server. Crypto
-errors never select plaintext, and previously selected modes are not persisted.
+Every new file or folder upload uses browser encryption. The picker opens
+directly. Missing or changed descriptors, invalid preparation tokens and
+plaintext upload requests are rejected by the server.
 
 ## Data and key paths
 
 The browser encrypts each complete upload into private temporary ciphertext
 storage before reserving its storage destination. It reads at most one 1 MiB
 plaintext chunk at a time; the temporary file is removed after completion or
-failure. Master and storage receive ciphertext. Master-managed lyrics use the
-same format without moving lyric relations to storage nodes. Existing plaintext
-objects remain plaintext.
+failure. The Master and storage nodes receive ciphertext, including for
+Master-owned objects. Master-managed lyrics use the same format and the Master
+retains lyric relations. Existing content can be downloaded before cutover and
+uploaded again through this same workflow.
 
-The configured single-file upload limit applies to plaintext size in both
-modes. Encrypted transport allows the bounded GCM tag overhead above that
+The configured single-file upload limit applies to the input file size.
+Encrypted transport allows the bounded GCM tag overhead above that
 limit; preparation and upload enforce the same descriptor and size rules.
 
 Version 1 uses AES-256-GCM with independent 1 MiB chunks and 128-bit tags. A file
@@ -50,15 +50,17 @@ without replacing those algorithms or adding expensive playback transformations.
 
 An authorization is bound to either the authenticated Admin session or an
 HttpOnly same-site browser cookie. Key endpoints require same-origin requests
-and HTTPS, with a loopback-only development exception. Public authorization
-rechecks current visibility and object ownership for each envelope. A public session
-cannot grant Admin access, grant hidden content, or transfer to another cookie.
+and HTTPS, with a loopback-only development exception. Public media authorization
+checks the current object and ownership for each envelope. Hiding an audio or
+video directory filters the default list. An exact address or the reveal gesture
+uses the same playback authorization. A public session is limited to its own cookie
+and public operations.
 
 Public lyric key and ciphertext requests also require a current relation to at
 least one visible, available audio source. An orphan lyric or one referenced
 only by hidden sources is refused. A shared lyric remains accessible through
-a visible source; the hidden source itself still cannot authorize playback or
-a new recording snapshot. These checks run again for each request.
+a visible source. A hidden source alone cannot authorize a lyric or a new
+recording snapshot. These checks run again for each request.
 
 The session has a fixed 15-minute lifetime. Multiple files, Range requests,
 seeks and continuous playback reuse its wrapping key; file requests do not
@@ -129,6 +131,14 @@ verification. Before every cached chunk, the page requests a fresh server key
 decision with the expected file ID. Hidden, deleted and replaced sources fail
 closed even while their earlier envelope is still live. Pages without the
 revalidation acknowledgement fall back to normal authenticated source reads.
+
+In the sealed catalog, Admin directory hiding commits the visibility rule
+before success and closes new public key and source authorization for its
+descendants. Previously issued Direct and S3 bearer grants expire on their
+original deadlines. Transfers already admitted may continue. Restoring a
+directory clears its explicit rule and supported descendant directory rules
+while keeping any rule above it and preserving placements and ciphertext.
+
 A changed encryption descriptor cannot reuse an earlier object's
 entry. Page exit still revokes that page's grants; worker restart loses the
 ciphertext cache. Renames preserve file

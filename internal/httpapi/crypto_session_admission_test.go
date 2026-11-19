@@ -75,8 +75,15 @@ func TestPublicCryptoSessionCreationLimitsCookiesAndTrustedIPWithoutAffectingAdm
 	}
 	// A rejected creation neither revokes nor renews the first live grant.
 	metadata, _ := mediacrypto.NewMetadata(20)
+	bindingContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	bindingContext.Request = httptest.NewRequest("POST", "/api/v1/media/crypto/key", nil)
+	bindingContext.Request.AddCookie(cookie)
+	binding, err := p.browserBinding(bindingContext, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for range 3 {
-		envelope, err := p.crypto.Wrap("browser:"+cookie.Value, grant.SessionID, metadata)
+		envelope, err := p.crypto.Wrap(binding, grant.SessionID, metadata)
 		if err != nil || envelope.ExpiresAt != grant.ExpiresAt {
 			t.Fatal("creation limit changed existing authorization", err)
 		}

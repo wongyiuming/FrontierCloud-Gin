@@ -1,4 +1,4 @@
-/* Admin node operations: Storage, Backup and connection state. */
+/* Admin node operations: ingress, fleet status and node controls. */
 (() => {
     const $ = id => document.getElementById(id);
     const panel = $('nodesPanel');
@@ -6,10 +6,21 @@
 
     let refreshTimer = null;
     let refreshQueue = Promise.resolve();
+    let s3RefreshGeneration = 0;
+    let s3Controller = null;
+    let s3CreationSummary = null;
+    let s3CreationForm = null;
+    let inventory = [];
+    let retirementInventoryAvailable = false;
+    let s3InventoryState = '';
     const certificateViews = new Map();
     const retirementViews = new Map();
     const expandedNodes = new Set();
-    const setStatus = text => { $('nodeOperationStatus').textContent = text || ''; };
+    const expandedOperations = new Set();
+    const modulePanels = [panel, $('nodeRoutingPanel'), $('nodeBackupsPanel'), $('nodeSettingsPanel')].filter(Boolean);
+    const setStatus = text => { for (const id of ['nodeOperationStatus','nodeRoutingStatus','nodeBackupsStatus','nodeSettingsStatus']) if ($(id)) $(id).textContent = text || ''; };
+    $('nodeRoutingContent')?.append(panel.querySelector('.node-ingress-card'));
+    $('nodeSettingsContent')?.append(panel.querySelector('.node-setup'));
     const visible = (id, show) => $(id).classList.toggle('hidden', !show);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     const gib = value => `${(Number(value || 0) / 1073741824).toFixed(2)} GiB`;
@@ -80,6 +91,66 @@
 
     function pill(text, tone = 'muted') { return make('span', `node-pill ${tone}`, text); }
 
+    function nodeHeading(kind, name, detail, memberId) {
+        const identity = make('div', 'node-card-identity');
+        const icon = make('span', `node-type-icon ${kind}`, {local: '本', follower: '存', s3: 'S3'}[kind]);
+        icon.setAttribute('aria-hidden', 'true');
+        const title = make('div', 'node-card-title');
+        title.append(make('strong', '', name));
+        if (detail) title.append(make('small', '', detail));
+        if (memberId) title.append(make('small', 'node-member-id', `NodeID ${memberId}`));
+        identity.append(icon, title);
+        return identity;
+    }
+
+    function nodeConnection(relation, observed) {
+        const connection = observed?.connection || {};
+        const status = connection.status || relation?.status;
+        const latency = Number(connection.current_rtt_ms ?? relation?.rtt_ms);
+        const retirement = relation?.state === 'retiring' ? '退役中' : relation?.state === 'revoked' ? (relation.summary?.retirement?.completed_at ? '已退役' : '已撤销') : '';
+        return {
+            category: retirement ? 'attention' : status === 'online' ? 'ready' : status === 'offline' ? 'offline' : 'attention',
+            label: retirement || ({online: '在线', offline: '离线', degraded: '降级', pending: '等待连接'}[status] || '状态待确认'),
+            latency: Number.isFinite(latency) && latency > 0 ? `${latency} ms` : '未测得',
+        };
+    }
+
+    function filterInventory() {
+        const term = ($('nodeInventorySearch').value || '').trim().toLowerCase();
+        const kind = $('nodeInventoryType').value || 'all';
+        const status = $('nodeInventoryStatus').value || 'all';
+        let shown = 0;
+        for (const item of inventory) {
+            item.row.hidden = (kind !== 'all' && item.kind !== kind) ||
+                (status !== 'all' && item.status !== status) || !item.text.includes(term);
+            if (!item.row.hidden) shown++;
+        }
+        const count = $('nodeInventoryCount');
+        const text = `显示 ${shown} / ${inventory.length} 个节点`;
+        if (count.textContent !== text) count.textContent = text;
+        const empty = $('nodeInventoryEmpty');
+        empty.hidden = shown !== 0;
+        if (shown === 0) {
+            const includesS3 = kind === 'all' || kind === 's3';
+            empty.textContent = includesS3 && s3InventoryState === 'loading' ? '正在读取 S3 节点状态' :
+                includesS3 && s3InventoryState === 'unavailable' ? 'S3 节点状态暂不可用，请刷新重试' :
+                term || kind !== 'all' || status !== 'all' ? '没有符合条件的节点，请调整筛选' : '当前没有节点可显示';
+        }
+    }
+
+    function addInventoryRow(row, kind, status, ...search) {
+        inventory.push({row, kind, status, text: search.filter(Boolean).join(' ').toLowerCase()});
+        $('nodeRelationships').append(row);
+    }
+
+    function renderIngress(node, routing) {
+        const address = routing?.ingress?.public_origin;
+        $('nodeIngressAddress').textContent = address || '—';
+        $('nodeIngressStatus').textContent = address
+            ? (routing.ingress.generation ? `路由版本 ${routing.ingress.generation}` : '入口已登记')
+            : node.role === 'Master' ? '入口状态暂不可用' : node.role === 'Follower' ? '公共入口由主站管理' : '当前为单机模式';
+    }
+
     function kv(items) {
         const grid = make('div', 'node-kv');
         for (const [label, value] of items) grid.append(make('span', '', label), make('span', '', String(value)));
@@ -118,11 +189,16 @@
 
     async function loadData() {
         const node = await api('/api/v1/media/admin/nodes');
+        retirementInventoryAvailable = node.retirement_inventory_available === true;
         let observability = {members: [], relationships: []};
         try { observability = await api('/api/v1/media/admin/nodes/observability'); }
         catch (error) { console.warn('node observability unavailable', error); }
-        const s3 = node.role === 'Master' ? await api('/api/v1/media/admin/nodes/s3') : {members: []};
-        return {node, observability, s3: Array.isArray(s3) ? s3 : (s3.members || s3.items || [])};
+        let routing = null;
+        if (node.role === 'Master') {
+            try { routing = await api('/api/v1/media/admin/nodes/public-routing'); }
+            catch (error) { console.warn('public routing unavailable', error); }
+        }
+        return {node, observability, routing};
     }
 
     function s3Request(path, method, body) {
@@ -156,9 +232,11 @@
             style.value = member?.location?.style || 'auto'; styleLabel.append(style); form.append(styleLabel);
             const capacity = field('capacity', '分配配额（GiB）', 'number', String((member?.allocated_bytes || 1073741824) / 1073741824), true);
             capacity.min = '1'; capacity.max = '10240'; capacity.step = '0.01';
-            const enabledLabel = make('label', 'node-s3-enabled');
-            const enabled = make('input'); enabled.type = 'checkbox'; enabled.checked = Boolean(member?.storage_enabled);
-            fields.enabled = enabled; enabledLabel.append(enabled, document.createTextNode('允许新上传（需先通过检查）')); form.append(enabledLabel);
+            if (member) {
+                const enabledLabel = make('label', 'node-s3-enabled');
+                const enabled = make('input'); enabled.type = 'checkbox'; enabled.checked = Boolean(member.storage_enabled);
+                fields.enabled = enabled; enabledLabel.append(enabled, document.createTextNode('允许新上传（需先通过检查）')); form.append(enabledLabel);
+            }
         }
         field('access_key', member && !recovery ? 'Access Key（留空保留）' : 'Access Key', 'password', '', !member || recovery);
         field('secret_key', member && !recovery ? 'Secret Key（留空保留）' : 'Secret Key', 'password', '', !member || recovery);
@@ -183,7 +261,7 @@
             const payload = recovery ? {revision: member.revision, credentials} : {
                 ...(member ? {revision: member.revision} : {}), name: fields.name.value.trim(),
                 location: {endpoint: fields.endpoint.value.trim(), bucket: fields.bucket.value.trim(), region: fields.region.value.trim(), prefix: fields.prefix.value.trim(), style: fields.style.value},
-                allocated_bytes: Math.round(Number(fields.capacity.value) * 1073741824), enabled: fields.enabled.checked,
+                allocated_bytes: Math.round(Number(fields.capacity.value) * 1073741824), enabled: fields.enabled?.checked ?? false,
                 ...(credentials ? {credentials} : {}),
             };
             submit.disabled = true;
@@ -197,17 +275,18 @@
         return form;
     }
 
-    function s3Card(member) {
-        const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
+    function s3Card(member, configurationMode) {
+        const row = make('tr', 'node-card-row'), cell = make('td');
         const card = make('article', 'node-card'), header = make('header', 'node-card-header');
-        const title = make('div', 'node-card-title');
-        title.append(make('strong', '', member.name || member.location?.bucket || 'S3 存储'), make('small', '', member.location?.endpoint || '地址不可用'));
         const badges = make('div', 'node-card-badges');
-        const state = member.cleanup_only ? '仅清理' : member.probe_state === 'ready' ? '检查通过' : member.probe_state === 'running' ? '检查中' : '待检查';
+        const legacyConfiguration = configurationMode === 'legacy';
+        const state = member.cleanup_only ? '仅清理' : member.probe_state === 'ready' ? (legacyConfiguration ? '检查通过' : '上次检查通过') : member.probe_state === 'running' ? '检查中' : '待检查';
         badges.append(pill('S3', 'muted'), pill(member.storage_enabled ? '已启用' : '未启用', member.storage_enabled ? 'good' : 'muted'), pill(state, member.cleanup_only ? 'warn' : 'muted'));
-        header.append(title, badges);
-        collapsibleNodeCard(card, header, member.member_id,
-            `已使用 / 已分配 ${gib(member.used_bytes)} / ${gib(member.allocated_bytes)} · 预留 ${gib(member.reserved_bytes)} · 物理容量未知`, () => {
+        header.append(nodeHeading('s3', member.name || member.location?.bucket || 'S3 存储', member.location?.endpoint || '地址不可用'), badges);
+        collapsibleNodeCard(card, header, member.member_id, [
+            ['已使用 / 已分配', `${gib(member.used_bytes)} / ${gib(member.allocated_bytes)}`],
+            ['预留容量', gib(member.reserved_bytes)], ['物理容量', '物理容量未知'],
+        ], () => {
                 const details = make('div', 'node-s3-details');
                 details.append(kv([['存储桶', member.location?.bucket || '-'], ['对象前缀', member.location?.prefix || '/'], ['外部流量', '未知'], ['凭据到期', member.credential_expires_at ? localTime(member.credential_expires_at) : '长期凭据'], ['状态', member.error_code || state]]));
                 const actions = make('div', 'node-card-actions');
@@ -220,21 +299,44 @@
                     return 'S3 配置已移除';
                 }, 'danger'));
                 details.append(actions);
-                const configure = make('details'); configure.append(make('summary', '', '配置与凭据'), s3Form(member)); details.append(configure);
-                const recovery = make('details'); recovery.append(make('summary', '', '未决清理凭据'), s3Form(member, true)); details.append(recovery);
+                if (legacyConfiguration) {
+                    const configure = make('details'); configure.append(make('summary', '', '配置与凭据'), s3Form(member)); details.append(configure);
+                    const recovery = make('details'); recovery.append(make('summary', '', '未决清理凭据'), s3Form(member, true)); details.append(recovery);
+                } else if (configurationMode === 'sealed') {
+                    const enabled = Boolean(member.storage_enabled);
+                    const change = button(enabled ? '停用新上传' : '启用新上传', async () => {
+                        await s3Request(`/${encodeURIComponent(member.member_id)}`, 'PATCH', {
+                            revision: member.revision, name: member.name, location: member.location,
+                            allocated_bytes: member.allocated_bytes, enabled: !enabled,
+                        });
+                        return enabled ? '已停用新上传' : '已启用新上传';
+                    }, 'apply');
+                    change.disabled = enabled ? member.used_bytes !== 0 || member.reserved_bytes !== 0 : member.probe_state !== 'ready' || member.cleanup_only;
+                    actions.append(change);
+                    details.append(make('p', 'node-note', '重启后需重新检查。仅从未使用的节点可停用。当前密文存储暂不支持修改配置或凭据。'));
+                } else {
+                    details.append(make('p', 'node-note', '配置能力待确认，请刷新后重试。'));
+                }
                 return [details];
             });
         cell.append(card); row.append(cell); return row;
     }
 
-    function s3Creation(master) {
+    function s3Creation(master, state) {
+        s3InventoryState = master ? state : '';
         let section = $('nodeS3Creation');
         if (!section) {
             section = make('details', 'node-pairing-details'); section.id = 'nodeS3Creation';
-            section.append(make('summary', '', '添加 S3 存储'), s3Form());
-            panel.querySelector('.nodes-table-scroll').after(section);
+            s3CreationSummary = make('summary');
+            s3CreationForm = s3Form();
+            section.append(s3CreationSummary, s3CreationForm);
+            const anchor = $('nodePairingSetup') || panel.querySelector('.nodes-table-scroll');
+            anchor.after(section);
         }
         section.hidden = !master;
+        s3CreationSummary.textContent = state === 'loading' ? 'S3 状态加载中' : state === 'unavailable' ? 'S3 状态暂不可用，请刷新后重试' : '添加 S3 存储';
+        s3CreationForm.hidden = state !== 'ready';
+        filterInventory();
     }
 
     function ensureOverview() {
@@ -265,13 +367,16 @@
             return;
         }
         const pool = node.storage_pool || {};
-        const followers = (observed.members || []).filter(item => item.member_kind === 'Follower');
-        const online = followers.filter(item => item.connection?.status === 'online').length;
-        const backupEnabled = followers.filter(item => item.backup?.enabled).length;
-        const backupHealthy = followers.filter(item => item.backup?.health === 'healthy').length;
+        const members = new Map((observed.members || []).map(item => [item.member_id, item]));
+        const relations = new Map((node.relationships || []).map(item => [item.relationship_id, item]));
+        const followers = (pool.members || []).filter(item => item.member_kind === 'Follower');
+        const online = followers.filter(item => nodeConnection(relations.get(item.relationship_id), members.get(item.member_id)).category === 'ready').length;
+        const backups = followers.map(item => members.get(item.member_id)?.backup || item.backup);
+        const backupEnabled = backups.filter(item => item?.enabled).length;
+        const backupHealthy = backups.filter(item => item?.enabled && item.health === 'healthy').length;
         const poolFacts = storageFacts(pool);
         overview.append(
-            overviewCard('存储节点', `${online} / ${followers.length}`, online === followers.length ? '全部在线' : '存在离线或降级节点', 'good'),
+            overviewCard('原生存储节点', `${online} / ${followers.length}`, !followers.length ? '尚未配对存储节点' : online === followers.length ? '全部在线' : '存在离线或待确认节点', online === followers.length ? 'good' : 'compute'),
             overviewCard('Storage', physicalStorageText(poolFacts), `${poolFacts.physicalKnown ? '物理 used / all · ' : ''}已使用 / 已分配 ${gib(poolFacts.used)} / ${gib(poolFacts.allocated)}`, 'storage'),
             overviewCard('Backup', `${backupHealthy} / ${backupEnabled}`, backupEnabled ? '健康 / 已启用备份节点' : '尚未启用备份节点', 'backup'),
         );
@@ -294,6 +399,15 @@
             ['连续失败', connection.failures ?? relation?.failures ?? 0],
             ['历史恢复', connection.recoveries ?? relation?.recoveries ?? 0],
         ]));
+        const usage = observed?.observed?.host_usage;
+        if (usage) {
+            const facts = [];
+            if (Number.isInteger(usage.cpu_percent)) facts.push(['整机 CPU', `${usage.cpu_percent}%`]);
+            if (Number.isSafeInteger(usage.memory_used_bytes) && usage.memory_total_bytes > 0) {
+                facts.push(['整机内存（已用 / 总量）', `${gib(usage.memory_used_bytes)} / ${gib(usage.memory_total_bytes)}`]);
+            }
+            if (facts.length) section.append(kv(facts));
+        }
         section.append(make('div', 'node-note', state === 'local' ? 'Master Local 是本机资源。' : 'RTT 是 Master 到该节点 HTTPS 控制面的往返时间。'));
         return section;
     }
@@ -328,7 +442,7 @@
             ['下次计划', backup.next_due ? `${localTime(backup.next_due)} · ${relativeTime(backup.next_due)}` : '-'],
             ['最近校验', backup.checksum ? `SHA256 ${shortId(backup.checksum)}…` : '-'],
         ]), syncLine(observed?.sync?.backup || (member.member_kind === 'MasterLocal' ? 'effective' : 'awaiting')),
-        make('div', 'node-note', 'Master 每 24 小时向启用 Backup 的存储节点 写入业务恢复点；失败约 5 分钟后重试。'));
+        make('div', 'node-note', 'Master 每 24 小时写入加密状态恢复点，包含数据库与歌词；失败约 5 分钟后重试。恢复仍需保留主站密钥和原媒体资源。'));
         return section;
     }
 
@@ -383,14 +497,7 @@
         }
         const config = configBox(member);
         const actions = make('div', 'node-card-actions');
-        const mode = document.createElement('select');
-        mode.setAttribute('aria-label', `${relation.peer_endpoint || '存储节点'} 数据传输模式`);
-        mode.title = 'Relay 由 Master 中转业务数据；Direct 允许数据面直接访问 存储节点。';
-        for (const value of ['Relay', 'Direct']) { const option = document.createElement('option'); option.value = value; option.textContent = value; mode.append(option); }
-        mode.value = relation.mode;
-        if (relation.summary?.storage_transport) { mode.disabled = true; mode.title = '网络部署类型固定：直连使用 443，中继使用通信高端口；切换需要维护期重新部署。'; }
-        mode.onchange = () => action(() => post(`/${relation.relationship_id}/mode`, {mode: mode.value}));
-        actions.append(mode, button('应用资源配置', async () => {
+        actions.append(button('应用资源配置', async () => {
             await post(`/${relation.relationship_id}/resources`, {
                 storage_enabled: config.storageEnabled.checked,
                 storage_capacity_gib: config.storageEnabled.checked ? Number(config.capacity.value) : 0,
@@ -405,49 +512,137 @@
     function collapsibleNodeCard(card, header, identity, summary, renderDetails) {
         const details = make('div', 'node-card-details');
         details.id = `node-details-${identity}`;
-        const toggle = make('button', 'node-details-toggle');
-        toggle.type = 'button';
-        toggle.setAttribute('aria-controls', details.id);
+        const toggle = make('span', 'node-details-toggle');
+        toggle.setAttribute('aria-hidden', 'true');
+        header.setAttribute('role', 'button');
+        header.tabIndex = 0;
+        header.setAttribute('aria-controls', details.id);
         let rendered = false;
         const sync = () => {
             const expanded = expandedNodes.has(identity);
-            toggle.textContent = expanded ? '收起' : '展开';
+            toggle.textContent = expanded ? '收起详情' : '查看详情';
             toggle.setAttribute('aria-expanded', String(expanded));
+            header.setAttribute('aria-expanded', String(expanded));
             details.hidden = !expanded;
             if (expanded && !rendered) {
                 details.append(...renderDetails());
                 rendered = true;
             }
         };
-        toggle.onclick = () => {
+        const changeExpanded = () => {
             if (expandedNodes.has(identity)) expandedNodes.delete(identity);
             else expandedNodes.add(identity);
             sync();
         };
-        header.append(toggle);
-        card.append(header, make('p', 'node-card-summary', summary), details);
+        header.onclick = () => {
+            if (window.getSelection()?.toString()) return;
+            changeExpanded();
+        };
+        header.onkeydown = event => {
+            if (event.target !== header || event.repeat || !['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            changeExpanded();
+        };
+        const facts = make('div', 'node-card-summary');
+        for (const [label, value] of summary) {
+            const fact = make('div', 'node-row-fact');
+            fact.append(make('small', '', label), make('strong', '', value));
+            facts.append(fact);
+        }
+        header.append(facts, toggle);
+        card.append(header, details);
         sync();
     }
 
-    function memberCard(member, relation, observed, localCertificate) {
+    function transportPolicyPanel(member, policy, ingress, selectionEnabled = false, targetOrigin = '') {
+        const section = make('section', 'node-resource-panel');
+        const isMaster = member.member_kind === 'MasterLocal';
+        section.append(make('strong', '', '公共资源访问'));
+        const labels = {confirmation_required: '历史设置待确认', retained: '当前入口使用 Local，非入口策略已保留', legacy_confirmed: '历史设置已确认，节点应用尚未验证', blocked: '目标策略待应用或条件未就绪', applied: '节点已确认策略', inactive: '关系未激活'};
+        const applicationLabels = {pending: '等待节点确认', failed: '节点暂不能应用', applied: '节点已确认'};
+        section.append(kv([
+            ['当前入口', ingress?.node_id === member.member_id ? '此节点' : '其他节点'],
+            ['当前有效访问方式', policy.effective_transport || '未知'],
+            ['非入口时的配置策略', policy.configured_transport || '待选择'],
+            ['配置版本', String(policy.revision || 0)],
+            ['节点确认的策略', policy.applied_transport || '尚未验证'],
+            ['节点确认的资源地址', policy.applied_origin || '未适用'],
+            ['节点应用状态', isMaster && policy.state === 'retained' ? (policy.applied_transport ? '本机已确认非入口策略' : '非入口时待确认') : applicationLabels[policy.peer_application_status] || '尚未请求'],
+            ['历史路由模式', policy.legacy_transport || '未适用'],
+            ['状态', labels[policy.state] || '未知'],
+        ]));
+        const mode = make('select');
+        mode.setAttribute('aria-label', '非入口时资源传输策略');
+        if (!policy.configured_transport) {
+            const empty = make('option', '', '请选择'); empty.value = ''; mode.append(empty);
+        }
+        for (const value of ['Direct', 'Relay']) {
+            const option = make('option', '', value); option.value = value; mode.append(option);
+        }
+        mode.value = policy.configured_transport || '';
+        mode.disabled = policy.state === 'inactive';
+        const save = button('保存非入口策略', async () => {
+            if (!mode.value) throw new Error('请选择 Direct 或 Relay');
+            const result = await post(`/public-routing/transport/${encodeURIComponent(member.member_id)}`, {configured_transport: mode.value, revision: policy.revision});
+            return result.state === 'blocked' ? '目标策略已保存但尚未生效；请检查节点应用状态' : result.state === 'legacy_confirmed' ? '已确认当前历史策略；节点应用尚未验证' : '策略已保存；请检查当前状态';
+        }, 'apply');
+        save.disabled = policy.state === 'inactive';
+        section.append(mode, save, make('p', 'node-note', isMaster
+            ? '保存策略不会更改当前路径或启用其他入口。'
+            : '节点确认表示节点接受了策略；实际访问方式及链路验证仍需分别确认。'));
+        if (!isMaster) {
+            const check = button('检查入口候选', async () => {
+                const result = await post(`/public-routing/candidates/${encodeURIComponent(member.member_id)}/check`, {});
+                return result.selection_enabled
+                    ? `候选 ${result.origin} 的身份和代理链检查通过；可以显式选择公共入口`
+                    : `候选 ${result.origin} 的身份和代理链检查通过；完整能力验证及入口选择尚未开放`;
+            });
+            check.disabled = policy.state === 'inactive';
+            section.append(check);
+        }
+        const selectIngress = make('button', '', '选择为公共入口');
+        selectIngress.type = 'button';
+        selectIngress.disabled = !selectionEnabled || !ingress?.generation || !ingress.public_origin || !targetOrigin || ingress.node_id === member.member_id || policy.state === 'inactive';
+        selectIngress.onclick = async () => {
+            if (selectIngress.disabled || !window.confirm(`确认切换公共入口？\n\n当前入口 ${ingress.public_origin}\n目标入口 ${targetOrigin}`)) return;
+            selectIngress.disabled = true;
+            try {
+                await action(async () => {
+                    const result = await post('/public-routing/select', {member_id: member.member_id, generation: ingress.generation, public_origin: targetOrigin});
+                    return `已选择公共入口 ${result.public_origin}`;
+                });
+            } finally { selectIngress.disabled = false; }
+        };
+        section.append(selectIngress);
+        if (!selectionEnabled) section.append(make('p', 'node-note', '入口选择等待完整能力验证。'));
+        return section;
+    }
+
+    function memberCard(member, relation, observed, localCertificate, policy, ingress, selectionEnabled, masterPublicOrigin) {
         const row = document.createElement('tr'); row.className = 'node-card-row';
-        const cell = document.createElement('td'); cell.colSpan = 4;
+        const cell = document.createElement('td');
         const card = make('article', 'node-card');
         const header = make('header', 'node-card-header');
-        const title = make('div', 'node-card-title');
-        title.append(make('strong', '', member.member_kind === 'MasterLocal' ? 'Master Local' : relation?.peer_endpoint || '存储节点'), make('small', '', member.member_kind === 'MasterLocal' ? '本机资源' : member.transport || relation?.mode || 'Storage'));
-        if (member.member_kind === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${member.member_id || '未知'}`));
+        const local = member.member_kind === 'MasterLocal';
+        const endpoint = relation?.peer_endpoint;
+        const name = member.name || relation?.summary?.servername;
+        const connection = nodeConnection(relation, observed);
+        const transport = member.transport || relation?.mode || 'Local';
+        const transportTone = {direct: 'transport-direct', relay: 'transport-relay'}[transport.toLowerCase()] || 'muted';
         const badges = make('div', 'node-card-badges');
-        badges.append(pill(member.member_kind === 'MasterLocal' ? 'LOCAL' : String(relation?.status || 'UNKNOWN').toUpperCase(), member.member_kind === 'MasterLocal' ? 'info' : relation?.status === 'online' ? 'good' : 'bad'), pill(member.transport || relation?.mode || 'Local', 'muted'));
-        header.append(title, badges);
+        badges.append(pill(local ? '本机' : connection.label, local ? 'info' : connection.category === 'ready' ? 'good' : connection.category === 'offline' ? 'bad' : 'warn'), pill(transport, transportTone));
+        if (ingress?.node_id === member.member_id) badges.append(pill('当前入口', 'info'));
+        header.append(nodeHeading(local ? 'local' : 'follower', local ? 'Master Local' : name || endpoint || '存储节点',
+            local ? '主站本机存储' : name && endpoint ? endpoint : '', local ? '' : member.member_id), badges);
         const facts = storageFacts(observed?.storage || member);
-        collapsibleNodeCard(card, header, member.member_id, `已使用 / 已分配 ${gib(facts.used)} / ${gib(facts.allocated)} · Backup ${member.backup?.enabled ? '已启用' : '未启用'}`, () => {
+        const backup = observed?.backup || member.backup;
+        const backupStatus = {healthy: '健康', running: '备份中', failed: '失败', stale: '过期', 'waiting-first-backup': '等待首份备份'};
+        collapsibleNodeCard(card, header, member.member_id, [
+            ['控制面 RTT', local ? '本机' : connection.latency], ['已使用 / 已分配', `${gib(facts.used)} / ${gib(facts.allocated)}`],
+        ], () => {
             const grid = make('div', 'node-card-grid');
-            grid.append(connectionPanel(relation, observed), storagePanel(member, observed), backupPanel(member, observed));
-            if (localCertificate && member.member_kind === 'MasterLocal') grid.append(certificatePanel(localCertificate));
-            if (relation?.direction === 'downstream' && relation.state === 'active') grid.append(certificatePanel(relation));
-            if (relation?.direction === 'downstream' && ['active', 'retiring', 'revoked'].includes(relation.state)) grid.append(retirementPanel(member, relation));
-            return [grid, controls(member, relation)];
+            grid.append(connectionPanel(relation, observed), storagePanel(member, observed));
+            return [grid];
         });
         cell.append(card); row.append(cell);
         return row;
@@ -461,6 +656,10 @@
             return section;
         }
         section.append(make('strong', '', '退役检查'));
+        if (!retirementInventoryAvailable) {
+            section.append(make('p', 'node-note', '当前部署尚不支持完整退役盘点，检查与退役暂不可用。请保留节点及数据；未知文件不能作为清理依据。'));
+            return section;
+        }
         section.append(make('p', 'node-note', '盘点资源、事务与备份。检查完成后仍需最终复核；不会撤销节点或删除磁盘。'));
         if (relation.state === 'retiring') section.append(make('p', 'node-note', '退役正在对账：持久写入隔离已生效，重启后仍保留。处理阻断项后重试完成退役。'));
         const saved = retirementViews.get(relation.relationship_id);
@@ -618,8 +817,9 @@
         return '已下载此节点的证书及私钥 PEM 文件';
     }
 
-    function renderRows(node, observed, s3) {
+    function renderRows(node, observed, routing) {
         const body = $('nodeRelationships'); body.replaceChildren();
+        inventory = [];
         const localCertificate = node.certificate ? {local: true, relationship_id: node.node_id, summary: {certificate: node.certificate}} : null;
         const relations = new Map();
         for (const relation of node.relationships || []) {
@@ -632,43 +832,116 @@
             return current.length === 1 ? current[0] : null;
         };
         const observedMembers = new Map((observed.members || []).map(item => [item.member_id, item]));
+        const policies = new Map((routing?.native_transport_policies || []).map(item => [item.member_id, item]));
         if (node.storage_pool) {
             for (const member of node.storage_pool.members || []) {
                 if (member.member_id === 'auto' || member.member_kind === 'Auto' || member.member_kind === 'S3') continue;
-                body.append(memberCard(member, memberRelation(member), observedMembers.get(member.member_id), localCertificate));
+                const relation = memberRelation(member);
+                const observation = observedMembers.get(member.member_id);
+                const local = member.member_kind === 'MasterLocal';
+                const row = memberCard(member, relation, observation, localCertificate, policies.get(member.member_id), routing?.ingress, routing?.selection_enabled, routing?.master_public_origin);
+                addInventoryRow(row, local ? 'local' : 'follower', local ? 'ready' : nodeConnection(relation, observation).category,
+                    local ? 'Master Local 本机' : member.member_id, member.name, relation?.summary?.servername, relation?.peer_endpoint, local ? node.endpoint : '');
             }
-
         }
-        for (const member of s3) body.append(s3Card(member));
+        renderOperationalModules(node, observed, routing, memberRelation, localCertificate);
         if (localCertificate && !(node.storage_pool?.members || []).some(member => member.member_kind === 'MasterLocal')) {
-            const row = make('tr', 'node-card-row'), cell = make('td'); cell.colSpan = 4;
+            const row = make('tr', 'node-card-row'), cell = make('td');
             const card = make('article', 'node-card');
             const header = make('header', 'node-card-header');
-            const title = make('div', 'node-card-title');
-            title.append(make('strong', '', `${node.role} · ${node.endpoint || '本机证书'}`));
-            if (node.role === 'Follower') title.append(make('small', 'node-member-id', `NodeID ${node.node_id || '未知'}`));
-            header.append(title);
-            collapsibleNodeCard(card, header, node.node_id, '本机证书', () => {
+            header.append(nodeHeading('local', node.endpoint || '当前节点', node.role, node.role === 'Follower' ? node.node_id : ''),
+                make('div', 'node-card-badges'));
+            collapsibleNodeCard(card, header, node.node_id, [['可查看', '本机证书']], () => {
                 const grid = make('div', 'node-card-grid'); grid.append(certificatePanel(localCertificate)); return [grid];
             });
-            cell.append(card); row.append(cell); body.append(row);
+            cell.append(card); row.append(cell);
+            addInventoryRow(row, 'local', 'ready', node.endpoint, node.role, node.role === 'Follower' ? node.node_id : '', '本机');
         }
-
     }
 
+
+    function renderOperationalModules(node, observed, routing, memberRelation, localCertificate) {
+        for (const id of ['nodeRoutingCards', 'nodeBackupCards', 'nodeSettingsCards']) $(id)?.remove();
+        const targets = {};
+        for (const [key, id] of [['routing','nodeRouting'],['backup','nodeBackups'],['settings','nodeSettings']]) {
+            const list = make('div', 'node-module-list');
+            list.id = key === 'routing' ? 'nodeRoutingCards' : key === 'backup' ? 'nodeBackupCards' : 'nodeSettingsCards';
+            $(id + 'Content')?.append(list); targets[key] = list;
+        }
+        const observations = new Map((observed.members || []).map(item => [item.member_id,item]));
+        const policies = new Map((routing?.native_transport_policies || []).map(item => [item.member_id,item]));
+        function append(key, member, build) {
+            const box = make('details', 'node-module-card');
+            const summary = make('summary');
+            const relation = memberRelation(member);
+            const name = member.name || relation?.summary?.servername || (member.member_kind === 'MasterLocal' ? '主站本机' : '存储节点');
+            summary.textContent = `${name} · ${relation?.peer_endpoint || routing?.master_public_origin || ''} · ID ${member.member_id}`;
+            if (key === 'backup') {
+                const backup = observations.get(member.member_id)?.backup || {};
+                summary.append(make('span','node-note', ` · ${backup.enabled ? '已开启' : '未开启'} · 恢复点 ${backup.recovery_points || 0} · ${backup.last_success ? '最近成功 '+localTime(backup.last_success) : '尚无成功备份'}`));
+            }
+            box.append(summary);
+            let rendered = false;
+            const stateKey = key + ':' + member.member_id;
+            box.ontoggle = () => {
+                if (box.open) expandedOperations.add(stateKey); else expandedOperations.delete(stateKey);
+                if (box.open && !rendered) { const content=make('div','node-card-grid'); content.append(...build()); box.append(content); rendered=true; }
+            };
+            box.open = expandedOperations.has(stateKey);
+            targets[key].append(box);
+        }
+        for (const member of node.storage_pool?.members || []) {
+            if (['S3','Auto'].includes(member.member_kind) || member.member_id === 'auto') continue;
+            const relation=memberRelation(member), observation=observations.get(member.member_id), policy=policies.get(member.member_id);
+            if (policy) append('routing', member, () => [transportPolicyPanel(member,policy,routing?.ingress,routing?.selection_enabled,member.member_kind==='MasterLocal'?routing?.master_public_origin:relation?.summary?.public_ingress_candidate_origin)]);
+            if (member.member_kind !== 'MasterLocal') append('backup',member,()=>[backupPanel(member,observation)]);
+            append('settings',member,()=>{
+                const parts=[controls(member,relation)];
+                if(member.member_kind==='MasterLocal' && localCertificate) parts.push(certificatePanel(localCertificate));
+                if(relation?.direction==='downstream' && relation.state==='active') parts.push(certificatePanel(relation));
+                if(relation?.direction==='downstream' && ['active','retiring','revoked'].includes(relation.state)) parts.push(retirementPanel(member,relation));
+                return parts;
+            });
+        }
+        if (!targets.backup.children.length) targets.backup.append(make('p','node-note','尚无可配置备份的存储节点。'));
+    }
     async function refresh() {
+        const generation = ++s3RefreshGeneration;
+        if (s3Controller) s3Controller.abort();
+        s3Controller = null;
         const current = refreshQueue.then(async () => {
-            const {node, observability, s3} = await loadData();
+            const {node, observability, routing} = await loadData();
+            if (generation !== s3RefreshGeneration) return;
             $('nodeIdentity').textContent = `${node.role} · ${node.app_version} / v${node.protocol}${node.endpoint ? ' · ' + node.endpoint : ''}`;
             visible('nodePromotion', node.role === 'Standalone'); visible('nodePairing', node.role !== 'Standalone');
-            visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.role !== 'Standalone');
+            visible('nodeImportPair', node.role === 'Master'); visible('nodeReinitialize', node.reinitialize_available === true);
             $('nodePairPackage').readOnly = false;
             const role = $('nodeRole'), capacity = $('masterLocalCapacity'); capacity.disabled = role.value !== 'Master'; role.onchange = () => { capacity.disabled = role.value !== 'Master'; };
+            renderIngress(node, routing);
             renderOverview(node, observability);
             const pool = node.storage_pool;
             $('storagePoolSummary').textContent = pool ? `Storage Pool · ${storageText(pool)}` : `${node.role} · 资源策略由 Master 管理`;
-            renderRows(node, observability, s3);
-            s3Creation(node.role === 'Master');
+            renderRows(node, observability, routing);
+            const master = node.role === 'Master';
+            s3Creation(master, master ? 'loading' : 'ready');
+            if (master) {
+                const controller = new AbortController();
+                s3Controller = controller;
+                api('/api/v1/media/admin/nodes/s3', {signal: controller.signal}).then(data => {
+                    if (generation !== s3RefreshGeneration) return;
+                    const members = Array.isArray(data) ? data : (data.members || data.items || []);
+                    if (!Array.isArray(members)) throw new Error('S3 状态无效');
+                    for (const member of members) {
+                        const category = member.storage_enabled && !member.cleanup_only && member.probe_state === 'ready' ? 'ready' : 'attention';
+                        addInventoryRow(s3Card(member, data.configuration_mode), 's3', category, 'S3', member.name, member.location?.endpoint, member.location?.bucket);
+                    }
+                    s3Creation(true, 'ready');
+                }).catch(() => {
+                    if (generation === s3RefreshGeneration) s3Creation(true, 'unavailable');
+                }).finally(() => {
+                    if (s3Controller === controller) s3Controller = null;
+                });
+            }
         });
         refreshQueue = current.catch(() => {}); return current;
     }
@@ -676,13 +949,20 @@
     function startAutoRefresh() {
         if (refreshTimer) return;
         refreshTimer = setInterval(() => {
-            if (panel.classList.contains('expanded') && !panel.contains(document.activeElement)) refresh().catch(error => setStatus(error.message));
+            const active = document.activeElement;
+            const editing = active && (active.matches('input, select, textarea') || active.isContentEditable)
+                && !['nodeInventorySearch', 'nodeInventoryType', 'nodeInventoryStatus'].includes(active.id)
+                && modulePanels.some(item => item.contains(active));
+            if (modulePanels.some(item => item.classList.contains('expanded')) && !editing) refresh().catch(error => setStatus(error.message));
         }, 10000);
     }
     function stopAutoRefresh() { if (refreshTimer) clearInterval(refreshTimer); refreshTimer = null; }
 
     $('nodesRefresh').onclick = () => action(async () => {}, '已刷新');
-    panel.querySelector('.module-heading').addEventListener('click', () => { if (panel.classList.contains('expanded')) { refresh().catch(error => setStatus(error.message)); startAutoRefresh(); } else stopAutoRefresh(); });
+    $('nodeInventorySearch').oninput = filterInventory;
+    $('nodeInventoryType').onchange = filterInventory;
+    $('nodeInventoryStatus').onchange = filterInventory;
+    for (const item of modulePanels) item.querySelector('.module-heading').addEventListener('click', () => { if (item.classList.contains('expanded')) { refresh().catch(error => setStatus(error.message)); startAutoRefresh(); } else if (!modulePanels.some(other => other.classList.contains('expanded'))) stopAutoRefresh(); });
     $('nodePromotion').onsubmit = event => { event.preventDefault(); const role = $('nodeRole').value; action(() => post('/promote', {role, endpoint: $('nodeEndpoint').value, local_capacity_gib: role === 'Master' ? Number($('masterLocalCapacity').value) : null})); };
     $('nodeImportPair').onclick = () => action(() => post('/pair', {package: JSON.parse($('nodePairPackage').value)}));
     $('nodeReinitialize').onsubmit = event => { event.preventDefault(); action(() => post('/reinitialize', {confirmation: $('nodeResetConfirmation').value})); };

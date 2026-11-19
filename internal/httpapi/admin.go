@@ -10,16 +10,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/admin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
 )
 
 type Admin struct {
-	settings config.Config
-	auth     *admin.Service
-	network  *network.Resolver
-	public   *Public
-	identity *node.Identity
+	settings            config.Config
+	auth                *admin.Service
+	network             *network.Resolver
+	handoffNetwork      *network.Resolver
+	public              *Public
+	identity            *node.Identity
+	selectedUpload      *business.SelectedUploadRuntime
+	selectedMediaDelete selectedMediaDeleteFunc
 }
 
 func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Service, public *Public, identity *node.Identity) (*Admin, error) {
@@ -27,12 +32,21 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	if err != nil {
 		return nil, err
 	}
-	a := &Admin{settings, auth, resolver, public, identity}
+	handoffResolver, err := network.New(settings.PublicIngressTrustedProxyNetworks)
+	if err != nil {
+		return nil, err
+	}
+	a := &Admin{settings: settings, auth: auth, network: resolver, handoffNetwork: handoffResolver, public: public, identity: identity}
 	group := router.Group("/api/v1/media/admin", a.transport)
+	group.GET("", a.authenticatePage, a.page)
+	group.GET("/", a.authenticatePage, a.page)
+	group.GET("/login", a.login)
 	group.POST("/elevate", a.elevate)
+	group.GET("/handoff/start", a.handoffStart)
+	group.POST("/handoff/redeem", a.handoffRedeem)
+	// Only an authenticated current ingress may call this specific operation.
+	router.POST("/api/v1/media/admin-handoff/authorize", a.handoffAuthorize)
 	protected := group.Group("", a.authenticate)
-	protected.GET("", a.page)
-	protected.GET("/", a.page)
 	protected.GET("/status", a.status)
 	protected.POST("/logout", a.logout)
 	protected.POST("/crypto/session", a.cryptoSession)
@@ -54,11 +68,22 @@ func RegisterAdmin(router *gin.Engine, settings config.Config, auth *admin.Servi
 	protected.POST("/delete", a.delete)
 	protected.GET("/download", a.download)
 	protected.GET("/download/plan", a.downloadPlan)
+	protected.POST("/download/plan", a.selectedDownloadPlan)
 	protected.GET("/download/bytes", a.downloadPlanBytes)
 	protected.HEAD("/download/bytes", a.downloadPlanBytes)
 	protected.POST("/upload/item", func(c *gin.Context) { a.upload(c, false) })
 	protected.POST("/upload/lyric", func(c *gin.Context) { a.upload(c, true) })
 	protected.GET("/storage-pool", a.storagePool)
+	protected.POST("/upload/selected/hidden-directory", a.selectedHiddenDirectory)
+	protected.POST("/upload/selected/prepare", a.selectedPrepareUpload)
+	protected.POST("/upload/selected/:upload/resume", a.selectedResumeUpload)
+	protected.PUT("/upload/selected/:upload/bytes", a.selectedRelayBytes)
+	protected.POST("/upload/selected/:upload/recover", a.selectedRelayRecover)
+	protected.POST("/upload/selected/:upload/cleanup", a.selectedRelayCleanup)
+	protected.GET("/upload/selected/:upload/status", a.selectedUploadStatus)
+	protected.POST("/upload/selected/:upload/complete", a.selectedCompleteUpload)
+	protected.POST("/upload/selected/:upload/cancel", a.selectedCancelUpload)
+	protected.POST("/upload/selected/:upload/cancel/finish", a.selectedFinishCancel)
 	protected.POST("/upload/session", a.reserveUpload)
 	protected.PUT("/upload/session/:upload/bytes", a.uploadBytes)
 	protected.POST("/upload/session/:upload/finalize", a.finalizeUpload)
@@ -113,14 +138,27 @@ func session(c *gin.Context) admin.Session {
 	return value.(admin.Session)
 }
 func (a *Admin) authenticate(c *gin.Context) {
+	a.authenticateRequest(c, false)
+}
+func (a *Admin) authenticatePage(c *gin.Context) {
+	a.authenticateRequest(c, true)
+}
+func (a *Admin) authenticateRequest(c *gin.Context, page bool) {
 	cookie, _ := c.Cookie(a.settings.AdminCookieName())
 	csrf, _ := c.Cookie(a.settings.CSRFCookieName())
 	value, err := a.auth.Authenticate(c.Request.Context(), cookie, csrf, c.GetHeader("X-CSRF-Token"), c.Request.Method, c.GetHeader("X-Admin-Activity"))
 	if err != nil {
+		var rejected *admin.Error
+		if page && errors.As(err, &rejected) && rejected.Status == http.StatusUnauthorized && a.canShowLogin(c) && adminPageNavigation(c) {
+			c.Redirect(http.StatusSeeOther, adminLoginPath)
+			c.Abort()
+			return
+		}
 		authError(c, err)
 		return
 	}
 	c.Set("admin_session", value)
+	c.Request = c.Request.WithContext(media.AdminResourceContext(c.Request.Context()))
 	if value.Refresh {
 		a.cookies(c, value)
 	}
@@ -157,7 +195,13 @@ func (a *Admin) status(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"status": "ok", "session": true, "node_role": identity.Role, "master_url": master, "limits": gin.H{"max_upload_file_size": a.settings.AdminMaxUploadBytes, "max_upload_task_files": a.settings.AdminMaxTaskFiles, "max_batch_files": a.settings.AdminMaxBatchFiles, "max_lyric_file_size": 2 * 1024 * 1024}, "csrf_cookie_name": a.settings.CSRFCookieName(), "credential_kind": value.Kind, "session_idle_minutes": value.IdleTTL / 60})
+	result := gin.H{"status": "ok", "session": true, "node_role": identity.Role, "master_url": master, "limits": gin.H{"max_upload_file_size": a.settings.AdminMaxUploadBytes, "max_upload_task_files": a.settings.AdminMaxTaskFiles, "max_batch_files": a.settings.AdminMaxBatchFiles, "max_lyric_file_size": 2 * 1024 * 1024}, "csrf_cookie_name": a.settings.CSRFCookieName(), "credential_kind": value.Kind, "session_idle_minutes": value.IdleTTL / 60}
+	if a.public.opaqueTree != nil {
+		result["media_download_protocol"] = "sealed-v1"
+		result["media_delete_protocol"] = "sealed-v1"
+		result["media_delete_available"] = a.selectedMediaDelete != nil
+	}
+	c.JSON(200, result)
 }
 func (a *Admin) logout(c *gin.Context) {
 	if err := a.auth.Logout(c.Request.Context(), session(c), a.info(c)); err != nil {
@@ -260,7 +304,7 @@ func (a *Admin) page(c *gin.Context) {
 		}
 		styles.WriteString(`<link rel="stylesheet" href="` + url + `">` + "\n")
 	}
-	for _, asset := range []string{"js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/priority-drag.js", "js/lyrics-directory-counts.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js"} {
+	for _, asset := range []string{"js/maintenance-admin.js", "js/brand-admin.js", "js/admin-focus.js", "js/directory-admin.js", "js/priority-drag.js", "js/lyrics-directory-counts.js", "js/upload-sha256.js", "js/admin-upload-integrity.js", "js/admin-visibility-integrity.js", "js/log-admin.js"} {
 		url, err := a.asset(asset)
 		if err != nil {
 			internalError(c, err)

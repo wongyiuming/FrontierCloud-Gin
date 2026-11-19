@@ -14,11 +14,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sourceauth"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 const defaultLyric = "lyrics/default.lrc"
-const defaultContent = "[00:00.00]建设中，暂无歌词\n"
+const defaultContent = sourceauth.DefaultLyricContent
 const maxLyricBytes = 5 * 1024 * 1024
 
 var timeTag = regexp.MustCompile(`\[(\d{1,3}):([0-5]\d)(?:[\.:](\d{1,3}))?\]`)

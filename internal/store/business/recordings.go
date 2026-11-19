@@ -77,113 +77,125 @@ func (r *Repository) ReserveRecording(ctx context.Context, v store.Recording, fr
 	if !validRecording(v) || free < 0 {
 		return result, member, store.ErrRecordingState
 	}
-	err = r.write(ctx, func(q queryer) error {
-		node, e := readNode(ctx, q, r.lock())
-		if e != nil {
-			return e
-		}
-		if node.Role != "Master" {
-			return store.ErrNodeState
-		}
-		u, e := scanUser(q.QueryRowContext(ctx, "SELECT "+userColumns+" FROM karaoke_users WHERE user_id=?"+r.lock(), v.UserID))
-		if errors.Is(e, sql.ErrNoRows) {
-			return store.ErrUserMissing
-		}
-		if e != nil {
-			return e
-		}
-		if u.Status != "active" {
-			return store.ErrUserBlocked
-		}
-		if u.Used < 0 || u.Quota-u.Used < v.Bytes {
-			return store.ErrRecordingQuota
-		}
-		rows, e := q.QueryContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members ORDER BY member_id"+r.lock())
-		if e != nil {
-			return e
-		}
-		members := []store.StorageMember{}
-		for rows.Next() {
-			m, e := scanMember(rows)
-			if e != nil {
-				rows.Close()
-				return e
-			}
-			members = append(members, m)
-		}
-		e = rows.Err()
-		rows.Close()
-		if e != nil {
-			return e
-		}
-		candidates := []store.StorageMember{}
-		now := time.Now().Unix()
-		for _, m := range members {
-			draining, e := r.migrationDraining(ctx, q, m.ID)
-			if e != nil {
-				return e
-			}
-			if draining {
-				continue
-			}
-			if m.ID == node.ID && m.Kind == "MasterLocal" {
-				m.PhysicalFree = free
-			} else {
-				if m.Kind != "Follower" || m.RelationshipID == nil {
-					continue
-				}
-				rel, e := scanRelation(q.QueryRowContext(ctx, "SELECT "+relationColumns+" FROM node_relationships WHERE relationship_id=?"+r.lock(), *m.RelationshipID))
-				if e != nil {
-					return e
-				}
-				if rel.State != "active" || rel.Direction != "downstream" || rel.PeerID != m.ID || rel.Status != "online" || now-rel.LastHeartbeat >= 120 {
-					continue
-				}
-			}
-			m.Available = capacity(m)
-			if m.Available >= v.Bytes {
-				candidates = append(candidates, m)
-			}
-		}
-		if len(candidates) == 0 {
-			return store.ErrStorageCapacity
-		}
-		sort.Slice(candidates, func(i, j int) bool {
-			x, y := candidates[i], candidates[j]
-			px, py := float64(x.Used+x.Reserved)/float64(max(int64(1), x.Allocation)), float64(y.Used+y.Reserved)/float64(max(int64(1), y.Allocation))
-			if px != py {
-				return px < py
-			}
-			if x.Available != y.Available {
-				return x.Available > y.Available
-			}
-			return x.ID < y.ID
-		})
-		member = candidates[0]
-		result = v
-		result.MemberID = member.ID
-		result.State = "pending"
-		result.SHA256 = nil
-		result.CreatedAt, result.UpdatedAt = now, now
-		if result.EncryptedLyrics != nil {
-			if e = r.putEncryptionFor(ctx, q, "recording_lyric", result.ID, &result.EncryptedLyrics.Encryption); e != nil {
-				return e
-			}
-		}
-		if e = insertRecording(ctx, q, result); e != nil {
-			return e
-		}
-		if _, e = q.ExecContext(ctx, "UPDATE karaoke_users SET used_bytes=used_bytes+?,updated_at=? WHERE user_id=?", v.Bytes, now, v.UserID); e != nil {
-			return e
-		}
-		if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", v.Bytes, member.PhysicalFree, now, member.ID); e != nil {
-			return e
-		}
-		a.UserID, a.Action, a.Result = v.UserID, "recording-reserve", "success"
-		a.Detail = map[string]any{"recording_id": v.ID, "size_bytes": v.Bytes, "storage_member_id": member.ID}
-		return r.karaokeAudit(ctx, q, a)
+	err = r.legacyWrite(ctx, func(q queryer) error {
+		return r.reserveRecordingTx(ctx, q, v, free, a, &result, &member)
 	})
 	return
+}
+
+// reserveRecordingTx lets the explicit request-ID protocol bind its durable
+// intent to the existing reservation, quota and audit in the same transaction.
+func (r *Repository) reserveRecordingTx(ctx context.Context, q queryer, v store.Recording, free int64, a store.KaraokeAudit, out *store.Recording, outMember *store.StorageMember) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
+	var result store.Recording
+	var member store.StorageMember
+	node, e := readNode(ctx, q, r.lock())
+	if e != nil {
+		return e
+	}
+	if node.Role != "Master" {
+		return store.ErrNodeState
+	}
+	u, e := scanUser(q.QueryRowContext(ctx, "SELECT "+userColumns+" FROM karaoke_users WHERE user_id=?"+r.lock(), v.UserID))
+	if errors.Is(e, sql.ErrNoRows) {
+		return store.ErrUserMissing
+	}
+	if e != nil {
+		return e
+	}
+	if u.Status != "active" {
+		return store.ErrUserBlocked
+	}
+	if u.Used < 0 || u.Quota-u.Used < v.Bytes {
+		return store.ErrRecordingQuota
+	}
+	rows, e := q.QueryContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members ORDER BY member_id"+r.lock())
+	if e != nil {
+		return e
+	}
+	members := []store.StorageMember{}
+	for rows.Next() {
+		m, e := scanMember(rows)
+		if e != nil {
+			rows.Close()
+			return e
+		}
+		members = append(members, m)
+	}
+	e = rows.Err()
+	rows.Close()
+	if e != nil {
+		return e
+	}
+	candidates := []store.StorageMember{}
+	now := time.Now().Unix()
+	for _, m := range members {
+		draining, e := r.migrationDraining(ctx, q, m.ID)
+		if e != nil {
+			return e
+		}
+		if draining {
+			continue
+		}
+		if m.ID == node.ID && m.Kind == "MasterLocal" {
+			m.PhysicalFree = free
+		} else {
+			if m.Kind != "Follower" || m.RelationshipID == nil {
+				continue
+			}
+			rel, e := scanRelation(q.QueryRowContext(ctx, "SELECT "+relationColumns+" FROM node_relationships WHERE relationship_id=?"+r.lock(), *m.RelationshipID))
+			if e != nil {
+				return e
+			}
+			if rel.State != "active" || rel.Direction != "downstream" || rel.PeerID != m.ID || rel.Status != "online" || now-rel.LastHeartbeat >= 120 {
+				continue
+			}
+		}
+		m.Available = capacity(m)
+		if m.Available >= v.Bytes {
+			candidates = append(candidates, m)
+		}
+	}
+	if len(candidates) == 0 {
+		return store.ErrStorageCapacity
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		x, y := candidates[i], candidates[j]
+		px, py := float64(x.Used+x.Reserved)/float64(max(int64(1), x.Allocation)), float64(y.Used+y.Reserved)/float64(max(int64(1), y.Allocation))
+		if px != py {
+			return px < py
+		}
+		if x.Available != y.Available {
+			return x.Available > y.Available
+		}
+		return x.ID < y.ID
+	})
+	member = candidates[0]
+	result = v
+	result.MemberID = member.ID
+	result.State = "pending"
+	result.SHA256 = nil
+	result.CreatedAt, result.UpdatedAt = now, now
+	if result.EncryptedLyrics != nil {
+		if e = r.putEncryptionFor(ctx, q, "recording_lyric", result.ID, &result.EncryptedLyrics.Encryption); e != nil {
+			return e
+		}
+	}
+	if e = insertRecording(ctx, q, result); e != nil {
+		return e
+	}
+	if _, e = q.ExecContext(ctx, "UPDATE karaoke_users SET used_bytes=used_bytes+?,updated_at=? WHERE user_id=?", v.Bytes, now, v.UserID); e != nil {
+		return e
+	}
+	if _, e = q.ExecContext(ctx, "UPDATE cluster_storage_members SET reserved_bytes=reserved_bytes+?,physical_free_bytes=?,updated_at=? WHERE member_id=?", v.Bytes, member.PhysicalFree, now, member.ID); e != nil {
+		return e
+	}
+	a.UserID, a.Action, a.Result = v.UserID, "recording-reserve", "success"
+	a.Detail = map[string]any{"recording_id": v.ID, "size_bytes": v.Bytes, "storage_member_id": member.ID}
+	*out, *outMember = result, member
+	return r.karaokeAudit(ctx, q, a)
 }
 func validRecordingReceipt(v store.RecordingReceipt) bool {
 	return nodeIDPattern.MatchString(v.ID) && v.Bytes > 0 && v.Bytes <= store.MaxRecordingBytes && nodeHashPattern.MatchString(v.SHA256) && (v.Metadata == nil || store.ValidRecordingMetadata(*v.Metadata) && store.RecordingEncryptedLyricsFit(*v.Metadata, v.Bytes))
@@ -207,7 +219,7 @@ func (r *Repository) FinalizeRecording(ctx context.Context, user, id string, rec
 	if id != receipt.ID || !validRecordingReceipt(receipt) {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if e := r.accountMaster(ctx, q); e != nil {
 			return e
 		}
@@ -287,7 +299,7 @@ func (r *Repository) StageRecordingDeletion(ctx context.Context, user, id string
 	if !nodeIDPattern.MatchString(user) || !nodeIDPattern.MatchString(id) {
 		return nil, store.ErrRecordingMissing
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if e := r.accountMaster(ctx, q); e != nil {
 			return e
 		}
@@ -329,7 +341,7 @@ func (r *Repository) StageRecordingDeletion(ctx context.Context, user, id string
 	return
 }
 func (r *Repository) CompleteRecordingDeletion(ctx context.Context, user, id string, a store.KaraokeAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if e := r.accountMaster(ctx, q); e != nil {
 			return e
 		}
@@ -398,11 +410,13 @@ func (r *Repository) PendingRecordingDeletions(ctx context.Context, limit int) (
 	return values, rows.Err()
 }
 func (r *Repository) DeferRecordingDeletion(ctx context.Context, id string) error {
-	_, e := r.db.ExecContext(ctx, "UPDATE karaoke_recordings SET updated_at=? WHERE recording_id=? AND state='deleting'", time.Now().Unix(), id)
-	return e
+	return r.legacyWrite(ctx, func(q queryer) error {
+		_, err := q.ExecContext(ctx, "UPDATE karaoke_recordings SET updated_at=? WHERE recording_id=? AND state='deleting'", time.Now().Unix(), id)
+		return err
+	})
 }
 func (r *Repository) StageExpiredRecordings(ctx context.Context, limit int) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if e := r.accountMaster(ctx, q); e != nil {
 			return e
 		}

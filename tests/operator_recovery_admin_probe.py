@@ -1,7 +1,6 @@
 """Ephemeral loopback HTTP client, never a resident product/Python service."""
 import http.cookiejar
 import json
-from pathlib import Path
 import sys
 import urllib.parse
 import urllib.request
@@ -9,7 +8,8 @@ import urllib.request
 jar = http.cookiejar.CookieJar()
 client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 base = 'http://127.0.0.1:8000'
-key = Path('/run/frontiercloud-secrets/admin_key').read_text().strip()
+key = sys.stdin.read().strip()
+assert key, 'original Admin credential is required'
 data = urllib.parse.urlencode({'token': key}).encode()
 with client.open(urllib.request.Request(base + '/api/v1/media/admin/elevate', data=data,
                                         headers={'Content-Type': 'application/x-www-form-urlencoded'}), timeout=10) as response:

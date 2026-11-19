@@ -13,7 +13,7 @@ import (
 // A private filesystem publication journal survives a terminated request. The
 // operation ID in source_summary makes replay idempotent without a new schema.
 func (r *Repository) CompleteUpload(ctx context.Context, object store.MediaObject, operation string, audit store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		id, err := r.ensureWithLock(ctx, q, object, r.lock())
 		if err != nil {
 			return err

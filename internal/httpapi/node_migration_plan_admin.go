@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
@@ -15,6 +16,10 @@ type migrationPlanner interface {
 	Create(string, string, string) (resourcemigration.PlanView, error)
 	Status(string, string) (resourcemigration.PlanView, error)
 	Start(string, string, string, string, store.NodeAudit) (resourcemigration.PlanView, error)
+}
+
+func (a *Admin) migrationPlanningAvailable() bool {
+	return a.public.opaqueTree == nil
 }
 
 // Plans are asynchronous observations. Clients select IDs and confirm the
@@ -32,6 +37,11 @@ func RegisterAdminMigrationPlanning(router *gin.Engine, a *Admin, planner migrat
 		n, e := a.public.media.IdentityState(c.Request.Context())
 		if e != nil || n.Role != "Master" {
 			detail(c, 409, "资源迁移计划仅由当前业务 Master 管理")
+			c.Abort()
+			return
+		}
+		if c.Request.Method == http.MethodPost && !a.migrationPlanningAvailable() {
+			detail(c, http.StatusConflict, "当前密文存储暂不支持创建或启动迁移计划")
 			c.Abort()
 			return
 		}

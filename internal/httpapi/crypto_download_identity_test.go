@@ -142,17 +142,25 @@ func testDownloadPlanIdentityHTTP(t *testing.T, site string) {
 	}
 	folder := "music/Identity-" + site
 	plainPath := folder + "/song.mp3"
-	uploadPlain := func(payload string) media.UploadTicket {
+	// Seed historical plaintext records internally. This download-identity
+	// test does not give the current HTTP upload route a plaintext mode.
+	seedPlain := func(payload string) {
 		t.Helper()
-		w := call("POST", "/api/v1/media/admin/upload/session", gin.H{"storage_mode": "plain", "site_type": site, "target_dir": folder, "filename": "song.mp3", "size_bytes": len(payload)})
-		var ticket media.UploadTicket
-		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ticket) != nil || ticket.Site != site {
-			t.Fatal("normal plain reservation", w.Code, w.Body.String())
+		identity, err := db.Nodes().ReadIdentity(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		memberID := identity.ID
+		if site != "primary" {
+			memberID = relation.PeerID
+		}
+		ticket, err := public.media.ReserveSelectedMasterUpload(ctx, "song.mp3", folder, "", memberID, int64(len(payload)), 255, store.AdminAudit{}, nil)
+		if err != nil || ticket.Site != site {
+			t.Fatal("seed historical download fixture", err)
 		}
 		finish(ticket, []byte(payload))
-		return ticket
 	}
-	uploadPlain("ID3firstAA")
+	seedPlain("ID3firstAA")
 	// An actual encrypted companion ensures this is the browser mixed-ZIP
 	// plan, with the existing AES format and signed storage descriptor lifecycle.
 	meta, err := mediacrypto.NewMetadata(10)
@@ -270,7 +278,7 @@ func testDownloadPlanIdentityHTTP(t *testing.T, site string) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"deleted":1`) {
 		t.Fatal("normal object deletion", w.Code, w.Body.String())
 	}
-	uploadPlain("ID3otherBB")
+	seedPlain("ID3otherBB")
 	reject(original)
 	if site != "primary" {
 		staleCapability := resolve(originalEdge, "")
@@ -289,7 +297,7 @@ func testDownloadPlanIdentityHTTP(t *testing.T, site string) {
 		t.Fatal("normal directory rename", w.Code, w.Body.String())
 	}
 	reject(replacement)
-	uploadPlain("ID3thirdCC")
+	seedPlain("ID3thirdCC")
 	reject(replacement)
 	read(plan(renamedFolder, renamedFolder+"/song.mp3"), "ID3otherBB")
 	read(plan(plainPath, plainPath, renamedFolder+"/encrypted.mp3"), "ID3thirdCC")

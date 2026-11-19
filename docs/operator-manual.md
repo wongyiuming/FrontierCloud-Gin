@@ -135,6 +135,10 @@ fresh-machine restore. Only explicitly requested full disaster recovery uses
 `backup plan/create --include-business-files`; coordinated `backup set-create`
 retains its explicit complete recovery-set contract. Application upgrades never
 select these complete workflows.
+`foc backup verify --file` checks the exact SHA-256 from the current upgrade
+journal when given its recorded archive path. Other encrypted tree archives
+require an independently retained `--sha256`. Archive verification alone does
+not establish that retained storage is ready to reopen.
 Failed pre-opening upgrades have an explicit `upgrade recover-state` path which
 retains failed database state and restores the verified original database,
 configuration and keys into the same media mounts. It remains fenced until a
@@ -195,6 +199,28 @@ Run from that directory:
 ./fc doctor
 ./fc install master
 ```
+
+Master HTTP(S) defaults to IPv4. To publish both address families on a new
+Master, use a DNS `SERVER_NAME` with reachable `A` and `AAAA` records and add
+these two settings to `.env`. Keep `PUBLIC_BIND_ADDRESS` at `0.0.0.0`.
+
+```dotenv
+MASTER_PUBLIC_IPV6=true
+MASTER_PUBLIC_IPV6_BIND_ADDRESS=::
+```
+
+The Master Compose bundle requires Docker Compose 2.33.1 or later. The dual-stack
+edge also requires working host IPv6 and Docker IPv6 port forwarding. Allow
+TCP 80 and 443 on both families and verify the same HTTPS hostname from an
+external IPv4 and IPv6 client. Storage, S3, STUN, and paired node settings stay
+as configured. Keep the established IPv4 control route for each peer. For a
+custom peer with IPv6 egress, use an existing TLS-verified IPv4-only control
+endpoint or an IPv4 route when publishing the Master public `AAAA` record.
+
+Existing `foc` deployments bind the published ports and networks to their
+receipts. For an already registered Master, use a separately prepared and
+verified deployment cutover to change this selection. Editing `.env` alone
+does not re-enroll the existing deployment.
 
 For Direct Storage, copy `.env.storage.example` to `.env`, set `SERVER_NAME`
 and `STORAGE_ENDPOINT=https://your-storage-domain`, then use:
@@ -309,7 +335,21 @@ MySQL requires a consistent logical export, never a hot data-directory copy.
 Cross-database/file recovery requires a defined frozen writer boundary for all
 nodes. Backup and migration must not overlap ownership commits.
 
-The existing `verify-backup` command inspects built-in business artifacts only.
+Current sealed SQLite namespaces use [encrypted business recovery points](business-recovery-points.md), checked on the retained Master with `verify-business-point`. The older `verify-backup` command inspects v2 JSONL artifacts only. Neither verification command replaces live state.
+For an independently captured v2 artifact, the Linux runtime command
+`import-business-state` accepts its bytes on standard input. Pass the recorded
+`--generation`, `--sha256`, `--bytes` and `--target-master-id`. It requires the
+matching fresh SQLite Master with its encrypted tree prepared and native
+maintenance held. Run it before attaching peers or populating the media tree.
+The input is bounded to 128 MiB and validation uses disposable memory. The
+single transaction imports IP policy and counters, WebRTC history and karaoke
+accounts, registration counters and minimal audit history. Repeating the same
+projection checks every selected row and refuses conflicts. Raw audit detail,
+recording data and other deployment state remain in the separate protected
+source. Recording usage in the new deployment is accounted for when its bytes
+are restored. The receipt reports `restore_ready=false`; leave the destination
+closed until all independent recovery checks are complete.
+
 The operator's deployment archive preserves local data, journals, identities,
 runtime secrets/premaster, certificate state, Redis state and locked deployment
 configuration. MySQL uses a bounded `mysqldump --single-transaction --quick`
@@ -320,6 +360,14 @@ scope, source NodeID, revision, generation, file/directory counts and sizes,
 actual SHA-256 values, key references, state classes and missing related-node
 recovery material. A local deployment archive does not silently include other
 nodes' media and identity; missing node state blocks applying it as a recovery set.
+
+Before a replacement, reconcile the archive against every durable source used by
+the live deployment and retained nodes. Capture whole durable roots, including
+files with no known classification. Account separately for remote stores and
+retained application logs outside captured mounts, including container log
+rotations. The Master archive requires the existing permanent AdminKey. Prove
+that the original key logs in after recovery. Keep all recovery material in
+protected storage accessible independently of the live hosts.
 
 ```sh
 ./fc backup plan --include-business-files --output /protected-backups/deployment.tar
@@ -346,6 +394,39 @@ target, restores original owners/permissions into private staging and publishes
 only after actual byte verification and synchronization. It preserves offline
 flags, identities and key bytes. It restores **recovery material**, does not start
 an instance, and reports `restore_ready=false` / `restored_business_verified=false`.
+
+For a fresh-schema cutover, prepare the new deployment in isolation before
+adding peers and media. After installing the new SQLite business deployment,
+promote its node to Master and turn on public maintenance through Admin GUI.
+Stop its writers and enter native maintenance using the offline backup workflow
+above. Preparation binds the
+original target mounts and initializes its encrypted storage under maintenance.
+An independently verified v2 business backup can then seed the prepared
+Master. Use the artifact generation recorded with its verified length and
+SHA-256. The source file must be private and locally readable by the operator.
+
+```sh
+foc --directory /new/master restore prepare-business-state --target-master-id <destination-master-id>
+foc --directory /new/master restore import-business-state --file /protected-backups/business.v2 --generation <artifact-generation> --sha256 <artifact-sha256> --bytes <artifact-bytes> --target-master-id <destination-master-id>
+foc --directory /new/master restore activate-business-state --target-master-id <destination-master-id> --source-sha256 <artifact-sha256>
+```
+
+The importer projects IP policy and history, WebRTC observations and karaoke
+accounts into the new schema. An identical retry can verify the rows already
+applied. Keep the complete original recovery material for raw audit details,
+recordings and other assets. The import leaves native maintenance enabled.
+Activation checks the exact import receipt and starts the pinned HTTPS
+management services with public maintenance still enabled. It reports
+`restore_ready=false`. Open `/api/v1/media/admin/login` on the management
+origin for the remaining business restore.
+
+Before cutover, download the three custom Logo images through the source Admin
+GUI or preserve them in the complete deployment backup. The portable business
+artifact does not carry image files. Restore the three originals through the
+target Admin GUI's Brand Logo panel. Verify the returned image bytes for
+entertainment, music and media against the source after switching the public
+entry. HTTP 200 alone also matches the built-in fallback.
+
 Use `--deployment --project <new-empty-project>` with `restore apply` to prepare
 a relocated Compose project using the recorded images and verified state classes.
 It refuses target containers/volumes and leaves the original recovery identity
@@ -377,13 +458,12 @@ verification is recorded in the development acceptance evidence.
 
 ## Approved upgrades
 
-The current runtime uses database generation 8. Its additive migrations
-preserve existing business data and record durable resource migration facts and
-peer object bindings, bounded paged plan records and Master-owned S3 state. Older binaries reject newer
-database generations. Recovery archives preserve their source generation;
-restoration uses the matching source images. The operator supports the explicitly
-implemented generation-6/7-to-8 upgrades in addition to same-generation upgrades. See the
-[schema contract](../migrations/README.md) before selecting target images.
+The encrypted-tree runtime uses database generation 12. Start this release
+with its own database and data directory, then restore verified media and
+lyrics through its normal business interfaces. Recovery archives preserve
+their source generation and are restored with matching source images.
+The current operator admits generation 12 for its upgrade and archive paths.
+See the [schema contract](../migrations/README.md) before selecting target images.
 
 Normal `foc upgrade` selects the verified release, refreshes the operator when
 needed, manages its private plan and asks for one confirmation. The detailed

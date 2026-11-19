@@ -71,6 +71,9 @@ func (r *Receiver) RetireDeletedAnchor(ctx context.Context, s Spec, admission fu
 		}
 	}
 	if exists {
+		if e = r.check(ctx); e != nil {
+			return e
+		}
 		if e = r.root.Remove(name); e != nil {
 			return e
 		}
@@ -93,6 +96,9 @@ func (r *Receiver) HistoricalAnchorsFinished(ctx context.Context, master string,
 	return r.historicalAnchors(ctx, master, o, sha, func() error { return nil }, false)
 }
 func (r *Receiver) historicalAnchors(ctx context.Context, master string, o store.MigrationObject, sha string, admission func() error, retire bool) (finished bool, result error) {
+	if e := r.check(ctx); e != nil {
+		return false, e
+	}
 	finished = true
 	if admission == nil || !identifier.MatchString(master) || o.Resource != r.resource || !digest.MatchString(sha) {
 		return false, ErrState

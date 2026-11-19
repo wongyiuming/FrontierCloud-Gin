@@ -25,6 +25,11 @@ type businessWriter struct {
 	monitor *businesstraffic.Monitor
 }
 
+// Unwrap preserves http.ResponseController access to the actual connection.
+// Streaming handlers must be able to enforce their read/write deadlines while
+// traffic accounting wraps the Gin writer.
+func (w *businessWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *businessWriter) Write(p []byte) (int, error) {
 	n, e := w.ResponseWriter.Write(p)
 	w.monitor.Egress(n)

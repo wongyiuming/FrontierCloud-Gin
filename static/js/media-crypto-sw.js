@@ -5,6 +5,7 @@ const common = self.FrontierCryptoCommon;
 const capabilities = new Map();
 const grants = new Map();
 const pendingGrants = new Map();
+const grantEpochs = new Map();
 const zipPlans = new Map();
 const PREFIX = '/__fc_media/';
 // Only authenticated ciphertext is retained, never keys or plaintext. Fresh
@@ -21,6 +22,21 @@ function forgetCipherChunk(key) {
 function cipherChunkKey(metadata, index) {
     return JSON.stringify([metadata.version, metadata.algorithm, metadata.file_id,
         metadata.nonce_prefix, metadata.plaintext_size, metadata.ciphertext_size, metadata.chunk_size, index]);
+}
+
+// A continuation or cache hit may renew credentials, but it must not splice
+// bytes from a different placement into the response already being served.
+function sameResourceIdentity(original, refreshed) {
+    if (!original || !refreshed || original.transport !== refreshed.transport) return false;
+    if (Boolean(original.encryption) !== Boolean(refreshed.encryption)) return false;
+    if (original.encryption && cipherChunkKey(original.encryption, 0) !== cipherChunkKey(refreshed.encryption, 0)) return false;
+    for (const name of ['kind', 'source_identity_version', 'resource_id', 'object_id', 'track_resource_id', 'source_object_id', 'source_owner_id', 'source_revision', 'size_bytes', 'download_snapshot']) {
+        if (original[name] !== refreshed[name]) return false;
+    }
+    if (original.transport === 'Recording' && (original.source_transport !== refreshed.source_transport
+        || original.source_origin !== refreshed.source_origin)) return false;
+    if (original.transport === 'S3' && original.source_headers?.['If-Match'] !== refreshed.source_headers?.['If-Match']) return false;
+    return true;
 }
 
 function cachedCipherChunk(key) {
@@ -43,11 +59,22 @@ function rememberCipherChunk(key, bytes) {
 
 function revokeCapability(token) {
     capabilities.delete(token);
+    grantEpochs.delete(token);
     for (const key of grants.keys()) if (key.startsWith(token + ':')) grants.delete(key);
     for (const [id, plan] of zipPlans) if (plan.token === token) zipPlans.delete(id);
 }
 
 async function registerCapability(event, data) {
+    const supported = {ok: true, admin_download: 'sealed-v1'};
+    const existing = capabilities.get(data.token);
+    if (existing) {
+        if (existing.clientId !== event.source.id) {
+            event.ports[0]?.postMessage({error: '加密播放会话不属于此页面'});
+            return;
+        }
+        event.ports[0]?.postMessage(supported);
+        return;
+    }
     if (capabilities.size >= 256 && !capabilities.has(data.token)) {
         // A renderer crash need not send pagehide. Reclaim only capabilities
         // whose owning client is gone, and retain concurrent replacements.
@@ -60,8 +87,13 @@ async function registerCapability(event, data) {
         event.ports[0]?.postMessage({error: '加密播放会话过多，请关闭闲置页面'});
         return;
     }
+    const current = capabilities.get(data.token);
+    if (current) {
+        event.ports[0]?.postMessage(current.clientId === event.source.id ? supported : {error: '加密播放会话不属于此页面'});
+        return;
+    }
     capabilities.set(data.token, {clientId: event.source.id});
-    event.ports[0]?.postMessage({ok: true});
+    event.ports[0]?.postMessage(supported);
 }
 
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
@@ -75,8 +107,12 @@ self.addEventListener('message', event => {
         });
         event.waitUntil?.(registration);
     } else if (data.type === 'fc-crypto-invalidate'
-        && capabilities.get(data.token)?.clientId === event.source.id) {
+        && capabilities.get(data.token)?.clientId === event.source.id && typeof data.file_path === 'string') {
+        let epochs = grantEpochs.get(data.token);
+        if (!epochs) { epochs = new Map(); grantEpochs.set(data.token, epochs); }
+        epochs.set(data.file_path, (epochs.get(data.file_path) || 0) + 1);
         for (const key of grants.keys()) if (key.startsWith(data.token + ':' + data.file_path + ':')) grants.delete(key);
+        event.ports[0]?.postMessage({ok: true});
     } else if (data.type === 'fc-crypto-zip'
         && capabilities.get(data.token)?.clientId === event.source.id) {
         const now = common.monotonicNow();
@@ -97,7 +133,7 @@ async function requestGrant(token, filePath, expectedFileId = '', fallbackClient
     const capability = capabilities.get(token);
     const client = await self.clients.get(capability?.clientId || fallbackClientId);
     if (!client) {
-        capabilities.delete(token);
+        if (capabilities.get(token) === capability) revokeCapability(token);
         const error = new Error('媒体会话已失效，请刷新播放页面');
         error.status = 403;
         throw error;
@@ -124,6 +160,22 @@ async function requestGrant(token, filePath, expectedFileId = '', fallbackClient
 
 async function getGrant(token, filePath, expectedFileId = '', fallbackClientId = '', revalidate = false) {
     const identity = token + ':' + filePath + ':' + expectedFileId;
+    const recording = filePath.startsWith('@recording/');
+    let capability = capabilities.get(token);
+    // After a worker restart the owning client can recover its capability.
+    // Register it before requesting a grant, so pagehide can revoke it while
+    // that request is still in flight and a late reply cannot recreate it.
+    if (!capability && fallbackClientId) {
+        if (capabilities.size >= 256) {
+            const error = new Error('加密播放会话过多，请关闭闲置页面'); error.status = 429; throw error;
+        }
+        capability = {clientId: fallbackClientId};
+        capabilities.set(token, capability);
+    }
+    if (!capability || recording && capability.clientId !== fallbackClientId) {
+        const error = new Error('媒体会话已失效，请刷新播放页面'); error.status = 403; throw error;
+    }
+    const epoch = grantEpochs.get(token)?.get(filePath) || 0;
     const cached = grants.get(identity);
     if (cached?.failed) {
         const error = new Error('加密媒体完整性校验失败，请重新选择文件');
@@ -131,18 +183,140 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
         throw error;
     }
     if (!revalidate && cached && cached.deadline > common.monotonicNow() + 10000) return cached;
-    const pendingIdentity = identity + (revalidate ? ':revalidate' : '');
+    const pendingIdentity = identity + ':' + epoch + (revalidate ? ':revalidate' : '');
     if (pendingGrants.has(pendingIdentity)) return pendingGrants.get(pendingIdentity);
     const pending = requestGrant(token, filePath, expectedFileId, fallbackClientId, revalidate).then(grant => {
+        if ((grantEpochs.get(token)?.get(filePath) || 0) !== epoch || capabilities.get(token) !== capability) {
+            const error = new Error('媒体对象已变化，请重新选择'); error.status = 409; throw error;
+        }
+        if (recording !== (grant.transport === 'Recording')) {
+            const error = new Error('录音读取授权无效'); error.status = 403; throw error;
+        }
         if (grant.encryption) {
             try { common.validate(grant.encryption); }
             catch (error) { if (grant.transport === 'S3') error.status = 422; throw error; }
         }
-        else if (grant.transport !== 'S3' || !Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < 1 || grant.size_bytes > 10 * 1024 ** 3
+        else if ((grant.transport !== 'S3' && grant.transport !== 'Native') || !Number.isSafeInteger(grant.size_bytes) || grant.size_bytes < (grant.transport === 'Native' ? 0 : 1) || grant.size_bytes > 10 * 1024 ** 3
             || typeof grant.object_id !== 'string' || !grant.object_id || expectedFileId && grant.object_id !== expectedFileId) {
             const error = new Error('媒体对象描述无效'); error.status = 422; throw error;
         }
-        if (grant.transport === 'S3') validateS3Source(grant);
+        if (grant.source_identity_version !== undefined && (grant.source_identity_version !== 1
+            || grant.transport !== 'Native' || !grant.source_object_id || !/^[a-f0-9]{32}$/.test(grant.source_owner_id || ''))) {
+            const error = new Error('媒体身份版本无效'); error.status = 422; throw error;
+        }
+        if (grant.transport === 'Native' && (!/^[a-f0-9]{64}$/.test(grant.resource_id || '') || !/^[a-f0-9]{64}$/.test(grant.object_id || '') || !/^[a-f0-9]{64}$/.test(grant.source_revision || '') || !['media', 'lyric'].includes(grant.kind) || grant.kind === 'lyric' && grant.resource_id !== grant.object_id || grant.encryption && !grant.source_object_id || grant.source_object_id !== undefined && !/^[a-f0-9]{32}$/.test(grant.source_owner_id || '') || !['Direct', 'Relay', 'Local'].includes(grant.source_transport) || !grant.source_headers)) {
+            const error = new Error('明文资源身份无效'); error.status = 422; throw error;
+        }
+        if (filePath.startsWith('@admin-download/') || grant.download_snapshot !== undefined) {
+            if (!grant.encryption || !/^[a-f0-9]{64}$/.test(grant.resource_id || '') || !/^[a-f0-9]{64}$/.test(grant.download_snapshot || '')
+                || filePath !== `@admin-download/${grant.resource_id}/${grant.download_snapshot}`) {
+                const error = new Error('下载资源授权无效'); error.status = 403; throw error;
+            }
+            let source;
+            try { source = new URL(grant.source_url); } catch (_) {}
+            if (grant.transport === 'S3') validateS3Source(grant);
+            else if (grant.transport === 'Native') {
+                let origin;
+                try { origin = new URL(grant.source_origin); } catch (_) {}
+                if (grant.source_transport !== 'Direct' || !origin || origin.protocol !== 'https:' || origin.origin !== grant.source_origin || origin.pathname !== '/'
+                    || origin.username || origin.password || origin.search || origin.hash || !source || source.href !== `${origin.origin}/internal/v1/opaque-media/${grant.source_object_id}`
+                    || !grant.source_headers || Object.keys(grant.source_headers).length !== 1 || typeof grant.source_headers['X-Media-Capability'] !== 'string'
+                    || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(grant.source_headers['X-Media-Capability'])) {
+                    const error = new Error('直连下载授权无效'); error.status = 403; throw error;
+                }
+            }
+            else if (!source || source.origin !== self.location.origin || source.username || source.password || source.hash
+                || source.pathname !== '/api/v1/media/admin/download/bytes' || source.searchParams.size !== 2
+                || !/^[a-f0-9]{32}$/.test(grant.download_session_id || '')
+                || source.searchParams.get('resource_id') !== grant.resource_id || source.searchParams.get('snapshot') !== grant.download_snapshot
+                || grant.transport !== undefined || grant.source_headers !== undefined || grant.source_transport !== undefined) {
+                const error = new Error('下载资源授权无效'); error.status = 403; throw error;
+            }
+        } else if (recording) {
+            const id = filePath.slice('@recording/'.length);
+            const signed = grant.source_headers;
+            const localSource = `${self.location.origin}/api/v1/karaoke/account/recordings/${id}/audio-bytes`;
+            const local = grant.source_transport === undefined && grant.source_origin === undefined
+                && grant.source_object_id === undefined && grant.source_owner_id === undefined && grant.source_url === localSource
+                && typeof signed?.['X-Fc-Recording-Session'] === 'string' && /^[a-f0-9]{32}$/.test(signed['X-Fc-Recording-Session']);
+            let origin;
+            try { if (grant.source_transport === 'Direct') origin = new URL(grant.source_origin); } catch (_) {}
+            const direct = origin && origin.protocol === 'https:' && origin.origin === grant.source_origin
+                && typeof grant.source_object_id === 'string' && /^[a-f0-9]{64}$/.test(grant.source_object_id)
+                && typeof grant.source_owner_id === 'string' && /^[a-f0-9]{32}$/.test(grant.source_owner_id)
+                && grant.source_url === `${origin.origin}/internal/v1/opaque-media/${grant.source_object_id}`
+                && typeof signed?.['X-Media-Capability'] === 'string' && signed['X-Media-Capability'].length <= 4096
+                && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(signed['X-Media-Capability']);
+            if (!/^[a-f0-9]{32}$/.test(id) || grant.object_id !== id || grant.kind !== 'recording'
+                || !grant.encryption || grant.encryption.file_id !== expectedFileId || grant.encryption.plaintext_size < 1
+                || grant.encryption.ciphertext_size > 1024 ** 3 || grant.size_bytes !== grant.encryption.ciphertext_size
+                || !/^[a-f0-9]{64}$/.test(grant.source_revision || '')
+                || !/^(audio\/(webm|ogg|mp4|mpeg|wav)|application\/octet-stream)$/.test(grant.content_type || '')
+                || !signed || Object.keys(signed).length !== 1 || (!local && !direct)) {
+                const error = new Error('录音读取授权无效'); error.status = 403; throw error;
+            }
+        }
+        else if (grant.transport === 'S3') validateS3Source(grant);
+        else if (grant.source_transport !== undefined && grant.source_headers === undefined) {
+            const error = new Error('资源读取授权无效'); error.status = 403; throw error;
+        }
+        else if (grant.source_headers !== undefined) {
+            const signed = grant.source_headers;
+            let target;
+            try { target = new URL(grant.source_url, self.location.origin); } catch (_) {}
+            const direct = grant.source_transport === 'Direct';
+            const relay = grant.source_transport === 'Relay';
+            const opaque = grant.source_object_id !== undefined;
+            const ownerPath = opaque ? `/internal/v1/opaque-media/${grant.source_object_id}` : `/internal/v1/media/${grant.object_id}`;
+            const opaqueRelayPath = `/api/v1/media/opaque-follower-relay/${grant.source_object_id}`;
+            const opaqueLocalRelayPath = `/api/v1/media/opaque-local-follower-relay/${grant.source_object_id}`;
+            const opaqueLyricDirectPath = `/api/v1/media/master-direct-lyric/${grant.source_object_id}`;
+            const opaqueMasterRelayPath = `/api/v1/media/master-relay/${grant.source_object_id}`;
+            const opaqueLyricLocalPath = `/api/v1/media/master-local-lyric/${grant.source_object_id}`;
+            const opaqueMediaLocalPath = `/api/v1/media/master-local/${grant.source_object_id}`;
+            const opaqueMediaDirectPath = `/api/v1/media/master-direct/${grant.source_object_id}`;
+            let configuredOrigin;
+            try { if (direct) configuredOrigin = new URL(grant.source_origin); } catch (_) {}
+            const validDirect = direct && configuredOrigin && configuredOrigin.protocol === 'https:'
+                && configuredOrigin.origin === grant.source_origin && configuredOrigin.pathname === '/'
+                && !configuredOrigin.username && !configuredOrigin.password && !configuredOrigin.search && !configuredOrigin.hash
+                && target?.origin === configuredOrigin.origin
+                && (/^\/api\/v1\/media\/master-direct(?:-lyric)?\/[a-f0-9]{64}$/.test(target.pathname)
+                    || /^\/internal\/v1\/(?:media|opaque-media)\/[a-f0-9]{64}$/.test(target.pathname));
+            const validLocal = target?.origin === self.location.origin && ((grant.source_transport === undefined || grant.transport === 'Native' && grant.source_transport === 'Local' && grant.kind === 'media')
+                && /^\/internal\/v1\/(?:media|opaque-media)\/[a-f0-9]{64}$/.test(target.pathname)
+                || grant.transport === 'Native' && grant.source_transport === 'Local' && opaque
+                    && (grant.kind === 'lyric' && target.pathname === opaqueLyricLocalPath || grant.kind === 'media' && target.pathname === opaqueMediaLocalPath));
+            const validRelay = relay && target?.origin === self.location.origin
+                && /^\/api\/v1\/media\/(?:master|follower|opaque-follower|opaque-local-follower)-relay\/[a-f0-9]{64}$/.test(target.pathname);
+            let validOpaquePath = false;
+            if (opaque && target) {
+                const path = target.pathname;
+                if (grant.kind === 'lyric') {
+                    validOpaquePath = direct && path === opaqueLyricDirectPath || relay && path === opaqueMasterRelayPath
+                        || grant.source_transport === 'Local' && path === opaqueLyricLocalPath;
+                } else {
+                    validOpaquePath = direct && (path === ownerPath || grant.encryption && path === opaqueMediaDirectPath)
+                        || relay && (path === opaqueRelayPath || path === opaqueLocalRelayPath || grant.encryption && path === opaqueMasterRelayPath)
+                        || grant.source_transport === 'Local' && (path === ownerPath || path === opaqueMediaLocalPath);
+                }
+            }
+            const capabilityHeader = relay ? 'X-Media-Relay' : 'X-Media-Capability';
+            const opaqueOnlyPath = target && /^\/(?:internal\/v1\/opaque-media|api\/v1\/media\/(?:opaque-follower-relay|opaque-local-follower-relay|master-local|master-local-lyric))\/[a-f0-9]{64}$/.test(target.pathname);
+            if (!target || target.protocol !== 'https:' || target.username || target.password
+                || target.search || target.hash || !(validDirect || validLocal || validRelay)
+                || !signed || Array.isArray(signed) || Object.keys(signed).length !== 1
+                || typeof signed[capabilityHeader] !== 'string' || signed[capabilityHeader].length > 4096
+                || (opaque || opaqueOnlyPath) && (grant.transport !== 'Native' || grant.source_identity_version !== 1 || !opaque || !/^[a-f0-9]{32}$/.test(grant.source_owner_id || ''))
+                || grant.transport === 'Native' && opaque && (!/^[a-f0-9]{64}$/.test(grant.source_object_id) || grant.source_object_id === grant.object_id || grant.source_object_id === grant.resource_id)
+                || grant.transport === 'Native' && opaque && !validOpaquePath
+                || grant.transport === 'Native' && !opaque && target.pathname !== (grant.source_transport === 'Local' ? `/internal/v1/media/${grant.object_id}` : `/api/v1/media/master-${direct ? 'direct' + (grant.kind === 'lyric' ? '-lyric' : '') : 'relay'}/${grant.resource_id}`)
+                    && !(direct && grant.kind === 'media' && target.pathname === `/internal/v1/media/${grant.object_id}`)
+                    && !(relay && grant.kind === 'media' && target.pathname === `/api/v1/media/follower-relay/${grant.resource_id}`)
+                || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(signed[capabilityHeader])) {
+                const error = new Error('资源读取授权无效'); error.status = 403; throw error;
+            }
+        }
         if (grant.encryption && !(grant.key instanceof CryptoKey) || !grant.source_url || !Number.isFinite(grant.deadline)
             || grant.deadline <= common.monotonicNow() || grant.deadline > common.monotonicNow() + 900000) {
             const error = new Error('解密授权已失效');
@@ -152,7 +326,6 @@ async function getGrant(token, filePath, expectedFileId = '', fallbackClientId =
         // The worker is a transient byte adapter. Keys are never written to
         // CacheStorage, IndexedDB, cookies or local/session storage.
         if (grants.size >= 32) grants.delete(grants.keys().next().value);
-        if (!capabilities.has(token) && fallbackClientId) capabilities.set(token, {clientId: fallbackClientId});
         grants.set(identity, grant);
         return grant;
     }).finally(() => pendingGrants.delete(pendingIdentity));
@@ -164,7 +337,10 @@ async function readChunk(grant, index, signal, revalidate) {
     const expected = common.cipherRange(grant.encryption, index);
     if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
     const cacheKey = cipherChunkKey(grant.encryption, index);
-    let ciphertext = cachedCipherChunk(cacheKey);
+    const recording = grant.transport === 'Recording';
+    const adminDownload = grant.download_snapshot !== undefined;
+    const localAdminDownload = adminDownload && grant.transport === undefined;
+    let ciphertext = recording || adminDownload ? null : cachedCipherChunk(cacheKey);
     if (ciphertext) {
         // A valid cached key does not prove the source is still visible. The
         // page must obtain a fresh server decision before cached bytes are used.
@@ -175,7 +351,7 @@ async function readChunk(grant, index, signal, revalidate) {
                 // normal authenticated source reads instead of trusting a key cache.
                 forgetCipherChunk(cacheKey); ciphertext = null;
             } else {
-                if (cipherChunkKey(fresh.encryption, index) !== cacheKey) {
+                if (!sameResourceIdentity(grant, fresh) || cipherChunkKey(fresh.encryption, index) !== cacheKey) {
                     const error = new Error('播放文件已变化，请重新选择'); error.status = 409; throw error;
                 }
                 Object.assign(grant, fresh);
@@ -183,10 +359,14 @@ async function readChunk(grant, index, signal, revalidate) {
         } catch (error) { forgetCipherChunk(cacheKey); throw error; }
     }
     if (!ciphertext) {
+        const localRecording = recording && grant.source_transport !== 'Direct';
+        const capabilitySource = !localRecording && (grant.transport === 'S3' || grant.source_headers);
         const response = await fetch(grant.source_url, {
-            headers: {...(grant.source_headers || {}), Range: `bytes=${expected.start}-${expected.end}`},
-            credentials: grant.transport === 'S3' ? 'omit' : 'same-origin',
-            ...(grant.transport === 'S3' ? {mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer'} : {}),
+            headers: {...(grant.source_headers || {}), Range: `bytes=${expected.start}-${expected.end}`,
+                ...(localAdminDownload ? {'X-Fc-Download-Session': grant.download_session_id} : {})},
+            credentials: capabilitySource ? 'omit' : 'same-origin',
+            ...(localRecording || localAdminDownload ? {mode: 'same-origin', redirect: 'error', referrerPolicy: 'no-referrer'}
+                : capabilitySource ? {mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer'} : {}),
             cache: 'no-store', signal,
         });
         if (grant.transport === 'S3' && !response.ok) {
@@ -197,11 +377,19 @@ async function readChunk(grant, index, signal, revalidate) {
             await response.body?.cancel().catch(() => {});
             const error = new Error('S3 对象身份校验失败'); error.status = 422; throw error;
         }
+        if (recording && response.ok && response.headers.get('ETag') !== `"${grant.source_revision}"`) {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('录音密文身份不一致'); error.status = 422; throw error;
+        }
+        if (localAdminDownload && response.ok && response.headers.get('ETag') !== `"${grant.download_snapshot}"`) {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('下载密文身份不一致'); error.status = 422; throw error;
+        }
         const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
         const exactRange = response.status === 206 && contentRange
             && Number(contentRange[1]) === expected.start && Number(contentRange[2]) === expected.end
             && Number(contentRange[3]) === grant.encryption.ciphertext_size;
-        const completeSmallObject = response.status === 200 && expected.start === 0
+        const completeSmallObject = !recording && !adminDownload && response.status === 200 && expected.start === 0
             && expected.size === grant.encryption.ciphertext_size;
         if (!exactRange && !completeSmallObject) {
             await response.body?.cancel().catch(() => {});
@@ -213,10 +401,11 @@ async function readChunk(grant, index, signal, revalidate) {
         ciphertext = await common.boundedBytes(response, expected.size);
     }
     // AES-GCM verifies each entire chunk before any of its bytes are delivered.
+    // It does not prove later chunks exist or will authenticate successfully.
     try {
         const plaintext = new Uint8Array(await crypto.subtle.decrypt(
             common.parameters(grant.encryption, index), grant.key, ciphertext));
-        if (!signal?.aborted) rememberCipherChunk(cacheKey, ciphertext);
+        if (!recording && !adminDownload && !signal?.aborted) rememberCipherChunk(cacheKey, ciphertext);
         return plaintext;
     } catch (error) {
         forgetCipherChunk(cacheKey);
@@ -320,8 +509,91 @@ async function serveS3(request, grant, token, filePath, download, expectedFileId
     return new Response(stream, {status: selected.partial ? 206 : 200, headers});
 }
 
+async function nativeRange(grant, start, end, signal) {
+    const response = await fetch(grant.source_url, {headers: {...grant.source_headers, Range: `bytes=${start}-${end}`},
+        credentials: 'omit', mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store', signal});
+    if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        const error = new Error('明文资源读取失败'); error.status = response.status; throw error;
+    }
+    const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('Content-Range') || '');
+    const exact = response.status === 206 && range && Number(range[1]) === start && Number(range[2]) === end && Number(range[3]) === grant.size_bytes
+        || response.status === 200 && start === 0 && end + 1 === grant.size_bytes;
+    if (!exact || Number(response.headers.get('Content-Length')) !== end - start + 1) {
+        await response.body?.cancel().catch(() => {});
+        const error = new Error('资源未返回授权范围'); error.status = 422; throw error;
+    }
+    return response;
+}
+
+async function serveNative(request, grant, token, filePath, download, expectedFileId, fallbackClientId) {
+    const size = grant.size_bytes, selected = common.range(request.headers.get('Range'), size);
+    if (!selected) return new Response(null, {status: 416, headers: {'Content-Range': `bytes */${size}`, 'Cache-Control': 'no-store'}});
+    const headers = new Headers({'Content-Type': grant.content_type || 'application/octet-stream',
+        'Content-Length': String(selected.end - selected.start + 1), 'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ETag: `"${grant.source_revision}"`});
+    if (selected.partial) headers.set('Content-Range', `bytes ${selected.start}-${selected.end}/${size}`);
+    if (download) headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(grant.filename || filePath.split('/').pop())}`);
+    if (size === 0) {
+        // An empty grant still requires a live owner request. Do not infer a
+        // successful empty file merely from metadata or a cached capability.
+        const sourceHeaders = new Headers(grant.source_headers);
+        if (request.headers.has('Range')) sourceHeaders.set('Range', request.headers.get('Range'));
+        const response = await fetch(grant.source_url, {method: request.method, headers: sourceHeaders,
+            credentials: 'omit', mode: 'cors', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store', signal: request.signal});
+        const suffix206 = selected.partial && response.status === 206 && response.headers.get('Content-Range') === 'bytes 0--1/0';
+        const full200 = response.status === 200 && !response.headers.has('Content-Range');
+        if ((!suffix206 && !full200) || response.headers.get('Content-Length') !== '0'
+            || response.headers.get('Content-Encoding') && response.headers.get('Content-Encoding') !== 'identity') {
+            await response.body?.cancel().catch(() => {});
+            const error = new Error('空资源读取失败'); error.status = 422; throw error;
+        }
+        if (request.method === 'GET' && response.body) await common.boundedBytes(response, 0);
+        if (full200) headers.delete('Content-Range');
+        return new Response(null, {status: response.status, headers});
+    }
+    if (request.method === 'HEAD') {
+        const probe = await nativeRange(grant, 0, 0, request.signal);
+        await probe.body?.cancel().catch(() => {});
+        return new Response(null, {status: selected.partial ? 206 : 200, headers});
+    }
+    let offset = selected.start;
+    const controller = new AbortController();
+    request.signal.addEventListener('abort', () => controller.abort(), {once: true});
+    if (request.signal.aborted) controller.abort();
+    const stream = new ReadableStream({
+        async pull(output) {
+            try {
+                if (offset > selected.end) { output.close(); return; }
+                if (grant.deadline <= common.monotonicNow() + 10000) {
+                    const fresh = await getGrant(token, filePath, expectedFileId, fallbackClientId, true);
+                    if (!sameResourceIdentity(grant, fresh) || fresh.transport !== 'Native' || fresh.encryption) {
+                        const error = new Error('媒体对象已变化，请重新选择'); error.status = 409; throw error;
+                    }
+                    Object.assign(grant, fresh);
+                }
+                const end = Math.min(selected.end, offset + common.CHUNK_SIZE - 1);
+                const response = await nativeRange(grant, offset, end, controller.signal);
+                output.enqueue(await common.boundedBytes(response, end - offset + 1));
+                offset = end + 1;
+                if (offset > selected.end) output.close();
+            } catch (error) {
+                const cancelled = request.signal.aborted || error.name === 'AbortError';
+                controller.abort();
+                if (!cancelled && (error.fatal || [401, 403, 404, 409, 412, 416, 422].includes(error.status))) {
+                    const client = await self.clients.get(capabilities.get(token)?.clientId || '');
+                    client?.postMessage({type: 'fc-crypto-fault', token, file_path: filePath, error: '媒体授权或对象校验失败，请重新选择'});
+                }
+                output.error(error);
+            }
+        }, cancel() { controller.abort(); },
+    }, {highWaterMark: 0});
+    return new Response(stream, {status: selected.partial ? 206 : 200, headers});
+}
+
 async function servePlaintext(request, token, filePath, download, expectedFileId = '', fallbackClientId = '') {
     const grant = await getGrant(token, filePath, expectedFileId, fallbackClientId);
+    if (grant.transport === 'Native' && !grant.encryption) return serveNative(request, grant, token, filePath, download, expectedFileId, fallbackClientId);
     if (!grant.encryption) return serveS3(request, grant, token, filePath, download, expectedFileId, fallbackClientId);
     const size = grant.encryption.plaintext_size;
     const selected = common.range(request.headers.get('Range'), size);
@@ -340,6 +612,7 @@ async function servePlaintext(request, token, filePath, download, expectedFileId
         {status: selected.partial ? 206 : 200, headers});
     let index = Math.floor(selected.start / common.CHUNK_SIZE);
     const last = Math.floor(selected.end / common.CHUNK_SIZE);
+    const epoch = grantEpochs.get(token)?.get(filePath) || 0;
     const controller = new AbortController();
     request.signal.addEventListener('abort', () => controller.abort(), {once: true});
     if (request.signal.aborted) controller.abort();
@@ -347,10 +620,15 @@ async function servePlaintext(request, token, filePath, download, expectedFileId
         async pull(output) {
             try {
                 if (index > last) { output.close(); return; }
+                if (grant.transport === 'Recording' && (capabilities.get(token)?.clientId !== fallbackClientId
+                    || (grantEpochs.get(token)?.get(filePath) || 0) !== epoch)) {
+                    const error = new Error('录音读取授权已失效'); error.status = 403; throw error;
+                }
                 if (grant.deadline <= common.monotonicNow() + 10000) {
                     const refreshed = await getGrant(token, filePath, expectedFileId, fallbackClientId);
-                    if (refreshed.encryption.file_id !== grant.encryption.file_id)
-                        throw new Error('播放文件已变化，请重新选择');
+                    if (!sameResourceIdentity(grant, refreshed)) {
+                        const error = new Error('播放文件已变化，请重新选择'); error.status = 409; throw error;
+                    }
                     Object.assign(grant, refreshed);
                 }
                 const plaintext = await readChunk(grant, index, controller.signal,

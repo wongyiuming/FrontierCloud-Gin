@@ -44,6 +44,9 @@ func (s *Storage) MigrationShadowCleanupAuthorized(ctx context.Context, relation
 // Source cleanup and cancellation shadows use the same full byte/footer
 // verification and durable recording deletion journal.
 func (s *Storage) migrationDeleteAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, peer store.MigrationPeerRepository, operation string) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	unlock, e := s.Lock(id)
 	if e != nil {
 		return e
@@ -174,7 +177,7 @@ func (s *Storage) finishMigrationHistory(ctx context.Context, relationship strin
 	if operation != "shadow" {
 		return s.migrationHistory(ctx, relationship, l, v, peer)
 	}
-	r, e := migrationdata.New(s.root, v.Header.TargetID, "recording")
+	r, e := migrationdata.NewGuarded(s.root, v.Header.TargetID, "recording", s.repo.CheckLegacyPhysicalWritesAllowed)
 	if e != nil {
 		return e
 	}
@@ -214,7 +217,7 @@ func (s *Storage) finishMigrationHistory(ctx context.Context, relationship strin
 }
 
 func (s *Storage) migrationHistory(ctx context.Context, relationship string, l store.MigrationLease, v store.MigrationPeerObject, repo store.MigrationPeerRepository) error {
-	r, e := migrationdata.New(s.root, v.Header.SourceID, "recording")
+	r, e := migrationdata.NewGuarded(s.root, v.Header.SourceID, "recording", s.repo.CheckLegacyPhysicalWritesAllowed)
 	if e != nil {
 		return e
 	}
@@ -230,7 +233,7 @@ func (s *Storage) migrationHistory(ctx context.Context, relationship string, l s
 	})
 }
 func (s *Storage) MigrationHistoryFinished(ctx context.Context, v store.MigrationPeerObject) (bool, error) {
-	r, e := migrationdata.New(s.root, v.Header.SourceID, "recording")
+	r, e := migrationdata.NewGuarded(s.root, v.Header.SourceID, "recording", s.repo.CheckLegacyPhysicalWritesAllowed)
 	if e != nil {
 		return false, e
 	}
@@ -238,6 +241,9 @@ func (s *Storage) MigrationHistoryFinished(ctx context.Context, v store.Migratio
 }
 
 func (s *Storage) finishMigrationIntent(ctx context.Context, id, task string) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	name := ".recording-" + id + ".json"
 	info, e := s.info(name)
 	if errors.Is(e, os.ErrNotExist) {

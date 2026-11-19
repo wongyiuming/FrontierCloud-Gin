@@ -1,10 +1,9 @@
 # Shared database schema
 
-The current schema generation is 8 (`migrations/schema.go`). Both backends
-embed their `0008-schema.json` snapshot. The operator archive/upgrade path accepts
-source generation 6, 7 or 8; the lower-level release-preparation command also has
-explicit 4/5-to-8 migration logic. That does not make those generations supported
-by `foc upgrade`. See [upgrade boundaries](../docs/operator-upgrade.md).
+The current schema generation is 13 (`migrations/schema.go`). Both backends
+embed their `0013-schema.json` snapshot. Encrypted-tree deployment starts with a
+fresh current-generation database and reimports business data through supported APIs. See
+[upgrade boundaries](../docs/operator-upgrade.md).
 
 Historical generation 6 has one logical model and two physical snapshots:
 
@@ -105,6 +104,51 @@ Older runtimes refuse generation 8. Recovery archives preserve the source
 generation and matching images; changing an image alone cannot reverse DDL.
 See the [S3 adapter contract](../docs/s3-storage.md) for credential, grant and
 backup boundaries.
+
+Generation 8 -> 9 adds an independent Master-owned public ingress record and
+native transport policy records. It does not rewrite placements or infer a
+Master Direct/Relay policy. The existing Master origin is recorded when the
+model is first read; peer ingress activation and policy application are not
+available in this generation. SQLite rolls back interrupted DDL; MySQL replays
+only canonical additive table shapes before the journal and generation commit.
+Business snapshots include the records while retaining compatibility with
+older v2 snapshots; restore still requires identity/relationship reconciliation.
+Older runtimes refuse generation 9, and rollback requires matching recovery data.
+
+Generation 9 -> 10 adds only dormant sealed-tree storage tables and identity
+reservations. It does not initialize keys, rewrite path-bearing data, remove
+historical backups, or enable the new layout. Startup refuses nonempty tree
+tables until runtime, protected backup/restore and migration are integrated.
+SQLite rolls back interrupted DDL; MySQL admits only verified canonical additive
+table/index shapes before recording the migration. Older runtimes refuse
+generation 10, and rollback requires matching recovery data.
+
+Generation 10 -> 11 adds a dormant table for sealed legacy-read control
+intents and their current pointer. It does not enable owner enrollment or a tree transition. Existing
+generation-10 assets and journal checksums remain unchanged. SQLite migration
+is atomic; MySQL additive DDL is shape-checked and retryable before journaling.
+Nonempty intents prevent startup and logical backup until their recovery and
+rollback protections are integrated. Older binaries refuse generation 11;
+restoring an older version requires a matching recovery point.
+
+Generation 11 -> 12 adds encrypted selected-upload intents, keyed indexes,
+sealed S3 multipart journals and sealed recording metadata. Schema preparation
+alone grants no upload authorization and changes no placements. Older binaries
+refuse generation 12.
+SQLite upgrades are atomic. MySQL accepts only canonical empty partial DDL before journaling. A
+nonempty generation-11 control intent prevents the upgrade and is retained.
+Until selected-upload recovery is integrated, nonempty new intents block
+startup and legacy logical backup; they must never be silently discarded.
+
+Generation 12 -> 13 adds sealed native migration intent, unit, object and
+receipt records. The ledger uses the existing migration task identity and
+keeps encrypted values separate from keyed lookup indexes. The historical
+tables and statements are retained exactly.
+
+SQLite commits the additive schema, checksum journal and marker together.
+MySQL verifies that any partial ledger is canonical and empty before writing
+the journal and marker in one transaction. Existing prepared Gen12 trees
+require a separately verified restore and reimport into a Gen13 target.
 
 Gin/Go implements business repositories, independent migration/health commands,
 and both database dialects. Default deployment is Gin + SQLite; the optional

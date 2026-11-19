@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
@@ -23,49 +22,10 @@ const maxMusicPictureBytes = 4 << 20
 var ErrMetadataBusy = errors.New("music metadata is busy")
 
 type MusicTags struct {
-	Title   string
-	Artist  string
-	Album   string
 	Picture []byte
 	MIME    string
 }
 
-func tagText(data []byte) string {
-	if len(data) == 0 {
-		return ""
-	}
-	encoding, data := data[0], data[1:]
-	var value string
-	switch encoding {
-	case 0:
-		runes := make([]rune, len(data))
-		for i, b := range data {
-			runes[i] = rune(b)
-		}
-		value = string(runes)
-	case 1, 2:
-		var order binary.ByteOrder = binary.BigEndian
-		if len(data) >= 2 && data[0] == 255 && data[1] == 254 {
-			order = binary.LittleEndian
-			data = data[2:]
-		} else if len(data) >= 2 && data[0] == 254 && data[1] == 255 {
-			data = data[2:]
-		}
-		words := make([]uint16, 0, len(data)/2)
-		for len(data) >= 2 {
-			words = append(words, order.Uint16(data))
-			data = data[2:]
-		}
-		value = string(utf16.Decode(words))
-	case 3:
-		value = string(data)
-	}
-	value = strings.TrimSpace(strings.SplitN(value, "\x00", 2)[0])
-	if len(value) > 4096 {
-		return ""
-	}
-	return value
-}
 func syncSafe(b []byte) int {
 	if len(b) != 4 {
 		return -1
@@ -201,6 +161,9 @@ func readMusicTags(reader io.Reader) MusicTags {
 		}
 		frame := data[width : width+length]
 		data = data[width+length:]
+		if name != "APIC" && name != "PIC" {
+			continue
+		}
 		if version == 3 && flags&0xe0 != 0 || version == 4 && flags&0x4c != 0 {
 			continue
 		}
@@ -214,12 +177,6 @@ func readMusicTags(reader io.Reader) MusicTags {
 			frame = frame[4:]
 		}
 		switch name {
-		case "TIT2", "TT2":
-			tags.Title = tagText(frame)
-		case "TPE1", "TP1":
-			tags.Artist = tagText(frame)
-		case "TALB", "TAL":
-			tags.Album = tagText(frame)
 		case "APIC", "PIC":
 			p, m, k := picture(frame, version == 2)
 			if len(p) > 0 && (len(tags.Picture) == 0 || k == 3) {
@@ -227,33 +184,6 @@ func readMusicTags(reader io.Reader) MusicTags {
 				tags.MIME = m
 			}
 		}
-	}
-	return tags
-}
-
-func tagsFromFile(file *os.File, size int64) MusicTags {
-	tags := readMusicTags(file)
-	if size >= 128 && (tags.Title == "" || tags.Artist == "" || tags.Album == "") {
-		tail := make([]byte, 128)
-		if _, err := file.ReadAt(tail, size-128); err == nil {
-			tags = legacyMusicTags(tags, tail)
-		}
-	}
-	return tags
-}
-
-func legacyMusicTags(tags MusicTags, tail []byte) MusicTags {
-	if len(tail) != 128 || string(tail[:3]) != "TAG" {
-		return tags
-	}
-	if tags.Title == "" {
-		tags.Title = tagText(append([]byte{0}, tail[3:33]...))
-	}
-	if tags.Artist == "" {
-		tags.Artist = tagText(append([]byte{0}, tail[33:63]...))
-	}
-	if tags.Album == "" {
-		tags.Album = tagText(append([]byte{0}, tail[63:93]...))
 	}
 	return tags
 }
@@ -288,7 +218,7 @@ func (s *Service) cachedMusicTags(key string, read func() (MusicTags, error)) (M
 	if err != nil {
 		return tags, err
 	}
-	size := len(tags.Picture) + len(tags.Title) + len(tags.Artist) + len(tags.Album) + len(key) + 256
+	size := len(tags.Picture) + len(key) + 256
 	s.tagsMu.Lock()
 	defer s.tagsMu.Unlock()
 	if _, exists := s.tagsCache[key]; exists {
@@ -403,7 +333,7 @@ func (s *Service) musicMetadata(ctx context.Context, name, id string) (MusicTags
 		return MusicTags{}, err
 	}
 	key := name + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
-	return s.cachedMusicTags(key, func() (MusicTags, error) { return tagsFromFile(file, info.Size()), nil })
+	return s.cachedMusicTags(key, func() (MusicTags, error) { return readMusicTags(file), nil })
 }
 func (s *Service) DecorateMusicTracks(ctx context.Context, tracks []Track) {
 	for i := range tracks {
@@ -432,13 +362,6 @@ func (s *Service) remoteMusicTags(ctx context.Context, row store.GlobalMedia) (M
 			return MusicTags{}, err
 		}
 		tags = readMusicTags(io.MultiReader(bytes.NewReader(header), bytes.NewReader(body)))
-	}
-	if row.Bytes >= 128 && (tags.Title == "" || tags.Artist == "" || tags.Album == "") {
-		tail, err := s.control.ReadGlobalMediaRange(ctx, row, row.Bytes-128, row.Bytes-1)
-		if err != nil {
-			return MusicTags{}, err
-		}
-		tags = legacyMusicTags(tags, tail)
 	}
 	return tags, nil
 }

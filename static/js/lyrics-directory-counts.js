@@ -4,7 +4,7 @@
     const originalLyricDirectoryButton = lyricDirectoryButton;
     lyricDirectoryButton = function(item, kind) {
         const button = originalLyricDirectoryButton(item, kind);
-        const count = Number(item?.count);
+        const count = item?.count;
         const trailing = button.lastElementChild;
         if (trailing && Number.isFinite(count)) {
             const unit = kind === 'track' ? '首曲目' : '份歌词';

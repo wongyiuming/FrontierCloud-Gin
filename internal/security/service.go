@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"net/netip"
 	"os"
@@ -105,7 +106,7 @@ func (s *Service) Policy(ctx context.Context, raw, action, note string, audit st
 	// Commit is authoritative even if edge publication must be retried. Backend
 	// enforcement remains live; the periodic publisher repairs the projection.
 	if err := s.Publish(ctx, false); err != nil {
-		slog.Error("IP edge policy publication deferred", "error", err)
+		slog.Error("IP edge policy publication deferred", "error_type", logsafe.ErrorType(err))
 	}
 	return ban, ip, nil
 }
@@ -237,7 +238,7 @@ func (s *Service) Run(ctx context.Context) {
 			err := s.Publish(attempt, false)
 			cancel()
 			if err != nil && ctx.Err() == nil {
-				slog.Error("IP edge policy refresh failed", "error", err)
+				slog.Error("IP edge policy refresh failed", "error_type", logsafe.ErrorType(err))
 			}
 		}
 	}

@@ -144,11 +144,9 @@
         const media = currentMediaList?.[index];
         if (!media || !art) return;
 
-        cancelPlayerArtwork();
         accountPlaybackTime();
         void reportValidPlayback();
         currentIndex = index;
-        loadSelectedMetadata(media);
         resetPlaybackAccounting(media);
         setPlaylistActive(index);
 

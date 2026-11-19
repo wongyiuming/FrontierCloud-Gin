@@ -118,6 +118,9 @@ func TestSharedLyricsRenderedAssetsAreVersionedAndOrdered(t *testing.T) {
 			t.Fatal(page.route, response.Code)
 		}
 		content := response.Body.String()
+		if page.parent == "js/player.js" && strings.Contains(content, public.assets["js/music-metadata.js"]) {
+			t.Fatal("player must not load the category artwork parser", page.route)
+		}
 		for _, asset := range []string{"css/lyrics-window.css", "js/lyrics-window.js"} {
 			quoted := `"` + public.assets[asset] + `"`
 			want := 0
@@ -134,11 +137,21 @@ func TestSharedLyricsRenderedAssetsAreVersionedAndOrdered(t *testing.T) {
 		if page.route == "/karaoke/" && (!strings.Contains(content, `src="`+public.assets["js/lyrics-window.js"]+`" defer`) || strings.Index(content, public.assets["js/lyrics-window.js"]) >= strings.Index(content, `"/static/js/karaoke-ui.js"`)) {
 			t.Fatal("Karaoke lyric defer/order contract changed")
 		}
+		if page.route == "/karaoke/" {
+			checksum := public.assets["js/upload-sha256.js"]
+			if !strings.Contains(content, `src="`+checksum+`" defer`) || strings.Index(content, checksum) >= strings.Index(content, public.assets[page.parent]) {
+				t.Fatal("Karaoke requires the fingerprinted checksum module before its uploader")
+			}
+		}
+	}
+	category := request(router, http.MethodGet, "/api/v1/media/music", "")
+	if category.Code != http.StatusOK || !strings.Contains(category.Body.String(), public.assets["js/music-metadata.js"]) {
+		t.Fatal("music category must retain its artwork parser", category.Code)
 	}
 }
 
 func TestPublicStartupRequiresEachCompiledCryptoModule(t *testing.T) {
-	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/business-navigation.js", "js/lyrics-window.js", "css/lyrics-window.css"}
+	required := []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/media-browser.js", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/upload-sha256.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/business-navigation.js", "js/lyrics-window.js", "css/lyrics-window.css"}
 	for _, missing := range required[10:] {
 		t.Run(filepath.Base(missing), func(t *testing.T) {
 			staticRoot := t.TempDir()

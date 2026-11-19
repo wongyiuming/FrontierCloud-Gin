@@ -7,12 +7,39 @@ This document records invariants that must survive feature work. It is intention
 FrontierCloud runs as one of three roles:
 
 - **Standalone** — one node owns business state and local media.
-- **Master** — the only business authority in a cluster. Public pages and business APIs are served by the Master.
+- **Master** — the only business authority in a cluster. It is the default public ingress and owns the Admin domain and APIs.
 - **storage node** — a resource node paired to a Master. A storage node provides authenticated health, storage/data-plane, backup, and node-control capabilities; it is not a second business authority.
 
 A cluster has exactly one business Master. Do not introduce multi-Master, implicit leader election, automatic Master failover, or peer-to-peer business writes under an unrelated feature change.
 
 Fixed Master/storage node roles require certificate-verified HTTPS. Loss of the TLS requirement must fail closed rather than silently downgrading a fixed role.
+
+### Public ingress and native resource transport
+
+Business authority, public ingress, resource ownership and resource transport
+are separate facts. The Master remains the sole business writer and retains the
+media premaster. One active ingress serves new public sessions; the Master is
+the default. An eligible storage node may be explicitly selected as ingress
+without becoming a Master. Prepared Linux SQLite Master startup installs the
+ingress prerequisite using the authenticated Owner and encrypted catalog tree.
+Each candidate must still pass the signed proxy and encrypted media probes.
+Deployment acceptance requires verified new-format uploads, reads,
+authorization and recovery on the supported paths.
+
+Each native owner has an independently configured Direct or Relay policy.
+Relative to the active ingress, an object owned by that ingress is Local;
+otherwise its effective access is its owner's applied policy. Switching ingress
+does not change policies or ownership. Direct failure must not trigger Relay,
+an ingress switch or Master failover. A Master with no non-ingress policy
+requires an explicit administrator choice; Local does not imply Direct or Relay.
+Historical follower mode remains an observed compatibility value pending manual
+confirmation. S3 retains its separate adapter contract.
+
+The existing storage-member `MasterLocal`/`Local` fields describe historical
+placement and are not the new ingress-relative access classification. Do not
+rewrite member kinds, object IDs, paths, versions or encryption descriptors to
+change that classification. Address and routing constraints, recovery and stage
+boundaries are specified in [public ingress](docs/public-ingress.md).
 
 ## 2. Business state versus resource state
 
@@ -26,24 +53,41 @@ The Master exposes one logical storage pool containing Master Local, enabled sto
 
 - One logical media path identifies one complete media object.
 - One complete object belongs to exactly one storage member at a time.
-- Placement is transparent to playback/download: Local, Direct, Relay, and S3 are transport choices, not different business objects.
+- Placement is transparent to playback/download: Local, Direct, Relay, and S3 do not create different business objects. Local is an effective access classification relative to ingress, not an administrator-selected native policy.
 - Storage allocation is FrontierCloud logical capacity. Physical disk capacity is observed separately.
 - Admin Storage wording is intentionally split into `physical used / all` and `used / allocated`; do not conflate filesystem free space with FrontierCloud quota.
 
-### Upload site types
+### Upload destination
 
-Admin media upload chooses a **site type**, never a concrete storage member. The selector starts empty and media upload does not begin until a type is explicitly selected.
+Admin media upload must explicitly select the destination storage member. For a
+native member the UI displays its configured, authenticated node address and
+identity; an S3 member is distinguished by its configured endpoint and bucket.
+The selector starts empty. A display address is not an authority to send bytes:
+the request identifies the selected member by its stable ID and the server
+validates the current relationship, configuration and applicable transport.
+The active public ingress is a separate choice and uploading never changes it.
 
-The supported site types are:
+The Admin selector submits one stable member ID; a site-type label does not
+authorize automatic placement. The non-tree reservation uses the existing
+transaction and upload/finalize/cancel lifecycle for that exact member. The new
+encrypted-tree upload and recovery paths are still being connected and must
+not be described as complete based on this non-tree path.
+Direct uploads use the authenticated owner's configured upload endpoint; Relay
+and Local follow their applicable serving paths, and S3 retains its own adapter.
+Selecting a Relay member's displayed address does not turn it into a browser
+Direct endpoint. Never accept an arbitrary browser-supplied URL as the target.
 
-- `primary` — the Master Local placement (`member_kind=MasterLocal`, transport `Local`);
-- `direct` — storage node placements whose current transport is `Direct`;
-- `relay` — storage node placements whose current transport is `Relay`;
-- `s3` — optional private object-store placements (`member_kind=S3`, transport `S3`), configured only by the Master.
+The existing immediate-parent affinity remains in force: live objects and
+reservations in a folder must have one owner, and each child folder is a
+separate affinity unit. When a chosen member conflicts with that owner, or is
+offline, non-writable or lacks quota or physical capacity, refuse with an
+actionable error; never silently select another member or move existing data.
+Historical split-owner folders fail closed. The server rechecks destination,
+relationship, applicable policy and capacity in the reservation transaction.
+Concurrent reservations account for `reserved_bytes`, and resume, cancel and
+recovery remain bound to the original member and object identity.
 
-For Direct and Relay uploads, the user must not name a specific member. The first live object/reservation in an immediate parent folder selects an eligible member by lowest `(used + reserved) / allocated` pressure, then more available bytes. Subsequent direct children bind to that same owner; a child folder is a separate affinity unit. An offline, non-writable or full bound owner causes refusal, never silent spill to another member. Historical split-owner folders fail closed. Member selection plus durable reservation is serialized by the storage write lock so concurrent Admin sessions see current `reserved_bytes`.
-
-Historical media requires **no migration** for this feature. Existing `storage_member_id`, `member_kind`, and `transport` remain the source of truth; Admin derives the visible site type from those fields. A missing transport in a local/Standalone media tree is treated as primary/local. Changing this presentation must not rewrite historical ownership.
+Historical media requires **no migration** for this feature. Existing `storage_member_id`, `member_kind`, and `transport` remain the source of truth for the existing placement/site-type model; they are not a substitute for the independent native transport policy and ingress-relative effective access. A missing transport in a local/Standalone media tree is treated as primary/local for that existing presentation. Changing this presentation must not rewrite historical ownership.
 
 S3 participates in the same immediate-parent affinity, serialized reservation,
 logical allocation and browser encryption rules. It is an adapter rather than a
@@ -88,8 +132,44 @@ Compute Worker is **retired**. Worker slots, leased compute scheduling, worker U
 
 ### Browser encryption boundary
 
-Every upload selection explicitly chooses plaintext or encrypted storage; neither
-remembered choices nor crypto-error fallback can silently choose plaintext.
+New managed resources use one encrypted format on every storage owner,
+including the Master. The active ingress and Local, Direct, Relay or S3
+transport may change how bytes travel. They never change the encryption,
+catalog or object format. Keep the logical tree encrypted at rest and use
+random physical object names throughout upload and publication. The upload
+UI opens the file picker directly. The server rejects uploads without valid
+encryption preparation.
+
+Start this release on its own database schema and a clean data directory.
+Carry forward old media and lyrics through the existing deployment's business
+download APIs and the new deployment's normal upload APIs. Record lyric
+associations and ordering before cutover and compare them after upload. Keep
+the verified download until the comparison succeeds. The release contract
+covers the new version's own startup, restart, recovery and business workflows.
+Previous versions, previous schema layouts and previous internal relationships
+are outside that contract.
+
+Before replacing a deployment, inventory and back up its complete durable
+application state. Derive the inventory from the effective deployment on
+the Master and every retained node, including active mounts, runtime secret
+sources, databases, state directories, configured remote stores and retained
+application logs outside those mounts. Preserve deployment configuration,
+node identities and credentials, key material and managed resources. The
+permanent AdminKey is part of that state and must be restored byte for byte.
+Treat an inventory as complete only when it reconciles every durable source,
+including unclassified files. Exclude only state proven to be reproducible or
+explicitly approved for removal. Protect credentials and private keys during
+capture, in transit, at rest and during recovery. Keep a protected copy whose
+authorized recovery does not depend on the original host being available.
+
+Verify recovery in isolation before replacing the live deployment. Confirm
+that the original AdminKey authenticates through the normal Admin login and
+that application settings, security state, observations, history and managed
+resources can be recovered. An unaccounted durable source or a failed recovery
+check blocks replacement.
+Use the backup as a recovery source. Import into the new version through its
+supported interfaces and its own schema.
+
 Browser AES-GCM chunks preserve bounded Range playback and one complete object
 per storage owner. The Master owns durable encryption metadata and permissions
 and wraps small file keys through session-scoped asymmetric handshakes; ordinary
@@ -167,7 +247,7 @@ Catalog ordering is cached server-side. A cache hit must not cause a new MySQL s
 
 ## 7. Lyrics
 
-Lyrics are Master-owned business content even when media bytes are stored on storage nodes.
+The Master owns lyric business facts and relations even when media bytes are stored on storage nodes. Lyric files are currently held on the Master; public routing must distinguish their bytes from their business metadata.
 
 The supported hierarchy is intentionally bounded:
 
@@ -188,6 +268,11 @@ Two directories below `lyrics` is the maximum. Upload, validation, Admin tree, s
 - a fallback relation does not make a track appear to have a user-managed lyric in Admin.
 
 Same-name auto-link is fallback automation, not an authority over user decisions. It runs only after an administrator explicitly clicks the Admin auto-link control; lyric upload and catalog refresh must never trigger it. It may fill a missing relation or replace `lyrics/default.lrc`, but it **must never overwrite an explicit user-managed lyric relation**, even when that selected lyric file is temporarily unavailable. The current-relation check and replacement happen under the same database row lock so a concurrent manual link cannot be overwritten. Auto-link must scan only the supported media and lyric hierarchy; historical orphan files outside that hierarchy cannot re-enter business state through automation.
+
+Manual association in Admin starts with one lyric and allows selecting or
+unselecting multiple tracks. The encrypted catalog keeps that workflow when
+tracks are paginated. Saving applies only the explicitly changed tracks in one
+transaction; tracks outside the current page or filter are not implicitly unlinked.
 
 An accepted lyric upload is successful only after the file and its managed-object registration are durable together. A failed registration/audit transaction removes the newly published file. A later cache-invalidation failure must never delete an already committed lyric.
 
@@ -240,6 +325,10 @@ Dynamic modules must join this same final DOM/visual order. Reordering code must
 Node management initially shows compact node summaries. Resource, certificate,
 backup and retirement details require explicit expansion; refresh preserves each
 node's manual expansion state for the current page session.
+In the node list, Direct uses teal and Relay uses violet. Reachability has a
+separate badge and does not determine the transport color.
+Follower details may show system-wide CPU and memory from recent signed
+heartbeats. Missing samples are omitted and cannot affect reachability.
 
 ## 11. Release topology
 
@@ -403,12 +492,15 @@ or player is deployed on storage. SQL payload backups are files, not online
 replicas or SQL BLOB copies. Master controls transport and allocations.
 Business public HTTP is fixed at 80 and HTTPS at 443. HTTP_PORT and HTTPS_PORT
 are retired and nonstandard business origins are rejected before startup.
-Storage has an explicit deployment profile, STORAGE_TRANSPORT=direct|relay.
-Direct defaults to and requires HTTPS 443 for browser media/Range and Master
-traffic. Relay uses an authenticated communication high port (default 8443),
-without idle 80/443 listeners. HTTP-01 temporarily binds host 80 during
-validation and releases it after success, failure or cancellation. Changing
-profile requires a fenced endpoint transition; it cannot be a GUI mode toggle.
+The current storage deployment has an explicit network profile,
+STORAGE_TRANSPORT=direct|relay. Direct defaults to and requires HTTPS 443 for
+browser media/Range and Master traffic. Relay uses an authenticated communication
+high port (default 8443), without idle 80/443 listeners. HTTP-01 temporarily
+binds host 80 during validation and releases it after success, failure or
+cancellation. Changing this deployment profile requires a fenced endpoint
+transition. The separate resource policy must not reconfigure listeners,
+certificates, firewall or the node control endpoint, and Direct can become effective only after its
+required public capability is verified. See [public ingress](docs/public-ingress.md).
  UDP STUN defaults to 3478 and runs inside the
 existing Go process: one packet loop, a 513-byte receive buffer, a small kernel
 queue, at most ten datagrams/second including malformed requests. Binding only;
@@ -530,6 +622,13 @@ for DNS identities. Fresh installations never require prepared certificates.
 Go obtains, validates and renews certificates; bootstrap exposes no plaintext
 business while waiting for issuance. Published HTTPS must be verified before
 reporting TLS ready or generating a five-minute storage pairing package.
+
+Master public HTTP(S) is IPv4 by default. The opt-in dual-stack deployment
+publishes TCP 80 and 443 through the same Nginx edge and a separate IPv6-capable
+bridge. IPv6 reaches that edge natively so client-IP policy sees the original
+address. Web and its peers retain the IPv4 application network and existing
+control endpoints. Storage appliances, S3, and STUN retain their own bindings
+and routing. Both families serve the same TLS identity and ACME lifecycle.
 
 Only immutable-main workflow code, after successful current-main source CI and
 all verified exact-SHA publication jobs (including the retained legacy tool artifact), may advance `latest`. Candidate

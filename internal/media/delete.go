@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"os"
 	"path"
@@ -96,6 +97,14 @@ func managedObject(name string, directory bool) bool {
 	return len(parts) >= 2 && len(parts) <= 4 && (parts[0] == "lyrics" || len(parts) >= 3) && validExt(parts[0], name)
 }
 
+// ValidAdminDeleteFilePath checks the canonical path of a managed leaf file.
+func ValidAdminDeleteFilePath(name string) bool { return managedObject(name, false) }
+
+// ValidAdminDeleteDirectoryPath excludes the fixed public roots.
+func ValidAdminDeleteDirectoryPath(name string) bool {
+	return strings.Contains(name, "/") && managedObject(name, true)
+}
+
 func validateOperation(operation store.DeleteOperation) error {
 	if !operationID.MatchString(operation.ID) || (operation.State != "pending" && operation.State != "committed") || len(operation.Items) == 0 || len(operation.Items) > 5000 {
 		return ErrRecovery
@@ -178,6 +187,9 @@ func (s *Service) quarantine(operation store.DeleteOperation) (string, error) {
 }
 
 func (s *Service) finishDelete(ctx context.Context, operation store.DeleteOperation) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if err := validateOperation(operation); err != nil {
 		return err
 	}
@@ -277,12 +289,15 @@ func (s *Service) reconcileDelete(id string) (*store.DeleteOperation, error) {
 			s.markRecovery()
 			return operation, fmt.Errorf("%w: %v", ErrRecovery, err)
 		}
-		slog.Error("committed media delete cleanup deferred", "operation", id, "error", err)
+		slog.Error("committed media delete cleanup deferred", "operation", id, "error_type", logsafe.ErrorType(err))
 	}
 	return operation, nil
 }
 
 func (s *Service) Delete(ctx context.Context, paths []string, audit store.AdminAudit) (int, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return 0, err
+	}
 	role, err := s.role(ctx)
 	if err != nil {
 		return 0, err
@@ -371,6 +386,9 @@ func (s *Service) Delete(ctx context.Context, paths []string, audit store.AdminA
 // Only the filesystem phase is shared. Native owned deletion has its own
 // quota-aware SQL transaction, and cannot use standalone metadata deletion.
 func (s *Service) stageDelete(ctx context.Context, operation store.DeleteOperation, commit func() error) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	quarantine := ".delete-" + operation.ID
 	if err := s.root.Mkdir(quarantine, 0700); err != nil {
 		return err

@@ -142,3 +142,23 @@
     script.async = true;
     document.head.appendChild(script);
 })();
+
+// Project-owned, activation-gated diagnostics. Send only enum/numeric states:
+// never console text, stack traces, URLs, credentials or media names.
+(() => {
+    if(window.__fcProjectDiagnostics)return;window.__fcProjectDiagnostics=true;
+    const endpoint='/api/v1/media/project-diagnostics',started=performance.now();
+    let enabled=false,sent=0,last=0;
+    const page=location.pathname.includes('karaoke')?'karaoke':typeof PLAYER_KIND!=='undefined'?(PLAYER_KIND==='audio'?'music':'video'):'catalog';
+    const status=()=>fetch(endpoint,{cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(3000)}).then(r=>r.ok?r.json():null).then(v=>{enabled=v?.enabled===true}).catch(()=>{});
+    status();
+    const send=(stage,media)=>{
+        if(!enabled||sent>=12||performance.now()-last<5000)return;
+        last=performance.now();sent++;
+        const payload={stage,page,media_time:Math.min(86400,Math.max(0,Number.isFinite(media?.currentTime)?media.currentTime:0)),ready:media?.readyState??0,network:media?.networkState??0,code:media?.error?.code??0,online:navigator.onLine,elapsed_ms:Math.min(604800000,Math.round(performance.now()-started))};
+        fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'omit',cache:'no-store',body:JSON.stringify(payload),signal:AbortSignal.timeout(3000)}).catch(()=>{});
+    };
+    window.addEventListener('error',event=>{const media=event.target instanceof HTMLMediaElement?event.target:null;send(media?'media_error':'page_error',media)},true);
+    window.addEventListener('unhandledrejection',()=>send('rejection',null));
+    for(const name of ['waiting','stalled','playing'])document.addEventListener(name,event=>{if(event.target instanceof HTMLMediaElement)send(name,event.target)},true);
+})();

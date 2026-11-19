@@ -104,6 +104,9 @@ func newS3HTTP(t *testing.T, role string) *s3HTTPFixture {
 	cfg.PublicOrigin = "https://master.example"
 	cfg.SecretsDirectory = filepath.Join(dir, "secrets")
 	p.settings = cfg
+	if err := p.control.ConfigurePublicOrigin(cfg.PublicOrigin); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	if role == "Master" {
 		if _, err := db.Nodes().PromoteIdentity(ctx, store.NodePromotion{Role: "Master", Endpoint: cfg.PublicOrigin, Allocation: 20 * store.GiB, PhysicalFree: 20 * store.GiB}, store.NodeAudit{}); err != nil {
@@ -240,8 +243,8 @@ func TestS3HTTPActualAdminTLSCSRFRoleAndCredentials(t *testing.T) {
 				}
 				return
 			}
-			if w.Code != 200 {
-				t.Fatal("Master read", w.Code)
+			if w.Code != 200 || !strings.Contains(w.Body.String(), `"configuration_mode":"legacy"`) {
+				t.Fatal("Master read", w.Code, w.Body.String())
 			}
 			member := f.add(t)
 			if member.ID == "" || member.Revision != 1 {
@@ -301,16 +304,73 @@ func TestS3HTTPRejectsHostileControlBeforeSQL(t *testing.T) {
 func TestS3HTTPReservePartGrantAndPendingCancelUseRealSQL(t *testing.T) {
 	f := newS3HTTP(t, "Master")
 	member := f.enable(t, f.add(t))
-	w := f.call("POST", "/api/v1/media/admin/upload/session", `{"site_type":"s3","target_dir":"music/artist","filename":"s3.mp3","size_bytes":128,"storage_mode":"plain"}`, true, true, true)
+	listing := f.call("GET", "/api/v1/media/admin/storage-pool", "", true, false, true)
+	var pool struct {
+		Destinations []struct {
+			ID       string `json:"member_id"`
+			Address  string `json:"address"`
+			Bucket   string `json:"bucket"`
+			Writable bool   `json:"writable"`
+		} `json:"upload_destinations"`
+	}
+	if listing.Code != 200 || json.Unmarshal(listing.Body.Bytes(), &pool) != nil {
+		t.Fatal("storage destinations", listing.Code, listing.Body.String())
+	}
+	listed := false
+	for _, d := range pool.Destinations {
+		listed = listed || d.ID == member.ID && d.Address == member.Location.Endpoint && d.Bucket == member.Location.Bucket && d.Writable
+	}
+	if !listed || strings.Contains(listing.Body.String(), "credentials") {
+		t.Fatal("invalid S3 destination listing")
+	}
+	w := f.call("POST", "/api/v1/media/admin/upload/session", fmt.Sprintf(`{"storage_member_id":%q,"site_type":"s3","target_dir":"music/artist","filename":"s3.mp3","size_bytes":128,"storage_mode":"plain"}`, member.ID), true, true, true)
+	if w.Code != http.StatusBadRequest {
+		t.Fatal("plaintext upload accepted", w.Code, w.Body.String())
+	}
+	var count int
+	if err := f.db.Database().QueryRow(`SELECT COUNT(*) FROM s3_uploads`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("plaintext request reserved an upload", count, err)
+	}
+	client, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionBody, err := json.Marshal(gin.H{"public_key": base64.StdEncoding.EncodeToString(client.PublicKey().Bytes())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = f.call("POST", "/api/v1/media/admin/crypto/session", string(sessionBody), true, true, true)
+	var cryptoSession mediacrypto.SessionGrant
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &cryptoSession) != nil || cryptoSession.SessionID == "" {
+		t.Fatal("crypto session", w.Code, w.Body.String())
+	}
+	prepareBody, err := json.Marshal(gin.H{"session_id": cryptoSession.SessionID, "plaintext_size": 112})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = f.call("POST", "/api/v1/media/admin/crypto/prepare", string(prepareBody), true, true, true)
+	var prepared struct {
+		Encryption mediacrypto.Metadata `json:"encryption"`
+		Token      string               `json:"preparation_token"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &prepared) != nil || prepared.Token == "" || prepared.Encryption.CiphertextSize != 128 {
+		t.Fatal("crypto preparation", w.Code, w.Body.String())
+	}
+	body, err := json.Marshal(gin.H{"storage_member_id": member.ID, "site_type": "s3", "target_dir": "music/artist", "filename": "s3.mp3", "size_bytes": prepared.Encryption.CiphertextSize, "storage_mode": "encrypted", "encryption": prepared.Encryption, "preparation_token": prepared.Token})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = f.call("POST", "/api/v1/media/admin/upload/session", string(body), true, true, true)
 	if w.Code != 200 {
 		t.Fatal("reserve", w.Code, w.Body.String())
 	}
 	var ticket struct {
 		ID        string `json:"upload_id"`
+		MemberID  string `json:"member_id"`
 		Transport string `json:"transport"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &ticket)
-	if ticket.Transport != "S3" || ticket.ID == "" || strings.Contains(w.Body.String(), "upload_url\":\"https:") {
+	if ticket.Transport != "S3" || ticket.MemberID != member.ID || ticket.ID == "" || strings.Contains(w.Body.String(), "upload_url\":\"https:") {
 		t.Fatal("payload relay or missing S3 ticket", w.Body.String())
 	}
 	base := "/api/v1/media/admin/upload/s3/" + ticket.ID
@@ -391,7 +451,7 @@ func TestS3HTTPErrorRedactsProviderAndGrantJSONKeepsHeaders(t *testing.T) {
 	}
 	var value map[string]any
 	json.Unmarshal(w.Body.Bytes(), &value)
-	if value["expires_at"] != float64(read.HEAD.ExpiresAt) || value["expires_in"].(float64) > 200 || value["source_headers"].(map[string]any)["If-Match"] != `"opaque"` || value["source_head_url"] != read.HEAD.URL || value["source_head_headers"].(map[string]any)["X-Amz-Checksum-Mode"] != "ENABLED" {
+	if value["expires_at"] != float64(read.HEAD.ExpiresAt) || value["expires_in"].(float64) > 200 || value["source_headers"].(map[string]any)["If-Match"] != `"opaque"` || value["source_head_url"] != read.HEAD.URL || value["source_head_headers"].(map[string]any)["X-Amz-Checksum-Mode"] != "ENABLED" || value["filename"] != "a.mp3" {
 		t.Fatal("source grant binding")
 	}
 	for _, invalid := range []map[string]string{
@@ -451,7 +511,7 @@ func (f *s3HTTPFixture) publish(t *testing.T, name string, meta *mediacrypto.Met
 		t.Fatal(err)
 	}
 	composite := sha256.Sum256(digest[:])
-	proof := store.S3ObjectProof{Key: u.Key, SessionID: r.ID, ObjectID: u.ObjectID, MemberID: r.MemberID, MediaID: r.MediaID, Bytes: size, ETag: `"observed-object"`, VersionID: "version-1", CompositeSHA256: base64.StdEncoding.EncodeToString(composite[:]) + "-1"}
+	proof := store.S3ObjectProof{MetadataFormat: u.Proof.MetadataFormat, MetadataOwner: u.Proof.MetadataOwner, Key: u.Key, SessionID: r.ID, ObjectID: u.ObjectID, MemberID: r.MemberID, MediaID: r.MediaID, Bytes: size, ETag: `"observed-object"`, VersionID: "version-1", CompositeSHA256: base64.StdEncoding.EncodeToString(composite[:]) + "-1"}
 	row, err := repo.S3FinalizeUpload(ctx, r.ID, u.Revision, proof, store.AdminAudit{})
 	if err != nil {
 		t.Fatal(err)

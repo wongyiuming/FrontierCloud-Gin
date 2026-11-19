@@ -42,7 +42,8 @@ func run() error {
 		// containing certificate material. No host service or Docker API is used.
 		return exec.CommandContext(ctx, "/usr/sbin/nginx", args...).Run()
 	}
-	edge := certedge.New(strings.ToLower(strings.TrimSpace(value("SERVER_NAME", "localhost"))), enabled, os.Getenv("PUBLIC_BIND_ADDRESS") == "::", execute)
+	ipv6 := os.Getenv("PUBLIC_BIND_ADDRESS") == "::" || os.Getenv("MASTER_PUBLIC_IPV6") == "true"
+	edge := certedge.New(strings.ToLower(strings.TrimSpace(value("SERVER_NAME", "localhost"))), enabled, ipv6, execute)
 	switch os.Args[1] {
 	case "ready":
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

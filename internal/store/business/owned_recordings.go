@@ -7,7 +7,7 @@ import (
 )
 
 func (r *Repository) CheckLocalRecordingUpload(ctx context.Context, v store.Recording) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, e := readNode(ctx, q, r.lock())
 		if e != nil {
 			return e
@@ -36,7 +36,7 @@ func (r *Repository) StageOwnedRecordingDeletion(ctx context.Context, relationsh
 	if !nodeIDPattern.MatchString(user) || !nodeIDPattern.MatchString(id) {
 		return nil, store.ErrRecordingState
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		n, e := r.ownedStorageNode(ctx, q, relationship)
 		if e != nil {
 			return e
@@ -80,7 +80,7 @@ func (r *Repository) ReserveOwnedRecording(ctx context.Context, relationship str
 	if !nodeIDPattern.MatchString(relationship) || !validRecording(v) || free < 0 {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, e := r.ownedStorageNode(ctx, q, relationship)
 		if e != nil {
 			return e
@@ -145,7 +145,7 @@ func (r *Repository) StageOwnedUserDeletion(ctx context.Context, relationship, u
 	if !nodeIDPattern.MatchString(user) {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if _, e := r.ownedStorageNode(ctx, q, relationship); e != nil {
 			return e
 		}
@@ -176,7 +176,7 @@ func (r *Repository) CompleteOwnedUserDeletion(ctx context.Context, relationship
 	if !nodeIDPattern.MatchString(relationship) || !nodeIDPattern.MatchString(user) {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if _, err := r.ownedStorageNode(ctx, q, relationship); err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func (r *Repository) CompleteOwnedRecording(ctx context.Context, relationship st
 	if !validRecordingReceipt(receipt) || free < 0 {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, e := r.ownedStorageNode(ctx, q, relationship)
 		if e != nil {
 			return e
@@ -260,12 +260,15 @@ func (r *Repository) CompleteOwnedRecordingDeletion(ctx context.Context, relatio
 	if !nodeIDPattern.MatchString(relationship) || !nodeIDPattern.MatchString(user) || !nodeIDPattern.MatchString(id) || free < 0 {
 		return store.ErrRecordingState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		return r.completeOwnedRecordingDeletion(ctx, q, relationship, user, id, free, a, "")
 	})
 }
 
 func (r *Repository) completeOwnedRecordingDeletion(ctx context.Context, q queryer, relationship, user, id string, free int64, a store.NodeAudit, task string) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	n, e := r.ownedStorageNode(ctx, q, relationship)
 	if e != nil {
 		return e

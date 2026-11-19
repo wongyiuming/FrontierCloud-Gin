@@ -11,16 +11,20 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/diagnostics"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/httpapi"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/maintenance"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/noderetirement"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/observation"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/publicproxy"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recording"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/security"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/sitecontrol"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"log/slog"
 )
 
 // runtimeHTTP is the single production registration path, also exercised by
@@ -30,11 +34,24 @@ type runtimeHTTP struct {
 	Identity   *node.Identity
 	Media      *media.Service
 	Control    *node.Service
+	Owner      *runtimeOwner
+	Sealed     *sealedMasterRuntime
 	Recordings *recording.Storage
 	Manager    *recording.Manager
 	Security   *security.Service
 	Redis      *redis.Client
 	Resolver   *network.Resolver
+}
+
+type sealedMasterRuntime struct {
+	tree                   *sealedtree.SQLStore
+	runtime                *maintenance.Runtime
+	maintenance            *maintenance.Gate
+	catalog                publicproxy.CatalogPreparer
+	recordingControlsReady bool
+	recovery               *ingressRecoveryRuntime
+	s3Close                func() error
+	mediaDeletionRun       func(context.Context)
 }
 
 func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, func() error, error) {
@@ -88,12 +105,23 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		return nil, nil, err
 	}
 	closers = append(closers, closeRetirementGate)
-	public, err := httpapi.RegisterPublic(handler, settings, mediaService)
+	var public *httpapi.Public
+	if services.Sealed != nil {
+		public, err = httpapi.RegisterSealedPublic(handler, settings, mediaService, services.Sealed.tree)
+	} else {
+		public, err = httpapi.RegisterPublic(handler, settings, mediaService)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 	closers = append(closers, public.Close)
 	public.ConfigureNetwork(controlService)
+	if err := public.ConfigureMasterDirect(handler, settings, controlService); err != nil {
+		return nil, nil, err
+	}
+	if err := public.ConfigureMasterRelay(handler, controlService); err != nil {
+		return nil, nil, err
+	}
 	adminService, err := admin.New(settings, admin.NewRedisCache(redisClient), database.Admin())
 	if err != nil {
 		return nil, nil, err
@@ -102,7 +130,24 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	if err != nil {
 		return nil, nil, err
 	}
+	accountsHTTP := httpapi.RegisterKaraokeAccounts(handler, karaoke.New(database.Karaoke(), database.Nodes(), karaoke.NewRedisCache(redisClient)), public, adminHTTP, resolver)
+	if services.Sealed != nil {
+		// The S3 control gate is optional, but when installed it must outlive
+		// the handlers and close before the shared tree and maintenance lease.
+		closers = append(closers, func() error {
+			if services.Sealed.s3Close == nil {
+				return nil
+			}
+			closeS3 := services.Sealed.s3Close
+			services.Sealed.s3Close = nil
+			return closeS3()
+		})
+		if err := installSealedMasterRuntime(settings, services, handler, public, adminHTTP, accountsHTTP); err != nil {
+			return nil, nil, err
+		}
+	}
 	httpapi.RegisterAdminNodes(handler, adminHTTP, controlService)
+	closers=append(closers,configureProjectLogs(settings,services,handler,adminHTTP))
 	httpapi.RegisterAdminRetirement(handler, adminHTTP, &noderetirement.Service{Repository: database.Pool().(store.RetirementRepository), Nodes: database.Nodes(), Client: controlService})
 	httpapi.RegisterOperational(handler, adminHTTP)
 	httpapi.RegisterPlaybackDiagnostics(handler, settings, resolver, controlService, adminHTTP, diagnostics.New())
@@ -113,7 +158,6 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	closers = append(closers, siteService.Close)
 	httpapi.RegisterSiteAdmin(handler, adminHTTP, siteService)
 	httpapi.RegisterSecurityAdmin(handler, adminHTTP, securityService)
-	accountsHTTP := httpapi.RegisterKaraokeAccounts(handler, karaoke.New(database.Karaoke(), database.Nodes(), karaoke.NewRedisCache(redisClient)), public, adminHTTP, resolver)
 	httpapi.RegisterKaraokeRecordings(handler, accountsHTTP, recordingManager, recordingStorage)
 	httpapi.RegisterKaraokeMedia(handler, public, resolver)
 	httpapi.RegisterNodeRecordings(handler, settings, resolver, controlService, recordingStorage)
@@ -149,11 +193,30 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 	if migrations, ok := database.Pool().(store.MigrationRepository); ok {
 		runner := &resourcemigration.Runner{Repository: migrations, Nodes: database.Nodes(), Client: controlService, Traffic: traffic}
 		httpapi.RegisterAdminMigrations(handler, adminHTTP, database.Pool().(store.MigrationAdminRepository), runner)
-		stop, err := runner.Start(context.Background())
-		if err != nil {
-			return nil, nil, err
+		if services.Sealed != nil && services.Sealed.recovery != nil {
+			waitCtx, cancel := context.WithCancel(services.Sealed.runtime.Context())
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				if !waitIngressRecovery(waitCtx, services.Sealed) {
+					return
+				}
+				stop, e := runner.Start(waitCtx)
+				if e != nil {
+					slog.Error("migration runner failed after ingress recovery")
+					return
+				}
+				<-waitCtx.Done()
+				_ = stop()
+			}()
+			closers = append(closers, func() error { cancel(); <-done; return nil })
+		} else {
+			stop, err := runner.Start(context.Background())
+			if err != nil {
+				return nil, nil, err
+			}
+			closers = append(closers, stop)
 		}
-		closers = append(closers, stop)
 		planner, err := resourcemigration.NewPlanner(context.Background(), runner)
 		if err != nil {
 			return nil, nil, err
@@ -162,6 +225,20 @@ func newRuntimeHTTP(settings config.Config, services runtimeHTTP) (*gin.Engine, 
 		httpapi.RegisterAdminMigrationPlanning(handler, adminHTTP, planner)
 	}
 	httpapi.RegisterObservations(handler, adminHTTP, observation.New(database.Observations(), redisClient, settings.WebRTCCooldown), resolver)
+	if settings.TLSEnabled {
+		controlService.ConfigureMasterRelayObservation(controlService.MasterRelayObservationValid)
+		if err := controlService.ConfigureMasterResourceReadiness(settings.MasterResourceOrigin, func(ctx context.Context, ingress store.PublicIngress, mode, origin string) error {
+			if !controlService.IngressSelectionConfigured() {
+				return store.ErrNodeState
+			}
+			if err := mediaService.Ready(ctx); err != nil {
+				return err
+			}
+			return controlService.VerifyMasterResourceReadiness(ctx, ingress, mode, origin)
+		}); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	ready = true
 	return handler, closeHTTP, nil

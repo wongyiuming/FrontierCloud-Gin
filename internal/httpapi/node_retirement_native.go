@@ -93,6 +93,11 @@ func newRetirementNativeInventory(ctx context.Context, root *os.Root, settings c
 					return nil, e
 				}
 			}
+			// The ingress fence is a retained native coordination inode. It must
+			// be idle and unchanged, just like the other retirement lease files.
+			if e = pin(v.database+store.PublicIngressLeaseSuffix, "idle_coordination"); e != nil {
+				return nil, e
+			}
 		}
 	}
 	if settings.SecretsDirectory != "" {

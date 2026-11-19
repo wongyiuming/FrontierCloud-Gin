@@ -1,4 +1,4 @@
-"""Cold audio startup comparison and small queue/original cover isolation."""
+"""Cold audio startup comparison and category original-cover isolation."""
 import argparse
 import json
 import os
@@ -26,8 +26,11 @@ def run(args):
                     context = browser.new_context(viewport={'width': 1360, 'height': 900})
                     try:
                         if mode == 'before':
-                            for name in ('player.js', 'music-metadata.js', 'audio-continuous-stream.js'):
+                            for name in ('player.js', 'audio-continuous-stream.js'):
                                 source = (baseline / name).read_text()
+                                if name == 'player.js':
+                                    # The current player page no longer injects this script.
+                                    source = (baseline / 'music-metadata.js').read_text() + '\n' + source
                                 context.route('**/static/js/' + name + '*',
                                     lambda route, request, source=source: route.fulfill(body=source, content_type='text/javascript'))
                         reads = []
@@ -45,53 +48,55 @@ def run(args):
                     finally:
                         context.close()
             context = browser.new_context(viewport={'width': 1360, 'height': 900})
-            context.add_init_script('window.artworkBlobs=new Map();const createArtworkURL=URL.createObjectURL.bind(URL);URL.createObjectURL=b=>{const u=createArtworkURL(b);artworkBlobs.set(u,b);return u;}')
             page = context.new_page()
             errors = []
+            player_requests = []
             page.on('pageerror', lambda error: errors.append(str(error)))
+            page.on('request', lambda request: player_requests.append(urllib.parse.urlsplit(request.url).path))
             plain_url = args.base_url + '/api/v1/media/music/category?' + urllib.parse.urlencode({'path': args.plain_path})
             page.goto(plain_url, wait_until='domcontentloaded')
             page.wait_for_function('()=>typeof currentMediaList!=="undefined"&&currentMediaList.length&&art', timeout=45000)
             page.evaluate('art.pause()')
             page.wait_for_timeout(1500)
-            proof['cold_plain_placeholder'] = page.locator('.media-item img').first.get_attribute('src')
-            assert proof['cold_plain_placeholder'].startswith('data:image/svg+xml'), proof
-            # Simulate viewing an original elsewhere, then reuse its ordinary HTTP cache in the small player.
-            page.evaluate('async()=>{await (await fetch(currentMediaList[0].cover)).arrayBuffer()}')
-            page.reload(wait_until='domcontentloaded')
-            page.wait_for_function('()=>typeof art!=="undefined"&&art', timeout=45000)
-            page.evaluate('art.pause()')
-            row = page.locator('.media-item').first
-            row.evaluate('(row)=>row.scrollIntoView({block:"nearest"})')
-            page.wait_for_timeout(3000)
-            # Artwork is explicitly optional, even when cached. Idle cancellation may retain the placeholder.
-            proof['plain_picture'] = row.locator('img').evaluate('''async image=>{
-                const thumb=artworkBlobs.get(image.src);const original=await (await fetch(currentMediaList[0].cover)).blob();
-                const bitmap=await createImageBitmap(original);const result={thumbnail_available:!!thumb,
-                    placeholder:image.src.startsWith('data:image/svg+xml'),thumbnail_width:thumb?image.naturalWidth:null,
-                    thumbnail_height:thumb?image.naturalHeight:null,thumbnail_bytes:thumb?.size,thumbnail_type:thumb?.type,
-                    original_width:bitmap.width,original_height:bitmap.height,original_bytes:original.size,
+            assert page.evaluate('''()=>typeof FrontierMusicMetadata==='undefined' &&
+                document.querySelectorAll('.media-item img').length===0 && currentMediaList.every(item=>{
+                    const file=item.media_path.split('/').pop();return item.title===file.slice(0,file.lastIndexOf('.'));})''')
+            assert not any(path in ('/api/v1/media/metadata', '/api/v1/media/cover') for path in player_requests), player_requests
+            proof['player_filename_labels_without_artwork'] = True
+            page.screenshot(path=str(out / 'player-without-artwork.png'))
+            assert errors == [], errors
+            proof['page_errors'] = errors
+            context.close()
+
+            # The category page renders and retrieves the unchanged original.
+            context = browser.new_context(viewport={'width': 1360, 'height': 900})
+            page = context.new_page()
+            parent, name = args.plain_path.rsplit('/', 1)
+            category_url = args.base_url + '/api/v1/media/music'
+            if parent != 'music':
+                category_url += '/category?' + urllib.parse.urlencode({'path': parent})
+            page.goto(category_url, wait_until='domcontentloaded')
+            page.wait_for_function('(name)=>[...document.querySelectorAll("a.card")].some(c=>c.title===name)', arg=name, timeout=45000)
+            page.get_by_title(name, exact=True).scroll_into_view_if_needed()
+            page.wait_for_function('(name)=>!![...document.querySelectorAll("a.card")].find(c=>c.title===name)?.querySelector("img")?.naturalWidth', arg=name, timeout=45000)
+            proof['plain_picture'] = page.get_by_title(name, exact=True).locator('img').evaluate('''async image=>{
+                const response=await fetch(image.src);if(!response.ok)throw Error('category original unavailable');
+                const original=await response.blob();const bitmap=await createImageBitmap(original);
+                const result={original_width:bitmap.width,original_height:bitmap.height,original_bytes:original.size,
                     original_sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',await original.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('')};bitmap.close();return result;}''')
             picture = proof['plain_picture']
             assert picture['original_sha256'] == args.original_sha256, picture
             assert picture['original_width'] == 500, picture
-            if picture['thumbnail_available']:
-                assert picture['thumbnail_width'] == 96 and picture['thumbnail_type'] == 'image/webp' and picture['thumbnail_bytes'] < picture['original_bytes'], picture
-            else:
-                assert picture['placeholder'], 'optional artwork must retain a network-free placeholder'
-            page.screenshot(path=str(out / 'small-player-original-preserved.png'))
-            assert errors == [], errors
-            proof['page_errors'] = errors
+            page.screenshot(path=str(out / 'category-original-preserved.png'))
             context.close()
             legacy = browser.new_context(viewport={'width': 1360, 'height': 900})
             legacy.add_init_script('window.OffscreenCanvas=undefined')
             page = legacy.new_page()
             page.goto(plain_url, wait_until='domcontentloaded')
             page.wait_for_function('()=>typeof currentMediaList!=="undefined"&&currentMediaList.length&&art', timeout=45000)
-            proof['legacy_placeholder'] = page.evaluate('''()=>({supported:FrontierMusicMetadata.canThumbnail(),
-                source:document.querySelector('.media-item img').getAttribute('src'),original:currentMediaList[0].cover})''')
-            original = proof['legacy_placeholder']
-            assert not original['supported'] and original['source'].startswith('data:image/svg+xml'), original
+            proof['legacy_without_artwork'] = page.evaluate('''()=>({parser:typeof FrontierMusicMetadata,
+                images:document.querySelectorAll('.media-item img').length})''')
+            assert proof['legacy_without_artwork'] == {'parser': 'undefined', 'images': 0}
             page.evaluate('art.pause()')
             legacy.close()
             proof['artwork_failure_playback'] = []

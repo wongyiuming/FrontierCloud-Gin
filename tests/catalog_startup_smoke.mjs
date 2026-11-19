@@ -103,6 +103,21 @@ function fixture({readyState = 'loading', catalogPresent = true, config, fetchIm
     assert.equal(page.grid.children[0].href, '/fresh');
 }
 
+for (const result of ['empty', 'populated', 'denied']) {
+    let destination = null;
+    const page = fixture({
+        config: {url: '/catalog', cacheKey: '', emptyRedirect: '/player?direct=true'},
+        windowExtras: {location: {href: 'https://catalog.fixture.invalid/', replace: value => { destination = value; }}},
+        fetchImpl: async () => result === 'denied'
+            ? {ok: false, status: 503}
+            : {ok: true, json: async () => ({entries: result === 'empty' ? [] : [{name: 'Nested', url: '/nested'}]})},
+    });
+    await new Promise(setImmediate);
+    assert.equal(destination, result === 'empty' ? '/player?direct=true' : null, 'only an authenticated empty result may select the direct player');
+    if (result === 'populated') assert.equal(page.grid.children[0].href, '/nested');
+    if (result === 'denied') assert.match(page.grid.children[0].textContent, /503/);
+}
+
 {
     let visible = [], clock = 10000;
     const pendingReads = new Map();

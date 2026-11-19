@@ -32,9 +32,13 @@ import (
 // HTTP routing, raw body HMAC and UseNumber decoding are real. The node
 // transport socket/private CA/hostname checks have separate real TLS tests.
 type clusterHTTP struct {
-	routers       map[string]*gin.Engine
-	peerReadHook  func(string, any)
-	mediaReadHook func(string)
+	routers          map[string]*gin.Engine
+	peerReadHook     func(string, any)
+	mediaReadHook    func(string)
+	controlHook      func(string, http.Header, []byte)
+	dropControlReply func(string) bool
+	legacyTLSClient  *http.Client
+	legacyTLSURL     string
 }
 
 func (t *clusterHTTP) MediaReadRange(ctx context.Context, origin, objectID, resourceID, owner, token string, size, start, end int64) ([]byte, error) {
@@ -151,6 +155,33 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 			r.Header.Set(k, v)
 		}
 	}
+	if t.controlHook != nil {
+		t.controlHook(route, r.Header.Clone(), append([]byte(nil), raw...))
+	}
+	if t.legacyTLSClient != nil && (route == protocol.LegacyReadDrainPath || route == protocol.LegacyReadEnrollmentPath || route == protocol.LegacyReadStatusPath) {
+		actual, err := http.NewRequestWithContext(ctx, method, t.legacyTLSURL+route, bytes.NewReader(raw))
+		if err != nil {
+			return nil, err
+		}
+		actual.Header = r.Header.Clone()
+		response, err := t.legacyTLSClient.Do(actual)
+		if err != nil {
+			return nil, err
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("control status %d", response.StatusCode)
+		}
+		body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		if err != nil {
+			return nil, err
+		}
+		var result map[string]any
+		if err = controlJSON(body, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
 	if w.Code != 200 {
@@ -161,6 +192,9 @@ func (t *clusterHTTP) Request(ctx context.Context, origin, route, method string,
 			return nil, node.ErrRemoteNotFound
 		}
 		return nil, fmt.Errorf("control status %d: %s", w.Code, w.Body.String())
+	}
+	if t.dropControlReply != nil && t.dropControlReply(route) {
+		return nil, errors.New("fixture lost control reply")
 	}
 	var result map[string]any
 	err = controlJSON(w.Body.Bytes(), &result)
@@ -213,6 +247,9 @@ func clusterFixtureRoots(t *testing.T, origin string, transport *clusterHTTP, em
 		t.Cleanup(func() { mounted.Close() })
 	}
 	service := node.NewService(db.Nodes(), identity, transport)
+	if err := service.ConfigurePublicOrigin(origin); err != nil {
+		t.Fatal(err)
+	}
 	// Protocol/fault fixtures use a settled idle observation; load gating has
 	// separate tests with a controlled clock and actual counted HTTP bodies.
 	settled := false

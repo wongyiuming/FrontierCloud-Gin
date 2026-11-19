@@ -39,11 +39,22 @@ type RestoreState struct {
 
 var composeProject = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
 
+// ErrTreeRecoveryNotReady distinguishes a byte-verified private tree archive
+// from a restore that is safe to activate. Owner, quota and lifecycle recovery
+// must be wired before the existing operator gate can be opened.
+var ErrTreeRecoveryNotReady = errors.New("encrypted tree archive verified, but operator recovery is not enabled")
+
 // RestoreCheck remains read-only, including the target and Docker engine. It
 // validates bytes, required local state and physical capacity before extraction.
 func RestoreCheck(ctx context.Context, input, target, expected string) (recovery.Report, error) {
 	r, e := recovery.Check(ctx, input, expected)
 	if e != nil {
+		// Version 2 is opt-in and remains rejected by the legacy checker. We
+		// recognize its exact verified checksum only to report the real blocker;
+		// no extraction, node identity change, or activation is authorized here.
+		if tree, treeErr := recovery.CheckTreeArchiveAuthenticated(ctx, input, expected); treeErr == nil {
+			return tree, ErrTreeRecoveryNotReady
+		}
 		return r, e
 	}
 	if r.Manifest.Scope == recovery.UpgradeStateScope {

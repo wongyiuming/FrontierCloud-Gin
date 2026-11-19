@@ -13,6 +13,9 @@ import (
 // SQL admission is repeated under the volume coordinator before unlinking.
 // Reserved capacity remains held until the whole unit cancellation receipt.
 func (s *Service) MigrationCancelPublication(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationShadowGrant, peer store.MigrationPeerRepository, audit store.NodeAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if peer == nil || g.Object.Resource != "media" {
 		return store.ErrMigrationState
 	}

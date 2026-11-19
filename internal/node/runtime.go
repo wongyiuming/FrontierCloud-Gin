@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -47,6 +48,9 @@ func (s *Service) Revoke(ctx context.Context, id string, a store.NodeAudit) erro
 	if err != nil {
 		return err
 	}
+	if s.logArchiveProtect != nil && s.logArchiveProtect(ctx, relation.PeerID) {
+		return ErrLogArchiveNodePinned
+	}
 	row, err := s.repo.ReadIdentity(ctx)
 	if err != nil {
 		return err
@@ -56,7 +60,11 @@ func (s *Service) Revoke(ctx context.Context, id string, a store.NodeAudit) erro
 		if s.volume == nil {
 			return errors.New("business volume is not configured")
 		}
-		err = s.volume.WithPromotion(ctx, "Follower", func(store.NodePromotion) error { return s.emptyRecordings(ctx, apply) })
+		err = s.withOwnerControlExclusive(ctx, func(ctx context.Context) error {
+			return s.volume.WithPromotion(ctx, "Follower", func(store.NodePromotion) error {
+				return s.emptyRecordings(ctx, func() error { return s.repo.RevokeRelationship(ctx, id, false, a) })
+			})
+		})
 	} else {
 		err = apply()
 	}
@@ -98,6 +106,8 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 		return errors.New("invalid relationship state")
 	}
 	started := time.Now()
+	var requested *store.NativeTransportPolicy
+	var requestedOrigin string
 	probe := func() (map[string]any, error) {
 		if relation.Status != "online" {
 			role := "Master"
@@ -118,6 +128,27 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 				return nil, err
 			}
 			value = map[string]any{"mode": relation.Mode, "resources": resourceWire(config), "capabilities": protocol.AdvertisedCapabilities()}
+			if ingress, e := s.CurrentPublicIngress(ctx); e == nil {
+				value["public_ingress"] = map[string]any{"node_id": ingress.NodeID, "public_origin": ingress.PublicOrigin, "generation": ingress.Generation}
+			}
+			if capabilities, e := protocol.ReadCapabilities(relation.Summary); e == nil && slices.Contains(capabilities, "native-transport-apply-v1") && s.nativeTransportReady != nil {
+				if routing, ok := s.repo.(store.PublicRoutingRepository); ok {
+					if p, e := routing.NativeTransport(ctx, relation.PeerID); e == nil && p.Revision > 0 && p.State != "applied" && p.State != "inactive" && p.State != "retained" && s.nativeTransportReady(ctx, relation, p.ConfiguredTransport) == nil {
+						if p.ConfiguredTransport == "Relay" {
+							requested = &p
+							value["native_transport_request"] = map[string]any{"transport": "Relay", "revision": p.Revision}
+						} else if p.ConfiguredTransport == "Direct" {
+							if origin, e := s.VerifyFollowerResourceIdentity(ctx, relation.ID); e == nil {
+								requested, requestedOrigin = &p, origin
+								value["native_transport_request"] = map[string]any{"transport": "Direct", "revision": p.Revision, "origin": origin}
+							}
+						}
+					}
+				}
+			}
+		}
+		if s.logHeartbeat != nil {
+			s.logHeartbeat.Outgoing(ctx, relation, value)
 		}
 		summary, err := s.Call(ctx, relation, "/internal/v1/heartbeat", value)
 		if err != nil {
@@ -132,6 +163,9 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 			return nil, err
 		}
 		summary["capabilities"] = capabilities
+		if s.logHeartbeat != nil {
+			s.logHeartbeat.Incoming(ctx, relation, summary)
+		}
 		return summary, nil
 	}
 	summary, err := probe()
@@ -149,7 +183,33 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 	}
 	rtt := int(min(startedElapsed(started), math.MaxInt32))
 	summary["heartbeat"] = heartbeatWindow(relation.Summary, rtt, now)
-	return s.repo.RecordHeartbeat(ctx, relation.ID, true, rtt, summary, now)
+	if err := s.repo.RecordHeartbeat(ctx, relation.ID, true, rtt, summary, now); err != nil {
+		return err
+	}
+	if requested != nil {
+		if result, ok := summary["native_transport_result"].(map[string]any); ok {
+			revision, valid := intField(result, "revision")
+			capabilities, _ := protocol.ReadCapabilities(summary)
+			if valid && revision == requested.Revision && textField(result, "transport") == requested.ConfiguredTransport && textField(result, "state") == "applied" && slices.Contains(capabilities, "native-transport-apply-v1") && s.nativeTransportReady(ctx, relation, requested.ConfiguredTransport) == nil {
+				if requested.ConfiguredTransport == "Direct" && textField(result, "origin") == requestedOrigin {
+					if origin, e := s.VerifyFollowerResourceIdentity(ctx, relation.ID); e == nil && origin == requestedOrigin {
+						if repo, ok := s.repo.(nativeDirectApplicationRepository); ok {
+							if err := repo.RecordNativeDirectApplication(ctx, relation.ID, revision, origin); err != nil {
+								slog.Warn("native transport application not published", "relationship_id", relation.ID)
+							}
+						}
+					}
+				} else if requested.ConfiguredTransport == "Relay" {
+					if repo, ok := s.repo.(nativeTransportApplicationRepository); ok {
+						if err := repo.RecordNativeTransportApplication(ctx, relation.ID, revision, "Relay"); err != nil {
+							slog.Warn("native transport application not published", "relationship_id", relation.ID)
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 func startedElapsed(started time.Time) int64 { return max(0, time.Since(started).Milliseconds()) }
 
@@ -197,6 +257,11 @@ func (s *Service) Run(ctx context.Context) {
 				})
 			}
 			workers.Wait()
+		}
+		if s.masterResourceReady != nil {
+			probe, cancel := context.WithTimeout(ctx, 8*time.Second)
+			_ = s.PrepareMasterResourcePolicy(probe)
+			cancel()
 		}
 		select {
 		case <-ctx.Done():

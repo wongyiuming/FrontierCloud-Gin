@@ -10,7 +10,17 @@ render_rules() {
 }
 
 install -d -m 0755 /etc/nginx/runtime
-# Web readiness guarantees the initial snapshot. Never bootstrap silently empty.
+# Web may be running before it publishes its first snapshot. Wait only for the
+# file to appear; a present but invalid snapshot must fail immediately.
+attempt=0
+while [ ! -e "$snapshot" ]; do
+    if [ "$attempt" -ge 30 ]; then
+        echo 'nginx: initial IP security snapshot unavailable' >&2
+        exit 1
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+done
 render_rules
 mv "$candidate" "$rules"
 nginx -t

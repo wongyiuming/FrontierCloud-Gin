@@ -120,7 +120,7 @@ func TestEncryptedLocalPublicationRecoveryPreservesDescriptor(t *testing.T) {
 	}
 	object := store.MediaObject{Path: "music/artist/recovery.mp3", Kind: "audio", Encryption: &meta}
 	journal := uploadJournal{Format: "frontiercloud-local-upload", Version: 1, ID: stage.id, Object: object, Bytes: stage.Bytes, SHA256: stage.Digest, Audit: store.AdminAudit{Action: "upload_item"}}
-	if err = svc.writeUploadJournal(journal); err != nil {
+	if err = svc.writeUploadJournal(context.Background(), journal); err != nil {
 		t.Fatal(err)
 	}
 	stage.retain = true

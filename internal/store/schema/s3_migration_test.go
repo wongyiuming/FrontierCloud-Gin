@@ -81,7 +81,7 @@ func TestS3MigrationSevenPreservesFactsAndJournal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s3Marker(t, db, 8)
+	s3Marker(t, db, migrations.Generation)
 	var name, checksum, path string
 	var score, preference, applied int
 	if err := db.QueryRow("SELECT migration_name,checksum,applied_at FROM frontiercloud_schema_migrations WHERE generation=8").Scan(&name, &checksum, &applied); err != nil || name != migrations.S3Name || checksum != migrations.S3Checksum || applied < 1 {
@@ -132,7 +132,7 @@ func TestS3MigrationInterruptedAndPartialDDLRepair(t *testing.T) {
 			if err := schema.Initialize(context.Background(), db, "sqlite"); err != nil {
 				t.Fatal(err)
 			}
-			s3Marker(t, db, 8)
+			s3Marker(t, db, migrations.Generation)
 			var count int
 			if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_schema WHERE type='index' AND (name LIKE 'idx_s3_%' OR name LIKE 'uq_s3_%')").Scan(&count); err != nil || count != 9 {
 				t.Fatal("secondary indexes not repaired", count, err)

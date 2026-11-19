@@ -111,12 +111,43 @@ func TestSharedSchemaBootstrapAndUpgrade(t *testing.T) {
 	if err := store.Initialize(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var count int
-	if err := store.database.QueryRow("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
+	statements, err := migrations.Statements("sqlite")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 54 {
-		t.Fatalf("got %d tables, want 54", count)
+	expected := make(map[string]bool)
+	for _, statement := range statements {
+		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS ") {
+			fields := strings.Fields(statement)
+			if len(fields) < 6 || expected[fields[5]] {
+				t.Fatalf("invalid or duplicate canonical table declaration: %q", statement)
+			}
+			expected[fields[5]] = true
+		}
+	}
+	if len(expected) == 0 {
+		t.Fatal("canonical schema has no tables")
+	}
+	rows, err := store.database.Query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		if !expected[name] {
+			rows.Close()
+			t.Fatalf("unexpected schema table %q", name)
+		}
+		delete(expected, name)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil || len(expected) != 0 {
+		t.Fatalf("missing schema tables %v: %v", expected, err)
 	}
 	if _, err := store.database.Exec("DROP TABLE frontiercloud_schema_migrations"); err != nil {
 		t.Fatal(err)

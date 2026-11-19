@@ -72,6 +72,7 @@ type journalRecord struct {
 type Receiver struct {
 	root           *os.Root
 	node, resource string
+	guard          func(context.Context) error
 }
 
 // Status reports persisted transfer facts. It does not upgrade them to disk
@@ -99,11 +100,41 @@ func New(root *os.Root, node, resource string) (*Receiver, error) {
 	}
 	return &Receiver{root: root, node: node, resource: resource}, nil
 }
+
+// NewGuarded rechecks a service-owned durable gate whenever the retained
+// receiver opens a private file or performs a mutation. This is not a lease:
+// callers must also exclude activation throughout each operation.
+func NewGuarded(root *os.Root, node, resource string, guard func(context.Context) error) (*Receiver, error) {
+	if guard == nil {
+		return nil, ErrState
+	}
+	r, err := New(root, node, resource)
+	if err != nil {
+		return nil, err
+	}
+	r.guard = guard
+	return r, nil
+}
+
+func (r *Receiver) check(ctx context.Context) error {
+	if r.guard != nil {
+		return r.guard(ctx)
+	}
+	return nil
+}
+func (r *Receiver) checkBounded() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return r.check(ctx)
+}
 func (r *Receiver) valid(s Spec) bool {
-	if !utf8.ValidString(s.TargetPath) {
+	if !identifier.MatchString(s.TaskID) || !identifier.MatchString(s.MasterID) || !identifier.MatchString(s.SourceID) || s.TargetID != r.node || s.SourceID == s.TargetID || s.MasterID == s.TargetID || s.MasterID == s.SourceID || s.Resource != r.resource || !digest.MatchString(s.SourceVersion) || !digest.MatchString(s.SHA256) || s.Bytes < 0 || s.Bytes > 10*store.GiB {
 		return false
 	}
-	if !identifier.MatchString(s.TaskID) || !identifier.MatchString(s.MasterID) || !identifier.MatchString(s.SourceID) || s.TargetID != r.node || s.SourceID == s.TargetID || s.MasterID == s.TargetID || s.MasterID == s.SourceID || s.Resource != r.resource || !digest.MatchString(s.SourceVersion) || !digest.MatchString(s.SHA256) || s.Bytes <= 0 || s.Bytes > 10*store.GiB || path.Clean(s.TargetPath) != s.TargetPath || strings.HasPrefix(s.TargetPath, "/") || strings.ContainsAny(s.TargetPath, "\\\x00:") || len(s.TargetPath) > 4096 {
+	if s.Resource == opaqueMediaResource {
+		return validOpaqueMediaSpec(s)
+	}
+	if s.Bytes == 0 || !utf8.ValidString(s.TargetPath) || path.Clean(s.TargetPath) != s.TargetPath || strings.HasPrefix(s.TargetPath, "/") || strings.ContainsAny(s.TargetPath, "\\\x00:") || len(s.TargetPath) > 4096 {
 		return false
 	}
 	for _, p := range strings.Split(s.TargetPath, "/") {
@@ -125,6 +156,9 @@ func names(s Spec) (string, string, string) {
 	return base + ".part", base + ".json", base + ".lock"
 }
 func (r *Receiver) private(name string, flags int) (*os.File, error) {
+	if e := r.checkBounded(); e != nil {
+		return nil, e
+	}
 	if info, e := r.root.Lstat(name); e == nil {
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 			return nil, ErrState
@@ -145,6 +179,9 @@ func (r *Receiver) private(name string, flags int) (*os.File, error) {
 	return f, nil
 }
 func (r *Receiver) lock(ctx context.Context, s Spec) (func(), error) {
+	if e := r.check(ctx); e != nil {
+		return nil, e
+	}
 	_, _, name := names(s)
 	f, e := r.private(name, os.O_CREATE|os.O_RDWR)
 	if e != nil {
@@ -221,6 +258,9 @@ func decodeCheckpoint(s Spec, raw []byte) (Checkpoint, error) {
 	return c, nil
 }
 func (r *Receiver) save(c Checkpoint) error {
+	if e := r.checkBounded(); e != nil {
+		return e
+	}
 	_, name, _ := names(c.Spec)
 	temporary := name + ".tmp"
 	// Only a task's private temporary journal may be reclaimed under its blob
@@ -246,6 +286,9 @@ func (r *Receiver) save(c Checkpoint) error {
 	}
 	e = errors.Join(e, f.Close())
 	if e != nil {
+		return e
+	}
+	if e = r.checkBounded(); e != nil {
 		return e
 	}
 	if e = r.root.Rename(temporary, name); e != nil {
@@ -316,6 +359,12 @@ func (r *Receiver) Begin(ctx context.Context, s Spec) (Checkpoint, error) {
 	if e = hashCheckpoint(&c, sha256.New()); e != nil {
 		return c, e
 	}
+	if s.Bytes == 0 {
+		if c.PrefixSHA != s.SHA256 {
+			return c, ErrState
+		}
+		c.State = "received"
+	}
 	return c, r.save(c)
 }
 
@@ -355,31 +404,60 @@ func (r *Receiver) inspectName(ctx context.Context, c Checkpoint, name string) (
 		return c, e
 	}
 	defer f.Close()
+	_, e = verifyCheckpointFile(ctx, c, f)
+	return c, e
+}
+
+func verifyCheckpointFile(ctx context.Context, c Checkpoint, f *os.File) (os.FileInfo, error) {
 	info, e := f.Stat()
 	if e != nil || info.Size() < c.Offset {
-		return c, ErrState
+		return nil, ErrState
 	}
 	// Reopening checks the persisted prefix against actual disk bytes, never
 	// merely a length. A crash tail is discarded only after this proof.
 	h := sha256.New()
 	n, e := io.CopyBuffer(h, contextReader{ctx, io.NewSectionReader(f, 0, c.Offset)}, make([]byte, 64<<10))
 	if e != nil {
-		return c, e
+		return nil, e
 	}
 	if n != c.Offset || hex.EncodeToString(h.Sum(nil)) != c.PrefixSHA {
-		return c, ErrState
+		return nil, ErrState
 	}
-	if (c.State == "received" || c.State == "verified" || c.State == "publishing" || c.State == "published") && (c.Offset != c.Spec.Bytes || info.Size() != c.Offset || c.PrefixSHA != c.Spec.SHA256) {
-		return c, ErrState
+	if (c.State == "received" || c.State == "verified" || c.State == "publishing" || c.State == "published" || c.PublicationCancelling) && (c.Offset != c.Spec.Bytes || info.Size() != c.Offset || c.PrefixSHA != c.Spec.SHA256) {
+		return nil, ErrState
 	}
-	return c, nil
+	return info, nil
+}
+
+func sameCheckpointFile(current, proof os.FileInfo) bool {
+	return current.Mode().IsRegular() && current.Mode() == proof.Mode() && os.SameFile(current, proof) &&
+		current.Size() == proof.Size() && current.ModTime().Equal(proof.ModTime())
 }
 
 // RetireAnchor removes only the private hard-link anchor. The immutable receipt
 // stays published. A durable intent distinguishes an interrupted unlink from an
 // unexplained missing anchor; recovery rehashes the surviving business file.
 func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() error, validate func(string, bool) error) (Checkpoint, error) {
-	if !r.valid(s) || admission == nil || validate == nil {
+	if validate == nil {
+		return Checkpoint{}, ErrState
+	}
+	return r.retireAnchor(ctx, s, admission, func(c Checkpoint, name string, exists bool) error {
+		if err := validate(name, exists); err != nil {
+			return err
+		}
+		path := s.TargetPath
+		if exists {
+			path = name
+		}
+		if _, err := r.inspectName(ctx, c, path); err != nil {
+			return err
+		}
+		return validate(name, exists)
+	}, nil)
+}
+
+func (r *Receiver) retireAnchor(ctx context.Context, s Spec, admission func() error, verify func(Checkpoint, string, bool) error, recheck func(bool) error) (Checkpoint, error) {
+	if !r.valid(s) || admission == nil {
 		return Checkpoint{}, ErrState
 	}
 	release, e := r.lock(ctx, s)
@@ -422,30 +500,30 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 	if c.AnchorRetired && exists {
 		return c, ErrState
 	}
-	if e = validate(name, exists); e != nil {
-		return failed(e)
-	}
-	if exists {
-		_, e = r.inspect(ctx, c)
-	} else {
-		_, e = r.inspectName(ctx, c, s.TargetPath)
-	}
-	if e != nil {
-		return failed(e)
-	}
-	if e = validate(name, exists); e != nil {
+	if e = verify(c, name, exists); e != nil {
 		return failed(e)
 	}
 	if e = admission(); e != nil {
 		return c, e
 	}
 	if c.AnchorRetired {
+		if recheck != nil {
+			return c, recheck(false)
+		}
 		return c, nil
 	}
 	if !c.AnchorRetiring {
 		c.AnchorRetiring = true
 		if e = r.save(c); e != nil {
 			return c, e
+		}
+	}
+	if e = r.check(ctx); e != nil {
+		return c, e
+	}
+	if recheck != nil {
+		if e = recheck(exists); e != nil {
+			return failed(e)
 		}
 	}
 	if exists {
@@ -455,6 +533,11 @@ func (r *Receiver) RetireAnchor(ctx context.Context, s Spec, admission func() er
 	}
 	if e = fsutil.SyncDirectory(r.root, "."); e != nil {
 		return c, e
+	}
+	if exists && recheck != nil {
+		if e = recheck(false); e != nil {
+			return failed(e)
+		}
 	}
 	c.AnchorRetired = true
 	c.AnchorRetiring = false
@@ -627,6 +710,9 @@ func (r *Receiver) Abort(ctx context.Context, s Spec, admission func() error) (C
 	name, _, _ := names(s)
 	if f, e := r.private(name, os.O_RDONLY); e == nil {
 		f.Close()
+		if e = r.check(ctx); e != nil {
+			return c, e
+		}
 		if e = r.root.Remove(name); e != nil {
 			return c, e
 		}
@@ -695,9 +781,7 @@ func (r *Receiver) VerifiedReader(ctx context.Context, s Spec) (*os.File, func()
 		return nil, nil, e
 	}
 	c, e := r.load(s)
-	if e == nil && c.State == "verified" {
-		_, e = r.inspect(ctx, c)
-	} else if e == nil {
+	if e == nil && c.State != "verified" {
 		e = ErrState
 	}
 	if e != nil {
@@ -710,6 +794,14 @@ func (r *Receiver) VerifiedReader(ctx context.Context, s Spec) (*os.File, func()
 		release()
 		return nil, nil, e
 	}
+	if _, e = verifyCheckpointFile(ctx, c, f); e == nil {
+		e = r.check(ctx)
+	}
+	if e != nil {
+		f.Close()
+		release()
+		return nil, nil, e
+	}
 	return f, func() { f.Close(); release() }, nil
 }
 
@@ -718,6 +810,13 @@ func (r *Receiver) VerifiedReader(ctx context.Context, s Spec) (*os.File, func()
 // callers must never overwrite a different inode at the destination. The local
 // volume coordinator is acquired by commit after the bounded-buffer disk scan.
 func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, commit func(string) error) (Checkpoint, error) {
+	if commit == nil {
+		return Checkpoint{}, ErrState
+	}
+	return r.publish(ctx, s, admission, func(name string, _ *os.File, _ os.FileInfo) error { return commit(name) })
+}
+
+func (r *Receiver) publish(ctx context.Context, s Spec, admission func() error, commit func(string, *os.File, os.FileInfo) error) (Checkpoint, error) {
 	if !r.valid(s) || admission == nil || commit == nil {
 		return Checkpoint{}, ErrState
 	}
@@ -739,7 +838,14 @@ func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, 
 	if e = admission(); e != nil {
 		return c, e
 	}
-	if _, e = r.inspect(ctx, c); e != nil {
+	name, _, _ := names(s)
+	file, e := r.private(name, os.O_RDONLY)
+	if e != nil {
+		return c, e
+	}
+	defer file.Close()
+	proof, e := verifyCheckpointFile(ctx, c, file)
+	if e != nil {
 		return c, e
 	}
 	if e = admission(); e != nil {
@@ -751,8 +857,10 @@ func (r *Receiver) Publish(ctx context.Context, s Spec, admission func() error, 
 			return c, e
 		}
 	}
-	name, _, _ := names(s)
-	if e = commit(name); e != nil {
+	if e = r.check(ctx); e != nil {
+		return c, e
+	}
+	if e = commit(name, file, proof); e != nil {
 		return c, e
 	}
 	c.State = "published"

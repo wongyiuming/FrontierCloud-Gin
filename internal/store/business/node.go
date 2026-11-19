@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -26,6 +27,9 @@ func (r *Repository) ReadIdentity(ctx context.Context) (store.NodeIdentity, erro
 	return readNode(ctx, r.db, "")
 }
 func (r *Repository) nodeAudit(ctx context.Context, q queryer, action, id string, detail map[string]any, a store.NodeAudit) error {
+	if handled, e := archiveEvent(ctx, q, logarchive.Node, map[string]any{"action": action, "relationship_id": id, "detail": detail, "actor": a.Actor, "request_id": a.RequestID, "trace_id": a.TraceID}); handled {
+		return e
+	}
 	if detail == nil {
 		detail = map[string]any{}
 	}
@@ -161,7 +165,7 @@ func (r *Repository) PrepareRelationship(ctx context.Context, v store.Relationsh
 	if !validRelation(v, "downstream") {
 		return nodeConflict("invalid downstream relationship")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -191,7 +195,7 @@ func (r *Repository) ConsumePair(ctx context.Context, p store.PairPackage, v sto
 	if !validPair(p, now) || !validRelation(v, "upstream") {
 		return nodeConflict("invalid pairing credentials")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -230,10 +234,13 @@ func (r *Repository) ConsumePair(ctx context.Context, p store.PairPackage, v sto
 	})
 }
 func (r *Repository) withRelation(ctx context.Context, id string, fn func(queryer, store.NodeIdentity, store.Relationship) error) error {
+	return r.withRelationWrite(ctx, id, r.write, fn)
+}
+func (r *Repository) withRelationWrite(ctx context.Context, id string, write func(context.Context, func(queryer) error) error, fn func(queryer, store.NodeIdentity, store.Relationship) error) error {
 	if !nodeIDPattern.MatchString(id) {
 		return nodeConflict("invalid relationship")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return write(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -249,7 +256,7 @@ func (r *Repository) withRelation(ctx context.Context, id string, fn func(querye
 	})
 }
 func (r *Repository) ActivateRelationship(ctx context.Context, id string, a store.NodeAudit) error {
-	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+	return r.withRelationWrite(ctx, id, r.ingressWrite, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
 		if v.State != "pending" && v.State != "active" {
 			return nodeConflict("relationship revoked")
 		}
@@ -275,7 +282,7 @@ func (r *Repository) ActivateRelationship(ctx context.Context, id string, a stor
 	})
 }
 func (r *Repository) RevokeRelationship(ctx context.Context, id string, confirmed bool, a store.NodeAudit) error {
-	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+	return r.withRelationWrite(ctx, id, r.ingressWrite, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
 		if v.State == "retiring" {
 			return store.ErrNodeState
 		}
@@ -357,7 +364,7 @@ func (r *Repository) RevokeRelationship(ctx context.Context, id string, confirme
 	})
 }
 func (r *Repository) AcknowledgeRevocation(ctx context.Context, id string, a store.NodeAudit) error {
-	return r.withRelation(ctx, id, func(q queryer, _ store.NodeIdentity, v store.Relationship) error {
+	return r.withRelationWrite(ctx, id, r.ingressWrite, func(q queryer, _ store.NodeIdentity, v store.Relationship) error {
 		if v.State != "revoked" {
 			return nodeConflict("relationship not revoked")
 		}
@@ -375,7 +382,7 @@ func (r *Repository) SetRelationshipMode(ctx context.Context, id, mode string, a
 	if mode != "Direct" && mode != "Relay" {
 		return nodeConflict("invalid transport mode")
 	}
-	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+	return r.withRelationWrite(ctx, id, r.ingressWrite, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
 		role, direction, action := "Master", "downstream", "mode-changed"
 		if accepted {
 			role, direction, action = "Follower", "upstream", "mode-accepted"
@@ -431,7 +438,10 @@ func (r *Repository) reserveNodeNonce(ctx context.Context, id, nonce, expectedCr
 	return
 }
 func (r *Repository) RecordHeartbeat(ctx context.Context, id string, success bool, rtt int, summary map[string]any, now int64) error {
-	return r.withRelation(ctx, id, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
+	// Heartbeat observations include Direct resource origin and freshness.
+	// Serialize updates with public grant admission so a changed origin or
+	// offline transition cannot overtake an in-progress authorization.
+	return r.withRelationWrite(ctx, id, r.ingressWrite, func(q queryer, node store.NodeIdentity, v store.Relationship) error {
 		if v.State != "active" {
 			return nil
 		}
@@ -448,6 +458,11 @@ func (r *Repository) RecordHeartbeat(ctx context.Context, id string, success boo
 			copy := map[string]any{}
 			for k, v := range summary {
 				copy[k] = v
+			}
+			// This is local authority, never peer-supplied heartbeat data.
+			delete(copy, nativeTransportReceiptKey)
+			if receipt, ok := v.Summary[nativeTransportReceiptKey]; ok {
+				copy[nativeTransportReceiptKey] = receipt
 			}
 			copy["recovered_at"] = v.Summary["recovered_at"]
 			if copy["recovered_at"] == nil {

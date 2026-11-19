@@ -82,7 +82,8 @@ body { background-color: #0f0f0f; color: #fff; font-family: -apple-system, Blink
 .fullscreen-lyrics { --fullscreen-lyric-font-size: 24px; position: fixed; inset: 0; z-index: 2147483600; display: grid; place-items: stretch; overflow: hidden; padding: clamp(20px, 3vw, 54px); color: #fff; background: radial-gradient(circle at 50% 45%, #17212a, #05080c 72%); cursor: pointer; touch-action: manipulation; user-select: none; }
 .fullscreen-lyrics.hidden { display: none; }
 .fullscreen-lyrics-columns { display: grid; min-width: 0; min-height: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(12px, 2vw, 36px); }
-.fullscreen-lyrics-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; justify-content: safe center; gap: .2em; overflow-y: auto; overflow-x: hidden; }
+.fullscreen-lyrics-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; justify-content: safe center; gap: .2em; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.fullscreen-lyrics-column::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .fullscreen-lyric-line { flex-shrink: 0; margin: 0; overflow: visible; color: #aebfca; font-size: var(--fullscreen-lyric-font-size); font-weight: 800; line-height: 1.18; text-align: center; white-space: normal; overflow-wrap: anywhere; transition: color .25s ease, opacity .25s ease, transform .25s ease; }
 .fullscreen-lyric-line:nth-child(6n+2) { color: #b9c4a6; }
 .fullscreen-lyric-line:nth-child(6n+3) { color: #c5b49f; }
@@ -96,7 +97,6 @@ body { background-color: #0f0f0f; color: #fff; font-family: -apple-system, Blink
 .media-item:hover { background: #282828; }
 .media-item.active { background: #333; border-right: 4px solid #3498db; border-left: none; }
 .audio-player-page .media-item.active { border-right: none; border-left: 4px solid #3498db; }
-.media-item img { width: 50px; height: 50px; border-radius: 6px; margin-right: 15px; object-fit: cover; pointer-events: none; }
 .media-info { flex: 1; overflow: hidden; }
 .media-title { margin-bottom: 4px; font-size: 14px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
 .media-artist { font-size: 12px; color: #888; }

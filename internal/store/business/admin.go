@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -24,10 +25,13 @@ func optional(value string) any {
 }
 
 func (r *Repository) AppendAudit(ctx context.Context, a store.AdminAudit) error {
-	return appendAudit(ctx, r.db, a)
+	return r.write(ctx, func(q queryer) error { return appendAudit(ctx, q, a) })
 }
 
 func appendAudit(ctx context.Context, q queryer, a store.AdminAudit) error {
+	if handled, e := archiveEvent(ctx, q, logarchive.Audit, a); handled {
+		return e
+	}
 	_, err := q.ExecContext(ctx, "INSERT INTO admin_audit_log (session_id_hash,action,target_count,source_summary,result,detail,client_ip,user_agent,request_id,trace_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", optional(a.SessionHash), bounded(a.Action, 64), a.TargetCount, bounded(a.SourceSummary, 10000), bounded(a.Result, 32), bounded(a.Detail, 10000), bounded(a.ClientIP, 45), bounded(a.UserAgent, 512), optional(bounded(a.RequestID, 128)), optional(a.TraceID), timestamp(time.Now()))
 	return err
 }

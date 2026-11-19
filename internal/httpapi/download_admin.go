@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,6 +12,11 @@ import (
 )
 
 func (a *Admin) download(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		noStore(c)
+		detail(c, http.StatusServiceUnavailable, "资源暂不可用")
+		return
+	}
 	var paths []string
 	if json.Unmarshal([]byte(c.Query("paths")), &paths) != nil || len(paths) == 0 || len(paths) > a.settings.AdminMaxDownloadItems {
 		detail(c, 400, "请选择合法下载对象")
@@ -51,7 +57,7 @@ func (a *Admin) download(c *gin.Context) {
 					c.Header("Content-Type", "")
 					mediaAdminError(c, err)
 				} else {
-					slog.Error("remote media download interrupted", "request_id", c.GetString("request_id"), "error", err)
+					slog.Error("remote media download interrupted", "request_id", c.GetString("request_id"), "error_type", logsafe.ErrorType(err))
 					c.Abort()
 				}
 			}
@@ -83,7 +89,7 @@ func (a *Admin) download(c *gin.Context) {
 			c.Header("Content-Type", "")
 			mediaAdminError(c, err)
 		} else {
-			slog.Error("media archive stream interrupted", "request_id", c.GetString("request_id"), "error", err)
+			slog.Error("media archive stream interrupted", "request_id", c.GetString("request_id"), "error_type", logsafe.ErrorType(err))
 			c.Abort()
 		}
 	}

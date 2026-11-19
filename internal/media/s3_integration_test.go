@@ -23,6 +23,7 @@ type mediaS3Control struct {
 	generation atomic.Uint64
 	reads      atomic.Int64
 	deletes    atomic.Int64
+	members    func(context.Context) ([]store.S3Member, error)
 	read       func(context.Context, string, string) (s3media.SourceGrant, error)
 	remove     func(context.Context, string, store.AdminAudit) error
 	complete   func(context.Context, string, store.AdminAudit) (store.GlobalMedia, error)
@@ -31,6 +32,12 @@ type mediaS3Control struct {
 }
 
 func (c *mediaS3Control) Generation() uint64 { return c.generation.Load() }
+func (c *mediaS3Control) Members(ctx context.Context) ([]store.S3Member, error) {
+	if c.members != nil {
+		return c.members(ctx)
+	}
+	return nil, nil
+}
 func (c *mediaS3Control) ReadSource(ctx context.Context, id, name string) (s3media.SourceGrant, error) {
 	c.reads.Add(1)
 	if c.read != nil {
@@ -72,7 +79,7 @@ func (r *forbiddenS3Reader) Read([]byte) (int, error) {
 }
 
 func TestS3MediaTicketAndNativePayloadPathsStaySeparate(t *testing.T) {
-	root, db, service, _ := s3CatalogFixture(t)
+	root, db, service, member := s3CatalogFixture(t)
 	ctx := context.Background()
 	control := &mediaS3Control{}
 	service.s3 = control
@@ -80,7 +87,7 @@ func TestS3MediaTicketAndNativePayloadPathsStaySeparate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ticket.Transport != "S3" || ticket.Site != "s3" || ticket.MemberID != "" || ticket.URL != "/api/v1/media/admin/upload/s3/"+ticket.ID {
+	if ticket.Transport != "S3" || ticket.Site != "s3" || ticket.MemberID != member.ID || ticket.URL != "/api/v1/media/admin/upload/s3/"+ticket.ID {
 		t.Fatal("native ticket leaked into S3", ticket)
 	}
 	reader := &forbiddenS3Reader{}
@@ -296,7 +303,7 @@ func TestS3PoolLogicalCapacityAndDeletePendingNeverUseNativePeer(t *testing.T) {
 	_, db, service, member := s3CatalogFixture(t)
 	ctx := context.Background()
 	row := publishS3CatalogObject(t, db, "music/S3Delete/one.mp3", nil)
-	control := &mediaS3Control{}
+	control := &mediaS3Control{members: db.Pool().(store.S3Repository).S3Members}
 	service.s3 = control
 	pool, err := service.StoragePool(ctx)
 	if err != nil {

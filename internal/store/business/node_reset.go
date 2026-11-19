@@ -12,7 +12,19 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 	if !nodeIDPattern.MatchString(confirmation) || !nodeIDPattern.MatchString(next.ID) || next.ID == confirmation || next.Role != "Standalone" || next.Endpoint != "" || next.PrivateKey == "" {
 		return result, nodeConflict("invalid reinitialization identity")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
+		if r.logProducer.Load() != nil {
+			var pending int
+			if e := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM log_producer_outbox").Scan(&pending); e != nil {
+				return e
+			}
+			if pending != 0 {
+				return nodeConflict("节点仍有等待主站确认的加密日志，禁止重新初始化")
+			}
+		}
+		if err := legacyTreeAbsent(ctx, q); err != nil {
+			return nodeConflict("加密文件树已启用，无法重新初始化节点")
+		}
 		old, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -82,6 +94,12 @@ func (r *Repository) ResetIdentity(ctx context.Context, confirmation, expectedRo
 			return err
 		}
 		if _, err := q.ExecContext(ctx, "UPDATE cluster_storage_members SET health='offline',writable=0"); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, "DELETE FROM public_ingress_config"); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, "DELETE FROM native_transport_policy"); err != nil {
 			return err
 		}
 		for _, table := range []string{"cluster_storage_members", "cluster_compute_members", "cluster_backup_members"} {

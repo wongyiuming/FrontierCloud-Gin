@@ -18,6 +18,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/search"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
@@ -28,26 +29,37 @@ var ErrCategory = errors.New("Media category not found")
 var ErrLyrics = errors.New("Lyrics not found")
 
 type Service struct {
-	root             *os.Root
-	repository       store.MediaRepository
-	identity         *node.Identity
-	mutation         sync.RWMutex
-	search           *search.Engine
-	recoveryRequired bool
-	nodes            store.NodeRepository
-	pool             store.PoolRepository
-	control          *node.Service
-	owned            store.OwnedStorageRepository
-	s3               s3Control
-	catalog          *catalogCache
-	controlLeaseMu   sync.Mutex
-	controlLeaseFile *os.File
-	tagsMu           sync.Mutex
-	tagsCache        map[string]MusicTags
-	tagsBytes        int
-	categoryCovers   map[string]directoryArtwork
-	coverGeneration  uint64
-	metadataSlots    chan struct{}
+	root                     *os.Root
+	repository               store.MediaRepository
+	identity                 *node.Identity
+	mutation                 sync.RWMutex
+	opaqueDeleteVerification sync.Mutex
+	plainIndexMu             sync.RWMutex
+	plainIndexBuild          sync.Mutex
+	plainIndexes             map[string]*plainContentIndex
+	plainIndexBytes          int
+	plainReadersOnce         sync.Once
+	plainReaders             chan struct{}
+	search                   *search.Engine
+	recoveryRequired         bool
+	nodes                    store.NodeRepository
+	pool                     store.PoolRepository
+	control                  *node.Service
+	opaqueDeletionReady      func(context.Context, sealedtree.RevocationIntent) (node.IngressPrerequisiteLease, error)
+	opaqueOwnerControlReady  func(context.Context, sealedtree.RevocationIntent) (node.IngressPrerequisiteLease, error)
+	owned                    store.OwnedStorageRepository
+	s3                       s3Control
+	opaqueS3ReadTree         *sealedtree.SQLStore
+	opaqueS3ReadGate         OpaqueS3ReadGate
+	catalog                  *catalogCache
+	controlLeaseMu           sync.Mutex
+	controlLeaseFile         *os.File
+	tagsMu                   sync.Mutex
+	tagsCache                map[string]MusicTags
+	tagsBytes                int
+	categoryCovers           map[string]directoryArtwork
+	coverGeneration          uint64
+	metadataSlots            chan struct{}
 }
 
 type Category struct {
@@ -55,21 +67,23 @@ type Category struct {
 	URL  string `json:"url"`
 }
 type Track struct {
-	MediaPath       string                `json:"media_path"`
-	Title           string                `json:"title"`
-	Artist          string                `json:"artist"`
-	Album           string                `json:"album,omitempty"`
-	Type            string                `json:"type"`
-	URL             string                `json:"url"`
-	Cover           string                `json:"cover"`
-	MediaID         string                `json:"media_id"`
-	ResourceID      string                `json:"resource_id,omitempty"`
-	Encryption      *mediacrypto.Metadata `json:"encryption,omitempty"`
-	NativeMetadata  bool                  `json:"native_metadata,omitempty"`
-	BrowserMetadata bool                  `json:"browser_metadata,omitempty"`
-	Transport       string                `json:"transport,omitempty"`
-	ObjectID        string                `json:"object_id,omitempty"`
-	SizeBytes       int64                 `json:"size_bytes,omitempty"`
+	MediaPath             string                `json:"media_path"`
+	Title                 string                `json:"title"`
+	Artist                string                `json:"artist"`
+	Album                 string                `json:"album,omitempty"`
+	Type                  string                `json:"type"`
+	URL                   string                `json:"url"`
+	Cover                 string                `json:"cover"`
+	MediaID               string                `json:"media_id"`
+	ResourceID            string                `json:"resource_id,omitempty"`
+	Encryption            *mediacrypto.Metadata `json:"encryption,omitempty"`
+	NativeMetadata        bool                  `json:"native_metadata,omitempty"`
+	BrowserMetadata       bool                  `json:"browser_metadata,omitempty"`
+	NativeSource          bool                  `json:"native_source,omitempty"`
+	SourceIdentityVersion int                   `json:"source_identity_version,omitempty"`
+	Transport             string                `json:"transport,omitempty"`
+	ObjectID              string                `json:"object_id,omitempty"`
+	SizeBytes             int64                 `json:"size_bytes"`
 	store.PlaybackStats
 	HasLyrics *bool  `json:"has_lyrics,omitempty"`
 	KaraokeID string `json:"karaoke_id"`
@@ -83,18 +97,16 @@ func NewContext(parent context.Context, directory string, repo store.MediaReposi
 	if err := parent.Err(); err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(directory)
+	// Check before startup recovery, default lyric creation, or any filesystem
+	// lease: those paths can publish legacy plaintext names and journals.
+	if err := repo.CheckLegacyPhysicalWritesAllowed(parent); err != nil {
+		return nil, err
+	}
+	service, err := openMediaService(directory, repo, identity)
 	if err != nil {
 		return nil, err
 	}
-	service := &Service{root: root, repository: repo, identity: identity}
-	service.owned, _ = repo.(store.OwnedStorageRepository)
-	service.pool, _ = repo.(store.PoolRepository)
-	service.search, err = search.New()
-	if err != nil {
-		root.Close()
-		return nil, err
-	}
+	root := service.root
 	// Recovery may hash multi-GiB completed uploads. No HTTP traffic is accepted
 	// until durable publication/deletion intents have been reconciled.
 	recovery, cancel := context.WithTimeout(parent, 30*time.Minute)
@@ -134,6 +146,49 @@ func NewContext(parent context.Context, directory string, repo store.MediaReposi
 	}
 	return service, nil
 }
+
+// NewSealedContext opens the media root after startup authenticates the
+// Master tree. This path never runs plaintext recovery or creates a lyric.
+func NewSealedContext(ctx context.Context, directory string, repo store.MediaRepository, identity *node.Identity, tree *sealedtree.SQLStore) (*Service, error) {
+	if ctx == nil || repo == nil || identity == nil || identity.Role != "Master" || tree == nil {
+		return nil, store.ErrNodeState
+	}
+	lease, err := tree.AcquireReadFence(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = lease.Check(ctx)
+	lease.Release()
+	if err != nil {
+		return nil, err
+	}
+	service, err := openMediaService(directory, repo, identity)
+	if err != nil {
+		return nil, err
+	}
+	if err := service.Ready(ctx); err != nil {
+		service.Close()
+		return nil, err
+	}
+	return service, nil
+}
+
+func openMediaService(directory string, repo store.MediaRepository, identity *node.Identity) (*Service, error) {
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return nil, err
+	}
+	engine, err := search.New()
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	service := &Service{root: root, repository: repo, identity: identity, search: engine}
+	service.owned, _ = repo.(store.OwnedStorageRepository)
+	service.pool, _ = repo.(store.PoolRepository)
+	return service, nil
+}
+
 func (s *Service) Close() error { return s.root.Close() }
 
 func mediaRoot(kind string) string {
@@ -508,6 +563,9 @@ type Stream struct {
 }
 
 func (s *Service) Stream(ctx context.Context, name string) (*Stream, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	release, leaseErr := s.acquire(ctx, false)
 	if leaseErr != nil {
 		return nil, leaseErr
@@ -565,16 +623,9 @@ func (s *Service) Playback(ctx context.Context, name, session string, played, du
 	if role == "Follower" {
 		return store.PlaybackResult{}, os.ErrNotExist
 	}
-	if math.IsNaN(played) || math.IsNaN(duration) || math.IsInf(played, 0) || math.IsInf(duration, 0) || played <= 0 || played > 86400 || duration <= 0 || duration > 86400 {
-		return store.PlaybackResult{}, errors.New("Invalid media duration")
-	}
-	canonical, err := normalizeSession(session)
+	canonical, threshold, err := ValidatePlaybackReport(session, played, duration)
 	if err != nil {
 		return store.PlaybackResult{}, err
-	}
-	threshold := math.Max(5, math.Min(30, duration*0.5))
-	if played+0.05 < threshold {
-		return store.PlaybackResult{}, errors.New("Playback threshold not reached")
 	}
 	release, leaseErr := s.acquire(ctx, false)
 	if leaseErr != nil {
@@ -591,6 +642,23 @@ func (s *Service) Playback(ctx context.Context, name, session string, played, du
 	result, err := s.repository.RecordPlayback(ctx, o, canonical)
 	result.Threshold = threshold
 	return result, err
+}
+
+// ValidatePlaybackReport applies the same session and threshold rules to
+// legacy and sealed catalog entries.
+func ValidatePlaybackReport(session string, played, duration float64) (string, float64, error) {
+	if math.IsNaN(played) || math.IsNaN(duration) || math.IsInf(played, 0) || math.IsInf(duration, 0) || played <= 0 || duration <= 0 || played > 86400 || duration > 86400 {
+		return "", 0, errors.New("Invalid media duration")
+	}
+	canonical, err := normalizeSession(session)
+	if err != nil {
+		return "", 0, err
+	}
+	threshold := math.Max(5, math.Min(30, duration*0.5))
+	if played+0.05 < threshold {
+		return "", 0, errors.New("Playback threshold not reached")
+	}
+	return canonical, threshold, nil
 }
 
 func normalizeSession(value string) (string, error) {

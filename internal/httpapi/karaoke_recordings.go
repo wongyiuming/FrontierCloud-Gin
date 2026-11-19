@@ -14,7 +14,7 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 	accounts.service.ConfigureRecordings(manager.RecoverUser)
 	g := router.Group("/api/v1/karaoke/account/recordings", func(c *gin.Context) {
 		noStore(c)
-		if accounts.public.settings.TLSEnabled && !accounts.resolver.SecureAdmin(c.Request) {
+		if accounts.public.settings.TLSEnabled && !secureKaraokeTransport(c.Request, accounts.resolver) {
 			detail(c, 426, "账号访问需要 HTTPS")
 			c.Abort()
 			return
@@ -37,8 +37,17 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 		return store.KaraokeAudit{UserID: user(c).ID, IP: info.IP, RequestID: info.RequestID, TraceID: info.TraceID}
 	}
 	g.POST("/crypto/prepare", func(c *gin.Context) { accounts.public.recordingCryptoPrepare(c, user(c)) })
+	g.POST("/crypto/audio-prepare", func(c *gin.Context) { accounts.recordingAudioPrepare(c, user(c)) })
+	g.POST("/:recording/audio-key", func(c *gin.Context) { accounts.serveRecordingAudio(c, user(c), true) })
+	g.POST("/:recording/audio-recover", func(c *gin.Context) { accounts.recordingAudioDirectAction(c, user(c), audit(c), false) })
+	g.POST("/:recording/audio-complete", func(c *gin.Context) { accounts.recordingAudioDirectAction(c, user(c), audit(c), true) })
+	g.GET("/:recording/audio-bytes", func(c *gin.Context) { accounts.serveRecordingAudio(c, user(c), false) })
 	g.POST("/:recording/lyrics-key", func(c *gin.Context) { accounts.public.recordingCryptoKey(c, user(c)) })
 	g.POST("/ticket", func(c *gin.Context) {
+		if accounts.public.opaqueTree != nil {
+			accounts.reserveRecordingAudio(c, user(c), audit(c))
+			return
+		}
 		var value struct {
 			Bytes           int64                           `json:"size_bytes"`
 			ContentType     string                          `json:"content_type"`
@@ -120,6 +129,10 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 		c.JSON(200, ticket)
 	})
 	g.PUT("/:recording/content", func(c *gin.Context) {
+		if accounts.public.opaqueTree != nil {
+			accounts.uploadRecordingAudio(c, user(c), audit(c), "upload")
+			return
+		}
 		v, e := manager.PendingUpload(c.Request.Context(), user(c).ID, c.Param("recording"))
 		if e != nil {
 			recordingError(c, e)
@@ -133,7 +146,14 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 		}
 		c.JSON(200, receipt)
 	})
+	g.POST("/:recording/recover", func(c *gin.Context) {
+		accounts.uploadRecordingAudio(c, user(c), audit(c), "recover")
+	})
 	g.POST("/:recording/finalize", func(c *gin.Context) {
+		if accounts.public.opaqueTree != nil {
+			detail(c, http.StatusNotFound, "录音路径不可用")
+			return
+		}
 		if e := manager.Finalize(c.Request.Context(), user(c).ID, c.Param("recording"), audit(c)); e != nil {
 			recordingError(c, e)
 			return
@@ -146,10 +166,38 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 			recordingError(c, e)
 			return
 		}
+		if accounts.recordingAudioDirect != nil {
+			work, e := accounts.recordingAudioDirect.ListRecordingAudioWork(c.Request.Context(), user(c).ID)
+			if e != nil {
+				recordingError(c, e)
+				return
+			}
+			result := make([]any, 0, len(work)+len(items))
+			unfinished := make(map[string]bool, len(work))
+			for _, item := range work {
+				unfinished[item.ID] = true
+				result = append(result, item)
+			}
+			for _, item := range items {
+				if unfinished[item.ID] {
+					continue
+				}
+				result = append(result, struct {
+					store.Recording
+					MemberID string `json:"storage_member_id"`
+				}{Recording: item, MemberID: item.MemberID})
+			}
+			c.JSON(200, gin.H{"items": result})
+			return
+		}
 		c.JSON(200, gin.H{"items": items})
 	})
 	for _, suffix := range []string{"", "/pending"} {
 		g.DELETE("/:recording"+suffix, func(c *gin.Context) {
+			if accounts.public.opaqueTree != nil {
+				accounts.deleteRecordingAudio(c, user(c), audit(c), suffix == "/pending")
+				return
+			}
 			a := audit(c)
 			a.Action = "recording-delete"
 			status := "deleted"
@@ -166,6 +214,10 @@ func RegisterKaraokeRecordings(router *gin.Engine, accounts *KaraokeAccounts, ma
 	}
 	serve := func(download bool) gin.HandlerFunc {
 		return func(c *gin.Context) {
+			if accounts.public.opaqueTree != nil {
+				detail(c, http.StatusNotFound, "录音路径不可用")
+				return
+			}
 			p, target, e := manager.Delivery(c.Request.Context(), user(c).ID, c.Param("recording"), download, accounts.public.settings.NginxMedia)
 			if e != nil {
 				if errors.Is(e, recording.ErrUnavailable) {

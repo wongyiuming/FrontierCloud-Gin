@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ func SecurityMiddleware(service *security.Service, resolver *network.Resolver) g
 		if err != nil {
 			c.Header("Cache-Control", "no-store")
 			detail(c, 503, "API security policy unavailable")
-			slog.Error("IP policy lookup failed", "error", err)
+			slog.Error("IP policy lookup failed", "error_type", logsafe.ErrorType(err))
 			c.Abort()
 			return
 		}
@@ -43,8 +44,8 @@ func SecurityMiddleware(service *security.Service, resolver *network.Resolver) g
 			accounting, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 2*time.Second)
 			defer cancel()
 			audit := store.AdminAudit{ClientIP: identity.IP, RequestID: c.GetString("request_id"), TraceID: c.GetString("trace_id")}
-			if err := service.Invalid(accounting, identity.IP, c.Request.Method, c.Request.URL.Path, c.Request.UserAgent(), audit); err != nil {
-				slog.Error("invalid API accounting failed", "client_ip", identity.IP, "error", err)
+			if err := service.Invalid(accounting, identity.IP, c.Request.Method, loggedRoute(c), c.Request.UserAgent(), audit); err != nil {
+				slog.Error("invalid API accounting failed", "client_ip", identity.IP, "error_type", logsafe.ErrorType(err))
 			}
 		}
 	}

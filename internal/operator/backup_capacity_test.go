@@ -57,6 +57,72 @@ func TestInvalidMySQLBackupDoesNotInspectOrDumpBeforeConfirmation(t *testing.T) 
 	}
 }
 
+func TestMasterBackupRefusesMissingAdminKeyBeforeFreeze(t *testing.T) {
+	d, receipt, runner, _ := upgradeFixture(t)
+	if err := os.Remove(filepath.Join(runner.secrets, "admin_key")); err != nil {
+		t.Fatal(err)
+	}
+	runner.calls = nil
+	output := filepath.Join(t.TempDir(), "new.tar")
+	if _, err := d.Backup(context.Background(), receipt, output, true, false); err == nil || !strings.Contains(err.Error(), "original Master AdminKey") {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("backup output was created", err)
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+			t.Fatal("backup froze writers before checking the AdminKey")
+		}
+	}
+}
+
+func TestUnsupportedEncryptedTreeBackupRefusesBeforeFreeze(t *testing.T) {
+	ctx := context.Background()
+	d, receipt, runner, _ := upgradeFixture(t)
+	runner.pending = map[string]int64{"sealed_tree_unrecoverable": 1}
+	runner.calls = nil
+	output := filepath.Join(t.TempDir(), "new.tar")
+	if _, err := d.BackupCapacity(ctx, receipt, output); err == nil || !strings.Contains(err.Error(), "encrypted tree backup is not enabled") {
+		t.Fatalf("full plan reported an unsupported backup as available: %v", err)
+	}
+	if _, err := d.UpgradeBackupCapacity(ctx, receipt, output); err == nil || !strings.Contains(err.Error(), "encrypted tree backup is not enabled") {
+		t.Fatalf("state plan reported an unsupported backup as available: %v", err)
+	}
+	if _, err := d.Backup(ctx, receipt, output, true, false); err == nil || !strings.Contains(err.Error(), "encrypted tree backup is not enabled") {
+		t.Fatalf("full backup failed to refuse before freeze: %v", err)
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+			t.Fatal("backup stopped a writer before reporting unsupported recovery", call)
+		}
+	}
+	for _, path := range []string{output, filepath.Join(d.Directory, OperationLock)} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("backup refusal left output or lock", err)
+		}
+	}
+}
+
+func TestRecoverySetRefusesUnsupportedEncryptedTreeBeforeAnyMemberFreeze(t *testing.T) {
+	items, runners := recoverySetFixture(t)
+	runners[1].pending = map[string]int64{"sealed_tree_unrecoverable": 1}
+	output := filepath.Join(t.TempDir(), "new-set")
+	if _, err := BackupSet(context.Background(), items, output, runners[0].node, true, false); err == nil || !strings.Contains(err.Error(), "encrypted tree backup is not enabled") {
+		t.Fatalf("set backup failed to refuse before freeze: %v", err)
+	}
+	for _, runner := range runners {
+		for _, call := range runner.calls {
+			if strings.Contains(call, "maintenance enter") || strings.Contains(call, " stop ") {
+				t.Fatal("set backup stopped a writer before reporting unsupported recovery", call)
+			}
+		}
+	}
+	if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("set backup refusal created output", err)
+	}
+}
+
 func TestManifestBudgetRejectsLongEscapedMetadataWithinEntryCountLimit(t *testing.T) {
 	p := BackupCapacity{}
 	entry := recovery.Entry{Path: "data/" + strings.Repeat("<", 3000), SHA256: strings.Repeat("0", 64), Mode: 0600}

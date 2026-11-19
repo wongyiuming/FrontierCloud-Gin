@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -26,8 +27,14 @@ func (r *Repository) RecordObservations(ctx context.Context, client string, addr
 		}
 		for _, address := range addresses {
 			matching := address != "" && address == client
-			if _, err := q.ExecContext(ctx, "INSERT INTO webrtc_observation_events(client_ip,webrtc_ip,outcome,matches_verified,observed_at) VALUES (?,?,?,?,?)", client, optional(address), outcome, matching, now); err != nil {
-				return err
+			handled, e := archiveEvent(ctx, q, logarchive.WebRTC, map[string]any{"client_ip": client, "webrtc_ip": address, "outcome": outcome, "matches_verified": matching})
+			if e != nil {
+				return e
+			}
+			if !handled {
+				if _, err := q.ExecContext(ctx, "INSERT INTO webrtc_observation_events(client_ip,webrtc_ip,outcome,matches_verified,observed_at) VALUES (?,?,?,?,?)", client, optional(address), outcome, matching, now); err != nil {
+					return err
+				}
 			}
 			if _, err := q.ExecContext(ctx, query, client, address, optional(address), matching, now, now, outcome); err != nil {
 				return err

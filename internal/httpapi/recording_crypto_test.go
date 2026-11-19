@@ -431,7 +431,10 @@ func testRecordingEncryptedLyricsHTTP(t *testing.T, cache karaoke.Cache) {
 	if !bytes.Equal(recovered, lyricsPlain) {
 		t.Fatal("browser lost historical lyrics")
 	}
-	master.public.crypto.RevokeBinding("browser:" + browserCookie.Value)
+	w = jsonRequest("/api/v1/media/crypto/revoke", gin.H{}, -1, false)
+	if w.Code != 200 {
+		t.Fatal("browser revoke", w.Code, w.Body.String())
+	}
 	w = jsonRequest(keyPath, keyBody, 0, true)
 	if w.Code != 401 {
 		t.Fatal("revoked snapshot grant", w.Code)

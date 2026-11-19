@@ -151,3 +151,10 @@ func TestObservabilityProjectsHeartbeatWithoutNetworkOrCredentials(t *testing.T)
 		t.Fatal(view, err)
 	}
 }
+
+func TestNewMasterBackupFailureOverridesOldPeerReceipt(t *testing.T) {
+	got := backupView(map[string]any{"enabled": true, "last_attempt": int64(200), "last_attempt_state": "failed", "generation": int64(7), "last_success": int64(100)}, map[string]any{"state": "receiving", "last_attempt": int64(150), "last_attempt_state": "receiving", "recovery_points": int64(2)}, 201)
+	if got["health"] != "failed" || got["generation"] != int64(7) || got["recovery_points"] != int64(2) || got["next_due"] != int64(500) {
+		t.Fatal(got)
+	}
+}

@@ -10,6 +10,7 @@ var ErrRegistrationLimit = errors.New("该公网 IP 今日注册次数已达上�
 var ErrUserMissing = errors.New("用户不存在")
 var ErrUserBlocked = errors.New("账号已被封禁或删除")
 var ErrAccountConflict = errors.New("账号状态已变化，请重新登录")
+var ErrUserHasRecordings = errors.New("请先在个人主页删除录音并取消待确认上传，再注销账号")
 var ErrUserQuota = errors.New("新空间不能小于用户已使用空间")
 
 type KaraokeUser struct {

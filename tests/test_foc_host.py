@@ -87,6 +87,35 @@ printf '%s\\n' "$@" > "$CALLS"
         self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(deployment), 'status'])
         self.assertEqual(list(self.scratch.iterdir()), [])
 
+    def test_business_recovery_requires_explicit_absolute_directory_without_discovery_or_registration(self):
+        recorded = self.deployment('discovered deployment')
+        self.registry.write_text(str(recorded) + '\n')
+        self.env['DOCKER_EXIT'] = '91'
+        registration = self.registration_backend()
+        selected = self.root / 'explicit prepared deployment'
+        selected.mkdir()
+        for action in ('prepare-business-state', 'import-business-state', 'activate-business-state'):
+            with self.subTest(action=action):
+                args = ['restore', action, '--target-master-id', 'a' * 32]
+                if action == 'import-business-state':
+                    args += ['--file', '/protected/source']
+                if action == 'activate-business-state':
+                    args += ['--source-sha256', 'b' * 64]
+                for selection in ([], ['--directory', 'relative']):
+                    result = self.invoke(*selection, *args)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn('explicit absolute --directory', result.stderr)
+                    self.assertFalse(self.calls.exists())
+                    self.assertFalse(registration.exists())
+                    self.assertEqual(list(self.scratch.iterdir()), [])
+
+                result = self.invoke('--directory', str(selected), *args)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(self.calls.read_text().splitlines(), ['--directory', str(selected), *args])
+                self.calls.unlink()
+                self.assertFalse(registration.exists())
+                self.assertFalse((selected / '.fc-deployment.json').exists())
+
     def test_multiple_deployments_refuse_before_backend(self):
         a, b = self.deployment('master'), self.deployment('storage')
         before = {directory: (directory / '.fc-deployment.json').read_bytes()

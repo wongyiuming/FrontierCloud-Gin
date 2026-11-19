@@ -24,6 +24,24 @@ const MaxRecordingBytes int64 = GiB
 const MaxRecordingMetadata = 2 * 1024 * 1024
 const MaxEncryptedRecordingLyricPlaintext = 1400 * 1024
 
+type RecordingAudioTicketRequest struct {
+	RecordingID      string               `json:"recording_id"`
+	MemberID         string               `json:"storage_member_id"`
+	CipherSHA256     string               `json:"cipher_sha256"`
+	ContentType      string               `json:"content_type"`
+	Title            string               `json:"title"`
+	SessionID        string               `json:"session_id"`
+	Encryption       mediacrypto.Metadata `json:"encryption"`
+	PreparationToken string               `json:"preparation_token"`
+}
+
+func (r RecordingAudioTicketRequest) Valid() bool {
+	return recordingAudioHex(r.RecordingID, 16) && recordingAudioHex(r.MemberID, 16) && recordingAudioHex(r.CipherSHA256, sha256.Size) &&
+		RecordingContentType(r.ContentType) && r.Title != "" && utf8.ValidString(r.Title) && utf8.RuneCountInString(r.Title) <= 255 &&
+		r.Encryption.Validate() == nil && r.Encryption.CiphertextSize > 0 && r.Encryption.CiphertextSize <= MaxRecordingBytes &&
+		r.SessionID != "" && r.PreparationToken != "" && len(r.PreparationToken) <= 2048
+}
+
 type RecordingEncryptedLyrics struct {
 	Encryption mediacrypto.Metadata `json:"encryption"`
 	Ciphertext string               `json:"ciphertext"`
@@ -269,6 +287,9 @@ func ValidRecordingFilename(v string) bool {
 // Completion methods require a verified physical receipt / cleanup proof.
 // A timeout, expired ticket or client-provided hash never constitutes proof.
 type RecordingRepository interface {
+	// Legacy recording filesystem operations must fail closed once a durable
+	// encrypted tree root exists. Runtime/maintenance fencing is separate.
+	CheckLegacyPhysicalWritesAllowed(context.Context) error
 	Recording(context.Context, string) (*Recording, error)
 	ListRecordings(context.Context, string, string, int) ([]Recording, error)
 	ReserveRecording(context.Context, Recording, int64, KaraokeAudit) (Recording, StorageMember, error)

@@ -31,7 +31,7 @@ func (r *Repository) PrepareGlobalDelete(ctx context.Context, scopes []store.Del
 		clauses = append(clauses, where)
 		args = append(args, values...)
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -137,7 +137,7 @@ func (r *Repository) DeferGlobalDelete(ctx context.Context, id string) error {
 	if !nodeHashPattern.MatchString(id) {
 		return store.ErrNodeState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -156,7 +156,7 @@ func (r *Repository) CompleteGlobalDelete(ctx context.Context, id string, a stor
 	if !nodeHashPattern.MatchString(id) {
 		return nodeConflict("invalid global deletion identity")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -183,6 +183,9 @@ func (r *Repository) completeGlobalDelete(ctx context.Context, q queryer, id str
 }
 
 func (r *Repository) completeGlobalDeleteProof(ctx context.Context, q queryer, id string, a store.AdminAudit, s3Proof bool) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	v, err := scanGlobal(q.QueryRowContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.media_id=?"+r.lock(), id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -240,7 +243,7 @@ func (r *Repository) PrepareMasterDelete(ctx context.Context, op store.DeleteOpe
 	if err != nil {
 		return err
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -268,7 +271,7 @@ func (r *Repository) PrepareMasterDelete(ctx context.Context, op store.DeleteOpe
 	})
 }
 func (r *Repository) CommitMasterDelete(ctx context.Context, id string, a store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err

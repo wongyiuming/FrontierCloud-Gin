@@ -22,7 +22,17 @@ func CheckPreparingMaterial(ctx context.Context, directory string, expected Repo
 }
 
 func checkMaterial(ctx context.Context, directory string, expected Report, preparing bool) error {
-	if !expected.Verified || validateManifest(expected.Manifest) != nil {
+	return checkMaterialVersion(ctx, directory, expected, preparing, false)
+}
+
+// CheckTreeMaterial verifies exact extracted v2 material before any restore
+// mutations. It does not rebind the fence or activate the deployment.
+func CheckTreeMaterial(ctx context.Context, directory string, expected Report) error {
+	return checkMaterialVersion(ctx, directory, expected, false, true)
+}
+
+func checkMaterialVersion(ctx context.Context, directory string, expected Report, preparing, treeFormat bool) error {
+	if !expected.Verified || validateManifestVersion(expected.Manifest, treeFormat) != nil {
 		return ErrUnsafe
 	}
 	info, e := os.Lstat(directory)

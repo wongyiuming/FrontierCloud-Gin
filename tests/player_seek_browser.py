@@ -38,6 +38,32 @@ def check(root, media, output, expect_broken=False):
                 }''', {'kind': kind, 'url': media_url})
                 page.wait_for_function('art.duration > 30 && art.video.readyState >= 2')
                 duration = page.evaluate('art.duration')
+                if not expect_broken:
+                    page.evaluate('''() => {
+                        window.keyboardTrackChanges = [];
+                        window.playNext = () => keyboardTrackChanges.push('next');
+                        window.playPrev = () => keyboardTrackChanges.push('previous');
+                        art.pause();
+                        art._showControls();
+                        art.currentTime = art.duration / 2;
+                    }''')
+                    slider = page.get_by_role('slider', name='播放进度')
+                    slider.focus()
+                    for key, expected in (('ArrowRight', duration / 2 + 5), ('ArrowLeft', duration / 2)):
+                        page.keyboard.press(key)
+                        page.wait_for_function('time => !art.video.seeking && Math.abs(art.currentTime - time) <= 0.15',
+                                               arg=expected)
+                        assert page.evaluate('art.video.paused && keyboardTrackChanges.length === 0'), (kind, key)
+
+                    slider.evaluate('''element => {
+                        for (const key of ['MediaTrackNext', 'MediaTrackPrevious']) {
+                            element.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true}));
+                        }
+                        element.blur();
+                    }''')
+                    page.keyboard.press('ArrowRight')
+                    page.keyboard.press('ArrowLeft')
+                    assert page.evaluate('keyboardTrackChanges') == ['next', 'previous', 'next', 'previous']
                 for mode in ('inline', 'web', 'native', 'inline-return'):
                     if mode == 'web':
                         page.evaluate('art.toggleWebFullscreen()')

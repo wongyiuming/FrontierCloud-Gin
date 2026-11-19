@@ -13,6 +13,15 @@ import (
 )
 
 func metadata(upload store.S3Upload) map[string]string {
+	if upload.Proof.MetadataFormat == store.S3OpaqueMetadata {
+		if !store.ValidS3MetadataIdentity(upload.Proof.MetadataFormat, upload.Key, upload.Proof.MetadataOwner, upload.Reservation.MediaID, upload.ObjectID) {
+			return nil
+		}
+		return map[string]string{"fc-format": store.S3OpaqueMetadata, "fc-owner": upload.Proof.MetadataOwner}
+	}
+	if !store.ValidS3MetadataIdentity(upload.Proof.MetadataFormat, upload.Key, upload.Proof.MetadataOwner, upload.Reservation.MediaID, upload.ObjectID) {
+		return nil
+	}
 	return map[string]string{"fc-session": upload.Reservation.ID, "fc-object": upload.ObjectID, "fc-member": upload.Reservation.MemberID, "fc-media": upload.Reservation.MediaID}
 }
 
@@ -141,11 +150,17 @@ func (s *Service) ConfirmPart(ctx context.Context, id string, number int) (store
 	return upload, s3store.ErrIncomplete
 }
 
-func objectProof(upload store.S3Upload, proof s3store.Proof) (store.S3ObjectProof, error) {
-	if proof.Size != upload.Reservation.ExpectedBytes || proof.ChecksumType != "COMPOSITE" || proof.ETag == "" || len(proof.ETag) > publishedETagBytes || len(proof.Metadata) != len(metadata(upload)) {
+// VerifyMultipartObjectProof checks the provider response against the exact
+// reserved key, identity, encrypted size, metadata and confirmed part hashes.
+// It performs no authorization or database writes. Callers must load upload
+// from their authenticated durable intent, not from an untrusted request.
+// CompositeSHA256 is the S3 multipart checksum, not the flat object digest.
+func VerifyMultipartObjectProof(upload store.S3Upload, proof s3store.Proof) (store.S3ObjectProof, error) {
+	expectedMetadata := metadata(upload)
+	if len(expectedMetadata) == 0 || proof.Size != upload.Reservation.ExpectedBytes || proof.ChecksumType != "COMPOSITE" || proof.ETag == "" || len(proof.ETag) > publishedETagBytes || len(proof.Metadata) != len(expectedMetadata) {
 		return store.S3ObjectProof{}, ErrProof
 	}
-	for key, value := range metadata(upload) {
+	for key, value := range expectedMetadata {
 		if proof.Metadata[key] != value {
 			return store.S3ObjectProof{}, ErrProof
 		}
@@ -167,7 +182,31 @@ func objectProof(upload store.S3Upload, proof s3store.Proof) (store.S3ObjectProo
 	if bytes != proof.Size || proof.ChecksumSHA256 != expected {
 		return store.S3ObjectProof{}, ErrProof
 	}
-	return store.S3ObjectProof{Key: upload.Key, SessionID: upload.Reservation.ID, ObjectID: upload.ObjectID, MemberID: upload.Reservation.MemberID, MediaID: upload.Reservation.MediaID, Bytes: proof.Size, ETag: proof.ETag, VersionID: proof.VersionID, CompositeSHA256: expected}, nil
+	return store.S3ObjectProof{MetadataFormat: upload.Proof.MetadataFormat, MetadataOwner: upload.Proof.MetadataOwner, Key: upload.Key, SessionID: upload.Reservation.ID, ObjectID: upload.ObjectID, MemberID: upload.Reservation.MemberID, MediaID: upload.Reservation.MediaID, Bytes: proof.Size, ETag: proof.ETag, VersionID: proof.VersionID, CompositeSHA256: expected}, nil
+}
+
+// VerifySelectedMultipartProof applies the new encrypted-tree constraints to
+// the existing provider checksum verifier. Its upload argument is a decoded,
+// authenticated Master intent, never a client-selected provider object.
+// Successful verification alone does not finalize a tree record or quota.
+func VerifySelectedMultipartProof(upload store.S3Upload, proof s3store.Proof) (store.S3ObjectProof, error) {
+	metadata := upload.Reservation.Encryption
+	if upload.Proof.MetadataFormat != store.S3OpaqueMetadata || metadata == nil || metadata.Validate() != nil || metadata.CiphertextSize != upload.Reservation.ExpectedBytes || !selectedS3Hex(upload.Reservation.ID, 32) || !selectedS3Hex(upload.Reservation.MemberID, 32) || !selectedS3Hex(upload.Reservation.MediaID, 64) || upload.ObjectID != upload.Reservation.MediaID {
+		return store.S3ObjectProof{}, ErrProof
+	}
+	return VerifyMultipartObjectProof(upload, proof)
+}
+
+func selectedS3Hex(value string, size int) bool {
+	if len(value) != size {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Complete recovers a lost completion response by verifying the same owned
@@ -219,7 +258,7 @@ func (s *Service) Complete(ctx context.Context, id string, audit store.AdminAudi
 	if err != nil {
 		return store.GlobalMedia{}, err
 	}
-	verified, err := objectProof(upload, proof)
+	verified, err := VerifyMultipartObjectProof(upload, proof)
 	if err != nil {
 		return store.GlobalMedia{}, err
 	}

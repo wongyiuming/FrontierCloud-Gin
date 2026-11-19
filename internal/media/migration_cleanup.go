@@ -19,6 +19,9 @@ import (
 // the exact inode again under a short exclusive lease before preparing deletion.
 // The authenticated native-only worker uses the persisted-grant entry below.
 func (s *Service) MigrationCleanup(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationCleanupGrant, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.owned == nil || repo == nil || g.Object.Resource != "media" {
 		return ErrUnavailable
 	}
@@ -33,6 +36,9 @@ func (s *Service) MigrationCleanupAuthorized(ctx context.Context, relationship s
 	return s.migrationDeleteAuthorized(ctx, relationship, l, id, repo, a, "cleanup")
 }
 func (s *Service) MigrationShadowCleanup(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationShadowGrant, repo store.MigrationPeerRepository, a store.NodeAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.owned == nil || repo == nil || g.Object.Resource != "media" {
 		return ErrUnavailable
 	}
@@ -47,6 +53,9 @@ func (s *Service) MigrationShadowCleanupAuthorized(ctx context.Context, relation
 
 // Both paths use the same pinned inode, full SHA, quarantine and SQL recovery.
 func (s *Service) migrationDeleteAuthorized(ctx context.Context, relationship string, l store.MigrationLease, id string, repo store.MigrationPeerRepository, a store.NodeAudit, operation string) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.owned == nil || repo == nil {
 		return ErrUnavailable
 	}

@@ -167,13 +167,18 @@ func authenticatedRecordingPublication(t *testing.T, encrypted bool, cleanup ...
 	payload = append(payload, tail...)
 	payload = append(payload, recording.TrailerMagic...)
 	id := strings.Repeat("b", 32)
-	v, member, e := mdb.Recordings().ReserveRecording(ctx, store.Recording{ID: id, UserID: user.ID, Filename: "voice.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), Title: snapshot.Title, Lyrics: snapshot.Lyrics, EncryptedLyrics: snapshot.EncryptedLyrics}, 10*store.GiB, store.KaraokeAudit{})
+	// Exercise placement onto the configured source by modeling a Master whose
+	// free space is at the reserve floor. Using an arbitrary 10 GiB here makes
+	// the chosen owner depend on the test host's actual follower disk space.
+	// The source still reports real free space and must pass normal capacity.
+	v, member, e := mdb.Recordings().ReserveRecording(ctx, store.Recording{ID: id, UserID: user.ID, Filename: "voice.webm", ContentType: "audio/webm", Bytes: int64(len(payload)), Title: snapshot.Title, Lyrics: snapshot.Lyrics, EncryptedLyrics: snapshot.EncryptedLyrics}, store.PhysicalReserve, store.KaraokeAudit{})
 	if e != nil {
 		t.Fatal(e)
 	}
 	srel, _ := mdb.Nodes().Relationship(ctx, srid)
 	if member.ID != srel.PeerID {
-		t.Fatal("ordinary allocation did not choose enabled source")
+		members, membersErr := mdb.Pool().Members(ctx)
+		t.Fatal("ordinary allocation did not choose enabled source", member, members, membersErr)
 	}
 	reply, e := master.UploadRecording(ctx, v, member, bytes.NewReader(payload))
 	if e != nil {

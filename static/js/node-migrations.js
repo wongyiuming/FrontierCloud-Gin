@@ -82,6 +82,10 @@
     function migrationPlanPanel(node) {
         const section = make('section', 'node-resource-panel');
         section.append(make('strong', '', '整节点资源迁出'));
+        if (node.migration_planning_available !== true) {
+            section.append(make('p', 'node-note', '当前部署暂不支持创建或启动迁移计划。已有任务仍可查看。'));
+            return section;
+        }
         section.append(make('p', 'node-note', '选择源与目标后生成只读计划。计划包含隐藏、加密及子目录对象；Master Local 暂不支持迁入或迁出。'));
         const members = (node.storage_pool?.members || []).filter(member => member.member_id !== 'auto' && member.member_kind !== 'Auto');
         for (const [key, label] of [['source', '源节点'], ['target', '目标节点']]) {
@@ -91,7 +95,7 @@
             for (const member of members) {
                 const reasons = [];
                 const relationship = memberRelationship(node, member);
-                if (member.member_kind !== 'Follower') reasons.push('Master Local 不支持');
+                if (member.member_kind !== 'Follower') reasons.push(member.member_kind === 'S3' ? 'S3 不支持迁移' : 'Master Local 不支持');
                 if (member.member_kind === 'Follower' && relationship?.state !== 'active') reasons.push(relationship?.state === 'retiring' ? '退役处理中' : '节点关系未生效');
                 if (member.health !== 'online') reasons.push('离线或不健康');
                 if (key === 'target' && (!member.storage_enabled || !member.writable || member.draining)) reasons.push('不可写或排空中');
@@ -162,8 +166,9 @@
                 await load('');
             };
             if (['queued', 'copying', 'verifying', 'committing', 'cleanup_pending'].includes(task.state)) actions.append(button('暂停', control('pause')));
-            if (task.state === 'paused') actions.append(button('恢复', control('resume')));
-            if (task.state === 'failed' || ['cleanup_pending', 'cancelling'].includes(task.state) && task.error_code) actions.append(button('重试', control('retry')));
+            const canResume = node?.migration_planning_available === true;
+            if (canResume && task.state === 'paused') actions.append(button('恢复', control('resume')));
+            if (canResume && (task.state === 'failed' || ['cleanup_pending', 'cancelling'].includes(task.state) && task.error_code)) actions.append(button('重试', control('retry')));
             if (!['completed', 'cancelled', 'cancelling'].includes(task.state)) actions.append(button('取消任务', control('cancel'), 'danger'));
             if (['completed', 'cancelled'].includes(task.state)) actions.append(button('明确解除本任务排空', async () => {
                 const source = window.prompt(`请输入源 NodeID ${task.source_id}，确认解除任务 ${task.task_id} 的排空限制。其他维护限制保留；此操作不会退役节点。`);
@@ -210,7 +215,7 @@
             }
             const query = `?view=${migrationQueueView ? 'queue' : 'history'}${migrationCursor.id ? `&after_time=${migrationCursor.time}&after_id=${encodeURIComponent(migrationCursor.id)}` : ''}`;
             const migrations = await api(`/api/v1/media/admin/nodes/migrations${query}`);
-            if (migrationPlan && ['observing', 'starting'].includes(migrationPlan.state)) {
+            if (node.migration_planning_available === true && migrationPlan && ['observing', 'starting'].includes(migrationPlan.state)) {
                 migrationPlan = await api(`/api/v1/media/admin/nodes/migration-plans/${encodeURIComponent(migrationPlan.plan_id)}`);
             }
             // At most four visible active tasks per refresh; no data-plane traffic.

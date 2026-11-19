@@ -135,7 +135,14 @@ func (store *Store) Backend() string {
 }
 
 func (store *Store) Initialize(ctx context.Context) error {
-	return schema.Initialize(ctx, store.database, store.Backend())
+	if err := schema.Initialize(ctx, store.database, store.Backend()); err != nil {
+		return err
+	}
+	return store.repo().PreparePublicIngressLease(ctx)
+}
+
+func (store *Store) VerifyPreparedRuntime(ctx context.Context) error {
+	return schema.VerifyPreparedSQLiteRuntime(ctx, store.database)
 }
 
 func (store *Store) Ping(ctx context.Context) error {

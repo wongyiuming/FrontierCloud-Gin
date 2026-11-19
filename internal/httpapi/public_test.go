@@ -63,6 +63,9 @@ func publicFixture(t *testing.T, accel bool) (*gin.Engine, *sqlitestore.Store, s
 	if err != nil {
 		t.Fatal(err)
 	}
+	control := node.NewService(db.Nodes(), identity, nil)
+	control.ConfigureVolumes(db.Pool(), svc, nil)
+	public.ConfigureNetwork(control)
 	t.Cleanup(func() { public.Close() })
 	return router, db, dir, public
 }

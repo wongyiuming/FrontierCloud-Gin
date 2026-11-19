@@ -41,9 +41,37 @@ body{min-height:100vh;min-height:100dvh;color:#fff;background:#000}
 <script>
 window.frontierCloudStunUrls={{STUN_URLS_JSON}};window.frontierCloudWebrtcIntervalMs={{WEBRTC_INTERVAL_MS}};
 window.frontierCloudPrefetchAssets={{MEDIA_PREFETCH_ASSETS_JSON}};
+const adminOrigin={{ADMIN_ORIGIN_JSON}};
 function fiveRapidClicks(element,action){let count=0,started=0;element.addEventListener('click',event=>{event.preventDefault();const now=Date.now();if(!started||now-started>1800){count=1;started=now}else count+=1;if(count===5){count=0;started=0;action()}})}
 fiveRapidClicks(document.getElementById('refreshHotspot'),()=>location.assign('/api/v1/media/refresh'));
-fiveRapidClicks(document.getElementById('elevateHotspot'),async()=>{const token=prompt('请输入 Admin Key:');if(!token)return;const body=new URLSearchParams({token});try{const r=await fetch('/api/v1/media/admin/elevate',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const d=await r.json();if(!r.ok){const detail=d.detail;throw new Error(detail&&typeof detail==='object'?(detail.message||'登录失败'):(detail||'登录失败'))}location.href=d.redirect}catch(e){alert(e.message)}});
+fiveRapidClicks(document.getElementById('elevateHotspot'),async()=>{
+    let key=prompt('请输入 Admin Key:');
+    if(!key)return;
+    if(adminOrigin===location.origin){
+        const body=new URLSearchParams({token:key});key='';
+        try{const r=await fetch('/api/v1/media/admin/elevate',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const d=await r.json();if(!r.ok){const detail=d.detail;throw new Error(detail&&typeof detail==='object'?(detail.message||'登录失败'):(detail||'登录失败'))}location.href=d.redirect}catch(e){alert(e.message)}
+        return;
+    }
+    if(!adminOrigin){key='';alert('管理地址不可用');return}
+    const popup=window.open(adminOrigin+'/api/v1/media/admin/handoff/start','_blank','popup,width=480,height=320');
+    if(!popup){key='';alert('请允许打开管理身份验证窗口');return}
+    let timer;
+    const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',onMessage)};
+    const onMessage=async event=>{
+        const data=event.data;
+        if(event.source!==popup||event.origin!==adminOrigin||!data||data.type!=='frontiercloud-admin-flow'||typeof data.challenge!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(data.challenge))return;
+        cleanup();
+        const body=JSON.stringify({challenge:data.challenge,key});key='';
+        try{
+            const r=await fetch('/api/v1/media/admin-handoff/authorize',{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'application/json'},body});
+            const result=await r.json();
+            if(!r.ok||typeof result.ticket!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(result.ticket))throw new Error('管理身份验证失败');
+            popup.postMessage({type:'frontiercloud-admin-ticket',challenge:data.challenge,ticket:result.ticket},adminOrigin);
+        }catch(e){popup.close();alert(e.message||'管理身份验证失败')}
+    };
+    window.addEventListener('message',onMessage);
+    timer=setTimeout(()=>{cleanup();key='';popup.close();alert('管理身份验证已过期')},60000);
+});
 </script><script src="{{MEDIA_BROWSER_JS_URL}}"></script><script src="{{NETWORK_OBSERVATION_JS_URL}}"></script>
 </body>
 </html>

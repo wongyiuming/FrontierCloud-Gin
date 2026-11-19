@@ -49,7 +49,7 @@ func (r *Repository) PrepareDelete(ctx context.Context, operation store.DeleteOp
 	if err != nil {
 		return err
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if _, err := q.ExecContext(ctx, "INSERT INTO media_delete_operations (operation_id,state,manifest,created_at) VALUES (?,'pending',?,?)", operation.ID, string(manifest), timestamp(time.Now())); err != nil {
 			return err
 		}
@@ -103,13 +103,16 @@ func (r *Repository) DeleteOperations(ctx context.Context) ([]store.DeleteOperat
 	return result, rows.Err()
 }
 func (r *Repository) ForgetDelete(ctx context.Context, id string) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		_, err := q.ExecContext(ctx, "DELETE FROM media_delete_operations WHERE operation_id=? AND state IN ('pending','committed')", id)
 		return err
 	})
 }
 
 func (r *Repository) deleteMetadata(ctx context.Context, q queryer, item store.DeleteItem) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	// Include legacy playback rows whose IDs predate the object registry.
 	ids := map[string]bool{}
 	for _, table := range []string{"media_objects", "media_playback_stats"} {
@@ -169,7 +172,7 @@ func (r *Repository) deleteMetadata(ctx context.Context, q queryer, item store.D
 }
 
 func (r *Repository) CommitDelete(ctx context.Context, id string, audit store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		operation, err := r.deleteOperation(ctx, q, id, true)
 		if err != nil {
 			return err

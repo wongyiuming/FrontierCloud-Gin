@@ -29,7 +29,9 @@ type dockerFailure struct {
 	status    int
 }
 
-func (e *dockerFailure) Error() string { return "Docker operation rejected" }
+func (e *dockerFailure) Error() string {
+	return fmt.Sprintf("Docker %s rejected (%d)", e.operation, e.status)
+}
 func dockerOperation(path string) string {
 	path, _, _ = strings.Cut(path, "?")
 	switch {
@@ -45,6 +47,10 @@ func dockerOperation(path string) string {
 		return "container-list"
 	case path == "/containers/create":
 		return "container-create"
+	case path == "/networks/create":
+		return "network-create"
+	case strings.HasPrefix(path, "/networks/") && strings.HasSuffix(path, "/connect"):
+		return "network-connect"
 	case strings.HasPrefix(path, "/containers/") && strings.HasSuffix(path, "/json"):
 		return "container-inspect"
 	case strings.HasPrefix(path, "/containers/") && strings.HasSuffix(path, "/exec"):

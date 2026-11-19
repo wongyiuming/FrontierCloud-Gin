@@ -3,6 +3,8 @@ set -eu
 
 tls_enabled=$(printf '%s' "${TLS_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')
 public_bind_address=${PUBLIC_BIND_ADDRESS:-0.0.0.0}
+master_public_ipv6=${MASTER_PUBLIC_IPV6:-false}
+master_ipv6_bind=${MASTER_PUBLIC_IPV6_BIND_ADDRESS:-}
 
 case "$tls_enabled" in
   true|1|yes|on) nginx_mode=https ;;
@@ -18,6 +20,21 @@ case "$public_bind_address" in
   ::) ipv6_enabled=true ;;
   *)
     echo "PUBLIC_BIND_ADDRESS must be 0.0.0.0 or :: for nginx" >&2
+    exit 1
+    ;;
+esac
+
+case "$master_public_ipv6/$master_ipv6_bind" in
+  false/) ;;
+  true/::)
+    if [ "$public_bind_address" != 0.0.0.0 ]; then
+      echo "Master dual-stack requires PUBLIC_BIND_ADDRESS=0.0.0.0" >&2
+      exit 1
+    fi
+    ipv6_enabled=true
+    ;;
+  *)
+    echo "Master dual-stack requires MASTER_PUBLIC_IPV6=true and MASTER_PUBLIC_IPV6_BIND_ADDRESS=:: together" >&2
     exit 1
     ;;
 esac
@@ -43,4 +60,4 @@ for template in /etc/nginx/templates/nginx.conf.template "$template_dir/extra-se
   esac
 done
 
-echo "nginx: selected $nginx_mode configuration with PUBLIC_BIND_ADDRESS=$public_bind_address"
+echo "nginx: selected $nginx_mode configuration with PUBLIC_BIND_ADDRESS=$public_bind_address and IPv6 listener=$ipv6_enabled"

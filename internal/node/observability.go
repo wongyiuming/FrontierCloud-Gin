@@ -34,6 +34,29 @@ func observedText(value map[string]any, key, fallback string) string {
 	}
 	return v
 }
+
+func hostUsageView(relation *store.Relationship, now int64) map[string]any {
+	if relation == nil || relation.Direction != "downstream" || relation.State != "active" || relation.Status != "online" ||
+		relation.LastHeartbeat <= 0 || relation.LastHeartbeat > now || now-relation.LastHeartbeat >= 120 {
+		return nil
+	}
+	report, _ := relation.Summary["host_usage"].(map[string]any)
+	if len(report) == 0 {
+		return nil
+	}
+	result := map[string]any{}
+	if cpu, ok := intField(report, "cpu_percent"); ok && cpu >= 0 && cpu <= 100 {
+		result["cpu_percent"] = cpu
+	}
+	used, haveUsed := intField(report, "memory_used_bytes")
+	total, haveTotal := intField(report, "memory_total_bytes")
+	if haveUsed && haveTotal && total > 0 && used >= 0 && used <= total {
+		result["memory_used_bytes"] = used
+		result["memory_total_bytes"] = total
+	}
+	return result
+}
+
 func connectionView(relation *store.Relationship) map[string]any {
 	if relation == nil {
 		return map[string]any{"status": "local", "current_rtt_ms": 0, "min_rtt_ms": 0, "avg_rtt_ms": 0, "max_rtt_ms": 0, "sample_count": 0, "last_heartbeat": 0, "failures": 0, "recoveries": 0}
@@ -94,6 +117,13 @@ func backupView(configured, observed map[string]any, now int64) map[string]any {
 	}
 	state := observedText(observed, "state", observedText(configured, "state", "disabled"))
 	attemptState := observedText(observed, "last_attempt_state", state)
+	attempt := observedInteger(observed, "last_attempt")
+	running := state == "receiving"
+	if configuredAttempt := observedInteger(configured, "last_attempt"); configuredAttempt > attempt {
+		attempt = configuredAttempt
+		attemptState = observedText(configured, "last_attempt_state", state)
+		running = attemptState == "receiving"
+	}
 	lag := int64(0)
 	if enabled && last != 0 {
 		lag = max(0, now-last)
@@ -102,7 +132,7 @@ func backupView(configured, observed map[string]any, now int64) map[string]any {
 	switch {
 	case !enabled:
 		health = "disabled"
-	case state == "receiving" || attemptState == "receiving":
+	case running || attemptState == "receiving":
 		health = "running"
 	case attemptState == "failed":
 		health = "failed"
@@ -123,7 +153,10 @@ func backupView(configured, observed map[string]any, now int64) map[string]any {
 	if enabled && last > 0 {
 		due = min(last, math.MaxInt64-24*60*60) + 24*60*60
 	}
-	return map[string]any{"enabled": enabled, "health": health, "raw_state": state, "generation": generation, "last_success": last, "lag_seconds": lag, "next_due": due, "checksum": checksum, "last_size_bytes": observedInteger(observed, "last_size_bytes"), "recovery_points": observedInteger(observed, "recovery_points"), "last_attempt": observedInteger(observed, "last_attempt"), "last_attempt_state": attemptState}
+	if enabled && attemptState == "failed" && attempt > 0 {
+		due = min(attempt, math.MaxInt64-5*60) + 5*60
+	}
+	return map[string]any{"enabled": enabled, "health": health, "raw_state": state, "generation": generation, "last_success": last, "lag_seconds": lag, "next_due": due, "checksum": checksum, "last_size_bytes": observedInteger(observed, "last_size_bytes"), "recovery_points": observedInteger(observed, "recovery_points"), "last_attempt": attempt, "last_attempt_state": attemptState}
 }
 
 // Observability projects existing authoritative members and heartbeat facts.
@@ -179,7 +212,11 @@ func (s *Service) Observability(ctx context.Context) (map[string]any, error) {
 		if member.Kind == "MasterLocal" {
 			storageSync, backupSync = "effective", "effective"
 		}
-		views = append(views, map[string]any{"member_id": member.ID, "member_kind": member.Kind, "relationship_id": member.RelationshipID, "connection": connectionView(relation), "sync": map[string]any{"storage": storageSync, "backup": backupSync}, "observed": map[string]any{"storage": storage, "backup": observedBackup}, "backup": backupView(member.Backup, observedBackup, now)})
+		observed := map[string]any{"storage": storage, "backup": observedBackup}
+		if usage := hostUsageView(relation, now); len(usage) != 0 {
+			observed["host_usage"] = usage
+		}
+		views = append(views, map[string]any{"member_id": member.ID, "member_kind": member.Kind, "relationship_id": member.RelationshipID, "connection": connectionView(relation), "sync": map[string]any{"storage": storageSync, "backup": backupSync}, "observed": observed, "backup": backupView(member.Backup, observedBackup, now)})
 	}
 	// A concurrent reset cannot turn a stale Master projection into authority.
 	current, err := s.repo.ReadIdentity(ctx)

@@ -61,5 +61,12 @@ func BusinessBackupTables() []string {
 		"ip_security_audit_log", "ip_security_summary", "ip_security_projection",
 		"ip_auto_ban_events", "ip_permanent_whitelist", "node_audit",
 		"s3_members", "s3_objects",
+		"public_ingress_config", "native_transport_policy",
 	}
+}
+
+// BackupAttemptRepository persists Master-side build/transfer failures even
+// when no peer receiving manifest could be created.
+type BackupAttemptRepository interface {
+	RecordBackupAttempt(context.Context, string, string, NodeAudit) error
 }

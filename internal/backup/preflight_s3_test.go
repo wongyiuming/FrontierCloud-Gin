@@ -57,6 +57,36 @@ func TestS3BackupProjectionRequiresIndependentCredentialsAndOwnershipProof(t *te
 	}
 }
 
+func TestS3BackupPreservesOpaqueMetadataFormat(t *testing.T) {
+	for _, format := range []string{store.S3OpaqueMetadata, "unknown"} {
+		t.Run(format, func(t *testing.T) {
+			records := s3PreflightRecords(t)
+			row := preflightRow(records, "s3_objects")
+			var proof store.S3ObjectProof
+			if err := json.Unmarshal([]byte(row["proof_json"].(string)), &proof); err != nil {
+				t.Fatal(err)
+			}
+			physical := strings.Repeat("a", 64)
+			proof.Key = "objects/aa/aa/" + physical + ".blob"
+			proof.MetadataFormat = format
+			proof.MetadataOwner = strings.Repeat("b", 64)
+			encoded, err := json.Marshal(proof)
+			if err != nil {
+				t.Fatal(err)
+			}
+			row["object_key"], row["proof_json"] = proof.Key, string(encoded)
+			data := encodedPreflight(records)
+			report, err := Preflight(context.Background(), bytes.NewReader(data), expectedPreflight(data), t.TempDir())
+			if format == store.S3OpaqueMetadata && (err != nil || !report.LogicalValid) {
+				t.Fatal("opaque proof rejected", err)
+			}
+			if format != store.S3OpaqueMetadata && err == nil {
+				t.Fatal("unknown metadata format accepted")
+			}
+		})
+	}
+}
+
 func TestS3BackupRejectsSigningAuthorityAndUnboundProviderFacts(t *testing.T) {
 	cases := map[string]func([]map[string]any) []map[string]any{
 		"credential": func(r []map[string]any) []map[string]any {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"io"
 	"log/slog"
 	"net/url"
@@ -29,10 +30,22 @@ type Manager struct {
 	pool     store.PoolRepository
 	control  *node.Service
 	volume   *Storage
+	sealedExpiry func(context.Context) error
 }
 
 func NewManager(repo store.RecordingRepository, accounts store.KaraokeRepository, nodes store.NodeRepository, pool store.PoolRepository, control *node.Service, volume *Storage) *Manager {
-	return &Manager{repo, accounts, nodes, pool, control, volume}
+	return &Manager{repo:repo, accounts:accounts, nodes:nodes, pool:pool, control:control, volume:volume}
+}
+
+// ConfigureSealedExpiry is startup-only. The bounded callback may process
+// only sealed-tree work it can prove safe; it does not enable recording
+// readiness or replace scoped-pending and account-deletion reconciliation.
+func (s *Manager) ConfigureSealedExpiry(expiry func(context.Context) error) error {
+	if s == nil || s.volume == nil || !s.volume.sealed || expiry == nil || s.sealedExpiry != nil {
+		return store.ErrRecordingState
+	}
+	s.sealedExpiry = expiry
+	return nil
 }
 
 type Ticket struct {
@@ -355,25 +368,41 @@ func (s *Manager) Run(ctx context.Context) {
 	tick := func() {
 		n, e := s.nodes.ReadIdentity(ctx)
 		if e != nil {
-			slog.Error("recording cleanup identity unavailable", "error", e)
+			slog.Error("recording cleanup identity unavailable", "error_type", logsafe.ErrorType(e))
 			return
 		}
 		if e = s.volume.Ready(ctx); e != nil {
+			if s.volume.sealed {
+				slog.Error("sealed recording storage unavailable", "error_type", logsafe.ErrorType(e))
+				return
+			}
 			if e = s.volume.Recover(ctx); e != nil {
-				slog.Error("recording storage recovery deferred", "error", e)
+				slog.Error("recording storage recovery deferred", "error_type", logsafe.ErrorType(e))
 				return
 			}
 		}
 		if n.Role != "Master" {
 			return
 		}
+		if s.volume.sealed {
+			// A sealed tree must never pass through legacy row/file deletion.
+			// One bounded page runs synchronously, so slow machines do not grow
+			// an unbounded queue of cleanup goroutines.
+			if s.sealedExpiry != nil {
+				job, cancel := context.WithTimeout(ctx, 5*time.Second)
+				err := s.sealedExpiry(job)
+				cancel()
+				if err != nil { slog.Warn("sealed recording expiry deferred", "error_type", logsafe.ErrorType(err)) }
+			}
+			return
+		}
 		if e = s.repo.StageExpiredRecordings(ctx, 50); e != nil {
-			slog.Error("recording expiry deferred", "error", e)
+			slog.Error("recording expiry deferred", "error_type", logsafe.ErrorType(e))
 			return
 		}
 		rows, e := s.repo.PendingRecordingDeletions(ctx, 50)
 		if e != nil {
-			slog.Error("recording cleanup queue unavailable", "error", e)
+			slog.Error("recording cleanup queue unavailable", "error_type", logsafe.ErrorType(e))
 			return
 		}
 		sem := make(chan struct{}, 4)
@@ -393,19 +422,19 @@ func (s *Manager) Run(ctx context.Context) {
 				job, cancel := context.WithTimeout(ctx, 20*time.Second)
 				defer cancel()
 				if e := s.Delete(job, v.UserID, v.ID, false, store.KaraokeAudit{Action: "recording-delete"}); e != nil {
-					slog.Warn("recording cleanup deferred", "recording_id", v.ID, "error", e)
+					slog.Warn("recording cleanup deferred", "recording_id", v.ID, "error_type", logsafe.ErrorType(e))
 				}
 			})
 		}
 		wg.Wait()
 		users, e := s.accounts.DeletingUsers(ctx, 20)
 		if e != nil {
-			slog.Error("account deletion queue unavailable", "error", e)
+			slog.Error("account deletion queue unavailable", "error_type", logsafe.ErrorType(e))
 			return
 		}
 		for _, user := range users {
 			if _, e = s.accounts.FinishUserDeletion(ctx, user, store.KaraokeAudit{Action: "account-delete"}); e != nil {
-				slog.Warn("account deletion deferred", "user_id", user, "error", e)
+				slog.Warn("account deletion deferred", "user_id", user, "error_type", logsafe.ErrorType(e))
 			}
 		}
 	}

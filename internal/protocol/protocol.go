@@ -15,6 +15,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"io"
 	"math"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,10 +23,27 @@ import (
 )
 
 const (
-	Version         = 2
-	TokenSeconds    = int64(300)
-	AuthSkewSeconds = int64(60)
+	Version = 2
+	// IngressMediaTokenVersion is scoped to public media capabilities. It is
+	// deliberately distinct from the legacy version so old nodes fail closed.
+	IngressMediaTokenVersion  = 3
+	PlainIngressTokenVersion  = 4
+	OpaqueIngressTokenVersion = 5
+	TokenSeconds              = int64(300)
+	AuthSkewSeconds           = int64(60)
 )
+
+const PlainProbeFixtureSize = (1 << 20) + 24
+
+// PlainProbeFixture is public synthetic content, never a user object. The
+// signed probe descriptor and the owner's verified read use these same bytes.
+func PlainProbeFixture() []byte { return bytes.Repeat([]byte("probe-v4"), (1<<20)/8+3) }
+
+var plainProbeDigest = func() string {
+	data := PlainProbeFixture()
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}()
 
 var (
 	encodedValue = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -190,6 +208,217 @@ func VerifyMediaToken(credential, token string, now int64) (map[string]any, erro
 				return nil, errors.New("invalid or expired media capability")
 			}
 		}
+	}
+	return value, nil
+}
+
+func validIngressOrigin(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || strings.ContainsAny(raw, "\\\r\n\t ") || u.Scheme != "https" || u.Hostname() == "" || u.Host != strings.ToLower(u.Host) || u.User != nil || u.Opaque != "" || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.String() != raw || strings.HasSuffix(u.Host, ":") {
+		return false
+	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 || n == 443 || strconv.Itoa(n) != port {
+			return false
+		}
+	}
+	return true
+}
+
+// IngressMediaToken binds a short-lived native read to its owner, immutable
+// object, logical resource and the public ingress that obtained the grant.
+// Only an already-authorized Master request may call this function.
+func IngressMediaDescriptor(size int64, meta *mediacrypto.Metadata) (string, error) {
+	if size < 0 || meta != nil && (meta.Validate() != nil || meta.CiphertextSize != size) {
+		return "", errors.New("invalid media descriptor")
+	}
+	raw, err := json.Marshal(struct {
+		Size       int64                 `json:"size"`
+		Encryption *mediacrypto.Metadata `json:"encryption"`
+	}{size, meta})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// OpaquePlacementRevision binds only random locators and content identity;
+// historical IDs and display paths cannot become dictionary oracles.
+const emptyOpaqueSHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+func OpaquePlacementRevision(alias, blob, digest string, size int64, meta *mediacrypto.Metadata) (string, error) {
+	if !objectID.MatchString(alias) || !objectID.MatchString(blob) || alias == blob || !objectID.MatchString(digest) || size < 0 || size > 10<<30 || size == 0 && (digest != emptyOpaqueSHA256 || meta != nil) {
+		return "", errors.New("invalid opaque media placement")
+	}
+	descriptor, err := IngressMediaDescriptor(size, meta)
+	if err != nil {
+		return "", err
+	}
+	return OpaquePlacementRevisionFromDescriptor(alias, blob, digest, descriptor, size)
+}
+
+func OpaquePlacementRevisionFromDescriptor(alias, blob, digest, descriptor string, size int64) (string, error) {
+	if !objectID.MatchString(alias) || !objectID.MatchString(blob) || alias == blob || !objectID.MatchString(digest) || !objectID.MatchString(descriptor) || size < 0 || size > 10<<30 || size == 0 && digest != emptyOpaqueSHA256 {
+		return "", errors.New("invalid opaque media placement")
+	}
+	if size == 0 {
+		emptyDescriptor, err := IngressMediaDescriptor(0, nil)
+		if err != nil || descriptor != emptyDescriptor {
+			return "", errors.New("invalid empty opaque media descriptor")
+		}
+	}
+	sum := sha256.Sum256([]byte("frontiercloud:opaque-revision:v1\x00" + alias + blob + digest + descriptor + strconv.FormatInt(size, 10)))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func IngressMediaToken(credential, relationship, master, owner, object, resource, ingress, publicOrigin, sessionID string, generation, now, expiresAt, size int64, meta *mediacrypto.Metadata) (string, error) {
+	return ingressMediaToken(credential, relationship, master, owner, object, resource, ingress, publicOrigin, sessionID, generation, now, expiresAt, size, meta, "")
+}
+
+// PlainIngressMediaToken binds plaintext to a Master-authorized content digest.
+// Weak historical size/mtime ETags cannot be used as a content proof.
+func PlainIngressMediaToken(credential, relationship, master, owner, object, resource, ingress, publicOrigin, sessionID string, generation, now, expiresAt, size int64, digest string) (string, error) {
+	if !objectID.MatchString(digest) || size <= 0 {
+		return "", errors.New("invalid plaintext content proof")
+	}
+	return ingressMediaToken(credential, relationship, master, owner, object, resource, ingress, publicOrigin, sessionID, generation, now, expiresAt, size, nil, digest)
+}
+
+// OpaqueIngressMediaToken binds two independent random identifiers to exact
+// authorized content. The owner sees neither historical object/resource IDs
+// nor logical names. Legacy path-based readers reject this version.
+func OpaqueIngressMediaToken(credential, relationship, master, owner, alias, ingress, publicOrigin, sessionID, blob string, generation, now, expiresAt, size int64, digest string, meta *mediacrypto.Metadata) (string, error) {
+	if !objectID.MatchString(blob) || !objectID.MatchString(alias) || blob == alias || !objectID.MatchString(digest) || size < 0 || size > 10<<30 || size == 0 && (digest != emptyOpaqueSHA256 || meta != nil) {
+		return "", errors.New("invalid opaque media placement")
+	}
+	base, err := ingressMediaToken(credential, relationship, master, owner, alias, alias, ingress, publicOrigin, sessionID, generation, now, expiresAt, size, meta, digest)
+	if err != nil {
+		return "", err
+	}
+	claims, err := verifyCapabilityToken(credential, base)
+	if err != nil {
+		return "", err
+	}
+	claims["v"], claims["kind"] = OpaqueIngressTokenVersion, "public-ingress-opaque-v1"
+	claims["blob"], claims["size"] = blob, size
+	claims["revision"], err = OpaquePlacementRevision(alias, blob, digest, size, meta)
+	if err != nil {
+		return "", err
+	}
+	return capabilityToken(credential, claims)
+}
+
+func VerifyOpaqueIngressMediaToken(credential, token string, now int64) (map[string]any, error) {
+	return verifyOpaqueMediaToken(credential, token, now, "public-ingress-opaque-v1")
+}
+
+func verifyOpaqueMediaToken(credential, token string, now int64, kind string) (map[string]any, error) {
+	claims, err := verifyIngressMediaToken(credential, token, now, OpaqueIngressTokenVersion, kind, true)
+	if err != nil {
+		return nil, err
+	}
+	blob := stringField(claims, "blob")
+	size, ok := integerField(claims, "size")
+	if !ok || size < 0 || size > 10<<30 || !objectID.MatchString(blob) || stringField(claims, "i") != stringField(claims, "g") || blob == stringField(claims, "i") {
+		return nil, errors.New("invalid opaque media placement")
+	}
+	revision, err := OpaquePlacementRevisionFromDescriptor(stringField(claims, "i"), blob, stringField(claims, "content_sha256"), stringField(claims, "descriptor"), size)
+	if err != nil || revision != stringField(claims, "revision") {
+		return nil, errors.New("invalid opaque media placement")
+	}
+	return claims, nil
+}
+
+// OpaqueIngressProbeToken is accepted only by the authenticated synthetic
+// probe branch, never by the business blob reader.
+func OpaqueIngressProbeToken(credential, relationship, master, owner, challenge string, now int64) (string, error) {
+	object, blob := strings.Repeat("0", 64), strings.Repeat("1", 64)
+	base, err := OpaqueIngressMediaToken(credential, relationship, master, owner, object, master, "https://readiness.invalid", challenge, blob, 1, now, now+30, PlainProbeFixtureSize, plainProbeDigest, nil)
+	if err != nil {
+		return "", err
+	}
+	claims, err := verifyCapabilityToken(credential, base)
+	if err != nil {
+		return "", err
+	}
+	claims["kind"] = "public-ingress-opaque-probe-v1"
+	return capabilityToken(credential, claims)
+}
+
+func VerifyOpaqueIngressProbeToken(credential, token, challenge string, now int64) (map[string]any, error) {
+	claims, err := verifyIngressMediaToken(credential, token, now, OpaqueIngressTokenVersion, "public-ingress-opaque-probe-v1", true)
+	size, sizeOK := integerField(claims, "size")
+	generation, generationOK := integerField(claims, "generation")
+	descriptor, _ := IngressMediaDescriptor(PlainProbeFixtureSize, nil)
+	revision, _ := OpaquePlacementRevision(strings.Repeat("0", 64), strings.Repeat("1", 64), plainProbeDigest, PlainProbeFixtureSize, nil)
+	if err != nil || !identifier.MatchString(challenge) || !sizeOK || size != PlainProbeFixtureSize || !generationOK || generation != 1 || stringField(claims, "session") != challenge || stringField(claims, "ingress") != stringField(claims, "m") || stringField(claims, "i") != strings.Repeat("0", 64) || stringField(claims, "g") != strings.Repeat("0", 64) || stringField(claims, "blob") != strings.Repeat("1", 64) || stringField(claims, "origin") != "https://readiness.invalid" || stringField(claims, "descriptor") != descriptor || stringField(claims, "revision") != revision || stringField(claims, "content_sha256") != plainProbeDigest {
+		return nil, errors.New("invalid opaque readiness probe")
+	}
+	return claims, nil
+}
+
+func ingressMediaToken(credential, relationship, master, owner, object, resource, ingress, publicOrigin, sessionID string, generation, now, expiresAt, size int64, meta *mediacrypto.Metadata, digest string) (string, error) {
+	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(owner) || !identifier.MatchString(ingress) || !identifier.MatchString(sessionID) || !objectID.MatchString(object) || !objectID.MatchString(resource) || !validIngressOrigin(publicOrigin) || generation < 1 || now < 0 || now > math.MaxInt64-TokenSeconds || expiresAt <= now || expiresAt > now+TokenSeconds {
+		return "", errors.New("invalid ingress media capability")
+	}
+	descriptor, err := IngressMediaDescriptor(size, meta)
+	if err != nil {
+		return "", err
+	}
+	claims := map[string]any{"v": IngressMediaTokenVersion, "kind": "public-ingress-media-v1", "r": relationship, "m": master, "o": owner, "i": object, "g": resource, "ingress": ingress, "origin": publicOrigin, "session": sessionID, "generation": generation, "descriptor": descriptor, "e": expiresAt}
+	if digest != "" {
+		claims["v"], claims["kind"] = PlainIngressTokenVersion, "public-ingress-plain-v1"
+		claims["content_sha256"] = digest
+	}
+	return capabilityToken(credential, claims)
+}
+
+func VerifyIngressMediaToken(credential, token string, now int64) (map[string]any, error) {
+	return verifyIngressMediaToken(credential, token, now, IngressMediaTokenVersion, "public-ingress-media-v1", false)
+}
+
+func VerifyPlainIngressMediaToken(credential, token string, now int64) (map[string]any, error) {
+	return verifyIngressMediaToken(credential, token, now, PlainIngressTokenVersion, "public-ingress-plain-v1", true)
+}
+
+// PlainIngressProbeToken cannot authorize a media route: its distinct kind is
+// accepted only by the authenticated readiness endpoint and binds fixed,
+// non-user fixture data to a fresh paired challenge.
+func PlainIngressProbeToken(credential, relationship, master, owner, challenge string, now int64) (string, error) {
+	if !identifier.MatchString(relationship) || !identifier.MatchString(master) || !identifier.MatchString(owner) || !identifier.MatchString(challenge) || now < 0 || now > math.MaxInt64-30 {
+		return "", errors.New("invalid plain readiness probe")
+	}
+	descriptor, err := IngressMediaDescriptor(PlainProbeFixtureSize, nil)
+	if err != nil {
+		return "", err
+	}
+	object := strings.Repeat("0", 64)
+	return capabilityToken(credential, map[string]any{"v": PlainIngressTokenVersion, "kind": "public-ingress-plain-probe-v1", "r": relationship, "m": master, "o": owner, "i": object, "g": object, "ingress": master, "origin": "https://readiness.invalid", "session": challenge, "generation": 1, "descriptor": descriptor, "content_sha256": plainProbeDigest, "e": now + 30})
+}
+
+func VerifyPlainIngressProbeToken(credential, token, challenge string, now int64) (map[string]any, error) {
+	value, err := verifyIngressMediaToken(credential, token, now, PlainIngressTokenVersion, "public-ingress-plain-probe-v1", true)
+	descriptor, _ := IngressMediaDescriptor(PlainProbeFixtureSize, nil)
+	generation, validGeneration := integerField(value, "generation")
+	if err != nil || !identifier.MatchString(challenge) || !validGeneration || generation != 1 || stringField(value, "session") != challenge || stringField(value, "ingress") != stringField(value, "m") || stringField(value, "i") != strings.Repeat("0", 64) || stringField(value, "g") != strings.Repeat("0", 64) || stringField(value, "origin") != "https://readiness.invalid" || stringField(value, "descriptor") != descriptor || stringField(value, "content_sha256") != plainProbeDigest {
+		return nil, errors.New("invalid plain readiness probe")
+	}
+	return value, nil
+}
+
+func verifyIngressMediaToken(credential, token string, now int64, expectedVersion int64, expectedKind string, plain bool) (map[string]any, error) {
+	value, err := verifyCapabilityToken(credential, token)
+	version, vok := integerField(value, "v")
+	expiry, eok := integerField(value, "e")
+	generation, gok := integerField(value, "generation")
+	if err != nil || !vok || version != expectedVersion || !eok || now < 0 || now > math.MaxInt64-TokenSeconds-60 || expiry <= now || expiry > now+TokenSeconds+60 || !gok || generation < 1 || stringField(value, "kind") != expectedKind || !identifier.MatchString(stringField(value, "r")) || !identifier.MatchString(stringField(value, "m")) || !identifier.MatchString(stringField(value, "o")) || !identifier.MatchString(stringField(value, "ingress")) || !identifier.MatchString(stringField(value, "session")) || !objectID.MatchString(stringField(value, "i")) || !objectID.MatchString(stringField(value, "g")) || !objectID.MatchString(stringField(value, "descriptor")) || !validIngressOrigin(stringField(value, "origin")) {
+		return nil, errors.New("invalid or expired ingress media capability")
+	}
+	_, present := value["content_sha256"]
+	if plain && (!present || !objectID.MatchString(stringField(value, "content_sha256"))) || !plain && present {
+		return nil, errors.New("invalid plaintext content proof")
 	}
 	return value, nil
 }

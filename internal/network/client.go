@@ -11,10 +11,11 @@ import (
 
 type Resolver struct{ networks []netip.Prefix }
 type Identity struct {
-	IP                   string
-	PeerIP               string
-	FromTrustedProxy     bool
-	TrustedHeaderMissing bool
+	IP                       string
+	PeerIP                   string
+	FromTrustedProxy         bool
+	TrustedHeaderMissing     bool
+	FromAuthenticatedIngress bool
 }
 
 func New(networks []string) (*Resolver, error) {
@@ -61,6 +62,11 @@ func (r *Resolver) Resolve(request *http.Request) Identity {
 		peer = "0.0.0.0"
 	}
 	result := Identity{IP: peer, PeerIP: peer}
+	if ingress, ok := AuthenticatedIngressFromContext(request.Context()); ok {
+		result.IP = ingress.ClientIP
+		result.FromAuthenticatedIngress = true
+		return result
+	}
 	address, _ := netip.ParseAddr(peer)
 	trusted := false
 	for _, prefix := range r.networks {

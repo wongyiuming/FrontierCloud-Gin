@@ -1,5 +1,6 @@
 # Linux container entrypoints must also work from Windows checkouts.
 *.sh text eol=lf
+scripts/foc text eol=lf
 *.awk text eol=lf
 *.go text eol=lf
 nginx/patches/*.patch text eol=lf

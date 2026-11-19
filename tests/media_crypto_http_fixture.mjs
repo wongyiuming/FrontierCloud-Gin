@@ -78,7 +78,7 @@ const opfs = {
 };
 const page = {
     crypto: webcrypto, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, DataView, URL, URLSearchParams,
-    Blob, Headers, Request, Response, ReadableStream, MessageChannel, Date, performance,
+    Blob, Headers, Request, Response, ReadableStream, AbortController, MessageChannel, Date, performance,
     atob, btoa, setTimeout, clearTimeout, console, isSecureContext: true,
     location: new URL(origin + '/api/v1/media/admin'),
     document: {getElementById: id => id === 'uploadFiles' ? {} : null},
@@ -145,7 +145,11 @@ for (const [index, size] of [1048576 + 97, 61].entries()) {
     const cipher = new Uint8Array(await prepared.file.arrayBuffer());
     assert.equal(cipher.length, prepared.encryption.ciphertext_size);
     assert.notDeepEqual(cipher.subarray(0, 61), plain.subarray(0, 61));
+    const pool = await (await networkFetch('/api/v1/media/admin/storage-pool')).json();
+    const destination = pool.upload_destinations.filter(item => item.site_type === site && item.writable);
+    assert.equal(destination.length, 1, 'fixture must explicitly identify exactly one requested owner');
     const ticket = await json('/api/v1/media/admin/upload/session', {
+        storage_member_id: destination[0].member_id,
         storage_mode: 'encrypted', site_type: site, target_dir: directory, filename: file.name,
         size_bytes: cipher.length, encryption: prepared.encryption,
         preparation_token: prepared.preparation_token,
@@ -190,9 +194,7 @@ async function verify(record, path) {
         'browser seek across authenticated chunks mismatch');
     const tags = await page.FrontierMusicMetadata.metadata(entries[0]);
     if (record.plain.length > 1048576) {
-        assert.equal(tags.title, 'Encrypted song');
-        assert.equal(tags.artist, 'Encrypted artist');
-        assert.equal(tags.album, 'Encrypted album');
+        assert.deepEqual(Object.keys(tags), ['cover'], 'category artwork must not expose text tags');
         const cover = await fetch(tags.cover);
         assert.deepEqual(new Uint8Array(await cover.arrayBuffer()), artwork, 'encrypted cover bytes changed');
     } else assert.equal(Object.keys(tags).length, 0, 'untagged encrypted music must retain fallback display');
@@ -210,8 +212,15 @@ for (const record of records) {
 }
 assert.equal(calls.filter(call => call.path.endsWith('/session')).length, 1,
     'play/download/rename key requests renewed a valid ECDH session');
-assert.equal(calls.filter(call => call.path.endsWith('/key')).length, 4,
-    'each of two files must receive a wrapped grant before and after rename');
+const keyCalls = calls.filter(call => call.path.endsWith('/key'));
+for (const record of records) {
+    for (const path of [record.ticket.path, record.path]) {
+        assert(keyCalls.some(call => call.body?.file_path === path),
+            `missing wrapped grant for ${path}`);
+    }
+}
+assert(keyCalls.length > 4, 'cached ciphertext must revalidate its source authorization');
+assert(keyCalls.length <= 32, `unexpected key grant amplification: ${keyCalls.length}`);
 assert(ranges.every(range => range.status === 206));
 assert(ranges.some(range => range.origin === (site === 'direct' ? 'https://follower.test' : origin)),
     'media used an unexpected primary/direct/relay delivery path');
@@ -222,6 +231,6 @@ assert.equal(deletion.pending_delete.length, 2, 'uncertain storage deletion refu
 for (const record of records) await json('/__fixture/check', {...record, plain: undefined, phase: 'pending_delete'});
 await json('/__fixture/recover-delete', {});
 for (const record of records) await json('/__fixture/check', {...record, plain: undefined, phase: 'deleted'});
-process.stdout.write(JSON.stringify({site, files: records.length, http_key_grants: 4,
+process.stdout.write(JSON.stringify({site, files: records.length, http_key_grants: keyCalls.length,
     browser_handshakes: 1, ciphertext_range_requests: ranges.length,
     plaintext_bytes: records.reduce((sum, record) => sum + record.plain.length, 0)}) + '\n');

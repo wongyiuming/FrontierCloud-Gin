@@ -13,6 +13,16 @@ import (
 )
 
 func TestDirectoryCaseFoldTiesMatchPublicAdminAndDrag(t *testing.T) {
+	probe := t.TempDir()
+	if err := os.Mkdir(filepath.Join(probe, "a"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(probe, "A"), 0700); err != nil {
+		if os.IsExist(err) {
+			t.Skip("requires a case-sensitive filesystem")
+		}
+		t.Fatal(err)
+	}
 	for _, master := range []bool{false, true} {
 		t.Run(map[bool]string{false: "Local", true: "Master"}[master], func(t *testing.T) {
 			fixture := deleteFixture

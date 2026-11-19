@@ -6,13 +6,13 @@ import {webcrypto} from 'node:crypto';
 // Exercise the actual bounded browser uploader with real SHA256, Blob slices
 // and concurrent provider requests. No provider URL or credential is logged.
 const source = fs.readFileSync('static/js/admin-upload-integrity.js', 'utf8');
-const uploader = source.slice(source.indexOf('const S3_PART_BYTES'), source.indexOf('\nrunUploadTask ='));
+const uploader = source.slice(source.indexOf('const S3_PART_BYTES'), source.indexOf('\nasync function runUploadTask('));
 const partBytes = 8 * 1024 * 1024;
 const bytes = new Uint8Array(partBytes + 17); bytes.fill(37);
 const file = new Blob([bytes]);
 const checksum = async value => Buffer.from(await webcrypto.subtle.digest('SHA-256', value)).toString('base64');
 const checksums = [await checksum(bytes.subarray(0, partBytes)), await checksum(bytes.subarray(partBytes))];
-let state, requests, transfers, active, peak, failTransfer, badHeaders;
+let state, requests, transfers, active, peak, failTransfer, badHeaders, finalResult, recoverCreate;
 const context = {
     console, crypto: webcrypto, URL, AbortController, Uint8Array, Blob,
     btoa: value => Buffer.from(value, 'binary').toString('base64'),
@@ -23,7 +23,10 @@ const context = {
     async api(url, options = {}) {
         requests.push({url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null});
         assert(url.startsWith('/api/v1/media/admin/upload/s3/u1'));
-        if (url.endsWith('/begin')) { assert.equal(state.state, 'reserved'); state.state = 'created'; }
+        if (url.endsWith('/begin')) {
+            assert.equal(state.state, recoverCreate ? 'create_unknown' : 'reserved');
+            state.state = 'created';
+        }
         const part = /\/parts\/(\d+)\/(grant|confirm)$/.exec(url);
         if (part) {
             const number = Number(part[1]);
@@ -40,7 +43,7 @@ const context = {
             assert.deepEqual(JSON.parse(options.body), {}, 'client never supplies ETag or provider proof');
             state.parts.find(value => value.number === number).confirmed = true;
         }
-        if (url.endsWith('/finalize')) return {path: 'music/a/test.mp3'};
+        if (url.endsWith('/finalize')) return finalResult;
         return structuredClone(state);
     },
     async fetch(url, options) {
@@ -62,6 +65,7 @@ vm.createContext(context); vm.runInContext(uploader, context);
 function reset() {
     state = {state: 'reserved', reservation: {expected_bytes: file.size}, parts: []};
     requests = []; transfers = []; active = 0; peak = 0; failTransfer = false; badHeaders = false;
+    finalResult = {path: 'music/a/test.mp3'}; recoverCreate = false;
 }
 reset();
 const progress = [];
@@ -95,6 +99,57 @@ reset(); badHeaders = true;
 await assert.rejects(context.uploadS3Parts({upload_id: 'u1'}, file, () => {}), /请求头/);
 assert.equal(transfers.length, 0);
 assert(!source.includes('/session/${encodeURIComponent(reservation.upload_id)}/s3'));
+
+const selectedUpload = {upload_id: 'u1', selected: true};
+reset(); finalResult = {state: 'published'};
+const originalHasher = context.s3FileHashes;
+context.s3FileHashes = () => { throw new Error('precommitted ciphertext was hashed twice'); };
+assert.equal((await context.uploadS3Parts(selectedUpload, file, () => {}, checksums)).state, 'published');
+context.s3FileHashes = originalHasher;
+
+reset(); state.state = 'create_unknown'; recoverCreate = true; finalResult = {state: 'published'};
+assert.equal((await context.uploadS3Parts(selectedUpload, file, () => {})).state, 'published');
+assert.equal(requests.filter(item => item.url.endsWith('/begin')).length, 1);
+assert.equal(transfers.length, 2);
+
+reset(); state.state = 'completing'; finalResult = {state: 'published'};
+assert.equal((await context.uploadS3Parts(selectedUpload, file, () => {})).state, 'published');
+assert.deepEqual(requests.map(item => item.url.split('/').at(-1)), ['u1', 'finalize']);
+assert.equal(transfers.length, 0, 'settlement recovery must not resend parts');
+
+reset(); state.state = 'completing'; finalResult = {state: 'completing'};
+await assert.rejects(context.uploadS3Parts(selectedUpload, file, () => {}), /发布状态未确认/);
+
+reset(); state.state = 'published';
+assert.equal((await context.uploadS3Parts(selectedUpload, file, () => {})).state, 'published');
+assert.equal(requests.length, 1, 'authenticated terminal state needs no new mutation');
+
+const originalForget = context.forgetS3Task;
+const removedTasks = [];
+context.forgetS3Task = async id => removedTasks.push(id);
+for (const initial of ['deleted', 'completing']) {
+    reset(); state.state = initial; finalResult = {state: 'deleted'};
+    await assert.rejects(context.uploadS3Parts(selectedUpload, file, () => assert.fail('removed upload reported success')), /已被管理员删除/);
+    assert.deepEqual(requests.map(item => item.url.split('/').at(-1)), initial === 'deleted' ? ['u1'] : ['u1', 'finalize']);
+    assert.equal(transfers.length, 0);
+}
+assert.deepEqual(removedTasks, ['u1', 'u1']);
+context.forgetS3Task = originalForget;
+
+// The first selected request commits the same ordered hashes passed to the
+// uploader; no second ciphertext hash pass is needed for that invocation.
+let prepareBody, passedHashes, retained = false, forgotten = false;
+context.uploadSHA256 = async (_file, check, onPart) => { check(); checksums.forEach(onPart); return 'a'.repeat(64); };
+context.retainS3Task = async () => { retained = true; };
+context.selectedUploadPost = async (_url, body) => { prepareBody = body; return {upload_id: 'u1', member_id: 'member', transport: 'S3'}; };
+context.uploadS3Parts = async (_reservation, _file, _progress, hashes) => { passedHashes = hashes; return {state: 'published'}; };
+context.forgetS3Task = async () => { forgotten = true; };
+const published = await context.publishSelectedUpload({file, encryption: {}, preparation_token: 'token'}, {name: 'song.mp3'},
+    {folder: 'music/category', destination: {member_id: 'member', site_type: 's3'}, id: 'u1', displayName: 'song.mp3'}, () => {});
+assert.equal(published.path, 'music/category/song.mp3');
+assert.deepEqual(Array.from(prepareBody.s3_part_sha256), checksums);
+assert.deepEqual(Array.from(passedHashes), checksums);
+assert(retained && forgotten);
 
 // Independent tabs share durable records, never one tab's in-memory snapshot.
 const shared = new Map();

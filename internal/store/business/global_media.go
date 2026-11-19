@@ -143,6 +143,20 @@ func (r *Repository) ReserveUpload(ctx context.Context, name, site string, size,
 }
 
 func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site string, size, localPhysicalFree int64, a store.AdminAudit, encryption *mediacrypto.Metadata) (result store.UploadReservation, err error) {
+	return r.reserveEncryptedUpload(ctx, name, site, "", size, localPhysicalFree, a, encryption)
+}
+
+// ReserveSelectedEncryptedUpload is not an HTTP endpoint. It adds exact owner
+// selection to the existing reservation transaction; callers still need to
+// bind the resulting ticket to authenticated, current transport policy.
+func (r *Repository) ReserveSelectedEncryptedUpload(ctx context.Context, name, memberID string, size, localPhysicalFree int64, a store.AdminAudit, encryption *mediacrypto.Metadata) (store.UploadReservation, error) {
+	if !nodeIDPattern.MatchString(memberID) {
+		return store.UploadReservation{}, nodeConflict("invalid selected storage member")
+	}
+	return r.reserveEncryptedUpload(ctx, name, "", memberID, size, localPhysicalFree, a, encryption)
+}
+
+func (r *Repository) reserveEncryptedUpload(ctx context.Context, name, site, selectedMember string, size, localPhysicalFree int64, a store.AdminAudit, encryption *mediacrypto.Metadata) (result store.UploadReservation, err error) {
 	if encryption != nil && (encryption.Validate() != nil || encryption.CiphertextSize != size) {
 		return result, mediacrypto.ErrMetadata
 	}
@@ -150,7 +164,7 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 	if strings.HasPrefix(name, "vido/") {
 		kind = "video"
 	}
-	if !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: name, Kind: kind}, Bytes: size}) || size <= 0 || size > 10*store.GiB || (site != "primary" && site != "direct" && site != "relay" && site != "s3") || localPhysicalFree < 0 {
+	if !poolPath(store.LocalMedia{MediaObject: store.MediaObject{Path: name, Kind: kind}, Bytes: size}) || size <= 0 || size > 10*store.GiB || (selectedMember == "" && site != "primary" && site != "direct" && site != "relay" && site != "s3") || localPhysicalFree < 0 {
 		return result, nodeConflict("invalid upload reservation")
 	}
 	id, err := randomID()
@@ -158,15 +172,39 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 		return result, err
 	}
 	id = id[:32]
-	mediaID := locator(id + ":" + name)
+	// This ID can appear alongside the upload ID in provider metadata. It
+	// must therefore be independent of both the upload ID and the media path:
+	// hashing those public values would permit offline path guessing.
+	mediaID, err := randomID()
+	if err != nil {
+		return result, err
+	}
 	now := time.Now().Unix()
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
 		}
 		if node.Role != "Master" {
 			return nodeConflict("Storage Pool uploads require a Master")
+		}
+		var selectedIngress store.PublicIngress
+		if selectedMember != "" {
+			// S3 has no native ingress policy. Read its kind without changing
+			// the identity -> ingress -> member row-lock order for native peers.
+			var selectedKind string
+			if err := q.QueryRowContext(ctx, "SELECT member_kind FROM cluster_storage_members WHERE member_id=?", selectedMember).Scan(&selectedKind); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return store.ErrNodeState
+				}
+				return err
+			}
+			if selectedKind != "S3" {
+				selectedIngress, err = r.legacySelectedIngress(ctx, q, node, r.shareLock())
+				if err != nil {
+					return err
+				}
+			}
 		}
 		if err := r.checkGlobalRenameScopes(ctx, q, []store.DeleteItem{{Path: name}}); err != nil {
 			return err
@@ -219,6 +257,9 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 		if err != nil {
 			return err
 		}
+		if selectedMember != "" && affinity != "" && affinity != selectedMember {
+			return nodeConflict("media folder belongs to another storage member")
+		}
 		rows, err = q.QueryContext(ctx, "SELECT "+memberColumns+" FROM cluster_storage_members ORDER BY member_id"+r.lock())
 		if err != nil {
 			return err
@@ -239,6 +280,14 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 		}
 		candidates := []store.StorageMember{}
 		for _, v := range members {
+			if selectedMember != "" && v.ID != selectedMember {
+				continue
+			}
+			if selectedMember != "" && v.Kind != "S3" {
+				if err := r.checkLegacySelectedTransport(ctx, q, node, selectedIngress, v, r.lock()); err != nil {
+					return err
+				}
+			}
 			if v.Kind == "S3" {
 				current, err := r.s3Member(ctx, q, v.ID, r.lock())
 				if err != nil {
@@ -265,14 +314,18 @@ func (r *Repository) ReserveEncryptedUpload(ctx context.Context, name, site stri
 				if err = q.QueryRowContext(ctx, "SELECT state,status,last_heartbeat FROM node_relationships WHERE relationship_id=?"+r.lock(), *v.RelationshipID).Scan(&state, &status, &last); err != nil {
 					return err
 				}
-				if state != "active" || status == "offline" || now-last >= 120 {
+				if state != "active" || status != "online" || last <= 0 || now < last || now-last >= 120 {
 					v.Writable = 0
 				}
 			}
 			if affinity != "" && v.ID != affinity {
 				continue
 			}
-			if memberSite(v) != site {
+			memberType := memberSite(v)
+			if selectedMember != "" {
+				site = memberType
+			}
+			if memberType == "" || memberType != site {
 				if affinity != "" {
 					return nodeConflict("media folder belongs to a different site type")
 				}
@@ -328,7 +381,7 @@ func (r *Repository) FinalizeUpload(ctx context.Context, id, objectID string, ac
 	if !nodeIDPattern.MatchString(id) || !nodeHashPattern.MatchString(objectID) || actualSize <= 0 || len(etag) == 0 || len(etag) > 128 || strings.ContainsAny(etag, "\r\n\x00") {
 		return result, nodeConflict("invalid upload completion")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		return r.finalizeUpload(ctx, q, id, objectID, actualSize, etag, a, false, false, &result)
 	})
 	return
@@ -340,7 +393,7 @@ func (r *Repository) FinalizeRecoveredUpload(ctx context.Context, id, objectID s
 	if !nodeIDPattern.MatchString(id) || !nodeHashPattern.MatchString(objectID) || actualSize <= 0 || len(etag) != 66 || etag[0] != '"' || etag[65] != '"' || !nodeHashPattern.MatchString(etag[1:65]) {
 		return result, nodeConflict("invalid recovered upload receipt")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		// Match all other reservation writes: identity, upload, then member.
 		// Locking the upload first can deadlock MySQL with normal finalize.
 		if _, err := readNode(ctx, q, r.lock()); err != nil {
@@ -359,6 +412,9 @@ func (r *Repository) FinalizeRecoveredUpload(ctx context.Context, id, objectID s
 }
 
 func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID string, actualSize int64, etag string, a store.AdminAudit, physicalProof, s3Proof bool, result *store.GlobalMedia) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	node, err := readNode(ctx, q, r.lock())
 	if err != nil {
 		return err
@@ -384,7 +440,10 @@ func (r *Repository) finalizeUpload(ctx context.Context, q queryer, id, objectID
 		return nodeConflict("S3 uploads require the exact provider completion proof")
 	}
 	if v.State == "complete" {
-		*result, err = scanGlobal(q.QueryRowContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.media_id=?", v.MediaID))
+		// A preceding marker read may have established a MySQL repeatable-read
+		// snapshot before the node/upload locks were acquired. The completed
+		// placement must be read at the same current version as those locks.
+		*result, err = scanGlobal(q.QueryRowContext(ctx, "SELECT "+globalColumns+globalTables+" WHERE g.media_id=?"+r.lock(), v.MediaID))
 		if err != nil {
 			return err
 		}
@@ -424,7 +483,7 @@ func (r *Repository) ReleaseCleanedUpload(ctx context.Context, id string, a stor
 	if !nodeIDPattern.MatchString(id) {
 		return nodeConflict("invalid upload session")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		node, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -502,6 +561,8 @@ func (r *Repository) DeferExpiredUpload(ctx context.Context, id string) error {
 	if !nodeIDPattern.MatchString(id) {
 		return store.ErrNodeState
 	}
-	_, err := r.db.ExecContext(ctx, "UPDATE cluster_upload_sessions SET updated_at=? WHERE upload_id=? AND state='reserved' AND expires_at<=?", time.Now().Unix(), id, time.Now().Unix())
-	return err
+	return r.legacyWrite(ctx, func(q queryer) error {
+		_, err := q.ExecContext(ctx, "UPDATE cluster_upload_sessions SET updated_at=? WHERE upload_id=? AND state='reserved' AND expires_at<=?", time.Now().Unix(), id, time.Now().Unix())
+		return err
+	})
 }

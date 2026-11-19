@@ -32,6 +32,7 @@ type Builder struct {
 	repository store.BackupRepository
 	source     Source
 	root       *os.Root
+	checkpoint func(context.Context, int64, io.Writer) error
 }
 type Artifact struct {
 	Generation int64
@@ -45,6 +46,12 @@ type Artifact struct {
 	release    func()
 	owner      bool
 	ownerInfo  os.FileInfo
+}
+
+// ConfigureCheckpoint installs the authenticated current-format Master source
+// at startup. The legacy builder remains isolated from populated sealed trees.
+func (b *Builder) ConfigureCheckpoint(capture func(context.Context, int64, io.Writer) error) {
+	b.checkpoint = capture
 }
 
 func (a *Artifact) Read(p []byte) (int, error) { return a.file.Read(p) }
@@ -94,7 +101,7 @@ func New(repository store.BackupRepository, source Source, directory string) (*B
 		root.Close()
 		return nil, store.ErrBackupState
 	}
-	return &Builder{repository, source, root}, nil
+	return &Builder{repository: repository, source: source, root: root}, nil
 }
 func (b *Builder) Close() error { return b.root.Close() }
 func (b *Builder) SchedulerLease(ctx context.Context) (func(), error) {
@@ -156,26 +163,30 @@ func (b *Builder) Build(ctx context.Context) (_ *Artifact, resultErr error) {
 		bounded.remaining = MaxRecordBytes
 		return encoder.Encode(value)
 	}
-	err = b.source.WithBusinessBackup(ctx, func(root *os.Root) error {
-		if err := write(map[string]any{"kind": "header", "version": 2, "generation": artifact.Generation}); err != nil {
-			return err
-		}
-		if err := b.repository.ExportBusinessSnapshot(ctx, func(table string, row map[string]any) error {
-			return write(map[string]any{"kind": "row", "table": table, "value": row})
-		}); err != nil {
-			return err
-		}
-		if err := walkLyrics(ctx, root, "lyrics", 0, func(name string) error {
-			payload, err := readLyric(ctx, root, name)
-			if err != nil {
+	if b.checkpoint != nil {
+		err = b.checkpoint(ctx, artifact.Generation, output)
+	} else {
+		err = b.source.WithBusinessBackup(ctx, func(root *os.Root) error {
+			if err := write(map[string]any{"kind": "header", "version": 2, "generation": artifact.Generation}); err != nil {
 				return err
 			}
-			return write(map[string]any{"kind": "lyric", "name": strings.TrimPrefix(name, "lyrics/"), "payload": base64.StdEncoding.EncodeToString(payload)})
-		}); err != nil {
-			return err
-		}
-		return write(map[string]any{"kind": "end"})
-	})
+			if err := b.repository.ExportBusinessSnapshot(ctx, func(table string, row map[string]any) error {
+				return write(map[string]any{"kind": "row", "table": table, "value": row})
+			}); err != nil {
+				return err
+			}
+			if err := walkLyrics(ctx, root, "lyrics", 0, func(name string) error {
+				payload, err := readLyric(ctx, root, name)
+				if err != nil {
+					return err
+				}
+				return write(map[string]any{"kind": "lyric", "name": strings.TrimPrefix(name, "lyrics/"), "payload": base64.StdEncoding.EncodeToString(payload)})
+			}); err != nil {
+				return err
+			}
+			return write(map[string]any{"kind": "end"})
+		})
+	}
 	if err != nil {
 		return nil, err
 	}

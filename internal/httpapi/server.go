@@ -4,7 +4,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +26,9 @@ func NewWithResolver(database, redis Check, resolver *network.Resolver, middlewa
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	m := newMetrics()
-	router.Use(m.instrument, requests(resolver), browserSecurity(resolver), gin.CustomRecoveryWithWriter(os.Stderr, m.recovered))
+	// The recovery handler omits request contents and preserves net/http's
+	// explicit stream-abort sentinel after a partially written response.
+	router.Use(m.instrument, requests(resolver), browserSecurity(resolver), m.recovery())
 	router.Use(middleware...)
 	router.HandleMethodNotAllowed = true
 	router.NoRoute(func(c *gin.Context) { detail(c, 404, "Not Found") })

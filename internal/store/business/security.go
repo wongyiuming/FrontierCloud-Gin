@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -23,6 +24,13 @@ func (r *Repository) lockIP(ctx context.Context, q queryer, ip string) error {
 	return nil
 }
 func (r *Repository) ipAudit(ctx context.Context, q queryer, ip, action string, detail any, a store.AdminAudit) error {
+	if handled, e := archiveEvent(ctx, q, logarchive.Security, map[string]any{"ip": ip, "action": action, "detail": detail, "session_hash": a.SessionHash, "request_id": a.RequestID, "trace_id": a.TraceID}); handled {
+		if e != nil {
+			return e
+		}
+		_, e = q.ExecContext(ctx, "INSERT INTO log_security_windows(ip_tag,action,created_at) VALUES(?,?,?)", archiveCatalog(q).SecurityWindowTag(ip), action, timestamp(time.Now()))
+		return e
+	}
 	encoded, err := json.Marshal(detail)
 	if err != nil {
 		return err
@@ -64,7 +72,8 @@ func (r *Repository) RecordInvalidAPI(ctx context.Context, ip, method, path, ua 
 		}
 		now := time.Now().UTC()
 		cutoff := timestamp(now.Add(-time.Duration(window) * time.Second))
-		if err := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM (SELECT id FROM ip_security_audit_log WHERE ip_address=? AND action='invalid_api' AND created_at>? ORDER BY created_at DESC,id DESC LIMIT ?) recent", ip, cutoff, threshold+1).Scan(&count); err != nil {
+		windowQuery, windowArgs := securityWindowQuery(q, ip, cutoff, threshold+1)
+		if err := q.QueryRowContext(ctx, "SELECT COUNT(*) FROM ("+windowQuery+") recent", windowArgs...).Scan(&count); err != nil {
 			return err
 		}
 		count++
@@ -106,7 +115,8 @@ func (r *Repository) RecordInvalidAPI(ctx context.Context, ip, method, path, ua 
 			expiry = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
 		}
 		var earliest sqlDate
-		if err := q.QueryRowContext(ctx, "SELECT MIN(created_at) FROM (SELECT created_at FROM ip_security_audit_log WHERE ip_address=? AND action='invalid_api' AND created_at>? ORDER BY created_at DESC,id DESC LIMIT ?) recent", ip, cutoff, threshold+1).Scan(&earliest); err != nil {
+		windowQuery, windowArgs = securityWindowQuery(q, ip, cutoff, threshold+1)
+		if err := q.QueryRowContext(ctx, "SELECT MIN(created_at) FROM ("+windowQuery+") recent", windowArgs...).Scan(&earliest); err != nil {
 			return err
 		}
 		if !earliest.Valid {

@@ -26,12 +26,10 @@
     const originalUpdateToolbar = updateToolbar;
     updateToolbar = function updateToolbarWithRename() {
         originalUpdateToolbar();
-        const path = selected.size === 1 ? [...selected][0] : '';
-        renameButton.disabled = !(
-            selected.size === 1
-            && selectionKind === 'directory'
-            && directoryCanMutate(path)
-        );
+        const item = selected.size === 1 ? visibleMediaItems.find(item => selected.has(item.path)) : null;
+        renameButton.disabled = item?.kind !== 'directory'
+            || Boolean(item.mutation_state)
+            || !directoryCanMutate(item.path);
     };
 
     renameButton.onclick = async () => {

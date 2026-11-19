@@ -46,6 +46,22 @@ func (r *Repository) ExportBusinessSnapshot(ctx context.Context, emit func(strin
 	if generation != migrations.Generation {
 		return store.ErrBackupState
 	}
+	// The v2 artifact does not contain the sealed tree, its key or replay
+	// state. Never emit a seemingly complete backup when any sealed-tree
+	// table is populated, including orphaned reservations or partial intents.
+	// This is a snapshot check, not a substitute for a cross-process fence:
+	// live activation and backup/restore integration remain disabled.
+	for _, table := range unsupportedSealedTreeBackupTables {
+		var one int
+		err := tx.QueryRowContext(ctx, "SELECT 1 FROM "+table+" LIMIT 1").Scan(&one)
+		if err == nil || !errors.Is(err, sql.ErrNoRows) {
+			return store.ErrBackupState
+		}
+	}
+	var sealedPlayback bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM media_playback_events WHERE playback_session_id LIKE 's1-%')").Scan(&sealedPlayback); err != nil || sealedPlayback {
+		return store.ErrBackupState
+	}
 	if err := checkS3BusinessBackup(ctx, tx); err != nil {
 		return err
 	}
@@ -63,6 +79,7 @@ func (r *Repository) ExportBusinessSnapshot(ctx context.Context, emit func(strin
 		"SELECT COUNT(*) FROM migration_scopes",
 		"SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')",
 		"SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL",
+		store.OpaqueMigrationUnsettledSQL,
 	} {
 		var count int64
 		if err := tx.QueryRowContext(ctx, query).Scan(&count); err != nil {
@@ -78,6 +95,18 @@ func (r *Repository) ExportBusinessSnapshot(ctx context.Context, emit func(strin
 		}
 	}
 	return tx.Commit()
+}
+
+var unsupportedSealedTreeBackupTables = [...]string{
+	"selected_upload_intents",
+	"selected_upload_parent_scopes",
+	"selected_s3_uploads",
+	"selected_s3_parts",
+	"sealed_recording_audio",
+	"legacy_read_control_intents",
+	"sealed_tree_meta", "sealed_tree_records", "sealed_tree_encryption_ids", "sealed_tree_blob_ids",
+	"sealed_tree_placements", "sealed_tree_aliases", "sealed_tree_revocations", "sealed_tree_facts", "sealed_tree_fence", "sealed_tree_operation_ids",
+	"sealed_tree_pending_files", "sealed_tree_pending_facts", "sealed_tree_owner_fence", "sealed_tree_capacity_intents", "sealed_tree_capacity_meta", "sealed_tree_capacity_accounts", "sealed_tree_capacity_ids", "sealed_tree_source_pin", "sealed_tree_capacity_scopes", "sealed_tree_listing_meta", "sealed_tree_listing", "selected_upload_cancellations",
 }
 
 func exportBackupTable(ctx context.Context, tx *sql.Tx, table string, emit func(string, map[string]any) error) error {

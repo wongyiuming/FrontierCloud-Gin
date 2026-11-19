@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -43,10 +44,15 @@ type Service struct {
 	nodes             store.NodeRepository
 	cache             Cache
 	recoverRecordings func(context.Context, string) error
+	deleteSealedUser  func(context.Context, string, *store.KaraokeUser, store.KaraokeAudit) (bool, error)
 }
 
 func (s *Service) ConfigureRecordings(recover func(context.Context, string) error) {
 	s.recoverRecordings = recover
+}
+
+func (s *Service) ConfigureSealedUserDeletion(deleteUser func(context.Context, string, *store.KaraokeUser, store.KaraokeAudit) (bool, error)) {
+	s.deleteSealedUser = deleteUser
 }
 
 type Session struct{ Token, CSRF string }
@@ -101,7 +107,7 @@ func publicError(err error) error {
 		return &Error{Status: 404, Detail: err.Error()}
 	case errors.Is(err, store.ErrUserBlocked):
 		return &Error{Status: 403, Detail: err.Error()}
-	case errors.Is(err, store.ErrUserQuota), errors.Is(err, store.ErrAccountConflict), errors.Is(err, store.ErrNodeState):
+	case errors.Is(err, store.ErrUserQuota), errors.Is(err, store.ErrAccountConflict), errors.Is(err, store.ErrUserHasRecordings), errors.Is(err, store.ErrNodeState):
 		return &Error{Status: 409, Detail: err.Error()}
 	default:
 		return err
@@ -477,7 +483,7 @@ func (s *Service) MutateUser(ctx context.Context, id, action string, quota int64
 	return publicError(s.repo.MutateUser(ctx, id, action, quota, a))
 }
 
-func (s *Service) DeleteUser(ctx context.Context, id string, info RequestInfo, actor string) (bool, bool, error) {
+func (s *Service) DeleteUser(ctx context.Context, id string, info RequestInfo, actor string, expected *store.KaraokeUser) (bool, bool, error) {
 	if err := s.RequireMaster(ctx); err != nil {
 		return false, false, err
 	}
@@ -487,13 +493,32 @@ func (s *Service) DeleteUser(ctx context.Context, id string, info RequestInfo, a
 	if s.cache == nil {
 		return false, false, unavailable()
 	}
-	if err := s.cache.RevokeUser(ctx, id); err != nil {
-		return false, false, unavailable()
-	}
 	a := audit(info, "account-delete", "pending")
 	if actor != "" {
 		a.Action = "admin-user-delete"
 		a.Detail = map[string]any{"actor": actor}
+	}
+	if s.deleteSealedUser != nil {
+		if actor == "" && expected == nil {
+			return false, false, publicError(store.ErrAccountConflict)
+		}
+		work, cancel := context.WithTimeout(ctx, 4*time.Second)
+		found, err := s.deleteSealedUser(work, id, expected, a)
+		cancel()
+		if err != nil || !found {
+			return found, !found, publicError(err)
+		}
+		// CurrentUser checks the committed account state, so its sessions can
+		// never authorize again even if Redis is temporarily unavailable.
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		if err = s.cache.RevokeUser(cleanup, id); err != nil {
+			slog.Warn("sealed karaoke session generation cleanup deferred")
+		}
+		return true, true, nil
+	}
+	if err := s.cache.RevokeUser(ctx, id); err != nil {
+		return false, false, unavailable()
 	}
 	found, err := s.repo.StageUserDeletion(ctx, id, a)
 	if err != nil || !found {

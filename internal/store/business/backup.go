@@ -288,3 +288,36 @@ func (r *Repository) AbortBackups(ctx context.Context, relationship string, gene
 	}
 	return
 }
+
+// RecordBackupAttempt records pipeline state without changing the last verified
+// generation/checksum. A failed build never replaces an existing recovery point.
+func (r *Repository) RecordBackupAttempt(ctx context.Context, relationship, state string, a store.NodeAudit) error {
+	if !nodeIDPattern.MatchString(relationship) || state != "receiving" && state != "failed" {
+		return store.ErrBackupState
+	}
+	return r.write(ctx, func(q queryer) error {
+		node, err := readNode(ctx, q, r.lock())
+		if err != nil {
+			return err
+		}
+		if node.Role != "Master" {
+			return store.ErrNodeState
+		}
+		rel, err := scanRelation(q.QueryRowContext(ctx, "SELECT "+relationColumns+" FROM node_relationships WHERE relationship_id=?"+r.lock(), relationship))
+		if err != nil {
+			return err
+		}
+		if rel.Direction != "downstream" || rel.State != "active" || rel.Protocol != 2 {
+			return store.ErrNodeState
+		}
+		result, err := q.ExecContext(ctx, "UPDATE cluster_backup_members SET state=?,updated_at=? WHERE member_id=? AND enabled=1", state, time.Now().Unix(), rel.PeerID)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil || n != 1 {
+			return store.ErrBackupState
+		}
+		return r.nodeAudit(ctx, q, "backup-attempt", relationship, map[string]any{"state": state}, a)
+	})
+}

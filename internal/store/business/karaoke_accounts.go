@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -73,6 +74,9 @@ func (r *Repository) karaokeAudit(ctx context.Context, q queryer, a store.Karaok
 			return store.ErrUserMissing
 		}
 		user = a.UserID
+	}
+	if handled, e := archiveEvent(ctx, q, logarchive.Audit, map[string]any{"source": "karaoke", "event": a}); handled {
+		return e
 	}
 	_, err = q.ExecContext(ctx, "INSERT INTO karaoke_audit_log(user_id,action,result,client_ip,webrtc_addresses,detail,request_id,trace_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)", user, a.Action, a.Result, a.IP, string(addresses), string(detail), a.RequestID, a.TraceID, time.Now().Unix())
 	return err
@@ -225,10 +229,10 @@ func (r *Repository) ListUsers(ctx context.Context, query string, page, size int
 		page = 1
 	}
 	size = min(100, max(1, size))
-	where, args := "", []any{}
+	where, args := " WHERE status<>'deleted'", []any{}
 	query = strings.TrimSpace(query)
 	if query != "" {
-		where = " WHERE username LIKE ? ESCAPE '!'"
+		where += " AND username LIKE ? ESCAPE '!'"
 		args = append(args, "%"+escapeLike(query)+"%")
 	}
 	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM karaoke_users"+where, args...).Scan(&result.Total); err != nil {

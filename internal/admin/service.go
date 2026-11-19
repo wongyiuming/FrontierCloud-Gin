@@ -9,11 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -30,9 +32,13 @@ func (e *Error) Error() string            { return "admin request rejected" }
 func reject(status int, detail any) error { return &Error{status, detail} }
 
 type Service struct {
-	settings   config.Config
-	cache      Cache
-	repository store.AdminRepository
+	settings       config.Config
+	cache          Cache
+	repository     store.AdminRepository
+	handoffMu      sync.Mutex
+	handoffFlows   map[string]handoffFlow
+	handoffGrants  map[string]handoffGrant
+	handoffPending int
 }
 type RequestInfo struct{ IP, UserAgent, RequestID, TraceID string }
 type Session struct {
@@ -45,7 +51,7 @@ type Session struct {
 }
 
 func New(settings config.Config, cache Cache, repo store.AdminRepository) (*Service, error) {
-	s := &Service{settings, cache, repo}
+	s := &Service{settings: settings, cache: cache, repository: repo}
 	if _, err := s.keyHash(); err != nil {
 		return nil, err
 	}
@@ -87,7 +93,7 @@ func (s *Service) Audit(ctx context.Context, session, action, source, result, de
 }
 func (s *Service) auditBestEffort(ctx context.Context, session, action, source, result, detail string, count int, info RequestInfo) {
 	if err := s.Audit(ctx, session, action, source, result, detail, count, info); err != nil {
-		slog.Error("admin audit write failed", "action", action, "result", result, "session_hash", session, "error", err)
+		slog.Error("admin audit write failed", "action", action, "result", result, "session_hash", session, "error_type", logsafe.ErrorType(err))
 	}
 }
 
@@ -319,7 +325,7 @@ func (s *Service) Rotate(ctx context.Context, session Session, mode, custom, con
 		cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		if err := s.cache.RotationUnlock(cleanup, lock); err != nil {
-			slog.Error("admin rotation lock release failed", "error", err)
+			slog.Error("admin rotation lock release failed", "error_type", logsafe.ErrorType(err))
 		}
 	}()
 	current, err := s.keyHash()
@@ -347,7 +353,7 @@ func (s *Service) Rotate(ctx context.Context, session Session, mode, custom, con
 	// The file is authoritative. Return a newly published random key even when
 	// Redis reconciliation fails; stale sessions fail key-hash verification.
 	if err := s.cache.ReplaceSessions(ctx, "admin:session:"+session.Hash, hash(key), s.settings.AdminSessionTTL); err != nil {
-		slog.Error("admin rotation session reconciliation failed", "error", err)
+		slog.Error("admin rotation session reconciliation failed", "error_type", logsafe.ErrorType(err))
 	}
 	s.auditBestEffort(ctx, session.Hash, "admin_key_rotate", mode, "success", "", 1, info)
 	return key, nil

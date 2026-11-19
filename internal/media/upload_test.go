@@ -202,7 +202,7 @@ func TestUploadRecoversPrePublicationIntentAndRejectsTampering(t *testing.T) {
 			value := staged(t, svc, "ID3payload")
 			value.retain = true
 			journal := uploadJournal{Format: "frontiercloud-local-upload", Version: 1, ID: value.id, Object: store.MediaObject{Path: "music/new/album/song.mp3", Kind: "audio"}, Bytes: value.Bytes, SHA256: value.Digest, Audit: store.AdminAudit{Action: "upload_item"}}
-			if err := svc.writeUploadJournal(journal); err != nil {
+			if err := svc.writeUploadJournal(context.Background(), journal); err != nil {
 				t.Fatal(err)
 			}
 			if tamper {

@@ -37,6 +37,7 @@ type upgradeRunner struct {
 	generation          int
 	role                string
 	relations           []NodeFact
+	pending             map[string]int64
 	onFact              func()
 }
 
@@ -68,7 +69,7 @@ func (r *upgradeRunner) Run(ctx context.Context, name string, args ...string) ([
 		if generation == 0 {
 			generation = migrations.Generation
 		}
-		return json.Marshal(RuntimeFact{NodeID: r.node, Role: role, NativeMaintenance: e == nil, Nodes: r.relations, Database: store.MaintenanceSnapshot{LogicalIdle: true, SchemaGeneration: generation}})
+		return json.Marshal(RuntimeFact{NodeID: r.node, Role: role, NativeMaintenance: e == nil, Nodes: r.relations, Database: store.MaintenanceSnapshot{LogicalIdle: len(r.pending) == 0, SchemaGeneration: generation, Pending: r.pending}})
 	}
 	if strings.Contains(call, "prepare-release") {
 		r.generation = migrations.Generation
@@ -131,6 +132,9 @@ func upgradeFixture(t *testing.T) (*Deployment, Receipt, *upgradeRunner, Upgrade
 	runner := &upgradeRunner{fakeRunner: base, data: data, secrets: secrets, node: strings.Repeat("d", 32)}
 	key := base64.URLEncoding.EncodeToString(make([]byte, 32))
 	if e = os.WriteFile(filepath.Join(secrets, "node-vault.key"), []byte(key), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(secrets, "admin_key"), []byte("original-fixture-admin-key\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	v, e := vault.New(key)

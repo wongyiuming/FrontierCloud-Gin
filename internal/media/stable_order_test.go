@@ -14,6 +14,25 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
+func TestCatalogSortUsesPreferencePathAndIDNotPlayScore(t *testing.T) {
+	items := []Track{
+		{MediaPath: "music/A/z.mp3", MediaID: "b", PlaybackStats: store.PlaybackStats{Preference: 0, PlayScore: 9000}},
+		{MediaPath: "music/A/a.mp3", MediaID: "b", PlaybackStats: store.PlaybackStats{Preference: 0, PlayScore: 0}},
+		{MediaPath: "music/A/a.mp3", MediaID: "a", PlaybackStats: store.PlaybackStats{Preference: 0, PlayScore: 1}},
+		{MediaPath: "music/A/top.mp3", MediaID: "c", PlaybackStats: store.PlaybackStats{Preference: 1, PlayScore: 0}},
+		{MediaPath: "music/A/low.mp3", MediaID: "d", PlaybackStats: store.PlaybackStats{Preference: -1, PlayScore: 100000}},
+	}
+	sortTracks(items)
+	var got []string
+	for _, item := range items {
+		got = append(got, item.MediaPath+":"+item.MediaID)
+	}
+	want := []string{"music/A/top.mp3:c", "music/A/a.mp3:a", "music/A/a.mp3:b", "music/A/z.mp3:b", "music/A/low.mp3:d"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("catalog ordering changed: %v", got)
+	}
+}
+
 func TestEqualPriorityCatalogStableAcrossSessionsAndCache(t *testing.T) {
 	for _, master := range []bool{false, true} {
 		t.Run(map[bool]string{false: "Local", true: "Master"}[master], func(t *testing.T) {

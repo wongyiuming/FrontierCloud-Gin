@@ -48,7 +48,7 @@ func (r *Repository) MoveStorageEndpoint(ctx context.Context, id, previous, next
 	if !nodeIDPattern.MatchString(id) || previous == "" || previous == next || !validStorageEndpoint(next) {
 		return store.ErrNodeState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		identity, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -75,7 +75,7 @@ func (r *Repository) RebindStorageEndpoint(ctx context.Context, master string, e
 	if !nodeIDPattern.MatchString(master) || !validStorageEndpoint(next) || expected.Endpoint == next {
 		return store.ErrNodeState
 	}
-	return r.withRelation(ctx, expected.ID, func(q queryer, identity store.NodeIdentity, current store.Relationship) error {
+	return r.withRelationWrite(ctx, expected.ID, r.ingressWrite, func(q queryer, identity store.NodeIdentity, current store.Relationship) error {
 		if identity.ID != master || identity.Role != "Master" || current.Direction != "downstream" || current.State != "active" ||
 			current.PeerID != expected.PeerID || current.PublicKey != expected.PublicKey || current.Credential != expected.Credential ||
 			(current.Endpoint != expected.Endpoint && current.Endpoint != next) {

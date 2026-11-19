@@ -416,14 +416,6 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 				return store.ErrMigrationState
 			}
 		}
-		source, target := members[t.SourceID], members[t.TargetID]
-		var reserved int64
-		if e = q.QueryRowContext(ctx, "SELECT reserved_bytes FROM migration_capacity WHERE task_id=?"+r.lock(), l.TaskID).Scan(&reserved); e != nil {
-			return e
-		}
-		if source.Used < bytes || target.Reserved < bytes || reserved < bytes || target.Used > target.Allocation-target.Reserved || target.Enabled == 0 || target.Writable == 0 || target.Health != "online" {
-			return store.ErrMigrationState
-		}
 		now := time.Now().Unix()
 		// Validation of a large unit may consume the lease interval. Recheck
 		// the persistent epoch/expiry before the authority-changing statement.
@@ -442,13 +434,13 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 		if e != nil || changed != count {
 			return store.ErrMigrationState
 		}
+		if e = r.settleMigrationCapacityTx(ctx, q, l.TaskID, members[t.SourceID], members[t.TargetID], bytes, now); e != nil {
+			return e
+		}
 		for _, change := range []struct {
 			query string
 			args  []any
 		}{
-			{"UPDATE cluster_storage_members SET used_bytes=used_bytes-?,updated_at=? WHERE member_id=?", []any{bytes, now, t.SourceID}},
-			{"UPDATE cluster_storage_members SET used_bytes=used_bytes+?,reserved_bytes=reserved_bytes-?,updated_at=? WHERE member_id=?", []any{bytes, bytes, now, t.TargetID}},
-			{"UPDATE migration_capacity SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE task_id=?", []any{bytes, now, l.TaskID}},
 			{"UPDATE migration_objects SET state='cleanup_pending',updated_at=? WHERE task_id=? AND unit_id=?", []any{now, l.TaskID, unit}},
 			// The grace timestamp is a minimum delay, never proof that active
 			// read leases or old capabilities have drained. Cleanup rechecks them.
@@ -461,4 +453,39 @@ func (r *Repository) CommitMigrationUnit(ctx context.Context, l store.MigrationL
 		}
 		return r.nodeAudit(ctx, q, "resource-migration-unit-committed", "", map[string]any{"task_id": l.TaskID, "unit_id": unit, "source_id": t.SourceID, "target_id": t.TargetID, "objects": count, "bytes": bytes}, a)
 	})
+}
+
+// settleMigrationCapacityTx transfers the authoritative Master charge. The
+// caller holds both member rows and commits ownership and unit state together.
+// A valid zero-byte unit checks the reservation without changing any charge.
+func (r *Repository) settleMigrationCapacityTx(ctx context.Context, q queryer, taskID string, source, target store.StorageMember, bytes, now int64) error {
+	var reserved int64
+	if err := q.QueryRowContext(ctx, "SELECT reserved_bytes FROM migration_capacity WHERE task_id=? AND member_id=?"+r.lock(), taskID, target.ID).Scan(&reserved); err != nil {
+		return err
+	}
+	if bytes < 0 || source.ID == target.ID || source.Used < bytes || target.Reserved < bytes || reserved < bytes || reserved > target.Reserved ||
+		target.Used < 0 || target.Allocation < target.Reserved || target.Used > target.Allocation-target.Reserved ||
+		target.Enabled == 0 || target.Writable == 0 || target.Health != "online" {
+		return store.ErrMigrationState
+	}
+	if bytes == 0 {
+		return nil
+	}
+	for _, change := range []struct {
+		query string
+		args  []any
+	}{
+		{"UPDATE cluster_storage_members SET used_bytes=used_bytes-?,updated_at=? WHERE member_id=? AND used_bytes=?", []any{bytes, now, source.ID, source.Used}},
+		{"UPDATE cluster_storage_members SET used_bytes=used_bytes+?,reserved_bytes=reserved_bytes-?,updated_at=? WHERE member_id=? AND used_bytes=? AND reserved_bytes=?", []any{bytes, bytes, now, target.ID, target.Used, target.Reserved}},
+		{"UPDATE migration_capacity SET reserved_bytes=reserved_bytes-?,updated_at=? WHERE task_id=? AND member_id=? AND reserved_bytes=?", []any{bytes, now, taskID, target.ID, reserved}},
+	} {
+		result, err := q.ExecContext(ctx, change.query, change.args...)
+		if err != nil {
+			return err
+		}
+		if changed, err := result.RowsAffected(); err != nil || changed != 1 {
+			return store.ErrMigrationState
+		}
+	}
+	return nil
 }

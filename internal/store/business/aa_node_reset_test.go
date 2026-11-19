@@ -46,6 +46,15 @@ func TestNodeResetAtomicIdentityRotationTombstonesAndColdHistory(t *testing.T) {
 	if _, err := db.Nodes().ResetIdentity(ctx, before.ID, "Standalone", next, audit); !errors.Is(err, store.ErrNodeState) {
 		t.Fatal("role inspection race ignored", err)
 	}
+	if _, err := raw.ExecContext(ctx, `INSERT INTO sealed_tree_meta(singleton,version,verifier,salt,root_encryption_id,root_sealed,write_fence) VALUES(1,1,?,?,?,?,0)`, strings.Repeat("a", 64), []byte{1}, strings.Repeat("b", 64), []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Nodes().ResetIdentity(ctx, before.ID, "Master", next, audit); !errors.Is(err, store.ErrNodeState) {
+		t.Fatal("sealed tree identity reset allowed", err)
+	}
+	if _, err := raw.ExecContext(ctx, `DELETE FROM sealed_tree_meta WHERE singleton=1`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := raw.Exec("UPDATE cluster_storage_members SET reserved_bytes=1 WHERE member_id=?", before.ID); err != nil {
 		t.Fatal(err)
 	}

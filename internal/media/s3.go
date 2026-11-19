@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/s3media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/s3store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -45,7 +46,31 @@ func (s *Service) ConfigureS3(service *s3media.Service) {
 	s.s3 = service
 }
 
+// SelectedS3Provider returns the same Master-held provider adapter that was
+// installed at startup. It does not install a selected S3 runtime or prove
+// that pending operations and configuration have been reconciled.
+func (s *Service) SelectedS3Provider() (interface {
+	WithSelectedProvider(context.Context, store.S3Member, func(context.Context, s3store.Provider) error) error
+}, error) {
+	if s == nil || s.s3 == nil {
+		return nil, ErrUnavailable
+	}
+	provider, ok := s.s3.(interface {
+		WithSelectedProvider(context.Context, store.S3Member, func(context.Context, s3store.Provider) error) error
+	})
+	if !ok {
+		return nil, ErrUnavailable
+	}
+	return provider, nil
+}
+
 func (s *Service) acquireS3(ctx context.Context) (func(), error) {
+	// The legacy provider control path operates on plaintext catalog facts and
+	// can issue upload grants or mutate provider state. It is not the sealed
+	// tree S3 adapter and must stop before making any such request.
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.requireMaster(ctx); err != nil {
 		return nil, err
 	}
@@ -65,6 +90,34 @@ func (s *Service) acquireS3(ctx context.Context) (func(), error) {
 }
 
 func (s *Service) S3Members(ctx context.Context) ([]store.S3Member, error) {
+	if s != nil && s.opaqueS3ReadTree != nil {
+		if ctx == nil || ctx.Err() != nil || s.opaqueS3ReadGate == nil || s.s3 == nil {
+			return nil, ErrUnavailable
+		}
+		var result []store.S3Member
+		work := func(c context.Context) error {
+			var e error
+			result, e = s.s3.Members(c)
+			return e
+		}
+		var err error
+		if gate, ok := s.opaqueS3ReadGate.(interface {
+			WithSelectedS3Listing(context.Context, *sealedtree.SQLStore, func(context.Context) error) error
+		}); ok {
+			err = gate.WithSelectedS3Listing(ctx, s.opaqueS3ReadTree, func(c context.Context) error {
+				if e := s.requireMaster(c); e != nil {
+					return e
+				}
+				return work(c)
+			})
+		} else {
+			err = s.withSelectedS3ManagementRead(ctx, work)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	release, err := s.acquireS3(ctx)
 	if err != nil {
 		return nil, err
@@ -73,6 +126,18 @@ func (s *Service) S3Members(ctx context.Context) ([]store.S3Member, error) {
 	return s.s3.Members(ctx)
 }
 func (s *Service) S3AddMember(ctx context.Context, cfg s3media.Configuration, a store.NodeAudit) (store.S3Member, error) {
+	if s != nil && s.opaqueS3ReadTree != nil {
+		var result store.S3Member
+		err := s.withSelectedS3ManagementRead(ctx, func(c context.Context) error {
+			var e error
+			result, e = s.s3.Add(c, cfg, a)
+			return e
+		})
+		if err != nil {
+			return store.S3Member{}, err
+		}
+		return result, nil
+	}
 	release, err := s.acquireS3(ctx)
 	if err != nil {
 		return store.S3Member{}, err
@@ -80,13 +145,147 @@ func (s *Service) S3AddMember(ctx context.Context, cfg s3media.Configuration, a 
 	defer release()
 	return s.s3.Add(ctx, cfg, a)
 }
+
+func (s *Service) withSelectedS3ManagementRead(ctx context.Context, work func(context.Context) error) error {
+	if s == nil || ctx == nil || ctx.Err() != nil || s.opaqueS3ReadTree == nil || s.opaqueS3ReadGate == nil || s.s3 == nil || work == nil {
+		return ErrUnavailable
+	}
+	gate, ok := s.opaqueS3ReadGate.(interface {
+		WithSelectedS3ManagementRead(context.Context, *sealedtree.SQLStore, func(context.Context) error) error
+	})
+	if !ok {
+		return ErrUnavailable
+	}
+	return gate.WithSelectedS3ManagementRead(ctx, s.opaqueS3ReadTree, func(c context.Context) error {
+		if err := s.requireMaster(c); err != nil {
+			return err
+		}
+		return work(c)
+	})
+}
 func (s *Service) S3ConfigureMember(ctx context.Context, id string, revision int64, cfg s3media.Configuration, a store.NodeAudit) (store.S3Member, error) {
+	if s != nil && s.opaqueS3ReadTree != nil {
+		if !cfg.Enabled {
+			return s.disableUnusedSelectedS3Member(ctx, id, revision, cfg, a)
+		}
+		var result store.S3Member
+		err := s.withSelectedS3ManagementRead(ctx, func(c context.Context) error {
+			repo, ok := s.pool.(interface {
+				S3Member(context.Context, string) (store.S3Member, error)
+			})
+			gate, ready := s.opaqueS3ReadGate.(interface {
+				CheckSelectedS3Member(context.Context, *sealedtree.SQLStore, store.S3Member) error
+			})
+			if !ok || !ready || cfg.Credentials != nil {
+				return ErrUnavailable
+			}
+			current, e := repo.S3Member(c, id)
+			// Any revision change would invalidate already-admitted selected
+			// intents. Until configuration draining and reconciliation are wired,
+			// allow only the first enable of an independently verified member.
+			if e != nil || current.Enabled != 0 || !cfg.Enabled || current.Revision != revision || cfg.Location != current.Location || gate.CheckSelectedS3Member(c, s.opaqueS3ReadTree, current) != nil {
+				return ErrUnavailable
+			}
+			result, e = s.s3.Configure(c, id, revision, cfg, a)
+			if e != nil {
+				return e
+			}
+			return gate.CheckSelectedS3Member(c, s.opaqueS3ReadTree, result)
+		})
+		if err != nil {
+			return store.S3Member{}, err
+		}
+		return result, nil
+	}
 	release, err := s.acquireS3(ctx)
 	if err != nil {
 		return store.S3Member{}, err
 	}
 	defer release()
 	return s.s3.Configure(ctx, id, revision, cfg, a)
+}
+
+// Only an unchanged, never-used member can be disabled without the longer
+// provider-grant drain and selected-object recovery protocol.
+func (s *Service) disableUnusedSelectedS3Member(ctx context.Context, id string, revision int64, cfg s3media.Configuration, audit store.NodeAudit) (store.S3Member, error) {
+	var result store.S3Member
+	gate, ok := s.opaqueS3ReadGate.(interface {
+		WithSelectedS3Startup(context.Context, *sealedtree.SQLStore, func(context.Context) error) error
+	})
+	repo, verified := s.pool.(interface {
+		S3Member(context.Context, string) (store.S3Member, error)
+		CheckSelectedS3Startup(context.Context, *sealedtree.SQLStore, []byte) error
+		CheckSelectedS3MemberNoHistory(context.Context, *sealedtree.SQLStore, []byte, string) error
+	})
+	if ctx == nil || !ok || !verified || s.s3 == nil || cfg.Credentials != nil {
+		return result, ErrUnavailable
+	}
+	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := gate.WithSelectedS3Startup(bounded, s.opaqueS3ReadTree, func(c context.Context) error {
+		if err := s.requireMaster(c); err != nil {
+			return err
+		}
+		current, err := repo.S3Member(c, id)
+		if err != nil || current.Enabled == 0 || current.Revision != revision || cfg.Location != current.Location || cfg.Name != current.Name || cfg.Quota != current.Allocation {
+			return ErrUnavailable
+		}
+		key, err := s.opaqueS3ReadTree.CapacityKey()
+		if err != nil {
+			return err
+		}
+		defer clear(key)
+		if err = repo.CheckSelectedS3Startup(c, s.opaqueS3ReadTree, key); err != nil {
+			return err
+		}
+		if err = repo.CheckSelectedS3MemberNoHistory(c, s.opaqueS3ReadTree, key, id); err != nil {
+			return err
+		}
+		result, err = s.s3.Configure(c, id, revision, cfg, audit)
+		return err
+	})
+	return result, err
+}
+
+// S3ProbeSelected verifies both configured browser origins under the same
+// cross-process S3 control gate. A successful process-local proof is required
+// again after restart before selected S3 grants may be issued.
+func (s *Service) S3ProbeSelected(ctx context.Context, id string, revision int64, adminOrigin string, a store.NodeAudit) (store.S3Member, error) {
+	if s == nil || ctx == nil || ctx.Err() != nil || s.opaqueS3ReadTree == nil || s.opaqueS3ReadGate == nil || s.s3 == nil {
+		return store.S3Member{}, ErrUnavailable
+	}
+	gate, ok := s.opaqueS3ReadGate.(interface {
+		WithSelectedS3Probe(context.Context, *sealedtree.SQLStore, string, string, string, func(context.Context) (store.S3Member, error)) (store.S3Member, error)
+	})
+	prober, probeOK := s.s3.(interface {
+		ProbeSelected(context.Context, string, int64, string, string, store.NodeAudit) (store.S3Member, error)
+	})
+	if !ok || !probeOK {
+		return store.S3Member{}, ErrUnavailable
+	}
+	routing, ok := s.nodes.(store.ExistingIngressRepository)
+	if !ok {
+		return store.S3Member{}, ErrUnavailable
+	}
+	ingress, err := routing.ExistingPublicIngress(ctx)
+	if err != nil || ingress.NodeID == "" || ingress.Generation < 1 || ingress.PublicOrigin == "" {
+		return store.S3Member{}, ErrUnavailable
+	}
+	publicOrigin := ingress.PublicOrigin
+	return gate.WithSelectedS3Probe(ctx, s.opaqueS3ReadTree, id, adminOrigin, publicOrigin, func(c context.Context) (store.S3Member, error) {
+		if err := s.requireMaster(c); err != nil {
+			return store.S3Member{}, err
+		}
+		member, err := prober.ProbeSelected(c, id, revision, adminOrigin, publicOrigin, a)
+		if err != nil {
+			return store.S3Member{}, err
+		}
+		current, err := routing.ExistingPublicIngress(c)
+		if err != nil || current != ingress {
+			return store.S3Member{}, ErrUnavailable
+		}
+		return member, nil
+	})
 }
 func (s *Service) S3ProbeMember(ctx context.Context, id string, revision int64, origin string, a store.NodeAudit) (store.S3Member, error) {
 	release, err := s.acquireS3(ctx)
@@ -97,6 +296,37 @@ func (s *Service) S3ProbeMember(ctx context.Context, id string, revision int64, 
 	return s.s3.Probe(ctx, id, revision, origin, a)
 }
 func (s *Service) S3RemoveMember(ctx context.Context, id string, revision int64, a store.NodeAudit) error {
+	if s != nil && s.opaqueS3ReadTree != nil {
+		gate, ok := s.opaqueS3ReadGate.(interface {
+			WithSelectedS3Startup(context.Context, *sealedtree.SQLStore, func(context.Context) error) error
+		})
+		repo, verified := s.pool.(interface {
+			CheckSelectedS3Startup(context.Context, *sealedtree.SQLStore, []byte) error
+			CheckSelectedS3MemberUnused(context.Context, *sealedtree.SQLStore, []byte, string) error
+		})
+		if ctx == nil || !ok || !verified || s.s3 == nil {
+			return ErrUnavailable
+		}
+		bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		return gate.WithSelectedS3Startup(bounded, s.opaqueS3ReadTree, func(c context.Context) error {
+			if err := s.requireMaster(c); err != nil {
+				return err
+			}
+			key, err := s.opaqueS3ReadTree.CapacityKey()
+			if err != nil {
+				return err
+			}
+			defer clear(key)
+			if err = repo.CheckSelectedS3Startup(c, s.opaqueS3ReadTree, key); err != nil {
+				return err
+			}
+			if err = repo.CheckSelectedS3MemberUnused(c, s.opaqueS3ReadTree, key, id); err != nil {
+				return err
+			}
+			return s.s3.Remove(c, id, revision, a)
+		})
+	}
 	release, err := s.acquireS3(ctx)
 	if err != nil {
 		return err
@@ -214,6 +444,9 @@ func (s *Service) PlaintextSource(ctx context.Context, name, expectedObjectID st
 	return s.readSource(ctx, name, expectedObjectID, admin, true)
 }
 func (s *Service) readSource(ctx context.Context, name, expectedObjectID string, admin, plainOnly bool) (s3media.SourceGrant, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return s3media.SourceGrant{}, err
+	}
 	object, err := s.cryptoObject(ctx, name, "", admin)
 	if err != nil {
 		return s3media.SourceGrant{}, err
@@ -231,7 +464,8 @@ func (s *Service) readSource(ctx context.Context, name, expectedObjectID string,
 		}
 		return s3media.SourceGrant{}, nil
 	}
-	row, _, err := s.resolveGlobal(ctx, "", name)
+	_, peer := network.AuthenticatedIngressFromContext(ctx)
+	row, _, err := s.resolveGlobalFor(ctx, "", name, peer && !admin)
 	if err != nil {
 		return s3media.SourceGrant{}, err
 	}
@@ -247,5 +481,7 @@ func (s *Service) readSource(ctx context.Context, name, expectedObjectID string,
 	if s.s3 == nil {
 		return s3media.SourceGrant{}, ErrUnavailable
 	}
-	return s.s3.ReadSource(ctx, row.ID, path.Base(row.Path))
+	// The browser receives its display/download filename from the authenticated
+	// Master response. Do not place that name in the provider's signed URL.
+	return s.s3.ReadSource(ctx, row.ID, "")
 }

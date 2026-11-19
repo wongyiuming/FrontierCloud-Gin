@@ -138,7 +138,7 @@ func (r *Repository) PrepareGlobalRename(ctx context.Context, old, target string
 	if e != nil {
 		return op, e
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -264,7 +264,7 @@ func (r *Repository) PrepareGlobalRename(ctx context.Context, old, target string
 // Catalog paths/state, local metadata, completed sessions and success audit are
 // atomic. Neither local nor remote storage capacity changes on rename.
 func (r *Repository) CompleteGlobalRename(ctx context.Context, id string) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err
@@ -309,7 +309,7 @@ func (r *Repository) DeferGlobalRename(ctx context.Context, id string) error {
 	if !nodeIDPattern.MatchString(id) {
 		return store.ErrNodeState
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		_, err := q.ExecContext(ctx, "UPDATE media_delete_operations SET created_at=? WHERE operation_id=? AND state IN ('rename_pending','rename_cleanup')", timestamp(time.Now()), id)
 		return err
 	})
@@ -319,7 +319,7 @@ func (r *Repository) DeferGlobalRename(ctx context.Context, id string) error {
 // (or the operation never had a local placement). This final state releases both
 // namespace fences; a crash before it remains discoverable by background retry.
 func (r *Repository) CompleteGlobalRenameCleanup(ctx context.Context, id string) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err

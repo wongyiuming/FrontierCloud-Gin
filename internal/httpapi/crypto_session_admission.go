@@ -20,8 +20,9 @@ type cryptoCreationWindow struct {
 	until time.Time
 }
 
-// This is public-handshake admission only. Range/key requests consume no new
-// window, and Admin handshakes do not use this public cache.
+// Allocation admission bounds independent caller and address windows. Public
+// handshakes and recording preparations use separate instances; existing
+// Range and key reads consume neither window.
 type cryptoSessionAdmission struct {
 	mu      sync.Mutex
 	windows map[string]cryptoCreationWindow

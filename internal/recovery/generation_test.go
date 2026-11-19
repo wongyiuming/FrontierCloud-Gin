@@ -2,6 +2,7 @@ package recovery_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
@@ -9,11 +10,11 @@ import (
 )
 
 func TestArchiveKeepsExplicitSupportedSourceGeneration(t *testing.T) {
-	if migrations.Generation != 8 {
-		t.Skip("explicit generation-8 recovery boundary")
+	if migrations.Generation != 11 {
+		t.Skip("explicit generation-11 recovery boundary")
 	}
-	for _, generation := range []int{6, 7} {
-		t.Run(string(rune('0'+generation)), func(t *testing.T) {
+	for _, generation := range []int{6, 7, 8, 9, 10} {
+		t.Run(strconv.Itoa(generation), func(t *testing.T) {
 			_, archive, m, sources := fixture(t)
 			m.SchemaGeneration = generation
 			r, e := recovery.Create(context.Background(), archive, m, sources)
@@ -32,7 +33,7 @@ func TestArchiveKeepsExplicitSupportedSourceGeneration(t *testing.T) {
 }
 func TestArchiveRejectsUndefinedOldAndFutureGeneration(t *testing.T) {
 	for _, generation := range []int{5, migrations.Generation + 1} {
-		t.Run(string(rune('0'+generation)), func(t *testing.T) {
+		t.Run(strconv.Itoa(generation), func(t *testing.T) {
 			_, archive, m, sources := fixture(t)
 			m.SchemaGeneration = generation
 			if _, e := recovery.Create(context.Background(), archive, m, sources); e == nil {

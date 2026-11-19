@@ -3,6 +3,7 @@ package business
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
@@ -32,6 +33,22 @@ func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceS
 	if result.Role != "Standalone" && result.Role != "Master" && result.Role != "Follower" {
 		return empty, store.ErrNodeState
 	}
+	// The current offline archive cannot preserve a populated tree together
+	// with a recoverable protected key and fence binding. Block the operator's
+	// normal idle-based capture/adoption gates if any tree state exists.
+	// This observation is not a cross-process writer fence.
+	for _, table := range unsupportedSealedTreeBackupTables {
+		var one int
+		err := tx.QueryRowContext(ctx, "SELECT 1 FROM "+table+" LIMIT 1").Scan(&one)
+		if err == nil {
+			result.Pending["sealed_tree_unrecoverable"] = 1
+			result.LogicalIdle = false
+			break
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return empty, store.ErrBackupState
+		}
+	}
 	for _, check := range []struct{ name, query string }{
 		{"media_mutations", "SELECT COUNT(*) FROM media_delete_operations WHERE state<>'rename_done'"},
 		{"uploads", "SELECT COUNT(*) FROM cluster_upload_sessions WHERE state NOT IN ('complete','cancelled')"},
@@ -46,6 +63,7 @@ func (r *Repository) InspectMaintenance(ctx context.Context) (store.MaintenanceS
 		{"migration_scopes", "SELECT COUNT(*) FROM migration_scopes"},
 		{"migration_storage", "SELECT COUNT(*) FROM migration_storage_journal WHERE state NOT IN ('published','deleted','aborted')"},
 		{"migration_binding_orphans", "SELECT COUNT(*) FROM migration_peer_bindings b LEFT JOIN migration_storage_journal j ON b.task_id=j.task_id AND b.logical_id=j.logical_id WHERE j.task_id IS NULL"},
+		{"opaque_migration_unsettled", store.OpaqueMigrationUnsettledSQL},
 		{"s3_uploads", "SELECT COUNT(*) FROM s3_uploads WHERE state NOT IN ('published','aborted') OR create_uncertain<>0"},
 		{"s3_part_orphans", "SELECT COUNT(*) FROM s3_upload_parts p LEFT JOIN s3_uploads u ON u.upload_id=p.upload_id WHERE u.upload_id IS NULL"},
 		{"s3_probes", "SELECT COUNT(*) FROM s3_probe_journal WHERE state<>'settled'"},

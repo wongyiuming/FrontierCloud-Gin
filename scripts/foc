@@ -26,6 +26,13 @@ for argument in "$@"; do
 done
 [ "$pending" = false ] || { echo 'foc: --directory requires a value' >&2; exit 2; }
 if [ -z "$command" ]; then command=status; set -- "$@" status; fi
+case "$command:$action" in
+  restore:prepare-business-state|restore:import-business-state|restore:activate-business-state)
+    case "$directory" in
+      /*) exec "$backend" "$@" ;;
+      *) echo "foc: restore $action requires an explicit absolute --directory" >&2; exit 2 ;;
+    esac ;;
+esac
 if [ "$explicit" = true ]; then
   [ -n "$directory" ] || { echo 'foc: --directory must not be empty' >&2; exit 2; }
   # Only commands opening a local running deployment may register it. Install,

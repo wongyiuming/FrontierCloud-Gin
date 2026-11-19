@@ -30,6 +30,10 @@ type BackupCapacity struct {
 	ManifestBytes         uint64 `json:"manifest_upper_bound_bytes"`
 	Scope                 string `json:"scope"`
 	BusinessFilesIncluded bool   `json:"business_files_included"`
+	// Internal estimate for lease-held runtime staging of classes that web
+	// cannot directly read. Existing API/required bytes are unchanged.
+	treeStageBytes   uint64
+	treeStageEntries uint64
 }
 
 type byteCounter struct{ bytes uint64 }
@@ -91,6 +95,9 @@ func (d *Deployment) backupCapacity(ctx context.Context, receipt Receipt, output
 	return d.backupCapacityScope(ctx, receipt, output, setParent, "deployment")
 }
 func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, output, setParent, scope string) (BackupCapacity, error) {
+	return d.backupCapacityScopeWithTree(ctx, receipt, output, setParent, scope, nil, false)
+}
+func (d *Deployment) backupCapacityScopeWithTree(ctx context.Context, receipt Receipt, output, setParent, scope string, treeStatePaths []string, treeArchive bool) (BackupCapacity, error) {
 	p := BackupCapacity{ReadOnly: true, Snapshot: "live estimate; repeated before freeze and under the offline lease"}
 	p.Scope = scope
 	p.BusinessFilesIncluded = scope != "upgrade-state"
@@ -133,6 +140,9 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 		if err != nil {
 			return p, err
 		}
+		selection = append(selection, treeStatePaths...)
+	} else if len(treeStatePaths) != 0 {
+		return p, errors.New("tree state selection requires upgrade-state scope")
 	}
 	roots := map[string]string{"data": data}
 	mounted := map[string]bool{}
@@ -182,12 +192,26 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 	if err != nil {
 		return p, err
 	}
+	if !treeArchive && fact.Database.Pending["sealed_tree_unrecoverable"] > 0 {
+		return p, errors.New("encrypted tree backup is not enabled")
+	}
 	if scope == recovery.UpgradeStateScope {
 		if err = d.validateBackupAdmission(ctx, cfg, receipt, fact); err != nil {
 			return p, err
 		}
 	}
 	header := recovery.Manifest{Format: recovery.Format, Version: 1, Scope: scope, NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, SchemaGeneration: fact.Database.SchemaGeneration, ConfigurationVersion: receipt.Version, CreatedAt: "9999-12-31T23:59:59.999999999Z", Consistency: "native-offline-and-deployment-writers-stopped", Bytes: 10 * 1024 * 1024 * 1024 * 1024, RecoverySet: strings.Repeat("f", 32), KeyReferences: []string{"runtime_secrets/node-vault.key", "runtime_secrets/media-premaster.key"}, Classes: []string{"deployment"}}
+	if receipt.Role == "master" {
+		secrets, ok := roots["runtime_secrets"]
+		if !ok {
+			return p, errors.New("backup requires the recorded Master runtime secrets root")
+		}
+		key, err := readRegular(filepath.Join(secrets, filepath.Base(adminKeyArchivePath)), 1<<20)
+		if err != nil || strings.TrimSpace(string(key)) == "" {
+			return p, errors.New("backup requires the original Master AdminKey")
+		}
+		header.KeyReferences = append(header.KeyReferences, adminKeyArchivePath)
+	}
 	if scope == recovery.UpgradeStateScope {
 		header.Missing = []string{recovery.ExcludedBusinessFiles}
 	}
@@ -251,6 +275,9 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 				return e
 			}
 			if info.IsDir() {
+				if class != "data" && class != "runtime_secrets" {
+					p.treeStageEntries++
+				}
 				if e = p.addSourceDirectory(); e != nil {
 					return e
 				}
@@ -275,6 +302,10 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 			if e = p.addManifestMetadata(recovery.Entry{Path: class + "/" + name, Bytes: info.Size(), SHA256: strings.Repeat("0", 64), Mode: h.Mode & 0777, UID: h.Uid, GID: h.Gid}); e != nil {
 				return e
 			}
+			if class != "data" && class != "runtime_secrets" {
+				p.treeStageBytes += uint64(info.Size())
+				p.treeStageEntries++
+			}
 			p.DataBytes += uint64(info.Size())
 			if p.DataBytes > 10*1024*1024*1024*1024 {
 				return recovery.ErrUnsafe
@@ -286,6 +317,7 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 			return p, e
 		}
 	}
+	p.treeStageEntries++ // generated deployment root
 	for _, name := range append([]string{ReceiptFile, ImagesFile, ".env"}, d.Files...) {
 		raw, e := readRegular(filepath.Join(d.Directory, name), 1<<20)
 		if os.IsNotExist(e) && name == ".env" {
@@ -295,6 +327,8 @@ func (d *Deployment) backupCapacityScope(ctx context.Context, receipt Receipt, o
 			return p, e
 		}
 		p.DataBytes += uint64(len(raw))
+		p.treeStageBytes += uint64(len(raw))
+		p.treeStageEntries++
 		p.ScratchBytes += uint64(len(raw))
 		p.Files++
 		if err = p.addManifestMetadata(recovery.Entry{Path: "deployment/" + name, Bytes: int64(len(raw)), SHA256: strings.Repeat("0", 64), Mode: 0600, UID: 1<<31 - 1, GID: 1<<31 - 1}); err != nil {

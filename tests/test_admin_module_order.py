@@ -15,7 +15,11 @@ EXPECTED_ORDER = [
     ("security", 50),
     ("network", 60),
     ("nodes", 70),
+    ("nodeRouting", 71),
+    ("nodeBackups", 72),
+    ("nodeSettings", 73),
     ("migrations", 75),
+    ("logs", 76),
     ("site", 80),
     ("key", 100),
     ("brand", 110),
@@ -36,7 +40,7 @@ class AdminModuleOrderTests(unittest.TestCase):
         names = [name for name, _order in EXPECTED_ORDER]
         self.assertEqual(names[0:3], ["media", "priority", "lyrics"])
         self.assertEqual(names[4:6], ["security", "network"])
-        self.assertEqual(names[6:9], ["nodes", "migrations", "site"])
+        self.assertEqual(names[6:13], ["nodes", "nodeRouting", "nodeBackups", "nodeSettings", "migrations", "logs", "site"])
         self.assertEqual(names[-1], "brand")
 
     def test_static_and_runtime_modules_use_the_order_contract_names(self):

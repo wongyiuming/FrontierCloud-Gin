@@ -36,7 +36,7 @@ func (r *Repository) ReserveOwnedUpload(ctx context.Context, operation, relation
 	if !poolPath(store.LocalMedia{MediaObject: o, Bytes: size}) || !nodeIDPattern.MatchString(operation) || !nodeIDPattern.MatchString(relationship) || !nodeHashPattern.MatchString(o.ID) || size <= 0 || size > 10*store.GiB {
 		return nodeConflict("invalid owned upload reservation")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, relationship)
 		if err != nil {
 			return err
@@ -95,7 +95,7 @@ func (r *Repository) CompleteOwnedUpload(ctx context.Context, operation string, 
 	if !poolPath(store.LocalMedia{MediaObject: o, Bytes: size, ETag: etag}) || size <= 0 {
 		return nodeConflict("invalid owned upload publication")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, "")
 		if err != nil {
 			return err
@@ -158,7 +158,7 @@ func (r *Repository) ReleaseOwnedUpload(ctx context.Context, operation string, a
 	if !nodeIDPattern.MatchString(operation) {
 		return nodeConflict("invalid owned upload operation")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, "")
 		if err != nil {
 			return err

@@ -67,6 +67,7 @@
 .admin-console > .admin-module[data-admin-module="network"] { order: 60; }
 .admin-console > .admin-module[data-admin-module="nodes"] { order: 70; }
 .admin-console > .admin-module[data-admin-module="migrations"] { order: 75; }
+.admin-console > .admin-module[data-admin-module="logs"] { order: 76; }
 .admin-console > .admin-module[data-admin-module="site"] { order: 80; }
 .admin-console > .admin-module[data-admin-module="key"] { order: 100; }
 .admin-console > .admin-module[data-admin-module="brand"] { order: 110; }
@@ -183,3 +184,9 @@
     .admin-console { height: calc(100dvh - 56px); margin-top: 0; }
     .admin-console .admin-module.expanded { min-height: calc(100dvh - 84px); flex-basis: calc(100dvh - 84px); }
 }
+
+.admin-console > .admin-module[data-admin-module="nodeRouting"] { order: 71; }
+.admin-console > .admin-module[data-admin-module="nodeBackups"] { order: 72; }
+.admin-console > .admin-module[data-admin-module="nodeSettings"] { order: 73; }
+.log-query-form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:18px 0}.log-query-form label{display:grid;gap:6px;min-width:160px;max-width:100%}.log-query-form input,.log-query-form select{min-width:0;width:100%}.log-results{white-space:pre-wrap;overflow-wrap:anywhere;max-height:65vh;overflow:auto;padding:12px;background:#09131e;border-radius:10px;font-size:13px}#logDestination{max-width:100%;min-width:0;flex:1 1 220px}@media(max-width:600px){.log-query-form>label{width:100%}}
+.log-query-form [hidden]{display:none!important}

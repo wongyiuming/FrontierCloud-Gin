@@ -130,7 +130,7 @@ func (r *Repository) AdoptOwnedRecordings(ctx context.Context, signed store.Sign
 		byID[proof.ID] = proof
 		bytes += proof.Bytes
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		adopted = 0
 		n, rel, err := r.backupUpstream(ctx, q, v.Relationship)
 		if err != nil {

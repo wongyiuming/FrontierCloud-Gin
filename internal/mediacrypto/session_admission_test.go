@@ -108,3 +108,73 @@ func TestSessionAdmissionConcurrentHandshakesCannotOverfillBinding(t *testing.T)
 		t.Fatal("concurrent admission escaped limit", accepted.Load(), len(m.sessions))
 	}
 }
+
+func TestSessionAbortReclaimsOnlyItsOwnAdmission(t *testing.T) {
+	m, _ := New(bytes.Repeat([]byte{3}, 32))
+	m.limits = sessionLimits{public: 4, admin: 2, binding: 2}
+	key := sessionAdmissionKey(t)
+	first, err := m.NewSession("browser:shared", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, abort, err := m.NewSessionWithAbort("browser:shared", key)
+	if err != nil || abort == nil {
+		t.Fatal("could not create rollback-capable session", err)
+	}
+	other, err := m.NewSession("browser:other", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = m.NewSessionWithAbort("browser:shared", key); !errors.Is(err, ErrSessionLimit) {
+		t.Fatal("binding limit was not enforced", err)
+	}
+
+	abort()
+	abort() // Rollback can safely be invoked more than once.
+	meta, _ := NewMetadata(25)
+	if _, err = m.Wrap("browser:shared", failed.SessionID, meta); !errors.Is(err, ErrSession) {
+		t.Fatal("aborted session remained usable", err)
+	}
+	for _, grant := range []struct{ binding, id string }{
+		{"browser:shared", first.SessionID}, {"browser:other", other.SessionID},
+	} {
+		if _, err = m.Wrap(grant.binding, grant.id, meta); err != nil {
+			t.Fatal("abort revoked a different session", err)
+		}
+	}
+	if _, err = m.NewSession("browser:shared", key); err != nil {
+		t.Fatal("aborted session retained quota", err)
+	}
+}
+
+func TestStaleSessionAbortCannotRevokeReusedID(t *testing.T) {
+	m, _ := New(bytes.Repeat([]byte{4}, 32))
+	key := sessionAdmissionKey(t)
+	old, abort, err := m.NewSessionWithAbort("browser:shared", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RevokeBinding("browser:shared")
+	replacement, err := m.NewSession("browser:shared", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Model a later random ID reuse. The old callback must still refer only to
+	// its original admission, even with the same ID and browser binding.
+	m.mu.Lock()
+	m.sessions[old.SessionID] = m.sessions[replacement.SessionID]
+	delete(m.sessions, replacement.SessionID)
+	m.mu.Unlock()
+	abort()
+	meta, _ := NewMetadata(25)
+	if _, err = m.Wrap("browser:shared", old.SessionID, meta); err != nil {
+		t.Fatal("stale callback revoked a later admission", err)
+	}
+}
+
+func TestSessionAbortNotReturnedOnFailedAdmission(t *testing.T) {
+	m, _ := New(bytes.Repeat([]byte{5}, 32))
+	if _, abort, err := m.NewSessionWithAbort("browser:shared", "invalid-key"); err == nil || abort != nil {
+		t.Fatal("failed admission returned a rollback callback", err)
+	}
+}

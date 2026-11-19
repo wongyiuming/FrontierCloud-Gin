@@ -14,6 +14,9 @@ import (
 )
 
 func (s *Service) MigrationReceiver(ctx context.Context) (*migrationdata.Receiver, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	if s.nodes == nil {
 		return nil, ErrUnavailable
 	}
@@ -27,7 +30,7 @@ func (s *Service) MigrationReceiver(ctx context.Context) (*migrationdata.Receive
 	if e = s.Ready(ctx); e != nil {
 		return nil, e
 	}
-	return migrationdata.New(s.root, n.ID, "media")
+	return migrationdata.NewGuarded(s.root, n.ID, "media", s.repository.CheckLegacyPhysicalWritesAllowed)
 }
 
 // The caller supplies a fenced post-cutover admission. This retires only the
@@ -151,6 +154,9 @@ func (s *Service) MigrationPublish(ctx context.Context, spec migrationdata.Spec,
 	})
 }
 func (s *Service) MigrationChunk(ctx context.Context, id, name string, expected, offset int64, length int) ([]byte, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	if length < 1 || length > migrationdata.ChunkBytes || offset < 0 || offset > expected-int64(length) {
 		return nil, ErrPath
 	}

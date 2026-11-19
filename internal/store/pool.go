@@ -96,6 +96,14 @@ type PoolRepository interface {
 	DeferGlobalRename(context.Context, string) error
 }
 
+// SelectedUploadRepository is the reservation primitive for an explicit
+// destination. The UI address is descriptive; memberID is the durable owner
+// identity. Upload routing and API admission must independently verify the
+// selected member's current applied transport before exposing a ticket.
+type SelectedUploadRepository interface {
+	ReserveSelectedEncryptedUpload(context.Context, string, string, int64, int64, AdminAudit, *mediacrypto.Metadata) (UploadReservation, error)
+}
+
 type OwnedStorageRepository interface {
 	ReserveOwnedUpload(context.Context, string, string, MediaObject, int64, int64, NodeAudit) error
 	CompleteOwnedUpload(context.Context, string, MediaObject, int64, string, int64, NodeAudit) error

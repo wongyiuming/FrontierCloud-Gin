@@ -200,6 +200,20 @@ func finishContext(ctx context.Context) (context.Context, context.CancelFunc) {
 }
 
 func (s *Service) Probe(ctx context.Context, id string, revision int64, origin string, audit store.NodeAudit) (store.S3Member, error) {
+	return s.probe(ctx, id, revision, []string{origin}, false, audit)
+}
+
+// ProbeSelected checks the exact authenticated Admin and public browser
+// origins in one durable probe. Caller must hold the real selected-S3 control
+// gate and separately bind this result to its process-lifetime readiness.
+func (s *Service) ProbeSelected(ctx context.Context, id string, revision int64, adminOrigin, publicOrigin string, audit store.NodeAudit) (store.S3Member, error) {
+	if err := s.recoverSelectedMemberProbe(ctx, id); err != nil {
+		return store.S3Member{}, err
+	}
+	return s.probe(ctx, id, revision, []string{adminOrigin, publicOrigin}, true, audit)
+}
+
+func (s *Service) probe(ctx context.Context, id string, revision int64, origins []string, selected bool, audit store.NodeAudit) (store.S3Member, error) {
 	if err := s.master(ctx); err != nil {
 		return store.S3Member{}, err
 	}
@@ -220,8 +234,9 @@ func (s *Service) Probe(ctx context.Context, id string, revision int64, origin s
 		return member, err
 	}
 	defer closeProvider()
-	prober, ok := provider.(s3store.JournaledProber)
-	if !ok {
+	prober, singleOK := provider.(s3store.JournaledProber)
+	multi, multiOK := provider.(s3store.JournaledMultiOriginProber)
+	if selected && !multiOK || !selected && !singleOK {
 		return member, ErrUnavailable
 	}
 	intent, err := s.repository.S3StartProbe(ctx, id, revision, audit)
@@ -229,7 +244,7 @@ func (s *Service) Probe(ctx context.Context, id string, revision int64, origin s
 		return member, err
 	}
 	var checkpointID string
-	report, operationErr := prober.TestKeyWithCheckpoint(ctx, origin, intent.Key, func(providerID string) error {
+	checkpoint := func(providerID string) error {
 		if providerID == "" || len(providerID) > 2048 || checkpointID != "" && checkpointID != providerID {
 			return ErrProof
 		}
@@ -240,7 +255,14 @@ func (s *Service) Probe(ctx context.Context, id string, revision int64, origin s
 		}
 		checkpointID = providerID
 		return nil
-	})
+	}
+	var report s3store.TestReport
+	var operationErr error
+	if selected {
+		report, operationErr = multi.TestKeyWithCheckpointOrigins(ctx, origins, intent.Key, checkpoint)
+	} else {
+		report, operationErr = prober.TestKeyWithCheckpoint(ctx, origins[0], intent.Key, checkpoint)
+	}
 	if operationErr == nil && (checkpointID == "" || report.UploadID != checkpointID || len(report.ETag) > publishedETagBytes) {
 		operationErr = ErrProof
 	}

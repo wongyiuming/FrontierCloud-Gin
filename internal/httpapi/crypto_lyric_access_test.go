@@ -29,6 +29,9 @@ func TestPublicLyricKeyAndCipherRangeRecheckSourceAccessHTTP(t *testing.T) {
 			router, db, _, public := publicFixture(t, false)
 			ctx := context.Background()
 			if master {
+				if err := public.control.ConfigurePublicOrigin("https://lyric-master.test"); err != nil {
+					t.Fatal(err)
+				}
 				err := public.media.WithPromotion(ctx, "Master", func(promotion store.NodePromotion) error {
 					promotion.Endpoint, promotion.Allocation = "https://lyric-master.test", 10*store.GiB
 					_, err := db.Nodes().PromoteIdentity(ctx, promotion, store.NodeAudit{})

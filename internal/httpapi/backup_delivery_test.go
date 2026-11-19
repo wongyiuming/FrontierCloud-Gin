@@ -25,6 +25,39 @@ type backupHTTP struct {
 	after func(string, map[string]any, error) (map[string]any, error)
 }
 
+func TestBusinessBackupEncryptedArtifactUsesUnchangedSignedTransport(t *testing.T) {
+	master, follower, builder, _, rel, sender := backupDeliveryFixture(t)
+	ctx := context.Background()
+	payload := append([]byte("FC-BUSINESS-POINT-1\n"), bytes.Repeat([]byte{0x8b, 0xf1, 0x00, 0xa3}, 100_000)...)
+	builder.ConfigureCheckpoint(func(_ context.Context, _ int64, w io.Writer) error { _, err := w.Write(payload); return err })
+	if err := sender.DeliverBackup(ctx, rel.ID); err != nil {
+		t.Fatal(err)
+	}
+	var generation int64
+	var checksum, state string
+	if err := master.db.Database().QueryRow("SELECT generation,checksum,state FROM cluster_backup_members WHERE member_id=?", follower.id).Scan(&generation, &checksum, &state); err != nil || state != "ready" {
+		t.Fatal(state, err)
+	}
+	var remoteChecksum string
+	var size int64
+	if err := follower.db.Database().QueryRow("SELECT checksum,size_bytes FROM cluster_business_backups WHERE master_id=? AND generation=? AND state='ready'", master.id, generation).Scan(&remoteChecksum, &size); err != nil || remoteChecksum != checksum || size != int64(len(payload)) {
+		t.Fatal("opaque receiver failed", err)
+	}
+	builder.ConfigureCheckpoint(func(context.Context, int64, io.Writer) error { return store.ErrBackupBusy })
+	if err := sender.DeliverBackup(ctx, rel.ID); !errors.Is(err, store.ErrBackupBusy) {
+		t.Fatal(err)
+	}
+	var retained int64
+	if err := master.db.Database().QueryRow("SELECT generation,state FROM cluster_backup_members WHERE member_id=?", follower.id).Scan(&retained, &state); err != nil || retained != generation || state != "failed" {
+		t.Fatal("verified generation lost after capture failure", retained, state, err)
+	}
+	var ready int
+	if err := follower.db.Database().QueryRow("SELECT COUNT(*) FROM cluster_business_backups WHERE master_id=? AND generation=? AND state='ready'", master.id, generation).Scan(&ready); err != nil || ready != 1 {
+		t.Fatal("peer point lost", err)
+	}
+	assertNoBackupArtifact(t, master)
+}
+
 func (t *backupHTTP) Request(ctx context.Context, origin, route, method string, value any, relationship, credential string) (map[string]any, error) {
 	result, err := t.clusterHTTP.Request(ctx, origin, route, method, value, relationship, credential)
 	if t.after != nil {
@@ -293,6 +326,14 @@ func TestBusinessBackupDeliveryDefersLiveReservationsAndRevokedRelationship(t *t
 	}
 	if err := sender.DeliverBackup(ctx, rel.ID); !errors.Is(err, store.ErrBackupBusy) {
 		t.Fatal("unrecoverable reservation exported", err)
+	}
+	var localState string
+	if err := master.db.Database().QueryRow("SELECT state FROM cluster_backup_members WHERE member_id=?", follower.id).Scan(&localState); err != nil || localState != "failed" {
+		t.Fatal("Master build failure not recorded", localState, err)
+	}
+	member, err := master.db.Nodes().Relationship(ctx, rel.ID)
+	if err != nil || member.Status != "online" {
+		t.Fatal("backup failure changed healthy relationship", member.Status, err)
 	}
 	var count int
 	if err := follower.db.Database().QueryRow("SELECT COUNT(*) FROM cluster_business_backups").Scan(&count); err != nil || count != 0 {

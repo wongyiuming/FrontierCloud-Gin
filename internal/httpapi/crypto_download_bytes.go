@@ -11,6 +11,10 @@ import (
 // plan's immutable source identity without generating duplicate audit events.
 func (a *Admin) downloadPlanBytes(c *gin.Context) {
 	noStore(c)
+	if a.public.opaqueTree != nil {
+		a.selectedDownloadBytes(c)
+		return
+	}
 	d, err := a.public.media.Download(c.Request.Context(), []string{c.Query("file_path")})
 	if err != nil {
 		mediaAdminError(c, err)

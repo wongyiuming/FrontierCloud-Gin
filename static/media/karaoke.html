@@ -76,17 +76,20 @@
     </div>
     <div id="profile" hidden>
       <div id="profileSummary"></div>
-      <p class="status">录音由 Master Storage Scheduler 自动选择可写存储成员。</p>
+      <p id="recordingStorageStatus" class="status">录音由 Master Storage Scheduler 自动选择可写存储成员。</p>
+      <label id="recordingStorageControl" hidden>录音存储节点<select id="bindStorage" disabled></select></label>
       <div class="profile-actions"><button id="uploadFile" type="button">上传已有录音</button><input id="uploadFileInput" type="file" accept="audio/*,.webm,.ogg,.m4a,.mp3,.wav" hidden><button id="logoutAccount" type="button">退出登录</button></div>
+      <button id="retryRecordingUpload" type="button" hidden>继续本次录音上传</button>
       <form id="passwordForm"><input id="currentPassword" type="password" placeholder="当前密码" required><input id="newPassword" type="password" placeholder="新密码，例如 Huawei@123" required><button type="submit">修改密码</button></form>
       <div id="recordingList" class="recording-list"></div>
-      <button id="deleteAccount" class="danger" type="button">注销账号并删除全部录音</button>
+      <button id="deleteAccount" class="danger" type="button">注销账号</button>
     </div>
   </section>
 </div>
 <noscript>当前浏览器必须启用脚本才能使用卡拉OK。</noscript>
 <script id="frontierCloudNetworkConfig" type="application/json">{"stun_urls":{{STUN_URLS}},"interval_ms":{{WEBRTC_INTERVAL_MS}}}</script>
 <script src="{{NETWORK_OBSERVATION_JS_URL}}" defer></script>
+<script src="{{UPLOAD_SHA256_JS_URL}}" defer></script>
 <script src="{{KARAOKE_JS_URL}}" defer></script>
 <script src="/static/js/lyrics-window.js" defer></script>
 <script src="/static/js/karaoke-audio-quality.js" defer></script>

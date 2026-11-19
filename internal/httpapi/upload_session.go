@@ -3,38 +3,60 @@ package httpapi
 import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"net/http"
 	"time"
 	"unicode/utf8"
 )
 
 func (a *Admin) storagePool(c *gin.Context) {
-	result, err := a.public.media.StoragePool(c.Request.Context())
+	var (
+		result map[string]any
+		err    error
+	)
+	selected := a.public.opaqueTree != nil
+	if selected {
+		ctx, cancel := selectedRuntimeContext(c)
+		defer cancel()
+		result, err = a.public.media.StoragePoolWithUploadReadiness(ctx, a.selectedUpload.ObserveUploadDestination)
+	} else {
+		result, err = a.public.media.StoragePool(c.Request.Context())
+	}
 	if err != nil {
 		mediaAdminError(c, err)
 		return
+	}
+	if selected {
+		result["selected_upload"] = true
 	}
 	c.JSON(200, result)
 }
 func (a *Admin) reserveUpload(c *gin.Context) {
 	var body struct {
-		Site        string          `json:"site_type"`
-		Target      string          `json:"target_dir"`
-		Relative    string          `json:"relative_path"`
-		Filename    string          `json:"filename"`
-		Bytes       int64           `json:"size_bytes"`
-		Mode        string          `json:"storage_mode"`
-		Encryption  json.RawMessage `json:"encryption"`
-		Preparation string          `json:"preparation_token"`
+		Site            string          `json:"site_type"`
+		MemberID        json.RawMessage `json:"member_id"`
+		StorageMemberID json.RawMessage `json:"storage_member_id"`
+		Target          string          `json:"target_dir"`
+		Relative        string          `json:"relative_path"`
+		Filename        string          `json:"filename"`
+		Bytes           int64           `json:"size_bytes"`
+		Mode            string          `json:"storage_mode"`
+		Encryption      json.RawMessage `json:"encryption"`
+		Preparation     string          `json:"preparation_token"`
 	}
 	if !decodeAdmin(c, &body) {
 		return
 	}
-	if (body.Site != "primary" && body.Site != "direct" && body.Site != "relay" && body.Site != "s3") || utf8.RuneCountInString(body.Target) > 1024 || utf8.RuneCountInString(body.Relative) > 1024 || body.Filename == "" || utf8.RuneCountInString(body.Filename) > 255 || body.Bytes <= 0 {
+	var memberID string
+	if len(body.MemberID) != 0 || json.Unmarshal(body.StorageMemberID, &memberID) != nil || !node.ValidIdentifier(memberID) {
+		detail(c, http.StatusConflict, "请选择具体的目标存储节点；不支持自动选择或备用节点")
+		return
+	}
+	if utf8.RuneCountInString(body.Target) > 1024 || utf8.RuneCountInString(body.Relative) > 1024 || body.Filename == "" || utf8.RuneCountInString(body.Filename) > 255 || body.Bytes <= 0 {
 		invalid(c, "body", "upload")
 		return
 	}
-	if body.Site == "s3" && !nodeHTTPS(c, a.settings, a.network) {
+	if !nodeHTTPS(c, a.settings, a.network) {
 		return
 	}
 	encoded := ""
@@ -45,15 +67,11 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 	if !ok {
 		return
 	}
-	plainSize := body.Bytes
-	if meta != nil {
-		plainSize = meta.PlaintextSize
-		if body.Bytes != meta.CiphertextSize {
-			detail(c, 400, "密文大小与加密元数据不一致")
-			return
-		}
+	if body.Bytes != meta.CiphertextSize {
+		detail(c, 400, "上传文件大小与准备信息不一致")
+		return
 	}
-	if plainSize > a.settings.AdminMaxUploadBytes {
+	if meta.PlaintextSize > a.settings.AdminMaxUploadBytes {
 		detail(c, 413, "文件超过单文件上传限制")
 		return
 	}
@@ -61,7 +79,7 @@ func (a *Admin) reserveUpload(c *gin.Context) {
 		detail(c, 413, "S3 单个对象最多允许 10 GiB")
 		return
 	}
-	result, err := a.public.media.ReserveMasterEncryptedUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, body.Site, body.Bytes, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, "upload-reserved", []string{body.Filename}), meta)
+	result, err := a.public.media.ReserveSelectedMasterUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, memberID, body.Bytes, a.settings.AdminMaxFilenameLength, a.mutationAudit(c, "upload-reserved", []string{body.Filename}), meta)
 	if err != nil {
 		if body.Site == "s3" {
 			s3HTTPError(c, err)

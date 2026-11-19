@@ -1,30 +1,40 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/karaoke"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/business"
 )
 
 type KaraokeAccounts struct {
-	service  *karaoke.Service
-	public   *Public
-	admin    *Admin
-	resolver *network.Resolver
+	service                   *karaoke.Service
+	public                    *Public
+	admin                     *Admin
+	resolver                  *network.Resolver
+	recordingAudioPreparation RecordingAudioPreparation
+	recordingAudioReservation RecordingAudioReservation
+	recordingAudioUpload      RecordingAudioUpload
+	recordingAudioDirect      *business.SelectedUploadRuntime
+	recordingAudioOpen        RecordingAudioOpen
+	recordingAudioDelete      recordingAudioDelete
+	recordingPreparationLimit cryptoSessionAdmission
 }
 
 func RegisterKaraokeAccounts(router *gin.Engine, service *karaoke.Service, public *Public, admin *Admin, resolver *network.Resolver) *KaraokeAccounts {
-	a := &KaraokeAccounts{service, public, admin, resolver}
+	a := &KaraokeAccounts{service: service, public: public, admin: admin, resolver: resolver}
 	g := router.Group("/api/v1/karaoke/account", func(c *gin.Context) {
 		noStore(c)
-		if public.settings.TLSEnabled && !resolver.SecureAdmin(c.Request) {
+		if public.settings.TLSEnabled && !secureKaraokeTransport(c.Request, resolver) {
 			detail(c, 426, "账号访问需要 HTTPS")
 			c.Abort()
 			return
@@ -173,6 +183,34 @@ func (a *KaraokeAccounts) status(c *gin.Context) {
 	if !ok {
 		return
 	}
+	var result any
+	if user != nil {
+		result = userJSON(*user)
+	}
+	if a.public.opaqueTree != nil {
+		// Account reads and new upload admission have separate lifecycle gates.
+		readAvailable := false
+		destinations := []business.RecordingAudioDirectDestination{}
+		if user != nil && secureKaraokeTransport(c.Request, a.resolver) {
+			ingress, err := a.public.cryptoIngress(c)
+			if err == nil && ingress.Scope == "ingress" && sameCryptoOrigin("https://"+c.Request.Host, ingress.Origin) {
+				readAvailable = a.recordingAudioDirect != nil || a.recordingAudioOpen != nil && ingress.Origin == a.public.settings.PublicOrigin
+				if a.recordingAudioDirect != nil {
+					ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+					defer cancel()
+					expected := store.PublicIngress{NodeID: ingress.NodeID, PublicOrigin: ingress.Origin, Generation: ingress.Generation}
+					if ready, err := a.recordingAudioDirect.RecordingAudioDirectDestinations(ctx, a.public.opaqueTree, expected); err == nil && ready != nil {
+						destinations = ready
+					}
+				}
+			}
+		}
+		c.JSON(200, gin.H{"available": true, "authenticated": user != nil, "user": result,
+			"recording_upload_protocol": "sealed-v1", "recording_read_available": readAvailable,
+			"recording_delete_available": readAvailable && (a.recordingAudioDirect != nil || a.recordingAudioDelete != nil),
+			"storage_available":          len(destinations) > 0, "recording_destinations": destinations})
+		return
+	}
 	pool, err := a.public.media.StoragePool(c.Request.Context())
 	if err != nil {
 		mediaAdminError(c, err)
@@ -186,10 +224,6 @@ func (a *KaraokeAccounts) status(c *gin.Context) {
 				break
 			}
 		}
-	}
-	var result any
-	if user != nil {
-		result = userJSON(*user)
 	}
 	c.JSON(200, gin.H{"available": true, "authenticated": user != nil, "user": result, "storage_available": storage})
 }
@@ -235,7 +269,7 @@ func (a *KaraokeAccounts) deleteAccount(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_, complete, err := a.service.DeleteUser(c.Request.Context(), user.ID, a.info(c), "")
+	_, complete, err := a.service.DeleteUser(c.Request.Context(), user.ID, a.info(c), "", user)
 	if err != nil {
 		karaokeError(c, err)
 		return
@@ -279,7 +313,8 @@ func (a *KaraokeAccounts) listUsers(c *gin.Context) {
 		entry["created_at"] = v.CreatedAt
 		items = append(items, entry)
 	}
-	c.JSON(200, gin.H{"items": items, "pagination": gin.H{"page": result.Page, "pages": result.Pages, "total": result.Total}})
+	c.JSON(200, gin.H{"items": items, "recordings_cleanup_required": a.recordingAudioDirect != nil,
+		"pagination": gin.H{"page": result.Page, "pages": result.Pages, "total": result.Total}})
 }
 func (a *KaraokeAccounts) mutateUser(c *gin.Context) {
 	var body struct {
@@ -299,7 +334,7 @@ func (a *KaraokeAccounts) mutateUser(c *gin.Context) {
 	}
 	id, actor := c.Param("user"), session(c).Hash
 	if body.Action == "delete" {
-		found, complete, err := a.service.DeleteUser(c.Request.Context(), id, a.info(c), actor)
+		found, complete, err := a.service.DeleteUser(c.Request.Context(), id, a.info(c), actor, nil)
 		if err != nil {
 			karaokeError(c, err)
 			return

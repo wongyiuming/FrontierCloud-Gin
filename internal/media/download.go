@@ -38,6 +38,9 @@ func (d *Download) RequiresBrowserSource() bool {
 }
 
 func (s *Service) Download(ctx context.Context, paths []string) (*Download, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
 		return nil, err
@@ -77,12 +80,13 @@ func (s *Service) Download(ctx context.Context, paths []string) (*Download, erro
 				return fail(os.ErrNotExist)
 			}
 			for _, row := range rows {
-				if _, _, err := s.resolveGlobal(ctx, row.ID, row.Path); err != nil {
+				resolved, _, err := s.resolveGlobal(ctx, row.ID, row.Path)
+				if err != nil {
 					return fail(err)
 				}
-				if !globalSeen[row.ID] {
-					globalSeen[row.ID] = true
-					value.globals = append(value.globals, row)
+				if !globalSeen[resolved.ID] {
+					globalSeen[resolved.ID] = true
+					value.globals = append(value.globals, resolved)
 				}
 			}
 			if !seen[name] {

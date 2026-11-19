@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"io"
 	"log/slog"
@@ -54,7 +55,7 @@ func (s *Stage) Close() {
 		}
 		if !s.retain {
 			if err := s.service.root.Remove(s.name); err != nil && !errors.Is(err, os.ErrNotExist) {
-				slog.Error("upload stage cleanup deferred", "operation", s.id, "error", err)
+				slog.Error("upload stage cleanup deferred", "operation", s.id, "error_type", logsafe.ErrorType(err))
 			}
 		}
 	})
@@ -75,6 +76,14 @@ func (s *Service) Stage(ctx context.Context, reader io.Reader, maximum int64) (*
 }
 
 func (s *Service) stage(ctx context.Context, reader io.Reader, maximum int64, prepare func(*Stage) error) (*Stage, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -339,7 +348,10 @@ func limited(value string, maximum int) string {
 	return string(runes)
 }
 
-func (s *Service) writeUploadJournal(journal uploadJournal) error {
+func (s *Service) writeUploadJournal(ctx context.Context, journal uploadJournal) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	data, err := json.Marshal(journal)
 	if err != nil {
 		return err
@@ -368,6 +380,9 @@ func (s *Service) writeUploadJournal(journal uploadJournal) error {
 }
 
 func (s *Service) finishUpload(ctx context.Context, journal uploadJournal) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if journal.Object.Encryption != nil && (journal.Object.Encryption.Validate() != nil || journal.Object.Encryption.CiphertextSize != journal.Bytes) {
 		return ErrRecovery
 	}
@@ -462,7 +477,7 @@ func (s *Service) finishUpload(ctx context.Context, journal uploadJournal) error
 		return err
 	}
 	if err := s.root.Remove(stageName); err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Error("completed upload stage cleanup deferred", "operation", journal.ID, "error", err)
+		slog.Error("completed upload stage cleanup deferred", "operation", journal.ID, "error_type", logsafe.ErrorType(err))
 	}
 	return nil
 }
@@ -565,7 +580,7 @@ func (s *Service) PublishEncrypted(ctx context.Context, stage *Stage, filename, 
 	journal := uploadJournal{Format: "frontiercloud-local-upload", Version: 1, ID: stage.id, Object: object, Bytes: stage.Bytes, SHA256: stage.Digest, Audit: audit}
 	// Retain the staged bytes if durable intent or publication is uncertain.
 	stage.retain = true
-	if err := s.writeUploadJournal(journal); err != nil {
+	if err := s.writeUploadJournal(ctx, journal); err != nil {
 		s.markRecovery()
 		return "", fmt.Errorf("%w: %v", ErrRecovery, err)
 	}

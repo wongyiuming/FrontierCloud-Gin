@@ -125,7 +125,7 @@ func TestS3MigrationMySQLPartialDDLAndRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			s3Marker(t, db, 8)
+			s3Marker(t, db, migrations.Generation)
 			if err = schema.Initialize(context.Background(), db, "mysql"); err != nil {
 				t.Fatal("idempotent admission failed", err)
 			}
@@ -138,7 +138,7 @@ func TestS3MigrationMySQLPartialDDLAndRecovery(t *testing.T) {
 			if err = db.QueryRow("SELECT m.media_path,s.play_score,s.preference FROM media_objects m JOIN media_playback_stats s ON s.media_id=m.media_id WHERE m.media_id='historical'").Scan(&path, &score, &preference); err != nil || path != "music/old.mp3" || score != 17 || preference != 500000 {
 				t.Fatal("historical facts changed", path, score, preference, err)
 			}
-			if _, err = db.Exec("UPDATE frontiercloud_schema SET generation=9"); err != nil {
+			if _, err = db.Exec("UPDATE frontiercloud_schema SET generation=?", migrations.Generation+1); err != nil {
 				t.Fatal(err)
 			}
 			if err = schema.Initialize(context.Background(), db, "mysql"); err == nil {

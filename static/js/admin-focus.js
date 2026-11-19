@@ -2,7 +2,7 @@
     const MODULE_ORDER = [
         'media', 'priority', 'lyrics', 'users',
         'security', 'network',
-        'nodes', 'migrations', 'site', 'key', 'brand',
+        'nodes', 'nodeRouting', 'nodeBackups', 'nodeSettings', 'migrations', 'logs', 'site', 'key', 'brand',
     ];
     const MODULE_RANK = new Map(MODULE_ORDER.map((name, index) => [name, index]));
     const consoleRoot = document.querySelector('.admin-console');

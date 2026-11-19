@@ -8,6 +8,10 @@ import (
 
 var capabilityName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
+const PublicIngressProxyCapability = "public-ingress-proxy-v1"
+const NativePlainProofCapability = "native-plain-proof-v4"
+const NativeOpaqueProofCapability = "native-opaque-proof-v5"
+
 // BaselineCapabilities names only the established protocol-v2 operations.
 // It does not advertise unfinished restore, release-manifest or worker features.
 func BaselineCapabilities() []string {
@@ -18,7 +22,7 @@ func BaselineCapabilities() []string {
 // Keep it separate from the legacy fallback: a missing capability field must
 // never authorize migration on a peer that predates the migration protocol.
 func AdvertisedCapabilities() []string {
-	return []string{"backup-v2", "media-v2", "node-auth-v2", "recordings-v2", "resource-migration-direct-v1", "storage-v2"}
+	return []string{"backup-v2", "media-v2", "native-transport-apply-v1", "node-auth-v2", "recordings-v2", "resource-migration-direct-v1", "storage-v2"}
 }
 
 // ReadCapabilities is called only after authenticating a protocol-v2 peer.

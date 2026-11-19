@@ -5,9 +5,10 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
-const Generation = 8
+const Generation = 13
 const JournalName = "create-schema-migration-journal"
 const JournalChecksum = "aee46be69d8c5b005cbee58ebfd37feb41d3431eb1fb23bb8339c9076147c03e"
 
@@ -61,3 +62,128 @@ const S3Name = "master-owned-s3-durable-multipart"
 // SHA256 of "sqlite\n" + additive SQLite DDL + "\nmysql\n" + additive MySQL
 // DDL, joining each backend's generation-8 statements by one newline.
 const S3Checksum = "fd063b0ff95182337eb1418efc844705d90bf703880d1b274e6b215b4001a943"
+
+// PublicRoutingChecksum binds the additive SQLite and MySQL generation-9 DDL.
+const PublicRoutingName = "public-ingress-native-transport-model"
+const PublicRoutingChecksum = "fdad1ca9bc242de1147fadddc493cff77e0f450ac937a78cc845a4cbfe92fada"
+
+// SealedTreeChecksum covers the exact additive backend DDL. These tables do
+// not activate encrypted-tree operation or migrate any historical data.
+const SealedTreeName = "master-sealed-tree-dormant-storage"
+const SealedTreeChecksum = "a24a35d6d903f481dcb9e8302dea193cc92c01b01ba59b3377e9547203972ca7"
+
+const LegacyReadIntentName = "legacy-read-control-intents"
+const LegacyReadIntentChecksum = "4c95fabb7c86ad07a4f398fd7a39a0c9a84b75bd387e73735b5692d2e00b3036"
+
+// Generation 12 reserves opaque, authenticated state for selected uploads,
+// S3 multipart uploads and recordings. Schema alone opens no endpoint.
+const SelectedUploadIntentName = "selected-upload-encrypted-intents"
+const SelectedUploadIntentChecksum = "48544c3dd8556a1908eb63b512521416f27f10e8f48527b491bbc95e1e353688"
+
+// Generation 13 adds the sealed native migration task, unit and object
+// journals while retaining the common migration queue and capacity tables.
+const OpaqueMigrationName = "sealed-native-migration-ledger"
+const OpaqueMigrationChecksum = "62d740dc8614a698c8b6f06fe42e477da5d17bec600b21a9a694f9d8b12afad1"
+
+func OpaqueMigrationStatements(backend string) ([]string, error) {
+	all, err := Statements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS opaque_migration_") ||
+			strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_opaque_migration_") ||
+			strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_opaque_migration_") {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}
+
+func SelectedUploadIntentStatements(backend string) ([]string, error) {
+	all, err := Statements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS selected_upload_intents") || strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS selected_upload_parent_scopes") || strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS selected_upload_cancellations") || strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_selected_upload_") || strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_selected_upload_") || IsSelectedS3Statement(statement) || isRecordingAudioStatement(statement) {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}
+
+func isRecordingAudioStatement(statement string) bool {
+	return strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS sealed_recording_audio ") ||
+		strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_sealed_recording_audio_")
+}
+
+func RecordingAudioStatements(backend string) ([]string, error) {
+	all, err := Statements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if isRecordingAudioStatement(statement) {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}
+
+// IsSelectedS3Statement identifies the S3 multipart journals within generation 12.
+func IsSelectedS3Statement(statement string) bool {
+	return strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS selected_s3_") ||
+		strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_selected_s3_") ||
+		strings.HasPrefix(statement, "CREATE INDEX IF NOT EXISTS idx_selected_s3_")
+}
+
+func SelectedS3Statements(backend string) ([]string, error) {
+	all, err := SelectedUploadIntentStatements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if IsSelectedS3Statement(statement) {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}
+
+// LegacyReadIntentStatements is the generation-11 addition only. It must not
+// change the independently checksummed generation-10 sealed tree DDL.
+func LegacyReadIntentStatements(backend string) ([]string, error) {
+	all, err := Statements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS legacy_read_control_intents") || strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_legacy_read_control_") {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}
+
+// SealedTreeStatements returns only additive encrypted-tree DDL from the
+// canonical current snapshot. Callers must not infer migration readiness from
+// table existence: legacy paths and physical layouts can still be plaintext.
+func SealedTreeStatements(backend string) ([]string, error) {
+	all, err := Statements(backend)
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, statement := range all {
+		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS sealed_tree_") || strings.HasPrefix(statement, "CREATE UNIQUE INDEX IF NOT EXISTS uq_st_") {
+			result = append(result, statement)
+		}
+	}
+	return result, nil
+}

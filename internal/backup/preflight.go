@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -75,7 +76,7 @@ func Preflight(ctx context.Context, reader io.Reader, expected Expectation, dire
 			result = Report{}
 		}
 	}()
-	if reader == nil || directory == "" || expected.Generation <= 0 || !hexID(expected.Checksum, 64) || expected.Bytes <= 0 || expected.Bytes > int64(store.MaxBackupChunkIndex+1)*store.MaxBackupChunk {
+	if directory == "" || !validBackupInput(reader, expected) {
 		return Report{}, store.ErrBackupState
 	}
 	if err := ctx.Err(); err != nil {
@@ -142,6 +143,16 @@ func Preflight(ctx context.Context, reader io.Reader, expected Expectation, dire
 			return Report{}, err
 		}
 	}
+	return stageBackup(ctx, raw, reader, expected)
+}
+
+func validBackupInput(reader io.Reader, expected Expectation) bool {
+	return reader != nil && expected.Generation > 0 && hexID(expected.Checksum, 64) && expected.Bytes > 0 && expected.Bytes <= int64(store.MaxBackupChunkIndex+1)*store.MaxBackupChunk
+}
+
+// stageBackup validates the complete artifact before committing any staged rows.
+// Its database is disposable and must never be the authoritative store.
+func stageBackup(ctx context.Context, raw *sql.DB, reader io.Reader, expected Expectation) (Report, error) {
 	statements, err := migrations.Statements("sqlite")
 	if err != nil {
 		return Report{}, err

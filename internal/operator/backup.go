@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,8 +17,17 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
 
+const adminKeyArchivePath = "runtime_secrets/admin_key"
+
 type StreamRunner interface {
 	RunTo(context.Context, io.Writer, string, ...string) error
+}
+
+// treeDuplexRunner is used only by the future lease-held tree capture. The
+// caller must enforce a deadline and prove/clean the exact container after
+// cancellation; loss of the Docker CLI alone does not prove container exit.
+type treeDuplexRunner interface {
+	RunDuplex(context.Context, string, []string, func(io.WriteCloser, *bufio.Reader) error) error
 }
 
 func (d *Deployment) runtimeFact(ctx context.Context) (RuntimeFact, error) {
@@ -137,6 +147,7 @@ func (d *Deployment) backupLocked(ctx context.Context, receipt Receipt, output s
 func (d *Deployment) backupSetLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool) (recovery.Report, error) {
 	return d.backupScopeLocked(ctx, receipt, output, freeze, externalWritersStopped, set, held, "deployment", false)
 }
+
 func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, output string, freeze, externalWritersStopped bool, set string, held bool, scope string, ordinary bool) (recovery.Report, error) {
 	var empty recovery.Report
 	cfg, e := d.ValidateReceipt(ctx, receipt)
@@ -214,6 +225,12 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		if e != nil {
 			return e
 		}
+		// A populated tree is a distinct recovery blocker, even if all other
+		// native activity is idle. Do not turn the v2 archive primitive into an
+		// operator backup until its full lifecycle and Owner checks are wired.
+		if fact.Database.Pending["sealed_tree_unrecoverable"] > 0 {
+			return errors.New("encrypted tree backup is not enabled; maintenance remains in effect")
+		}
 		if !fact.NativeMaintenance || !fact.Database.LogicalIdle || !recovery.SupportedSchemaGeneration(fact.Database.SchemaGeneration) {
 			return errors.New("backup requires matching operator/schema generation, native maintenance and no unfinished resource transactions")
 		}
@@ -272,6 +289,9 @@ func (d *Deployment) backupScopeLocked(ctx context.Context, receipt Receipt, out
 		}
 		sources := []recovery.Root{{Class: "data", Directory: data, IncludePaths: selection}, {Class: "deployment", Directory: deployment}}
 		m := recovery.Manifest{NodeID: fact.NodeID, Role: fact.Role, Revision: receipt.Revision, Database: receipt.Database, Consistency: "native-offline-and-deployment-writers-stopped", Missing: []string{}, KeyReferences: []string{"runtime_secrets/node-vault.key"}}
+		if receipt.Role == "master" {
+			m.KeyReferences = append(m.KeyReferences, adminKeyArchivePath)
+		}
 		m.Scope = scope
 		if _, keyErr := os.Lstat(filepath.Join(data, "media-keys", "media-premaster.key")); keyErr == nil {
 			m.KeyReferences = append(m.KeyReferences, "data/media-keys/media-premaster.key")

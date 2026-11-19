@@ -108,6 +108,15 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		if w := perform("GET", "/nodes/observability", "", false, true); w.Code != 401 {
 			t.Fatal("anonymous observations", w.Code)
 		}
+		if w := perform("GET", "/nodes/public-routing", "", false, true); w.Code != 401 {
+			t.Fatal("anonymous public routing", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/candidates/invalid/check", `{}`, false, true); w.Code != 401 {
+			t.Fatal("anonymous candidate check", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/select", `{"member_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}`, false, true); w.Code != 401 {
+			t.Fatal("anonymous ingress selection", w.Code)
+		}
 		if w := perform("GET", "/playback-continuity-diagnostics", "", false, true); w.Code != 401 {
 			t.Fatal("anonymous diagnostics", w.Code)
 		}
@@ -125,6 +134,18 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 		}
 		if w := perform("POST", "/nodes/member/certificate", `{"action":"download"}`, false, true); w.Code != 403 {
 			t.Fatal("certificate download without CSRF", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/candidates/invalid/check", `{}`, false, true); w.Code != 403 {
+			t.Fatal("candidate check without CSRF", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/candidates/invalid/check", `{}`, true, true); w.Code != 409 {
+			t.Fatal("invalid candidate check", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/select", `{"member_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}`, false, true); w.Code != 403 {
+			t.Fatal("ingress selection without CSRF", w.Code)
+		}
+		if w := perform("POST", "/nodes/public-routing/select", `{"member_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":1}`, true, true); w.Code != 409 {
+			t.Fatal("closed selection gate", w.Code)
 		}
 		for _, path := range []string{"/docs", "/redoc", "/openapi.json"} {
 			r := httptest.NewRequest("GET", origin+path, nil)
@@ -263,12 +284,36 @@ func TestNodeAdminRedisPromotionPairConfigurationRevocationAndReinitialize(t *te
 			}
 		}
 	}
-	check(m.perform("POST", "/nodes/"+relation+"/mode", `{"mode":"Direct"}`, true, true), 200)
+	// The legacy mode endpoint cannot commit a changed route ahead of peer
+	// application.  No-op requests remain compatible with older clients.
+	check(m.perform("POST", "/nodes/"+relation+"/mode", `{"mode":"`+masterRelation.Mode+`"}`, true, true), 200)
+	otherMode := "Direct"
+	if masterRelation.Mode == otherMode {
+		otherMode = "Relay"
+	}
+	check(m.perform("POST", "/nodes/"+relation+"/mode", `{"mode":"`+otherMode+`"}`, true, true), 409)
+	unchanged, err := m.db.Nodes().Relationship(ctx, relation)
+	if err != nil || unchanged.Mode != masterRelation.Mode {
+		t.Fatal("legacy endpoint changed the route without peer acknowledgment", unchanged, err)
+	}
 	check(m.perform("POST", "/nodes/"+relation+"/resources", `{"storage_enabled":true,"storage_capacity_gib":2,"backup_enabled":true}`, true, true), 200)
 	row, err := m.control.IdentityState(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	routing := check(m.perform("GET", "/nodes/public-routing", "", false, true), 200)
+	ingress := routing["ingress"].(map[string]any)
+	if ingress["node_id"] != row.ID || ingress["public_origin"] != "https://admin-master.test" {
+		t.Fatal("default ingress", ingress)
+	}
+	policyPath := "/nodes/public-routing/transport/" + row.ID
+	check(m.perform("POST", policyPath, `{"configured_transport":"Relay","revision":0}`, false, true), 403)
+	check(m.perform("POST", policyPath, `{"configured_transport":"Relay","revision":0}`, true, false), 403)
+	policy := check(m.perform("POST", policyPath, `{"configured_transport":"Relay","revision":0}`, true, true), 200)
+	if policy["configured_transport"] != "Relay" || policy["effective_transport"] != "Local" || policy["state"] != "retained" {
+		t.Fatal("retained Master policy", policy)
+	}
+	check(m.perform("POST", policyPath, `{"configured_transport":"Direct","revision":0}`, true, true), 409)
 	check(m.perform("POST", "/nodes/"+row.ID+"/resources", `{"storage_enabled":false,"storage_capacity_gib":0}`, true, true), 409)
 	status := check(m.perform("GET", "/nodes", "", false, true), 200)
 	relations := status["relationships"].([]any)

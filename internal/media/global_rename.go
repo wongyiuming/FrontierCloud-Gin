@@ -19,6 +19,9 @@ import (
 // A SQL intent fences both directory names before any owner is contacted. We
 // roll forward rather than guessing whether an offline owner needs rollback.
 func (s *Service) RenameGlobal(ctx context.Context, old, target string, a store.AdminAudit) (RenameResult, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return RenameResult{}, err
+	}
 	if err := s.requireMaster(ctx); err != nil {
 		return RenameResult{}, err
 	}
@@ -71,6 +74,9 @@ func (s *Service) prepareGlobalRename(ctx context.Context, old, target string, a
 func globalRenameMarker(id string) string { return ".global-rename-" + id + ".marker" }
 
 func (s *Service) retryGlobalRename(ctx context.Context, op store.GlobalRenameOperation) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if !operationID.MatchString(op.ID) {
 		return ErrPath
 	}
@@ -354,6 +360,9 @@ func (s *Service) cleanGlobalRenameMarker(ctx context.Context, op store.GlobalRe
 }
 
 func (s *Service) RetryGlobalRenames(ctx context.Context) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.nodes == nil || s.pool == nil {
 		return nil
 	}

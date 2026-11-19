@@ -16,7 +16,12 @@ func (r *Repository) CompleteMasterUpload(ctx context.Context, operation string,
 	if !nodeIDPattern.MatchString(operation) || !nodeHashPattern.MatchString(o.ID) || !poolPath(store.LocalMedia{MediaObject: o, Bytes: size, ETag: etag}) || size <= 0 || free < 0 || etag == "" || strings.ContainsAny(etag, "\r\n\x00") {
 		return nodeConflict("invalid Master upload publication")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.heldOwnerWrite(ctx, func(q queryer) error {
+		// This legacy writer cannot maintain the encrypted tree. A durable root
+		// therefore blocks it even when the caller owns the correct owner fence.
+		if err := legacyTreeAbsent(ctx, q); err != nil {
+			return store.ErrNodeState
+		}
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {
 			return err

@@ -38,6 +38,10 @@ func TestEncryptedPreparePlaintextLimitMatchesLocalAndMasterUpload(t *testing.T)
 					t.Fatal(err)
 				}
 			}
+			identity, err := db.Nodes().ReadIdentity(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
 			resolver, err := network.New(nil)
 			if err != nil {
 				t.Fatal(err)
@@ -63,7 +67,11 @@ func TestEncryptedPreparePlaintextLimitMatchesLocalAndMasterUpload(t *testing.T)
 				if err != nil {
 					t.Fatal(err)
 				}
-				return request(router, "POST", "/size-admin/"+route, string(encoded))
+				req := httptest.NewRequest("POST", "https://master.test/size-admin/"+route, bytes.NewReader(encoded))
+				req.Header.Set("Content-Type", "application/json")
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+				return rec
 			}
 			client, err := ecdh.P256().GenerateKey(rand.Reader)
 			if err != nil {
@@ -73,6 +81,12 @@ func TestEncryptedPreparePlaintextLimitMatchesLocalAndMasterUpload(t *testing.T)
 			var session mediacrypto.SessionGrant
 			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &session) != nil {
 				t.Fatal(response.Code, response.Body.String())
+			}
+			if role == "Master" {
+				response = post("reserve", gin.H{"storage_member_id": identity.ID, "target_dir": "music/artist", "filename": "plain.mp3", "size_bytes": 10, "storage_mode": "plain"})
+				if response.Code != 400 {
+					t.Fatal("plaintext reservation accepted", response.Code, response.Body.String())
+				}
 			}
 			for _, cap := range []int64{64, mediacrypto.ChunkSize + 1} {
 				a.settings.AdminMaxUploadBytes = cap
@@ -139,7 +153,7 @@ func TestEncryptedPreparePlaintextLimitMatchesLocalAndMasterUpload(t *testing.T)
 						response = httptest.NewRecorder()
 						router.ServeHTTP(response, req)
 					} else {
-						response = post("reserve", gin.H{"site_type": "primary", "target_dir": "music/artist", "filename": filename, "size_bytes": len(encrypted), "storage_mode": "encrypted", "encryption": prep.Encryption, "preparation_token": prep.Token})
+						response = post("reserve", gin.H{"storage_member_id": identity.ID, "site_type": "primary", "target_dir": "music/artist", "filename": filename, "size_bytes": len(encrypted), "storage_mode": "encrypted", "encryption": prep.Encryption, "preparation_token": prep.Token})
 						var ticket media.UploadTicket
 						if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &ticket) != nil {
 							t.Fatal("ciphertext reservation rejected", response.Code, response.Body.String())

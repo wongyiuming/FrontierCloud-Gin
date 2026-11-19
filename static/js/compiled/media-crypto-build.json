@@ -51,24 +51,24 @@
   "files": [
     {
       "file": "media-crypto-common.js",
-      "source_sha256": "71d771e2f805858419cb1643d5291118e8bf355687f589caa93b82424761253b",
-      "compiled_sha256": "199689fda839526d4cfa064664065034b00afbc46443aca0fd4d60bd64525226",
-      "source_bytes": 6677,
-      "compiled_bytes": 7507
+      "source_sha256": "24b62fc5e604e2b6589a63bb6af2ce27ad0529d52c13d9dafc9ddea875374aea",
+      "compiled_sha256": "5ff1f1ce94e81f59e0be1b99a1d830daf6810b86b2bd0c0f7c17319d531ccbb3",
+      "source_bytes": 6992,
+      "compiled_bytes": 7686
     },
     {
       "file": "media-crypto.js",
-      "source_sha256": "908f51e779546e0c0a74ebe882b957c546e7e729d1a3339f789a1bb58492bb00",
-      "compiled_sha256": "b65e6b610b0eef69496614176bacc01ec6d24b864901b4aa7aaf8d20abfe81cc",
-      "source_bytes": 28253,
-      "compiled_bytes": 30923
+      "source_sha256": "fdec1672cf372b0d98dba37c814f79b22123505c0609ad087ef30c669b1e9d5a",
+      "compiled_sha256": "40ee557c3ea0f68247869088565f3347d7a394407efd22159058ea84cc0a2514",
+      "source_bytes": 64986,
+      "compiled_bytes": 68066
     },
     {
       "file": "media-crypto-sw.js",
-      "source_sha256": "f1358b1d38d5531376900da1c0fcfcd5a1f293fbffb7b8a8a3cc364b6f1897bc",
-      "compiled_sha256": "d2ecd0369db38e703eb6e2dff70bd8ad03b47436059f85a7397e895a11bcb416",
-      "source_bytes": 28738,
-      "compiled_bytes": 34365
+      "source_sha256": "2b13de70a5d0f18cf6c96bdb4183353d6227058c298a2c118b63c8f5f091eeb7",
+      "compiled_sha256": "b7cf3dde90e95fd0baadafee70c2ffe978a2a380200fc28f5757c271ad8f5150",
+      "source_bytes": 50860,
+      "compiled_bytes": 56757
     }
   ]
 }

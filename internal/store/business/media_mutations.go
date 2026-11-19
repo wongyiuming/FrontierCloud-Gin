@@ -14,7 +14,7 @@ func (r *Repository) SetPreference(ctx context.Context, o store.MediaObject, val
 	if value < store.PriorityMinimum || value > store.PriorityMaximum {
 		return result, errors.New("Preference must be between -7 and 500000")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if _, err := r.priorityIdentity(ctx, q); err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func escapeLike(value string) string {
 }
 
 func (r *Repository) SetHidden(ctx context.Context, paths []string, hide bool, audit store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		for _, path := range paths {
 			if hide {
 				query := "INSERT INTO media_visibility (relative_path,hidden,updated_at) VALUES (?,1,?)"

@@ -139,10 +139,22 @@ class AudioContinuousStreamContractTests(unittest.TestCase):
         self.assertIn("folder := path.Dir(name)", self.routing)
         self.assertIn("path.Dir(existing) == folder", self.routing)
         self.assertIn("v.ID != affinity", self.routing)
+        self.assertIn('selectedMember != "" && v.ID != selectedMember', self.routing)
         self.assertIn("no online writable member has enough capacity for this media folder", self.routing)
         self.assertIn("historical media folder is spread across multiple storage members", self.routing)
-        self.assertIn("ReserveMasterEncryptedUpload", self.upload)
+        self.assertIn(
+            "ReserveSelectedMasterUpload(c.Request.Context(), body.Filename, body.Target, body.Relative, memberID,",
+            self.upload,
+        )
         self.assertIn("mutationAudit", self.upload)
+
+        coordinator = (ROOT / "internal/store/business/selected_upload_coordinator.go").read_text(encoding="utf-8")
+        layout = (ROOT / "internal/sealedtree/coordinated_layout.go").read_text(encoding="utf-8")
+        self.assertIn("PreflightCategoryAndOwner(ctx, entry.ParentID, placement.OwnerID)", coordinator)
+        self.assertIn("ConsumeCategoryOwnerPreflightTx(c, q, proof, entry.ParentID, placement.OwnerID)", coordinator)
+        self.assertIn("MemberID: pending.Placement.OwnerID", coordinator)
+        self.assertIn("entry.ParentID != parentID", layout)
+        self.assertIn("placement.OwnerID != ownerID", layout)
 
 
 if __name__ == "__main__":

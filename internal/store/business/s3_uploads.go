@@ -24,10 +24,29 @@ func (r *Repository) reserveS3(ctx context.Context, q queryer, reservation store
 	if member.CleanupOnly || member.Enabled == 0 || member.ProbeState != "ready" || member.ProbeRevision != member.Revision {
 		return nodeConflict("S3 member no longer admits placement")
 	}
+	// Generate the physical key independently from paths, business IDs and
+	// upload IDs. Persist it with the reservation before contacting S3 so every
+	// recovery or retry continues using the exact same provider key.
+	physicalID, err := randomID()
+	if err != nil {
+		return err
+	}
+	key := "objects/" + physicalID[:2] + "/" + physicalID[2:4] + "/" + physicalID + ".blob"
+	owner, err := randomID()
+	if err != nil {
+		return err
+	}
+	if !store.ValidS3MetadataIdentity(store.S3OpaqueMetadata, key, owner, reservation.MediaID, reservation.MediaID) {
+		return nodeConflict("S3 random ownership identity collision")
+	}
+	initialProof, err := json.Marshal(store.S3ObjectProof{MetadataFormat: store.S3OpaqueMetadata, MetadataOwner: owner})
+	if err != nil {
+		return err
+	}
 	now := time.Now().Unix()
-	_, err = q.ExecContext(ctx, "INSERT INTO s3_uploads("+s3UploadColumns+") VALUES (?,?,?,?,'','reserved',1,?,0,0,?,0,'{}','',?,?)",
-		reservation.ID, reservation.MemberID, "objects/"+reservation.MediaID+"/"+reservation.ID,
-		reservation.MediaID, member.CredentialRevision, now+store.S3AbsoluteSeconds, now, now)
+	_, err = q.ExecContext(ctx, "INSERT INTO s3_uploads("+s3UploadColumns+") VALUES (?,?,?,?,'','reserved',1,?,0,0,?,0,?,'',?,?)",
+		reservation.ID, reservation.MemberID, key,
+		reservation.MediaID, member.CredentialRevision, now+store.S3AbsoluteSeconds, string(initialProof), now, now)
 	return err
 }
 
@@ -56,7 +75,7 @@ func (r *Repository) s3Upload(ctx context.Context, q queryer, id, lock string) (
 		return
 	}
 	if v.Reservation.MemberID != memberID || v.Reservation.MediaID != v.ObjectID || v.Reservation.ExpectedBytes < 1 ||
-		v.Reservation.ExpectedBytes > store.S3MaxObjectBytes || len(raw) > 16384 || json.Unmarshal([]byte(raw), &v.Proof) != nil {
+		v.Reservation.ExpectedBytes > store.S3MaxObjectBytes || len(raw) > 16384 || json.Unmarshal([]byte(raw), &v.Proof) != nil || !store.ValidS3MetadataIdentity(v.Proof.MetadataFormat, v.Key, v.Proof.MetadataOwner, v.Reservation.MediaID, v.ObjectID) {
 		return v, nodeConflict("S3 upload journal binding is inconsistent")
 	}
 	member, err := r.s3Member(ctx, q, memberID, lock)
@@ -163,7 +182,7 @@ func (r *Repository) s3WritableUpload(ctx context.Context, q queryer, v store.S3
 }
 
 func (r *Repository) S3StartCreate(ctx context.Context, id string, revision int64) (result store.S3Upload, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -193,7 +212,7 @@ func (r *Repository) S3FinishCreate(ctx context.Context, id string, revision int
 	if !s3Opaque(providerID, 2048) || !s3Code(code) || outcome != "created" && outcome != "rejected" && outcome != "unknown" || outcome == "created" && providerID == "" || outcome == "rejected" && providerID != "" {
 		return result, nodeConflict("invalid S3 creation outcome")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -264,7 +283,7 @@ func (r *Repository) S3IssuePart(ctx context.Context, id string, number int, che
 	if !s3SHA(checksum) {
 		return result, nodeConflict("S3 part requires canonical SHA256")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -324,7 +343,7 @@ func (r *Repository) S3ConfirmPart(ctx context.Context, id string, proof store.S
 	if !s3SHA(proof.SHA256) || proof.ETag == "" || !s3Opaque(proof.ETag, 128) {
 		return result, nodeConflict("invalid S3 confirmed part proof")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -369,7 +388,7 @@ func (r *Repository) S3ConfirmPart(ctx context.Context, id string, proof store.S
 }
 
 func (r *Repository) S3TouchUpload(ctx context.Context, id string) (result store.S3Upload, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -412,7 +431,7 @@ func s3Composite(v store.S3Upload) (string, error) {
 }
 
 func (r *Repository) S3StartComplete(ctx context.Context, id string, revision int64) (result store.S3Upload, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -443,7 +462,7 @@ func (r *Repository) S3StartComplete(ctx context.Context, id string, revision in
 }
 
 func (r *Repository) S3FinalizeUpload(ctx context.Context, id string, revision int64, proof store.S3ObjectProof, a store.AdminAudit) (result store.GlobalMedia, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -468,7 +487,7 @@ func (r *Repository) S3FinalizeUpload(ctx context.Context, id string, revision i
 		if err != nil {
 			return err
 		}
-		if proof.Key != v.Key || proof.SessionID != id || proof.ObjectID != v.ObjectID || proof.MemberID != v.Reservation.MemberID ||
+		if proof.MetadataFormat != v.Proof.MetadataFormat || proof.MetadataOwner != v.Proof.MetadataOwner || proof.Key != v.Key || proof.SessionID != id || proof.ObjectID != v.ObjectID || proof.MemberID != v.Reservation.MemberID ||
 			proof.MediaID != v.Reservation.MediaID || proof.Bytes != v.Reservation.ExpectedBytes || proof.CompositeSHA256 != composite ||
 			proof.ETag == "" || !s3Opaque(proof.ETag, 128) || !s3Opaque(proof.VersionID, 1024) {
 			return nodeConflict("S3 object proof does not match its durable session and part proofs")
@@ -495,7 +514,7 @@ func (r *Repository) S3RecordUploadError(ctx context.Context, id string, revisio
 	if !s3Code(code) {
 		return nodeConflict("invalid S3 recovery error code")
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}

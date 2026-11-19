@@ -44,6 +44,10 @@ type Config struct {
 	SecretsDirectory       string
 	ServerName             string
 	PublicOrigin           string
+	AdminOrigin            string
+	MasterResourceOrigin   string
+	FollowerResourceOrigin string
+	FollowerIngressOrigin  string
 	TLSEnabled             bool
 	NginxMedia             bool
 	STUNPort               int
@@ -59,12 +63,15 @@ type Config struct {
 	AdminMaxFilenameLength int
 	AdminUploadInactivity  int
 	TrustedProxyNetworks   []string
-	SecurityExemptNetworks []string
-	SecurityInvalidLimit   int
-	SecurityInvalidWindow  int
-	SecurityContact        string
-	LogLevel               string
-	LogFormat              string
+	// Separate from the general gateway trust: empty means no TLS terminator
+	// may attest HTTPS for the public-ingress peer protocol.
+	PublicIngressTrustedProxyNetworks []string
+	SecurityExemptNetworks            []string
+	SecurityInvalidLimit              int
+	SecurityInvalidWindow             int
+	SecurityContact                   string
+	LogLevel                          string
+	LogFormat                         string
 }
 
 // Load reads configuration from the process environment.
@@ -170,6 +177,32 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	adminConfig := value
+	adminRaw := strings.TrimSpace(getenv("ADMIN_ORIGIN"))
+	if adminRaw != "" {
+		adminURL, parseErr := url.Parse(adminRaw)
+		if parseErr != nil || adminURL == nil {
+			return Config{}, errors.New("ADMIN_ORIGIN must be a valid origin")
+		}
+		adminConfig.ServerName, err = certificate.NormalizeSubject(adminURL.Hostname())
+		if err != nil {
+			return Config{}, errors.New("ADMIN_ORIGIN must use a valid hostname")
+		}
+	}
+	value.AdminOrigin, err = publicOrigin(adminConfig, func(name string) string {
+		if name == "PUBLIC_ORIGIN" {
+			return getenv("ADMIN_ORIGIN")
+		}
+		return getenv(name)
+	})
+	if err != nil {
+		return Config{}, fmt.Errorf("ADMIN_ORIGIN: %w", err)
+	}
+	// Direct resource addressing is independent of the control endpoint. An
+	// empty value leaves the reader disabled; runtime validates explicit URLs.
+	value.MasterResourceOrigin = strings.TrimSpace(getenv("MASTER_RESOURCE_ORIGIN"))
+	value.FollowerResourceOrigin = strings.TrimSpace(getenv("FOLLOWER_RESOURCE_ORIGIN"))
+	value.FollowerIngressOrigin = strings.TrimSpace(getenv("FOLLOWER_INGRESS_ORIGIN"))
 	if value.SQLitePath == ":memory:" {
 		return Config{}, errors.New("SQLITE_PATH must name a persistent database file")
 	}
@@ -217,6 +250,9 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("invalid ADMIN_UPLOAD_INACTIVITY_TIMEOUT")
 	}
 	value.TrustedProxyNetworks = strings.Split(fallback(getenv("TRUSTED_PROXY_NETWORKS"), "172.16.0.0/12"), ",")
+	if raw := strings.TrimSpace(getenv("PUBLIC_INGRESS_TRUSTED_PROXY_NETWORKS")); raw != "" {
+		value.PublicIngressTrustedProxyNetworks = strings.Split(raw, ",")
+	}
 	for _, p := range []*string{&value.DataRoot, &value.StaticRoot, &value.SecretsDirectory} {
 		absolute, err := filepath.Abs(*p)
 		if err != nil {

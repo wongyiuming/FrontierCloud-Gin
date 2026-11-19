@@ -156,7 +156,7 @@ func (s *Service) ownedUpload(ctx context.Context, relationship string, object s
 	}
 	journal := uploadJournal{Format: "frontiercloud-owned-upload", Version: 1, ID: stage.id, Object: object, Bytes: expected, SHA256: stage.Digest, NodeAudit: a}
 	stage.retain = true
-	if err = s.writeUploadJournal(journal); err == nil {
+	if err = s.writeUploadJournal(ctx, journal); err == nil {
 		err = s.finishUpload(ctx, journal)
 	}
 	if err != nil {

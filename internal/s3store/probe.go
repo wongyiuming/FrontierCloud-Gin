@@ -125,18 +125,41 @@ func (c *Client) TestKeyWithCheckpoint(ctx context.Context, origin, relativeProb
 }
 
 func (c *Client) testKey(ctx context.Context, origin, relativeProbeKey string, checkpoint func(string) error) (report TestReport, result error) {
+	return c.testKeyOrigins(ctx, []string{origin}, relativeProbeKey, checkpoint)
+}
+
+// TestKeyWithCheckpointOrigins validates one or two distinct trusted browser
+// origins without creating an extra unjournaled provider object.
+func (c *Client) TestKeyWithCheckpointOrigins(ctx context.Context, origins []string, relativeProbeKey string, checkpoint func(string) error) (TestReport, error) {
+	if checkpoint == nil {
+		return TestReport{ProbeKey: relativeProbeKey, NoMutation: true}, ErrConfig
+	}
+	return c.testKeyOrigins(ctx, origins, relativeProbeKey, checkpoint)
+}
+
+func (c *Client) testKeyOrigins(ctx context.Context, origins []string, relativeProbeKey string, checkpoint func(string) error) (report TestReport, result error) {
 	report.NoMutation = true
 	report.ProbeKey = relativeProbeKey
-	origin, err := normalizeEndpoint(origin)
-	if err != nil {
+	if len(origins) < 1 || len(origins) > 2 {
 		return report, ErrConfig
+	}
+	checkedOrigins := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		canonical, e := normalizeEndpoint(origin)
+		if e != nil {
+			return report, ErrConfig
+		}
+		if len(checkedOrigins) == 0 || checkedOrigins[0] != canonical {
+			checkedOrigins = append(checkedOrigins, canonical)
+		}
 	}
 	if !strings.HasPrefix(relativeProbeKey, "probes/") {
 		return report, ErrConfig
 	}
-	if _, err = c.key(relativeProbeKey); err != nil {
+	if _, err := c.key(relativeProbeKey); err != nil {
 		return report, err
 	}
+	var err error
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	metadata := map[string]string{"fc-probe": relativeProbeKey}
@@ -205,20 +228,23 @@ func (c *Client) testKey(ctx context.Context, origin, relativeProbeKey string, c
 			requested = append(requested, name)
 		}
 	}
-	if err = c.preflight(ctx, grant.URL, origin, http.MethodPut, requested); err != nil {
-		return report, err
-	}
-	uploaded, err := c.doGrant(ctx, http.MethodPut, grant, payload, http.Header{"Origin": {origin}})
-	if err != nil {
-		return report, err
-	}
-	etag := uploaded.Header.Get("ETag")
-	uploaded.Body.Close()
-	if uploaded.StatusCode != http.StatusOK || !validETag(etag) || uploaded.Header.Get("X-Amz-Checksum-Sha256") != checksum || !originAllowed(uploaded.Header, origin) {
-		return report, ErrResponse
-	}
-	if !headersExposed(uploaded.Header, "etag", "x-amz-checksum-sha256") {
-		return report, ErrCORS
+	var etag string
+	for _, origin := range checkedOrigins {
+		if err = c.preflight(ctx, grant.URL, origin, http.MethodPut, requested); err != nil {
+			return report, err
+		}
+		uploaded, e := c.doGrant(ctx, http.MethodPut, grant, payload, http.Header{"Origin": {origin}})
+		if e != nil {
+			return report, e
+		}
+		etag = uploaded.Header.Get("ETag")
+		uploaded.Body.Close()
+		if uploaded.StatusCode != http.StatusOK || !validETag(etag) || uploaded.Header.Get("X-Amz-Checksum-Sha256") != checksum || !originAllowed(uploaded.Header, origin) {
+			return report, ErrResponse
+		}
+		if !headersExposed(uploaded.Header, "etag", "x-amz-checksum-sha256") {
+			return report, ErrCORS
+		}
 	}
 	report.Write = true
 	parts, err := c.ListParts(ctx, report.ProbeKey, report.UploadID)
@@ -249,60 +275,63 @@ func (c *Client) testKey(ctx context.Context, origin, relativeProbeKey string, c
 			headHeaders = append(headHeaders, strings.ToLower(name))
 		}
 	}
-	if err = c.preflight(ctx, head.URL, origin, http.MethodHead, headHeaders); err != nil {
-		return report, err
-	}
-	headed, err := c.doGrant(ctx, http.MethodHead, head, nil, http.Header{"Origin": {origin}})
-	if err != nil {
-		return report, err
-	}
-	headed.Body.Close()
-	if headed.StatusCode != http.StatusOK || headed.ContentLength != proof.Size || headed.Header.Get("ETag") != proof.ETag || headed.Header.Get("X-Amz-Checksum-Sha256") != proof.ChecksumSHA256 || !originAllowed(headed.Header, origin) {
-		return report, ErrResponse
-	}
-	if !headersExposed(headed.Header, "etag", "x-amz-checksum-sha256", "x-amz-checksum-type") || proof.VersionID != "" && !headersExposed(headed.Header, "x-amz-version-id") {
-		return report, ErrCORS
+	for _, origin := range checkedOrigins {
+		if err = c.preflight(ctx, head.URL, origin, http.MethodHead, headHeaders); err != nil {
+			return report, err
+		}
+		headed, e := c.doGrant(ctx, http.MethodHead, head, nil, http.Header{"Origin": {origin}})
+		if e != nil {
+			return report, e
+		}
+		headed.Body.Close()
+		if headed.StatusCode != http.StatusOK || headed.ContentLength != proof.Size || headed.Header.Get("ETag") != proof.ETag || headed.Header.Get("X-Amz-Checksum-Sha256") != proof.ChecksumSHA256 || !originAllowed(headed.Header, origin) {
+			return report, ErrResponse
+		}
+		if !headersExposed(headed.Header, "etag", "x-amz-checksum-sha256", "x-amz-checksum-type") || proof.VersionID != "" && !headersExposed(headed.Header, "x-amz-version-id") {
+			return report, ErrCORS
+		}
 	}
 	report.Head = true
 	read, err := c.PresignGet(ctx, report.ProbeKey, proof.VersionID, proof.ETag, "", time.Minute)
 	if err != nil {
 		return report, err
 	}
-	if err = c.preflight(ctx, read.URL, origin, http.MethodGet, []string{"if-match", "range"}); err != nil {
-		return report, err
+	for _, origin := range checkedOrigins {
+		if err = c.preflight(ctx, read.URL, origin, http.MethodGet, []string{"if-match", "range"}); err != nil {
+			return report, err
+		}
+		response, e := c.doGrant(ctx, http.MethodGet, read, nil, http.Header{"Origin": {origin}, "Range": {"bytes=0-15"}})
+		if e != nil {
+			return report, e
+		}
+		body, readErr := io.ReadAll(response.Body)
+		response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusPartialContent || response.Header.Get("Content-Range") != "bytes 0-15/"+strconv.Itoa(len(payload)) || !bytes.Equal(body, payload[:16]) {
+			return report, ErrResponse
+		}
+		if !originAllowed(response.Header, origin) || !headersExposed(response.Header, "etag", "content-range") {
+			return report, ErrCORS
+		}
+		response, e = c.doGrant(ctx, http.MethodGet, read, nil, http.Header{"Origin": {origin}})
+		if e != nil {
+			return report, e
+		}
+		body, readErr = io.ReadAll(response.Body)
+		response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK || !bytes.Equal(body, payload) || !originAllowed(response.Header, origin) {
+			return report, ErrResponse
+		}
+		if !headersExposed(response.Header, "etag", "x-amz-checksum-sha256", "x-amz-checksum-type", "content-range") || proof.VersionID != "" && !headersExposed(response.Header, "x-amz-version-id") {
+			return report, ErrCORS
+		}
 	}
-	response, err := c.doGrant(ctx, http.MethodGet, read, nil, http.Header{"Origin": {origin}, "Range": {"bytes=0-15"}})
-	if err != nil {
-		return report, err
-	}
-	body, readErr := io.ReadAll(response.Body)
-	response.Body.Close()
-	if readErr != nil || response.StatusCode != http.StatusPartialContent || response.Header.Get("Content-Range") != "bytes 0-15/"+strconv.Itoa(len(payload)) || !bytes.Equal(body, payload[:16]) {
-		return report, ErrResponse
-	}
-	if !originAllowed(response.Header, origin) || !headersExposed(response.Header, "etag", "content-range") {
-		return report, ErrCORS
-	}
-	report.Range = true
-	response, err = c.doGrant(ctx, http.MethodGet, read, nil, http.Header{"Origin": {origin}})
-	if err != nil {
-		return report, err
-	}
-	body, readErr = io.ReadAll(response.Body)
-	response.Body.Close()
-	if readErr != nil || response.StatusCode != http.StatusOK || !bytes.Equal(body, payload) || !originAllowed(response.Header, origin) {
-		return report, ErrResponse
-	}
-	report.Read = true
-	if !headersExposed(response.Header, "etag", "x-amz-checksum-sha256", "x-amz-checksum-type", "content-range") || proof.VersionID != "" && !headersExposed(response.Header, "x-amz-version-id") {
-		return report, ErrCORS
-	}
+	report.Range, report.Read = true, true
 	// A bucket that permits anonymous object reads fails the private-store
 	// capability gate even if every signed request happened to work.
 	unsigned, _ := url.Parse(read.URL)
 	unsigned.RawQuery = ""
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, unsigned.String(), nil)
-	response, err = c.http.Do(request)
+	response, err := c.http.Do(request)
 	if err != nil {
 		return report, ErrNetwork
 	}

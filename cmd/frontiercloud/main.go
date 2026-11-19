@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"net"
 	"net/http"
@@ -36,7 +38,7 @@ import (
 
 func main() {
 	if err := command(os.Args[1:]); err != nil {
-		slog.Error("FrontierCloud stopped", "error", err)
+		slog.Error("FrontierCloud stopped", "error_type", logsafe.ErrorType(err))
 		os.Exit(1)
 	}
 }
@@ -49,6 +51,8 @@ func command(arguments []string) error {
 	switch name {
 	case "serve":
 		return serve()
+	case "log-query":
+		return logQueryCommand(arguments[1:], os.Stdout)
 	case "migrate":
 		settings, err := config.Load()
 		if err != nil {
@@ -79,6 +83,9 @@ func command(arguments []string) error {
 	case "healthcheck":
 		return healthcheck()
 	case "certificate-agent":
+		if os.Getenv("PROJECT_LOG_FORWARD") == "1" {
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logarchive.ForwardWriter{}, nil)))
+		}
 		return certificateAgentCommand(arguments[1:])
 	case "init-certificate":
 		return initializeCertificateVolumes(arguments[1:])
@@ -119,11 +126,38 @@ func command(arguments []string) error {
 			return errors.New("storage-status accepts no arguments")
 		}
 		return storageStatusCommand(os.Stdout)
+	case "storage-owner-prepare":
+		return storageOwnerPrepareCommand(arguments[1:], os.Stdout)
 	case "operator-status":
 		if len(arguments) != 1 {
 			return errors.New("operator-status accepts no arguments")
 		}
 		return operatorStatusCommand(os.Stdout)
+	case "tree-backup-runtime-inspect":
+		return treeBackupRuntimeInspect(arguments[1:], os.Stdout)
+	case "tree-backup-capture":
+		if len(arguments) != 1 {
+			return errors.New("tree-backup-capture accepts no arguments")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		return treeBackupCapture(ctx, os.Stdin, os.Stdout, [3]string{"/fc-tree-data", "/fc-tree-secrets", "/fc-tree-tmp"})
+	case "tree-retained-recovery":
+		if len(arguments) != 1 {
+			return errors.New("tree-retained-recovery accepts no arguments")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		return treeRetainedRecovery(ctx, os.Stdin, os.Stdout, [2]string{"/fc-tree-data", "/fc-tree-secrets"})
+	case "sealed-tree-inventory":
+		if len(arguments) != 1 {
+			return errors.New("sealed-tree-inventory accepts no arguments")
+		}
+		return sealedTreeInventoryCommand(os.Stdout)
+	case "sealed-tree-prepare":
+		return sealedTreePrepareCommand(arguments[1:], os.Stdout)
+	case "sealed-s3-prepare":
+		return sealedS3PrepareCommand(arguments[1:], os.Stdout)
 	case "recovery-verify":
 		if len(arguments) != 1 {
 			return errors.New("recovery-verify accepts no arguments")
@@ -135,8 +169,16 @@ func command(arguments []string) error {
 		return deleteStorageRecordingCommand(arguments[1:], os.Stdout)
 	case "delete-owned-recording":
 		return deleteOwnedRecordingCommand(arguments[1:], os.Stdout)
+	case "verify-business-point":
+		return verifyBusinessPointCommand(arguments[1:], os.Stdout)
 	case "verify-backup":
 		return verifyBackupCommand(arguments[1:], os.Stdout)
+	case "prepare-business-state":
+		return prepareBusinessStateCommand(arguments[1:], os.Stdout)
+	case "import-business-state":
+		return importBusinessStateCommand(arguments[1:], os.Stdin, os.Stdout)
+	case "resume-business-state":
+		return resumeBusinessStateCommand(arguments[1:], os.Stdout)
 	case "cleanup-backup-cache":
 		return cleanupBackupCacheCommand(arguments[1:], os.Stdout)
 	case "maintenance":
@@ -206,12 +248,23 @@ func serve() error {
 	defer database.Close()
 	initialization, cancelInitialization := context.WithTimeout(shutdown, 90*time.Second)
 	defer cancelInitialization()
-	if err := database.Initialize(initialization); err != nil {
-		return err
+	if err := initializeRuntimeSchema(initialization, database, settings); err != nil {
+		return fmt.Errorf("initialize runtime schema: %w", err)
 	}
-	identity, err := node.Initialize(initialization, database.Nodes(), settings.SecretsDirectory)
+	tree, closeTree, err := openOpaqueMasterTree(initialization, database, settings)
 	if err != nil {
 		return err
+	}
+	if closeTree != nil {
+		defer closeTree()
+	}
+	mediaRoot := filepath.Join(settings.DataRoot, "media")
+	if err := checkOpaqueRegistryIdentity(initialization, database.Nodes(), mediaRoot, settings.SecretsDirectory); err != nil {
+		return err
+	}
+	identity, err := openRuntimeIdentity(initialization, database, settings)
+	if err != nil {
+		return fmt.Errorf("open runtime identity: %w", err)
 	}
 	if err := runtimeIdentityTransport(settings, identity); err != nil {
 		return err
@@ -219,9 +272,24 @@ func serve() error {
 	if err := identity.CheckNativeRuntime(initialization, settings.DataRoot); err != nil {
 		return err
 	}
-	mediaService, err := media.NewContext(shutdown, filepath.Join(settings.DataRoot, "media"), database.Media(), identity)
+	owner, err := openRuntimeOwner(initialization, settings, database, identity)
 	if err != nil {
-		return err
+		return fmt.Errorf("open runtime Owner: %w", err)
+	}
+	if owner != nil {
+		defer owner.Close()
+	}
+	if tree != nil && owner == nil {
+		return errors.New("encrypted Master tree requires its authenticated Owner volume")
+	}
+	var mediaService *media.Service
+	if tree != nil {
+		mediaService, err = media.NewSealedContext(initialization, mediaRoot, database.Media(), identity, tree)
+	} else {
+		mediaService, err = media.NewContext(shutdown, mediaRoot, database.Media(), identity)
+	}
+	if err != nil {
+		return fmt.Errorf("open runtime media: %w", err)
 	}
 	defer mediaService.Close()
 	mediaService.ConfigureCatalogCache(time.Duration(settings.MediaCatalogCacheTTL) * time.Second)
@@ -245,15 +313,49 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	ingressEdgeResolver, err := network.New(settings.PublicIngressTrustedProxyNetworks)
+	if err != nil {
+		return fmt.Errorf("invalid PUBLIC_INGRESS_TRUSTED_PROXY_NETWORKS: %w", err)
+	}
 	controlTransport := node.NewTransport()
 	defer controlTransport.Close()
 	controlService := node.NewService(database.Nodes(), identity, controlTransport)
+	if settings.FollowerResourceOrigin != "" {
+		if !settings.TLSEnabled {
+			return errors.New("FOLLOWER_RESOURCE_ORIGIN requires TLS")
+		}
+		if err := node.ValidateFollowerResourceOrigin(settings.FollowerResourceOrigin); err != nil {
+			return fmt.Errorf("invalid FOLLOWER_RESOURCE_ORIGIN: %w", err)
+		}
+	}
+	if settings.FollowerIngressOrigin != "" {
+		if !settings.TLSEnabled || settings.DeploymentMode != config.DeploymentStorage {
+			return errors.New("FOLLOWER_INGRESS_ORIGIN requires TLS and storage deployment")
+		}
+		if err := node.ValidateFollowerIngressOrigin(settings.FollowerIngressOrigin); err != nil {
+			return fmt.Errorf("invalid FOLLOWER_INGRESS_ORIGIN: %w", err)
+		}
+	}
+	if settings.TLSEnabled {
+		if err := controlService.ConfigurePublicOrigin(settings.PublicOrigin); err != nil && identity.Role == "Master" {
+			return err
+		}
+		if identity.Role == "Master" {
+			if err := controlService.ConfigureSelectedAdminOrigin(context.Background(), settings.AdminOrigin); err != nil {
+				return err
+			}
+		}
+	}
 	mediaService.ConfigureCluster(database.Nodes(), database.Pool(), controlService)
 	if settings.DeploymentMode != config.DeploymentStorage {
 		repository, ok := database.Pool().(storecontract.S3Repository)
-		if !ok { return errors.New("business runtime requires the durable S3 repository") }
+		if !ok {
+			return errors.New("business runtime requires the durable S3 repository")
+		}
 		private, err := vault.OpenExisting(settings.SecretsDirectory)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		mediaService.ConfigureS3(s3media.New(repository, database.Nodes(), private))
 	}
 	recordingsRoot, err := os.OpenRoot(filepath.Join(settings.DataRoot, "recordings"))
@@ -268,11 +370,19 @@ func serve() error {
 			return err
 		}
 		defer backupBuilder.Close()
+		if err := configureBusinessCheckpoint(settings, database, tree, backupBuilder, identity.ID); err != nil {
+			return err
+		}
 		controlService.ConfigureBackups(database.Backups(), backupBuilder)
 	}
-	recordingStorage, err := recording.NewContext(shutdown, recordingsRoot, database.Recordings(), database.Nodes())
+	var recordingStorage *recording.Storage
+	if tree != nil {
+		recordingStorage, err = recording.NewSealedContext(initialization, recordingsRoot, database.Recordings(), database.Nodes(), tree)
+	} else {
+		recordingStorage, err = recording.NewContext(shutdown, recordingsRoot, database.Recordings(), database.Nodes())
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("open runtime recording storage: %w", err)
 	}
 	var recordingManager *recording.Manager
 	if settings.DeploymentMode != config.DeploymentStorage {
@@ -334,19 +444,69 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	if settings.FollowerResourceOrigin != "" {
+		if err := controlService.ConfigureFollowerResourceOrigin(settings.FollowerResourceOrigin); err != nil {
+			return fmt.Errorf("invalid FOLLOWER_RESOURCE_ORIGIN: %w", err)
+		}
+	}
 	// Native inventory pins the completed admission records before serving any
 	// HTTP requests, including retirement observations.
-	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
+	var sealed *sealedMasterRuntime
+	if tree != nil {
+		sealed = &sealedMasterRuntime{tree: tree, runtime: runtime, maintenance: gate}
+	}
+	var ingressBootstrap *masterIngressBootstrap
+	if sealed != nil {
+		ingressBootstrap, err = startMasterIngressBootstrap(shutdown, settings.HTTPAddress, runtime, controlService, ingressEdgeResolver)
+		if err != nil {
+			return fmt.Errorf("open Master ingress bootstrap: %w", err)
+		}
+		// On any startup failure, stop accepting before the node, tree and
+		// database resources unwind; no probe may outlive those resources.
+		defer func() {
+			runtime.Stop()
+			ingressBootstrap.server.Close()
+			ingressBootstrap.listener.Close()
+			runtime.WaitHTTP()
+		}()
+	}
+	handler, closeHTTP, err := newRuntimeHTTP(settings, runtimeHTTP{Database: database, Identity: identity, Media: mediaService, Control: controlService, Owner: owner, Sealed: sealed, Recordings: recordingStorage, Manager: recordingManager, Security: securityService, Redis: redisClient, Resolver: resolver})
 	if err != nil {
-		return err
+		return fmt.Errorf("register native HTTP runtime: %w", err)
 	}
 	defer closeHTTP()
-	server := &http.Server{
-		Addr:              settings.HTTPAddress,
-		Handler:           runtime.Handler(handler),
-		BaseContext:       func(net.Listener) context.Context { return shutdown },
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       60 * time.Second,
+	var servedHandler http.Handler = handler
+	if settings.DeploymentMode != config.DeploymentStorage {
+		if sealed != nil {
+			servedHandler = masterIngressEdgeWithControls(handler, controlService, ingressEdgeResolver, sealed.catalog, sealed.recordingControlsReady)
+			if sealed.recovery != nil {
+				servedHandler = wrapRecoveryControl(servedHandler, sealed.recovery, settings.AdminOrigin, ingressEdgeResolver)
+			}
+		} else {
+			servedHandler = masterIngressEdge(handler, controlService, ingressEdgeResolver)
+		}
+	} else {
+		peerIngress := newPeerIngressHTTP(handler, controlService, settings)
+		peerIngress.recordingControlsReady = owner != nil && settings.TLSEnabled
+		defer peerIngress.Close()
+		servedHandler = peerIngress
+		if settings.FollowerIngressOrigin != "" {
+			if err := controlService.ConfigureFollowerIngressCandidate(settings.FollowerIngressOrigin); err != nil {
+				return err
+			}
+		}
+	}
+	var server *http.Server
+	if ingressBootstrap != nil {
+		server = ingressBootstrap.server
+	} else {
+		server = &http.Server{
+			Addr:              settings.HTTPAddress,
+			Handler:           runtime.Handler(servedHandler),
+			BaseContext:       func(net.Listener) context.Context { return shutdown },
+			ReadHeaderTimeout: 5 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
 	}
 
 	publisherDone := make(chan struct{})
@@ -357,25 +517,54 @@ func serve() error {
 		}
 	}()
 	deletionDone := make(chan struct{})
-	go func() { defer close(deletionDone); mediaService.RunGlobalDeletes(shutdown) }()
+	go func() {
+		defer close(deletionDone)
+		if waitIngressRecovery(shutdown, sealed) {
+			if sealed != nil && sealed.mediaDeletionRun != nil {
+				sealed.mediaDeletionRun(shutdown)
+				return
+			}
+			mediaService.RunGlobalDeletes(shutdown)
+		}
+	}()
 	uploadRecoveryDone := make(chan struct{})
-	go func() { defer close(uploadRecoveryDone); mediaService.RunUploadRecovery(shutdown) }()
+	go func() {
+		defer close(uploadRecoveryDone)
+		if waitIngressRecovery(shutdown, sealed) {
+			mediaService.RunUploadRecovery(shutdown)
+		}
+	}()
 	s3RecoveryDone := make(chan struct{})
 	go func() {
 		defer close(s3RecoveryDone)
-		if settings.DeploymentMode != config.DeploymentStorage { mediaService.RunS3Recovery(shutdown) }
+		if settings.DeploymentMode != config.DeploymentStorage && waitIngressRecovery(shutdown, sealed) {
+			mediaService.RunS3Recovery(shutdown)
+		}
 	}()
 	recordingDone := make(chan struct{})
 	go func() {
 		defer close(recordingDone)
-		if settings.DeploymentMode != config.DeploymentStorage {
+		if settings.DeploymentMode != config.DeploymentStorage && waitIngressRecovery(shutdown, sealed) {
 			recordingManager.Run(shutdown)
 		}
 	}()
 	backupDone := make(chan struct{})
-	go func() { defer close(backupDone); controlService.RunBackups(shutdown) }()
+	go func() {
+		defer close(backupDone)
+		if waitIngressRecovery(shutdown, sealed) {
+			controlService.RunBackups(shutdown)
+		}
+	}()
 	controlDone := make(chan struct{})
-	go func() { defer close(controlDone); controlService.Run(shutdown) }()
+	go func() {
+		defer close(controlDone)
+		if sealed != nil && sealed.recovery != nil {
+			sealed.recovery.retrySelected()
+		}
+		if waitIngressRecovery(shutdown, sealed) {
+			controlService.Run(shutdown)
+		}
+	}()
 	defer func() {
 		stop()
 		<-publisherDone
@@ -393,9 +582,15 @@ func serve() error {
 		return err
 	}
 	errorsChannel := make(chan error, 1)
-	listener, err := net.Listen("tcp", settings.HTTPAddress)
-	if err != nil {
-		return err
+	var listener net.Listener
+	if ingressBootstrap != nil {
+		listener = ingressBootstrap.listener
+		errorsChannel = ingressBootstrap.errors
+	} else {
+		listener, err = net.Listen("tcp", settings.HTTPAddress)
+		if err != nil {
+			return err
+		}
 	}
 	defer listener.Close()
 	if settings.DeploymentMode == config.DeploymentStorage {
@@ -428,10 +623,23 @@ func serve() error {
 			}
 		}()
 		defer func() { stop(); <-pairingDone }()
+	} else if ingressBootstrap != nil {
+		// All routes and prerequisites have been installed. Requests reaching
+		// this same listener now enter the complete runtime atomically.
+		select {
+		case err := <-errorsChannel:
+			return fmt.Errorf("Master ingress bootstrap stopped: %w", err)
+		default:
+		}
+		ingressBootstrap.publish(servedHandler)
 	} else {
 		go func() { errorsChannel <- server.Serve(listener) }()
 	}
-	slog.Info("FrontierCloud Go runtime started", "address", settings.HTTPAddress, "database", database.Backend())
+	if sealed != nil && sealed.recovery != nil && sealed.recovery.Active() {
+		slog.Warn("FrontierCloud ingress recovery only", "address", settings.HTTPAddress)
+	} else {
+		slog.Info("FrontierCloud Go runtime started", "address", settings.HTTPAddress, "database", database.Backend())
+	}
 	select {
 	case err := <-errorsChannel:
 		if !errors.Is(err, http.ErrServerClosed) {

@@ -65,6 +65,9 @@ func (s *Service) writeRenameJournal(j renameJournal) error {
 	return s.syncDirectory(".")
 }
 func (s *Service) finishRename(ctx context.Context, j renameJournal) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	owned := j.Format == "frontiercloud-owned-rename"
 	if j.Format != "frontiercloud-local-rename" && !owned || j.Version != 1 || !operationID.MatchString(j.ID) || !renameDirectoryPath(j.Old) || !renameDirectoryPath(j.New) || j.Old == j.New || path.Dir(j.Old) != path.Dir(j.New) || j.Audit.Action != "directory_rename" || !owned && j.Relationship != "" || owned && (s.owned == nil || !operationID.MatchString(j.Relationship) || !store.ValidDirectoryRename(j.Old, j.New)) {
 		return ErrRecovery
@@ -136,6 +139,9 @@ func (s *Service) finishRename(ctx context.Context, j renameJournal) error {
 	return s.syncDirectory(j.New)
 }
 func (s *Service) Rename(ctx context.Context, old, newName string, audit store.AdminAudit) (RenameResult, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return RenameResult{}, err
+	}
 	role, roleErr := s.role(ctx)
 	if roleErr != nil {
 		return RenameResult{}, roleErr
@@ -172,6 +178,9 @@ func (s *Service) Rename(ctx context.Context, old, newName string, audit store.A
 // Follower Admin mutations remain disabled. An operation ID permits a lost HTTP
 // reply to be retried without moving a different directory into its place.
 func (s *Service) OwnedRename(ctx context.Context, relationship, old, target, id string, a store.NodeAudit) (RenameResult, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return RenameResult{}, err
+	}
 	if s.owned == nil {
 		return RenameResult{}, ErrUnavailable
 	}
@@ -182,6 +191,9 @@ func (s *Service) OwnedRename(ctx context.Context, relationship, old, target, id
 }
 
 func (s *Service) renameDirectory(ctx context.Context, old, target, id, relationship string, audit store.AdminAudit, a store.NodeAudit) (RenameResult, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return RenameResult{}, err
+	}
 	release, err := s.acquire(ctx, true)
 	if err != nil {
 		return RenameResult{}, err

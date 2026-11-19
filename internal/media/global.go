@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"path"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 	"golang.org/x/text/cases"
@@ -178,6 +178,20 @@ func (s *Service) globalCatalog(ctx context.Context, kind, name, session string,
 }
 
 func (s *Service) resolveGlobal(ctx context.Context, id, name string) (store.GlobalMedia, *store.Relationship, error) {
+	return s.resolveGlobalFor(ctx, id, name, false)
+}
+
+// Authorization lookup can identify and check a resource independently of
+// whether its configured byte path is currently implemented or reachable.
+// Only a verifier-authenticated peer or the separately held Master-local
+// admission may use this relaxed availability check.
+func (s *Service) resolveGlobalFor(ctx context.Context, id, name string, authorizationOnly bool) (store.GlobalMedia, *store.Relationship, error) {
+	lyricGrant := hasVerifiedLyricRead(ctx)
+	if authorizationOnly {
+		if _, _, verified := network.PublicIngressIdentityFromContext(ctx); !verified && !lyricGrant {
+			return store.GlobalMedia{}, nil, ErrUnavailable
+		}
+	}
 	var row store.GlobalMedia
 	var err error
 	if id == "" {
@@ -242,7 +256,7 @@ func (s *Service) resolveGlobal(ctx context.Context, id, name string) (store.Glo
 			return row, nil, os.ErrNotExist
 		}
 		relation = &v
-		if v.Status == "offline" || time.Now().Unix()-v.LastHeartbeat >= 120 {
+		if !authorizationOnly && (v.Status == "offline" || time.Now().Unix()-v.LastHeartbeat >= 120) {
 			return row, relation, ErrUnavailable
 		}
 	} else {
@@ -254,8 +268,59 @@ func (s *Service) resolveGlobal(ctx context.Context, id, name string) (store.Glo
 			return row, nil, os.ErrNotExist
 		}
 	}
-	if row.Health != "online" {
+	if !authorizationOnly && row.Health != "online" {
 		return row, relation, ErrUnavailable
+	}
+	if row.Transport != "S3" {
+		identity, err := s.IdentityState(ctx)
+		if err != nil {
+			return row, relation, err
+		}
+		ingressID := identity.ID
+		// Management requests were authenticated directly on Master. Their
+		// existing resource route is relative to Master, independently of the
+		// public ingress; they never install a peer ingress assertion.
+		if repository, ok := s.nodes.(store.PublicRoutingRepository); ok && !IsAdminResourceContext(ctx) && !lyricGrant {
+			ingress, err := repository.PublicIngress(ctx)
+			if err != nil {
+				return row, relation, err
+			}
+			origin, err := node.Endpoint(ingress.PublicOrigin)
+			if err != nil || origin != ingress.PublicOrigin {
+				return row, relation, ErrUnavailable
+			}
+			if authorizationOnly {
+				assertion, local, verified := network.PublicIngressIdentityFromContext(ctx)
+				if !verified || assertion.NodeID != ingress.NodeID || assertion.Generation != ingress.Generation || assertion.PublicOrigin != ingress.PublicOrigin {
+					return row, relation, ErrUnavailable
+				}
+				if local && assertion.NodeID != identity.ID {
+					return row, relation, ErrUnavailable
+				}
+			}
+			if ingress.NodeID != identity.ID {
+				// Only the new ingress's own resource is currently supported here.
+				// The verifier supplies this assertion while holding the lease; a
+				// browser-supplied header cannot authorize an alternate path.
+				assertion, verified := network.AuthenticatedIngressFromContext(ctx)
+				if !verified || assertion.NodeID != ingress.NodeID || assertion.Generation != ingress.Generation || assertion.PublicOrigin != ingress.PublicOrigin || !authorizationOnly && (row.MemberID != ingress.NodeID || relation == nil) {
+					return row, relation, ErrUnavailable
+				}
+			}
+			ingressID = ingress.NodeID
+		}
+		applied := ""
+		if relation != nil {
+			applied = relation.Mode
+		}
+		row.Transport, err = store.EffectiveNativeTransport(ingressID, row.MemberID, applied)
+		if err != nil {
+			if authorizationOnly {
+				row.Transport = "" // No byte route is implied by object authorization.
+				return row, relation, nil
+			}
+			return row, relation, ErrUnavailable
+		}
 	}
 	return row, relation, nil
 }
@@ -268,6 +333,9 @@ type Delivery struct {
 }
 
 func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID string, nginx bool) (Delivery, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return Delivery{}, err
+	}
 	role, err := s.role(ctx)
 	if err != nil {
 		return Delivery{}, err
@@ -294,6 +362,9 @@ func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID str
 		return Delivery{}, ErrBrowserSource
 	}
 	if relation == nil {
+		if row.Transport != "Local" {
+			return Delivery{}, ErrUnavailable
+		}
 		local, err := s.OwnedStream(ctx, row.ObjectID)
 		if err != nil {
 			return Delivery{}, err
@@ -309,6 +380,9 @@ func (s *Service) Delivery(ctx context.Context, name, id, requestID, traceID str
 }
 
 func (s *Service) remoteDelivery(ctx context.Context, row store.GlobalMedia, relation *store.Relationship, requestID, traceID string, nginx bool) (Delivery, error) {
+	if relation == nil || s.control == nil || relation.ID == "" || row.RelationshipID == nil || *row.RelationshipID != relation.ID || relation.PeerID != row.MemberID || (row.Transport != "Direct" && row.Transport != "Relay") || (row.Transport == "Relay" && !nginx) {
+		return Delivery{}, ErrUnavailable
+	}
 	result := Delivery{ResourceID: row.ID, OwnerID: row.MemberID, ObjectID: row.ObjectID}
 	token, err := s.control.MediaCapability(ctx, relation.ID, row.MemberID, row.ObjectID, row.ID, requestID, traceID)
 	if err != nil {
@@ -318,12 +392,9 @@ func (s *Service) remoteDelivery(ctx context.Context, row store.GlobalMedia, rel
 	if err != nil {
 		return Delivery{}, err
 	}
-	if relation.Mode == "Direct" {
+	if row.Transport == "Direct" {
 		result.Redirect = origin + "/internal/v1/media/" + row.ObjectID + "?" + url.Values{"token": {token}}.Encode()
 		return result, nil
-	}
-	if relation.Mode != "Relay" || !nginx {
-		return Delivery{}, ErrUnavailable
 	}
 	host, port, err := node.RelayTarget(origin)
 	if err != nil {
@@ -341,7 +412,12 @@ func (s *Service) OwnedStream(ctx context.Context, id string) (*Stream, error) {
 		return nil, err
 	}
 	defer release()
-	if err = s.ready(); err != nil {
+	return s.ownedStreamLocked(ctx, id)
+}
+
+// ownedStreamLocked requires the caller to hold the media read lease.
+func (s *Service) ownedStreamLocked(ctx context.Context, id string) (*Stream, error) {
+	if err := s.ready(); err != nil {
 		return nil, err
 	}
 	o, err := s.repository.ObjectByID(ctx, id)
@@ -384,16 +460,9 @@ func (s *Service) GlobalPlayback(ctx context.Context, name, id, session string, 
 	if role != "Master" {
 		return store.PlaybackResult{}, ErrUnavailable
 	}
-	if math.IsNaN(played) || math.IsNaN(duration) || math.IsInf(played, 0) || math.IsInf(duration, 0) || played <= 0 || duration <= 0 || played > 86400 || duration > 86400 {
-		return store.PlaybackResult{}, errors.New("Invalid media duration")
-	}
-	canonical, err := normalizeSession(session)
+	canonical, threshold, err := ValidatePlaybackReport(session, played, duration)
 	if err != nil {
 		return store.PlaybackResult{}, err
-	}
-	threshold := math.Max(5, math.Min(30, duration*.5))
-	if played+.05 < threshold {
-		return store.PlaybackResult{}, errors.New("Playback threshold not reached")
 	}
 	row, _, err := s.resolveGlobal(ctx, id, name)
 	if err != nil {

@@ -21,22 +21,38 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/brand"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/config"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Public struct {
-	settings           config.Config
-	media              *media.Service
-	static             *os.Root
-	assets             map[string]string
-	brand              *brand.Service
-	crypto             *mediacrypto.Manager
-	cryptoSessionLimit cryptoSessionAdmission
-	cryptoSourceLimit  s3SourceAdmission
-	control            *node.Service
+	settings            config.Config
+	media               *media.Service
+	static              *os.Root
+	assets              map[string]string
+	brand               *brand.Service
+	crypto              *mediacrypto.Manager
+	cryptoSessionLimit  cryptoSessionAdmission
+	cryptoSourceLimit   s3SourceAdmission
+	control             *node.Service
+	masterDirect        *MasterDirect
+	masterRelay         *MasterRelay
+	masterLocalLyric    *MasterLocalLyric
+	masterLocalMedia    *MasterLocalMedia
+	localFollowerRelay  *OpaqueFollowerRelay
+	opaqueFollowerRelay *OpaqueFollowerRelay
+	followerRelay       *FollowerRelay
+	// Production startup leaves this unset until encrypted-tree lifecycle and
+	// authorization gates are complete. Isolated tests can exercise it.
+	opaqueTree *sealedtree.SQLStore
+	// Experimental only; product startup does not install an incomplete
+	// catalog preparer or activate its two-stage local path.
+	localCatalogPreparer *OpaqueCatalogPreparer
 }
 
 func assetURL(name string, content []byte) string {
@@ -47,12 +63,23 @@ func assetURL(name string, content []byte) string {
 // RegisterPublic validates required frontend assets at startup; missing assets
 // fail the deployment instead of leaving unresolved placeholders in HTML.
 func RegisterPublic(router *gin.Engine, settings config.Config, service *media.Service) (*Public, error) {
+	return registerPublic(router, settings, service, nil)
+}
+
+func RegisterSealedPublic(router *gin.Engine, settings config.Config, service *media.Service, tree *sealedtree.SQLStore) (*Public, error) {
+	if tree == nil {
+		return nil, store.ErrNodeState
+	}
+	return registerPublic(router, settings, service, tree)
+}
+
+func registerPublic(router *gin.Engine, settings config.Config, service *media.Service, tree *sealedtree.SQLStore) (*Public, error) {
 	root, err := os.OpenRoot(settings.StaticRoot)
 	if err != nil {
 		return nil, err
 	}
-	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}}
-	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/lyrics-window.js", "css/lyrics-window.css", "js/media-browser.js", "js/business-navigation.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
+	p := &Public{settings: settings, media: service, static: root, assets: map[string]string{}, opaqueTree: tree}
+	for _, name := range []string{"js/player.js", "css/player.css", "js/lyrics.js", "css/lyrics.css", "js/lyrics-window.js", "css/lyrics-window.css", "js/media-browser.js", "js/business-navigation.js", "js/directory-globe.js", "js/music-metadata.js", "css/directory-globe.css", "js/network-observation.js", "js/player-directory-label.js", "js/audio-continuous-stream.js", "css/karaoke.css", "js/karaoke.js", "js/upload-sha256.js", "js/compiled/media-crypto-common.js", "js/compiled/media-crypto.js", "js/compiled/media-crypto-sw.js"} {
 		content, err := root.ReadFile(name)
 		if err != nil {
 			root.Close()
@@ -78,8 +105,8 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 	router.HEAD("/static/*asset", func(c *gin.Context) { p.staticFile(c, strings.TrimPrefix(c.Param("asset"), "/"), false) })
 	router.GET("/karaoke/", p.karaokePage)
 	group := router.Group("/api/v1/media")
-	group.GET("", func(c *gin.Context) { p.page(c, "index.html", nil) })
-	group.GET("/", func(c *gin.Context) { p.page(c, "index.html", nil) })
+	group.GET("", p.catalogIngressAdmission(), func(c *gin.Context) { p.page(c, "index.html", nil) })
+	group.GET("/", p.catalogIngressAdmission(), func(c *gin.Context) { p.page(c, "index.html", nil) })
 	group.GET("/refresh", func(c *gin.Context) {
 		id, err := randomUUID()
 		if err != nil {
@@ -90,20 +117,20 @@ func RegisterPublic(router *gin.Engine, settings config.Config, service *media.S
 		c.Header("Clear-Site-Data", `"cache"`)
 		c.Redirect(http.StatusSeeOther, "/api/v1/media?ui="+strings.ReplaceAll(id, "-", ""))
 	})
-	group.GET("/catalog/categories", p.categories)
-	group.GET("/catalog/artwork", p.directoryArtwork)
-	group.GET("/catalog/media", p.catalog)
+	group.GET("/catalog/categories", p.catalogIngressAdmission(), p.categories)
+	group.GET("/catalog/artwork", p.catalogIngressAdmission(), p.directoryArtwork)
+	group.GET("/catalog/media", p.catalogIngressAdmission(), p.catalog)
 	group.GET("/cover", p.musicCover)
-	group.GET("/metadata", p.musicMetadata)
-	group.GET("/music", func(c *gin.Context) { p.categoryPage(c, "music") })
-	group.GET("/video", func(c *gin.Context) { p.categoryPage(c, "video") })
-	group.GET("/music/category", func(c *gin.Context) { p.playerPage(c, "music") })
-	group.GET("/video/category", func(c *gin.Context) { p.playerPage(c, "video") })
+	group.GET("/metadata", p.catalogIngressAdmission(), p.musicMetadata)
+	group.GET("/music", p.catalogIngressAdmission(), func(c *gin.Context) { p.categoryPage(c, "music") })
+	group.GET("/video", p.catalogIngressAdmission(), func(c *gin.Context) { p.categoryPage(c, "video") })
+	group.GET("/music/category", p.catalogIngressAdmission(), func(c *gin.Context) { p.playerPage(c, "music") })
+	group.GET("/video/category", p.catalogIngressAdmission(), func(c *gin.Context) { p.playerPage(c, "video") })
 	group.GET("/stream", p.stream)
 	group.HEAD("/stream", p.stream)
 	group.POST("/playback", p.playback)
-	group.GET("/lyrics/content", p.lyricsContent)
-	group.GET("/lyrics", p.lyricsPage)
+	group.GET("/lyrics/content", p.catalogIngressAdmission(), p.lyricsContent)
+	group.GET("/lyrics", p.catalogIngressAdmission(), p.lyricsPage)
 	p.brand, err = brand.New(settings.DataRoot, settings.StaticRoot)
 	if err != nil {
 		root.Close()
@@ -120,7 +147,7 @@ func internalError(c *gin.Context, err error) {
 		detail(c, 503, "媒体事务等待恢复，请在数据库恢复后重启服务")
 		return
 	}
-	slog.Error("request failed", "path", c.Request.URL.Path, "error", err)
+	slog.Error("request failed", "path", loggedRoute(c), "error_type", logsafe.ErrorType(err), "request_id", c.GetString("request_id"))
 	detail(c, 500, "Internal server error")
 }
 func invalid(c *gin.Context, location, field string) {
@@ -168,6 +195,15 @@ func queryBool(c *gin.Context, name string) (bool, bool) {
 }
 
 func (p *Public) categories(c *gin.Context) {
+	if preflight, ok := c.Request.Context().Value(opaqueCatalogPreflightKey{}).(*opaqueCatalogPreflight); ok {
+		p.prepareOpaqueCategories(c, preflight)
+		return
+	}
+	if p.opaqueTree != nil {
+		c.Header("Cache-Control", "private, no-store")
+		detail(c, http.StatusServiceUnavailable, "Media catalog temporarily unavailable")
+		return
+	}
 	kind, ok := kindQuery(c)
 	if !ok {
 		return
@@ -185,6 +221,15 @@ func (p *Public) categories(c *gin.Context) {
 	c.JSON(200, gin.H{"entries": p.media.CategoryArtwork(c.Request.Context(), kind, entries, include)})
 }
 func (p *Public) directoryArtwork(c *gin.Context) {
+	if preflight, ok := c.Request.Context().Value(opaqueCatalogPreflightKey{}).(*opaqueCatalogPreflight); ok {
+		p.prepareOpaqueArtwork(c, preflight)
+		return
+	}
+	if p.opaqueTree != nil {
+		c.Header("Cache-Control", "private, no-store")
+		detail(c, http.StatusServiceUnavailable, "Music artwork temporarily unavailable")
+		return
+	}
 	name, ok := queryText(c, "path", 1024)
 	if !ok {
 		return
@@ -210,6 +255,15 @@ func (p *Public) directoryArtwork(c *gin.Context) {
 }
 
 func (p *Public) catalog(c *gin.Context) {
+	if preflight, ok := c.Request.Context().Value(opaqueCatalogPreflightKey{}).(*opaqueCatalogPreflight); ok {
+		p.prepareOpaqueCatalog(c, preflight)
+		return
+	}
+	if p.opaqueTree != nil {
+		c.Header("Cache-Control", "private, no-store")
+		detail(c, http.StatusServiceUnavailable, "Media catalog temporarily unavailable")
+		return
+	}
 	kind, ok := kindQuery(c)
 	if !ok {
 		return
@@ -246,8 +300,10 @@ func (p *Public) catalog(c *gin.Context) {
 	}
 	for i := range entries {
 		entries[i].Encryption = metadata[entries[i].MediaID]
+		if _, proxied := network.AuthenticatedIngressFromContext(c.Request.Context()); proxied && entries[i].Transport != "S3" && entries[i].Encryption == nil {
+			entries[i].NativeSource = true
+		}
 	}
-	p.media.DecorateMusicTracks(c.Request.Context(), entries)
 	c.Header("Cache-Control", "private, no-cache, must-revalidate")
 	c.JSON(200, gin.H{"entries": entries})
 }
@@ -262,7 +318,7 @@ func (p *Public) stream(c *gin.Context) {
 	p.deliver(c, name, id)
 }
 func (p *Public) deliver(c *gin.Context, name, id string) {
-	delivery, err := p.media.Delivery(c.Request.Context(), name, id, c.GetString("request_id"), c.GetString("trace_id"), p.settings.NginxMedia)
+	delivery, err := p.admitDelivery(c, name, id)
 	if err != nil {
 		if errors.Is(err, media.ErrBrowserSource) {
 			browserSourceRequired(c)
@@ -323,6 +379,50 @@ func (p *Public) deliver(c *gin.Context, name, id string) {
 	}
 	http.ServeContent(c.Writer, c.Request, path.Base(stream.Path), stream.Info.ModTime(), stream.File)
 }
+
+// Hold the entry fence until any new capability or local read is admitted.
+// Once committed, release it before streaming so existing reads can drain
+// without blocking an explicit ingress selection for the whole file.
+func (p *Public) admitDelivery(c *gin.Context, name, id string) (media.Delivery, error) {
+	if p.opaqueTree != nil {
+		return media.Delivery{}, media.ErrUnavailable
+	}
+	ctx := c.Request.Context()
+	identity, err := p.media.IdentityState(ctx)
+	if err != nil {
+		return media.Delivery{}, err
+	}
+	var lease store.PublicIngressLease
+	if _, peer := network.AuthenticatedIngressFromContext(ctx); identity.Role == "Master" && !peer && !media.IsAdminResourceContext(ctx) {
+		if p.control == nil {
+			return media.Delivery{}, media.ErrUnavailable
+		}
+		ingress, held, e := p.control.AcquireCurrentIngress(ctx)
+		if e != nil || held == nil || ingress.NodeID != identity.ID {
+			if held != nil {
+				held.Release()
+			}
+			return media.Delivery{}, media.ErrUnavailable
+		}
+		lease = held
+		defer lease.Release()
+		ctx, err = store.BindIngressPrerequisite(ctx, lease)
+		if err != nil {
+			return media.Delivery{}, media.ErrUnavailable
+		}
+	}
+	delivery, err := p.media.Delivery(ctx, name, id, c.GetString("request_id"), c.GetString("trace_id"), p.settings.NginxMedia)
+	if err != nil {
+		return media.Delivery{}, err
+	}
+	if lease != nil && (ctx.Err() != nil || lease.Commit() != nil || ctx.Err() != nil) {
+		if delivery.Stream != nil {
+			_ = delivery.Stream.File.Close()
+		}
+		return media.Delivery{}, media.ErrUnavailable
+	}
+	return delivery, nil
+}
 func quoteMediaPath(name string) string {
 	return media.QuotePath(name)
 }
@@ -354,7 +454,13 @@ func (p *Public) playback(c *gin.Context) {
 	}
 	var result store.PlaybackResult
 	var err error
-	if body.ResourceID != nil {
+	if p.opaqueTree != nil {
+		if body.ResourceID == nil {
+			invalid(c, "body", "resource_id")
+			return
+		}
+		result, err = p.sealedPlayback(c, body.MediaPath, *body.ResourceID, body.Session, body.Played, body.Duration)
+	} else if body.ResourceID != nil {
 		result, err = p.media.GlobalPlayback(c.Request.Context(), body.MediaPath, *body.ResourceID, body.Session, body.Played, body.Duration)
 	} else {
 		result, err = p.media.Playback(c.Request.Context(), body.MediaPath, body.Session, body.Played, body.Duration)
@@ -397,7 +503,21 @@ func (p *Public) lyrics(c *gin.Context) ([]media.LyricEntry, bool) {
 	return entries, true
 }
 func (p *Public) lyricsContent(c *gin.Context) {
+	if p.opaqueTree != nil {
+		p.opaqueLyricMetadata(c, false)
+		return
+	}
 	if p.encryptedLyrics(c, false) {
+		return
+	}
+	if _, proxied := network.AuthenticatedIngressFromContext(c.Request.Context()); proxied {
+		object, size, err := p.media.PlainLyricMetadata(c.Request.Context(), c.Query("track"), c.Query("resource_id"))
+		if err != nil {
+			detail(c, http.StatusServiceUnavailable, "歌词资源路径不可用")
+			return
+		}
+		noStore(c)
+		c.JSON(http.StatusOK, gin.H{"native_lyric": true, "file_path": object.Path, "resource_id": object.ID, "object_id": object.ID, "size_bytes": size})
 		return
 	}
 	entries, ok := p.lyrics(c)
@@ -408,7 +528,20 @@ func (p *Public) lyricsContent(c *gin.Context) {
 	c.JSON(200, gin.H{"entries": entries})
 }
 func (p *Public) lyricsPage(c *gin.Context) {
+	if p.opaqueTree != nil {
+		p.opaqueLyricMetadata(c, true)
+		return
+	}
 	if p.encryptedLyrics(c, true) {
+		return
+	}
+	if _, proxied := network.AuthenticatedIngressFromContext(c.Request.Context()); proxied {
+		object, size, err := p.media.PlainLyricMetadata(c.Request.Context(), c.Query("track"), c.Query("resource_id"))
+		if err != nil {
+			detail(c, http.StatusServiceUnavailable, "歌词资源路径不可用")
+			return
+		}
+		p.page(c, "lyrics.html", map[string]string{"LYRICS_JSON": "[]", "LINE_COUNT": "0", "ENCRYPTED_LYRICS_JSON": jsonString(gin.H{"native_source": true, "file_path": object.Path, "resource_id": object.ID, "object_id": object.ID, "size_bytes": size})})
 		return
 	}
 	entries, ok := p.lyrics(c)
@@ -436,7 +569,7 @@ func (p *Public) template(c *gin.Context, name string) (string, error) {
 	if name == "category.html" || name == "audio-player.html" || name == "video-player.html" {
 		content = strings.Replace(content, "<script", `<script src="`+p.assets["js/business-navigation.js"]+`"></script>`+"\n<script", 1)
 	}
-	if name == "category.html" || name == "audio-player.html" {
+	if name == "category.html" {
 		content = strings.Replace(content, "<script", `<script src="`+p.assets["js/music-metadata.js"]+`"></script>`+"\n<script", 1)
 	}
 	if name == "audio-player.html" || name == "video-player.html" {
@@ -460,6 +593,7 @@ func (p *Public) page(c *gin.Context, name string, extra map[string]string) {
 		return
 	}
 	values := map[string]string{
+		"ADMIN_ORIGIN_JSON":          jsonString(p.settings.AdminOrigin),
 		"STUN_URLS_JSON":             jsonString(p.stunURLs(c)),
 		"WEBRTC_INTERVAL_MS":         strconv.Itoa(p.settings.WebRTCCooldown * 1000),
 		"NETWORK_OBSERVATION_JS_URL": html.EscapeString(p.assets["js/network-observation.js"]),
@@ -511,7 +645,21 @@ func (p *Public) playerPage(c *gin.Context, kind string) {
 	if !ok {
 		return
 	}
-	if err := p.media.CategoryExists(c.Request.Context(), name, kind); err != nil {
+	if p.opaqueTree != nil {
+		root := "music"
+		if kind == "video" {
+			root = "vido"
+		}
+		parts := strings.Split(name, "/")
+		valid := (kind == "music" || kind == "video") && len(parts) >= 2 && len(parts) <= 3 && parts[0] == root && name == path.Clean(name) && !strings.ContainsAny(name, "\\\x00")
+		for _, part := range parts {
+			valid = valid && part != "" && !strings.HasPrefix(part, ".")
+		}
+		if !valid {
+			detail(c, http.StatusNotFound, "Media category not found")
+			return
+		}
+	} else if err := p.media.CategoryExists(c.Request.Context(), name, kind); err != nil {
 		if errors.Is(err, media.ErrCategory) {
 			detail(c, 404, "Media category not found")
 		} else {
@@ -533,6 +681,16 @@ func (p *Public) playerPage(c *gin.Context, kind string) {
 	title += " - " + strings.Join(parts[1:], "/")
 	back := "/api/v1/media/" + kind + suffix
 	if len(parts) == 2 && !direct {
+		if p.opaqueTree != nil {
+			values := url.Values{"media_type": {kind}, "path": {name}}
+			player := url.Values{"path": {name}, "direct": {"true"}}
+			if include {
+				values.Set("include_hidden", "true")
+				player.Set("include_hidden", "true")
+			}
+			p.page(c, "category.html", map[string]string{"PAGE_TITLE": html.EscapeString(title), "BACK_URL": html.EscapeString(back), "CATALOG_CONFIG_JSON": jsonString(gin.H{"url": "/api/v1/media/catalog/categories?" + values.Encode(), "cacheKey": "", "emptyRedirect": "/api/v1/media/" + kind + "/category?" + player.Encode(), "emptyText": "暂无分类目录"})})
+			return
+		}
 		entries, err := p.media.Subcategories(c.Request.Context(), kind, name, include)
 		if err != nil {
 			internalError(c, err)
@@ -613,7 +771,7 @@ func (p *Public) karaokePage(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
-	values := map[string]string{"KARAOKE_CSS_URL": p.assets["css/karaoke.css"], "KARAOKE_JS_URL": p.assets["js/karaoke.js"], "NETWORK_OBSERVATION_JS_URL": p.assets["js/network-observation.js"], "STUN_URLS": jsonString(p.stunURLs(c)), "WEBRTC_INTERVAL_MS": strconv.Itoa(p.settings.WebRTCCooldown * 1000)}
+	values := map[string]string{"KARAOKE_CSS_URL": p.assets["css/karaoke.css"], "KARAOKE_JS_URL": p.assets["js/karaoke.js"], "UPLOAD_SHA256_JS_URL": p.assets["js/upload-sha256.js"], "NETWORK_OBSERVATION_JS_URL": p.assets["js/network-observation.js"], "STUN_URLS": jsonString(p.stunURLs(c)), "WEBRTC_INTERVAL_MS": strconv.Itoa(p.settings.WebRTCCooldown * 1000)}
 	for key, value := range values {
 		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
 	}

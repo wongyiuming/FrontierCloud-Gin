@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"os"
 	"time"
@@ -96,7 +97,7 @@ func (s *Service) markRecovery() {
 		return
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		slog.Error("media recovery flag unavailable", "error", err)
+		slog.Error("media recovery flag unavailable", "error_type", logsafe.ErrorType(err))
 		return
 	}
 	f, err := s.root.OpenFile(".recovery-required", os.O_CREATE|os.O_WRONLY, 0600)
@@ -108,6 +109,6 @@ func (s *Service) markRecovery() {
 		err = s.syncDirectory(".")
 	}
 	if err != nil {
-		slog.Error("media recovery flag persistence failed", "error", err)
+		slog.Error("media recovery flag persistence failed", "error_type", logsafe.ErrorType(err))
 	}
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -33,12 +34,26 @@ type UploadResult struct {
 }
 
 func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
+	return s.StoragePoolWithUploadReadiness(ctx, nil)
+}
+
+// StoragePoolWithUploadReadiness uses the selected runtime's advisory
+// readiness for the authenticated upload picker while keeping ownership facts.
+func (s *Service) StoragePoolWithUploadReadiness(ctx context.Context, ready func(context.Context, string) error) (map[string]any, error) {
 	role, err := s.role(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if role != "Master" {
-		return map[string]any{"members": []store.StorageMember{}, "standalone": true}, nil
+		identity, err := s.IdentityState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		destinations := []UploadDestination{}
+		if role == "Standalone" && node.ValidIdentifier(identity.ID) {
+			destinations = append(destinations, UploadDestination{MemberID: identity.ID, Kind: "Standalone", Site: "primary", Transport: "Local", Address: storageAddress(identity.Endpoint), Writable: ready == nil || ready(ctx, identity.ID) == nil})
+		}
+		return map[string]any{"members": []store.StorageMember{}, "standalone": true, "upload_destinations": destinations}, nil
 	}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
@@ -56,7 +71,7 @@ func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := map[string]any{}
+	result := map[string]any{"standalone": false}
 	var allocated, used, reserved, available, offline, largest, physicalTotal, physicalFree int64
 	unknownPhysical := false
 	add := func(a, b int64) int64 {
@@ -108,6 +123,11 @@ func (s *Service) StoragePool(ctx context.Context) (map[string]any, error) {
 	}
 	auto := store.StorageMember{ID: "auto", Kind: "Auto", Transport: "Automatic", Enabled: 1, Health: "online", Writable: 1, Available: largest, OnlineWritable: largest, Compute: map[string]any{}, Backup: map[string]any{}}
 	result["members"] = append([]store.StorageMember{auto}, members...)
+	destinations, err := s.uploadDestinations(ctx, members, ready)
+	if err != nil {
+		return nil, err
+	}
+	result["upload_destinations"] = destinations
 	return result, nil
 }
 
@@ -127,6 +147,24 @@ func (s *Service) ReserveMasterUpload(ctx context.Context, filename, target, rel
 }
 
 func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, target, relative, site string, size int64, maxName int, a store.AdminAudit, encryption *mediacrypto.Metadata) (UploadTicket, error) {
+	return s.reserveMasterEncryptedUpload(ctx, filename, target, relative, site, "", size, maxName, a, encryption)
+}
+
+// ReserveSelectedMasterUpload binds the existing upload lifecycle to one owner.
+// The display address is never accepted as a destination or routing authority.
+func (s *Service) ReserveSelectedMasterUpload(ctx context.Context, filename, target, relative, memberID string, size int64, maxName int, a store.AdminAudit, encryption *mediacrypto.Metadata) (UploadTicket, error) {
+	if !node.ValidIdentifier(memberID) {
+		return UploadTicket{}, store.ErrNodeState
+	}
+	return s.reserveMasterEncryptedUpload(ctx, filename, target, relative, "", memberID, size, maxName, a, encryption)
+}
+
+func (s *Service) reserveMasterEncryptedUpload(ctx context.Context, filename, target, relative, site, memberID string, size int64, maxName int, a store.AdminAudit, encryption *mediacrypto.Metadata) (UploadTicket, error) {
+	// This legacy reservation stores a plaintext path and can issue a direct
+	// owner upload capability, before UploadMasterBytes is ever invoked.
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return UploadTicket{}, err
+	}
 	if err := s.requireMaster(ctx); err != nil {
 		return UploadTicket{}, err
 	}
@@ -150,7 +188,29 @@ func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, ta
 		return UploadTicket{}, err
 	}
 	var v store.UploadReservation
-	if encryption == nil {
+	if memberID != "" {
+		repository, ok := s.pool.(store.SelectedUploadRepository)
+		if !ok {
+			return UploadTicket{}, ErrUnavailable
+		}
+		// Refuse unavailable S3 control before creating a durable reservation.
+		var members []store.StorageMember
+		members, err = s.pool.Members(ctx)
+		if err != nil {
+			return UploadTicket{}, err
+		}
+		for _, member := range members {
+			if member.ID == memberID && member.Kind == "S3" && s.s3 == nil {
+				return UploadTicket{}, ErrUnavailable
+			}
+			if member.ID == memberID && member.Kind == "Follower" {
+				if err := s.control.CheckLegacySelectedUploadRelationship(ctx, member); err != nil {
+					return UploadTicket{}, err
+				}
+			}
+		}
+		v, err = repository.ReserveSelectedEncryptedUpload(ctx, o.Path, memberID, size, free, a, encryption)
+	} else if encryption == nil {
 		v, err = s.pool.ReserveUpload(ctx, o.Path, site, size, free, a)
 	} else {
 		repository, ok := s.pool.(store.EncryptionRepository)
@@ -162,9 +222,20 @@ func (s *Service) ReserveMasterEncryptedUpload(ctx context.Context, filename, ta
 	if err != nil {
 		return UploadTicket{}, err
 	}
+	if memberID != "" {
+		switch v.Member.Transport {
+		case "Local":
+			site = "primary"
+		case "Direct":
+			site = "direct"
+		case "Relay":
+			site = "relay"
+		case "S3":
+			site = "s3"
+		}
+	}
 	ticket := UploadTicket{ID: v.ID, MediaID: v.MediaID, Path: v.Path, Transport: v.Member.Transport, MemberID: v.MemberID, URL: "/api/v1/media/admin/upload/session/" + v.ID + "/bytes", Site: site, Label: map[string]string{"primary": "主站", "direct": "直连", "relay": "中继", "s3": "S3 存储桶"}[site]}
 	if v.Member.Transport == "S3" {
-		ticket.MemberID = ""
 		ticket.URL = "/api/v1/media/admin/upload/s3/" + v.ID
 	}
 	if v.Member.Transport == "Direct" {
@@ -232,6 +303,11 @@ func checkReceipt(v store.UploadReservation, value map[string]any) (StorageRecei
 	return StorageReceipt{ObjectID: id, Bytes: size, SHA256: digest, ETag: etag}, nil
 }
 func (s *Service) UploadMasterBytes(ctx context.Context, id string, reader io.Reader, a store.AdminAudit) (UploadResult, error) {
+	// This also covers remote owners: their local database cannot establish
+	// whether the Master's durable encrypted tree has been activated.
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return UploadResult{}, err
+	}
 	release, err := s.uploadSessionLease(id)
 	if err != nil {
 		return UploadResult{}, err
@@ -278,32 +354,54 @@ func (s *Service) UploadMasterBytes(ctx context.Context, id string, reader io.Re
 	if v.Encryption == nil && !signature(strings.ToLower(path.Ext(v.Path)), stage.Head) {
 		return UploadResult{}, ErrSignature
 	}
-	volumeRelease, err := s.acquire(ctx, true)
+	// The potentially large body has been staged before taking the node-local
+	// owner fence. The short publication keeps owner before volume/SQL so an
+	// admitted reader cannot invert the lock order. This remains the legacy
+	// plaintext-path writer and is not the encrypted-tree publication path.
+	publish := func(held context.Context) error {
+		volumeRelease, e := s.acquire(held, true)
+		if e != nil {
+			return e
+		}
+		defer volumeRelease()
+		if e = s.ready(); e != nil {
+			return e
+		}
+		if _, e = s.safeInfo(v.Path); e == nil {
+			return os.ErrExist
+		} else if !errors.Is(e, os.ErrNotExist) {
+			return e
+		}
+		journal := uploadJournal{Format: "frontiercloud-master-upload", Version: 1, ID: stage.id, UploadSessionID: v.ID, Object: store.MediaObject{ID: v.MediaID, Path: v.Path, Kind: v.Kind}, Bytes: stage.Bytes, SHA256: stage.Digest, Audit: a}
+		journal.Object.Encryption = v.Encryption
+		stage.retain = true
+		if e = s.writeUploadJournal(held, journal); e == nil {
+			e = s.finishUpload(held, journal)
+		}
+		if e != nil {
+			s.markRecovery()
+			return errors.Join(ErrRecovery, e)
+		}
+		return nil
+	}
+	coordinator, ok := s.nodes.(store.OwnerControlCoordinator)
+	if !ok {
+		coordinator, ok = s.repository.(store.OwnerControlCoordinator)
+	}
+	if ok {
+		err = coordinator.WithOwnerControlExclusive(ctx, publish)
+	} else {
+		err = publish(ctx)
+	}
 	if err != nil {
 		return UploadResult{}, err
-	}
-	defer volumeRelease()
-	if err = s.ready(); err != nil {
-		return UploadResult{}, err
-	}
-	if _, err = s.safeInfo(v.Path); err == nil {
-		return UploadResult{}, os.ErrExist
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return UploadResult{}, err
-	}
-	journal := uploadJournal{Format: "frontiercloud-master-upload", Version: 1, ID: stage.id, UploadSessionID: v.ID, Object: store.MediaObject{ID: v.MediaID, Path: v.Path, Kind: v.Kind}, Bytes: stage.Bytes, SHA256: stage.Digest, Audit: a}
-	journal.Object.Encryption = v.Encryption
-	stage.retain = true
-	if err = s.writeUploadJournal(journal); err == nil {
-		err = s.finishUpload(ctx, journal)
-	}
-	if err != nil {
-		s.markRecovery()
-		return UploadResult{}, errors.Join(ErrRecovery, err)
 	}
 	return completedResult(v), nil
 }
 func (s *Service) FinalizeMasterUpload(ctx context.Context, id string, a store.AdminAudit) (UploadResult, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return UploadResult{}, err
+	}
 	release, err := s.uploadSessionLease(id)
 	if err != nil {
 		return UploadResult{}, err
@@ -336,6 +434,9 @@ func (s *Service) FinalizeMasterUpload(ctx context.Context, id string, a store.A
 	return completedResult(v), nil
 }
 func (s *Service) CancelMasterUpload(ctx context.Context, id string, a store.AdminAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	release, err := s.uploadSessionLease(id)
 	if err != nil {
 		return err

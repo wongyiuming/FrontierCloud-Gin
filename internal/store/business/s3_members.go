@@ -181,6 +181,17 @@ func s3BoundState(ctx context.Context, q queryer, id string, now int64) (objects
 	return
 }
 
+func rejectUnreconciledSelectedS3(ctx context.Context, q queryer, member store.S3Member) error {
+	var treeRoots int64
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM sealed_tree_meta`).Scan(&treeRoots); err != nil || treeRoots < 0 || treeRoots > 1 {
+		return store.ErrNodeState
+	}
+	if treeRoots != 0 && (member.Used != 0 || member.Reserved != 0) {
+		return nodeConflict("S3 selected data or reservations require a drained configuration gate")
+	}
+	return nil
+}
+
 func (r *Repository) S3AddMember(ctx context.Context, c store.S3MemberConfiguration, a store.NodeAudit) (result store.S3Member, err error) {
 	c, namespace, err := normalizedS3Configuration(c)
 	if err != nil {
@@ -194,7 +205,7 @@ func (r *Repository) S3AddMember(ctx context.Context, c store.S3MemberConfigurat
 		return result, err
 	}
 	id = id[:32]
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -227,7 +238,7 @@ func (r *Repository) S3ConfigureMember(ctx context.Context, id string, revision 
 	if err != nil {
 		return result, err
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -245,6 +256,15 @@ func (r *Repository) S3ConfigureMember(ctx context.Context, id string, revision 
 		}
 		locationChanged := c.Location != old.Location
 		credentialChanged := c.SealedCredentials != nil && (*c.SealedCredentials != old.SealedCredentials || c.CredentialExpiresAt != old.CredentialExpiresAt)
+		// New-tree S3 placements and reservations are not present in the old
+		// s3_objects/s3_uploads tables. Until the selected ledger and read
+		// grants are drained by the real S3 lifecycle gate, never infer that
+		// such a member is empty from those legacy tables alone.
+		if locationChanged || credentialChanged {
+			if err = rejectUnreconciledSelectedS3(ctx, q, old); err != nil {
+				return err
+			}
+		}
 		rebindingRestore := old.SealedCredentials == "" && old.Enabled == 0 && !locationChanged && pending == 0 && probes == 0
 		if (locationChanged || credentialChanged && !rebindingRestore) && (objects != 0 || pending != 0 || probes != 0) {
 			return nodeConflict("S3 location and credentials are frozen while owned data or intent remains")
@@ -301,7 +321,7 @@ func (r *Repository) S3RecoveryCredentials(ctx context.Context, id string, revis
 	if sealed == "" || !s3Opaque(sealed, 32768) || expires < 0 {
 		return result, nodeConflict("invalid sealed S3 recovery credentials")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -311,6 +331,9 @@ func (r *Repository) S3RecoveryCredentials(ctx context.Context, id string, revis
 		}
 		if member.Revision != revision || member.Enabled != 0 {
 			return nodeConflict("S3 recovery rotation requires a disabled matching configuration")
+		}
+		if err = rejectUnreconciledSelectedS3(ctx, q, member); err != nil {
+			return err
 		}
 		now := time.Now().Unix()
 		checks := []struct {
@@ -352,7 +375,7 @@ func (r *Repository) S3RecoveryCredentials(ctx context.Context, id string, revis
 }
 
 func (r *Repository) S3RemoveMember(ctx context.Context, id string, revision int64, a store.NodeAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.ingressWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}

@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"os"
 	"time"
@@ -96,6 +97,11 @@ func uploadRecoveryBudget(v store.UploadReservation) time.Duration {
 // The budget function permits fast deadline tests without changing production
 // limits. Both investigation and rotation still inherit caller cancellation.
 func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store.UploadReservation) time.Duration, cleanupGrace time.Duration) error {
+	// A stale legacy sweeper must preserve staged bytes and reservations while
+	// the encrypted-tree transition requires an explicit reconciliation.
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	// Interrupted ordinary uploads can leave a stage even without a pool
 	// reservation. Reclaim dead staging on every role, without replaying or
 	// hashing publication journals during normal request serving.
@@ -163,12 +169,12 @@ func (s *Service) retryExpiredUploads(ctx context.Context, itemBudget func(store
 			rotationCancel()
 			if rotationErr != nil {
 				if ctx.Err() == nil {
-					slog.Warn("expired upload rotation failed", "upload_id", v.ID, "error", rotationErr)
+					slog.Warn("expired upload rotation failed", "upload_id", v.ID, "error_type", logsafe.ErrorType(rotationErr))
 				}
 				return errors.Join(err, rotationErr)
 			}
 			if !errors.Is(err, store.ErrNodeState) && !errors.Is(err, os.ErrExist) && !errors.Is(err, ErrUnavailable) {
-				slog.Warn("expired upload reconciliation deferred", "upload_id", v.ID, "error", err)
+				slog.Warn("expired upload reconciliation deferred", "upload_id", v.ID, "error_type", logsafe.ErrorType(err))
 			}
 		}
 	}
@@ -201,7 +207,7 @@ func runUploadRecovery(ctx context.Context, sweep func(context.Context) error, n
 		}
 		bounded, cancel := context.WithTimeout(ctx, 180*time.Second)
 		if err := sweep(bounded); err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
-			slog.Warn("upload reconciliation sweep deferred", "error", err)
+			slog.Warn("upload reconciliation sweep deferred", "error_type", logsafe.ErrorType(err))
 		}
 		cancel()
 		if ctx.Err() != nil {

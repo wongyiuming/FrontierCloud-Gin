@@ -14,8 +14,8 @@ task, lease, immutable object version, source endpoint and target public key.
 The target proves its own identity for each bounded chunk; the source checks
 the active Master relationship and persistent task again. Chunk responses bind
 the target nonce and are signed by the source. Target staging and disk validation
-retain the existing restart and publication transactions. The old Master read,
-append and cancellation-read endpoints reject requests. No fallback exists.
+retain the existing restart and publication transactions. Retired Master-side
+read, append and cancellation-read endpoints reject requests. No fallback exists.
 Cancellation hashes the authoritative bytes on the source's joined local worker,
 returning only a fresh observation proof. Unreachable peers must retain both the
 source authority and resumable target staging; repair connectivity before retry.

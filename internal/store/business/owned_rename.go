@@ -61,7 +61,7 @@ func (r *Repository) checkOwnedRename(ctx context.Context, q queryer, relationsh
 }
 
 func (r *Repository) CheckOwnedRename(ctx context.Context, relationship, old, target string) error {
-	return r.write(ctx, func(q queryer) error { return r.checkOwnedRename(ctx, q, relationship, old, target) })
+	return r.legacyWrite(ctx, func(q queryer) error { return r.checkOwnedRename(ctx, q, relationship, old, target) })
 }
 
 func (r *Repository) ownedRenameCompleted(ctx context.Context, q queryer, relationship, old, target, operation string) (bool, error) {
@@ -86,7 +86,7 @@ func (r *Repository) ownedRenameCompleted(ctx context.Context, q queryer, relati
 }
 
 func (r *Repository) OwnedRenameCompleted(ctx context.Context, relationship, old, target, operation string) (done bool, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if _, e := r.ownedStorageNode(ctx, q, relationship); e != nil {
 			return e
 		}
@@ -97,7 +97,7 @@ func (r *Repository) OwnedRenameCompleted(ctx context.Context, relationship, old
 }
 
 func (r *Repository) CompleteOwnedRename(ctx context.Context, relationship, old, target, operation string, a store.NodeAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if _, err := r.ownedStorageNode(ctx, q, relationship); err != nil {
 			return err
 		}

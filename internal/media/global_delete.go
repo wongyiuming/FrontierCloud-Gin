@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"log/slog"
 	"os"
 	"strings"
@@ -21,6 +22,9 @@ type GlobalDeleteResult struct {
 
 func (s *Service) DeleteGlobal(ctx context.Context, paths []string, a store.AdminAudit) (GlobalDeleteResult, error) {
 	result := GlobalDeleteResult{Pending: []string{}}
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return result, err
+	}
 	if err := s.requireMaster(ctx); err != nil {
 		return result, err
 	}
@@ -65,6 +69,9 @@ func (s *Service) DeleteGlobal(ctx context.Context, paths []string, a store.Admi
 }
 
 func (s *Service) retryGlobalDelete(ctx context.Context, v store.GlobalMedia, a store.AdminAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if v.State != "pending_delete" {
 		return store.ErrNodeState
 	}
@@ -187,6 +194,9 @@ func (s *Service) deleteMasterLocal(ctx context.Context, v store.GlobalMedia, a 
 // RetryGlobalDeletes leaves unknown physical placements intact. It is safe for
 // multiple workers and restarts; only a verified storage receipt refunds quota.
 func (s *Service) RetryGlobalDeletes(ctx context.Context) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.pool == nil || s.nodes == nil {
 		return nil
 	}
@@ -214,7 +224,7 @@ func (s *Service) RetryGlobalDeletes(ctx context.Context) error {
 				// Rotate failed rows behind older pending work, preventing starvation.
 				_ = s.pool.DeferGlobalDelete(ctx, v.ID)
 				if !errors.Is(err, store.ErrNodeState) && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, ErrUnavailable) {
-					slog.Warn("global media deletion deferred", "media_id", v.ID, "error", err)
+					slog.Warn("global media deletion deferred", "media_id", v.ID, "error_type", logsafe.ErrorType(err))
 				}
 			}
 		})
@@ -228,10 +238,10 @@ func (s *Service) RunGlobalDeletes(ctx context.Context) {
 	defer timer.Stop()
 	for {
 		if err := s.RetryGlobalRenames(ctx); err != nil && ctx.Err() == nil {
-			slog.Warn("global directory rename retry failed", "error", err)
+			slog.Warn("global directory rename retry failed", "error_type", logsafe.ErrorType(err))
 		}
 		if err := s.RetryGlobalDeletes(ctx); err != nil && ctx.Err() == nil {
-			slog.Warn("global media deletion retry failed", "error", err)
+			slog.Warn("global media deletion retry failed", "error_type", logsafe.ErrorType(err))
 		}
 		select {
 		case <-ctx.Done():

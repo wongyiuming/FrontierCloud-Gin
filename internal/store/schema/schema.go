@@ -77,6 +77,21 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 		if err := writeS3Journal(ctx, conn); err != nil {
 			return err
 		}
+		if err := writePublicRoutingJournal(ctx, conn); err != nil {
+			return err
+		}
+		if err := writeSealedTreeJournal(ctx, conn); err != nil {
+			return err
+		}
+		if err := writeLegacyReadIntentJournal(ctx, conn); err != nil {
+			return err
+		}
+		if err := writeSelectedUploadIntentJournal(ctx, conn); err != nil {
+			return err
+		}
+		if err := writeOpaqueMigrationJournal(ctx, conn); err != nil {
+			return err
+		}
 		if _, err := conn.ExecContext(ctx, "INSERT INTO frontiercloud_schema(singleton, generation, created_at) VALUES (1, ?, ?)", migrations.Generation, time.Now().Unix()); err != nil {
 			return err
 		}
@@ -256,11 +271,167 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 			}
 			generation = 8
 		}
+		if generation == 8 {
+			if err := checkPublicRoutingJournal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := preparePublicRoutingSchema(ctx, conn, backend, statements, true); err != nil {
+				return fmt.Errorf("migrate public routing model: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writePublicRoutingJournal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=9 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 9
+		}
+		if generation == 9 {
+			if err := checkSealedTreeJournal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := prepareSealedTreeSchema(ctx, conn, backend, true); err != nil {
+				return fmt.Errorf("migrate dormant sealed tree schema: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writeSealedTreeJournal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=10 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 10
+		}
+		if generation == 10 {
+			if err := checkLegacyReadIntentJournal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := prepareLegacyReadIntent(ctx, conn, backend, true, true); err != nil {
+				return fmt.Errorf("migrate legacy read intent: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writeLegacyReadIntentJournal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=11 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 11
+		}
+		if generation == 11 {
+			// Do not advance a store whose prior protected intents still need
+			// offline recovery. In particular, never clear them to migrate.
+			if err := checkLegacyReadIntentJournal(ctx, conn, true); err != nil {
+				return err
+			}
+			if err := prepareLegacyReadIntent(ctx, conn, backend, false, true); err != nil {
+				return fmt.Errorf("verify prior legacy read intent: %w", err)
+			}
+			if err := checkSelectedUploadIntentJournal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := prepareSelectedUploadIntent(ctx, conn, backend, true, true); err != nil {
+				return fmt.Errorf("migrate selected upload intent: %w", err)
+			}
+			if err := prepareRecordingAudioSchema(ctx, conn, backend, true, true); err != nil {
+				return fmt.Errorf("migrate sealed recordings: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writeSelectedUploadIntentJournal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=12 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 12
+		}
+		if generation == 12 {
+			// Check protected state before any MySQL DDL can implicitly
+			// commit. A live prepared tree needs an explicit recovery flow.
+			if err := verifySelectedSchema(ctx, conn, backend, false); err != nil {
+				return err
+			}
+			if err := checkOpaqueMigrationJournal(ctx, conn, false); err != nil {
+				return err
+			}
+			if err := prepareOpaqueMigrationSchema(ctx, conn, backend, true, true); err != nil {
+				return fmt.Errorf("migrate opaque native migration ledger: %w", err)
+			}
+			if backend == "mysql" {
+				if _, err := conn.ExecContext(ctx, "START TRANSACTION"); err != nil {
+					return err
+				}
+			}
+			if err := writeOpaqueMigrationJournal(ctx, conn); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE frontiercloud_schema SET generation=13 WHERE singleton=1"); err != nil {
+				return err
+			}
+			generation = 13
+		}
 		if generation != migrations.Generation {
 			return fmt.Errorf("unsupported schema generation %d", generation)
 		}
 	}
-	tables, err = tableNames(ctx, conn, backend)
+	if err := verifyCurrentSchema(ctx, conn, backend, statements, false); err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, "COMMIT")
+	return err
+}
+
+// VerifyPreparedSQLiteRuntime checks the exact current schema without migration
+// or mutation. The caller must separately authenticate the durable tree or
+// Owner fence before admitting runtime traffic.
+func VerifyPreparedSQLiteRuntime(ctx context.Context, database *sql.DB) error {
+	statements, err := migrations.Statements("sqlite")
+	if err != nil {
+		return err
+	}
+	conn, err := database.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, "BEGIN"); err != nil {
+		return err
+	}
+	defer func() {
+		rollback, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = conn.ExecContext(rollback, "ROLLBACK")
+	}()
+	var generation int
+	if err = conn.QueryRowContext(ctx, `SELECT generation FROM frontiercloud_schema WHERE singleton=1`).Scan(&generation); err != nil || generation != migrations.Generation {
+		return fmt.Errorf("prepared SQLite runtime requires schema generation %d", migrations.Generation)
+	}
+	if err = verifyCurrentSchema(ctx, conn, "sqlite", statements, true); err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, "COMMIT")
+	return err
+}
+
+func verifyCurrentSchema(ctx context.Context, conn *sql.Conn, backend string, statements []string, prepared bool) error {
+	tables, err := tableNames(ctx, conn, backend)
 	if err != nil {
 		return err
 	}
@@ -276,8 +447,47 @@ func Initialize(ctx context.Context, database *sql.DB, backend string) error {
 	if err := prepareS3Schema(ctx, conn, backend, statements, false); err != nil {
 		return fmt.Errorf("verify Master S3 journals: %w", err)
 	}
-	_, err = conn.ExecContext(ctx, "COMMIT")
-	return err
+	if err := checkPublicRoutingJournal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := preparePublicRoutingSchema(ctx, conn, backend, statements, false); err != nil {
+		return fmt.Errorf("verify public routing model: %w", err)
+	}
+	if err := verifySelectedSchema(ctx, conn, backend, prepared); err != nil {
+		return err
+	}
+	if err := checkOpaqueMigrationJournal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := prepareOpaqueMigrationSchema(ctx, conn, backend, false, !prepared); err != nil {
+		return fmt.Errorf("verify opaque migration ledger schema: %w", err)
+	}
+	return nil
+}
+
+func verifySelectedSchema(ctx context.Context, conn *sql.Conn, backend string, prepared bool) error {
+	if err := checkSealedTreeJournal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := checkSealedTreeSchema(ctx, conn, backend, false, !prepared, false); err != nil {
+		return fmt.Errorf("verify sealed tree schema: %w", err)
+	}
+	if err := checkLegacyReadIntentJournal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := prepareLegacyReadIntent(ctx, conn, backend, false, true); err != nil {
+		return fmt.Errorf("verify legacy read intent schema: %w", err)
+	}
+	if err := checkSelectedUploadIntentJournal(ctx, conn, true); err != nil {
+		return err
+	}
+	if err := prepareSelectedUploadIntent(ctx, conn, backend, false, !prepared); err != nil {
+		return fmt.Errorf("verify selected upload intent schema: %w", err)
+	}
+	if err := prepareRecordingAudioSchema(ctx, conn, backend, false, !prepared); err != nil {
+		return fmt.Errorf("verify sealed recording schema: %w", err)
+	}
+	return nil
 }
 
 func tableNames(ctx context.Context, conn *sql.Conn, backend string) (map[string]bool, error) {

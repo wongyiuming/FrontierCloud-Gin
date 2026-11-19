@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"errors"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logsafe"
 	"io"
 	"log/slog"
 	"net/http"
@@ -46,7 +47,7 @@ func (a *Admin) brandStatus(c *gin.Context) {
 }
 func (a *Admin) brandAudit(c *gin.Context, action, source, detail string) {
 	if err := a.auth.Audit(c.Request.Context(), session(c).Hash, action, source, "success", detail, 1, a.info(c)); err != nil {
-		slog.Error("brand audit write failed", "action", action, "error", err)
+		slog.Error("brand audit write failed", "action", action, "error_type", logsafe.ErrorType(err))
 	}
 }
 func (a *Admin) brandDownload(c *gin.Context) {

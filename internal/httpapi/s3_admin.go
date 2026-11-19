@@ -196,7 +196,11 @@ func (a *Admin) s3Members(c *gin.Context) {
 		s3HTTPError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"members": value})
+	mode := "legacy"
+	if a.public.opaqueTree != nil {
+		mode = "sealed"
+	}
+	c.JSON(200, gin.H{"members": value, "configuration_mode": mode})
 }
 
 func (a *Admin) s3AddMember(c *gin.Context) {
@@ -267,7 +271,13 @@ func (a *Admin) s3ProbeMember(c *gin.Context) {
 	}
 	// The trusted configured origin, never a client-supplied Host/Origin, is the
 	// browser CORS target. Fixed node roles already require public HTTPS.
-	value, err := a.public.media.S3ProbeMember(c.Request.Context(), c.Param("member"), revision, a.settings.PublicOrigin, a.s3NodeAudit(c))
+	var value store.S3Member
+	var err error
+	if a.public.opaqueTree != nil {
+		value, err = a.public.media.S3ProbeSelected(c.Request.Context(), c.Param("member"), revision, a.settings.AdminOrigin, a.s3NodeAudit(c))
+	} else {
+		value, err = a.public.media.S3ProbeMember(c.Request.Context(), c.Param("member"), revision, a.settings.PublicOrigin, a.s3NodeAudit(c))
+	}
 	if err != nil {
 		s3HTTPError(c, err)
 		return
@@ -298,6 +308,10 @@ func (a *Admin) s3RecoveryCredentials(c *gin.Context) {
 func s3Empty(c *gin.Context) bool { var body struct{}; return decodeS3(c, &body) }
 
 func (a *Admin) s3UploadStatus(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Status(c, false)
+		return
+	}
 	value, err := a.public.media.S3UploadStatus(c.Request.Context(), c.Param("upload"), false)
 	if err != nil {
 		s3HTTPError(c, err)
@@ -306,6 +320,10 @@ func (a *Admin) s3UploadStatus(c *gin.Context) {
 	c.JSON(200, value)
 }
 func (a *Admin) s3TouchUpload(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Status(c, true)
+		return
+	}
 	if !s3Empty(c) {
 		return
 	}
@@ -317,6 +335,10 @@ func (a *Admin) s3TouchUpload(c *gin.Context) {
 	c.JSON(200, value)
 }
 func (a *Admin) s3BeginUpload(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Begin(c)
+		return
+	}
 	if !s3Empty(c) {
 		return
 	}
@@ -336,6 +358,10 @@ func s3PartNumber(c *gin.Context) (int, bool) {
 	return value, true
 }
 func (a *Admin) s3PartGrant(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3PartGrant(c)
+		return
+	}
 	number, ok := s3PartNumber(c)
 	if !ok {
 		return
@@ -360,6 +386,10 @@ func (a *Admin) s3PartGrant(c *gin.Context) {
 	c.JSON(200, value)
 }
 func (a *Admin) s3ConfirmPart(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Confirm(c)
+		return
+	}
 	number, ok := s3PartNumber(c)
 	if !ok || !s3Empty(c) {
 		return
@@ -372,6 +402,10 @@ func (a *Admin) s3ConfirmPart(c *gin.Context) {
 	c.JSON(200, value)
 }
 func (a *Admin) s3CompleteUpload(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Complete(c)
+		return
+	}
 	if !s3Empty(c) {
 		return
 	}
@@ -383,6 +417,10 @@ func (a *Admin) s3CompleteUpload(c *gin.Context) {
 	c.JSON(200, value)
 }
 func (a *Admin) s3CancelUpload(c *gin.Context) {
+	if a.public.opaqueTree != nil {
+		a.selectedS3Cancel(c)
+		return
+	}
 	// DELETE carries no authority-bearing fields; reject bodies rather than
 	// accepting a client provider upload id, key, ETag or refund assertion.
 	if c.Request.ContentLength != 0 {

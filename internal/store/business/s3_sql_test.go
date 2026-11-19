@@ -126,7 +126,7 @@ func (f *s3SQLFixture) completing(t *testing.T, u store.S3Upload) (store.S3Uploa
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof := store.S3ObjectProof{Key: u.Key, SessionID: u.Reservation.ID, ObjectID: u.ObjectID, MemberID: u.Reservation.MemberID, MediaID: u.Reservation.MediaID, Bytes: u.Reservation.ExpectedBytes, ETag: "object-etag", VersionID: "object-version", CompositeSHA256: base64.StdEncoding.EncodeToString(hash.Sum(nil)) + fmt.Sprint("-", count)}
+	proof := store.S3ObjectProof{MetadataFormat: u.Proof.MetadataFormat, MetadataOwner: u.Proof.MetadataOwner, Key: u.Key, SessionID: u.Reservation.ID, ObjectID: u.ObjectID, MemberID: u.Reservation.MemberID, MediaID: u.Reservation.MediaID, Bytes: u.Reservation.ExpectedBytes, ETag: "object-etag", VersionID: "object-version", CompositeSHA256: base64.StdEncoding.EncodeToString(hash.Sum(nil)) + fmt.Sprint("-", count)}
 	return u, proof
 }
 
@@ -427,7 +427,7 @@ func TestS3SQLImmutablePartsAndCompletion(t *testing.T) {
 		digest, _ := base64.StdEncoding.DecodeString(s3SQLChecksum(n))
 		hash.Write(digest)
 	}
-	proof := store.S3ObjectProof{Key: u.Key, SessionID: u.Reservation.ID, ObjectID: u.ObjectID, MemberID: u.Reservation.MemberID, MediaID: u.Reservation.MediaID, Bytes: u.Reservation.ExpectedBytes, ETag: "completed-etag", VersionID: "version-1", CompositeSHA256: base64.StdEncoding.EncodeToString(hash.Sum(nil)) + "-3"}
+	proof := store.S3ObjectProof{MetadataFormat: u.Proof.MetadataFormat, MetadataOwner: u.Proof.MetadataOwner, Key: u.Key, SessionID: u.Reservation.ID, ObjectID: u.ObjectID, MemberID: u.Reservation.MemberID, MediaID: u.Reservation.MediaID, Bytes: u.Reservation.ExpectedBytes, ETag: "completed-etag", VersionID: "version-1", CompositeSHA256: base64.StdEncoding.EncodeToString(hash.Sum(nil)) + "-3"}
 	for _, field := range []string{"key", "session", "object", "member", "media", "size", "checksum"} {
 		bad := proof
 		switch field {

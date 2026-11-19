@@ -152,6 +152,10 @@ func RegisterAdminMigrations(router *gin.Engine, a *Admin, repository store.Migr
 			invalid(c, "body", "action")
 			return
 		}
+		if (request.Action == "resume" || request.Action == "retry") && !a.migrationPlanningAvailable() {
+			detail(c, 409, "当前密文存储暂不支持恢复或重试旧迁移任务")
+			return
+		}
 		current, e := repository.MigrationStatus(c.Request.Context(), c.Param("task"), "")
 		if e != nil || current.Task.SourceID != request.Source || current.Task.TargetID != request.Target {
 			failed(c)

@@ -23,8 +23,69 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/resourcemigration"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
+
+type adminMigrationPlanningTestStub struct {
+	writes int
+}
+
+func (p *adminMigrationPlanningTestStub) Create(string, string, string) (resourcemigration.PlanView, error) {
+	p.writes++
+	return resourcemigration.PlanView{}, nil
+}
+
+func (*adminMigrationPlanningTestStub) Status(string, string) (resourcemigration.PlanView, error) {
+	return resourcemigration.PlanView{}, nil
+}
+
+func (p *adminMigrationPlanningTestStub) Start(string, string, string, string, store.NodeAudit) (resourcemigration.PlanView, error) {
+	p.writes++
+	return resourcemigration.PlanView{}, nil
+}
+
+func TestAdminSealedMigrationPlanningAdvertisesAndRefusesLegacyWrites(t *testing.T) {
+	f := newS3HTTP(t, "Master")
+	planner := &adminMigrationPlanningTestStub{}
+	RegisterAdminNodes(f.router, f.admin, f.public.control)
+	RegisterAdminMigrationPlanning(f.router, f.admin, planner)
+	RegisterAdminMigrations(f.router, f.admin, nil)
+	const nodes = "/api/v1/media/admin/nodes"
+	const plans = nodes + "/migration-plans"
+	const plan = plans + "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const create = `{"request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","target_id":"cccccccccccccccccccccccccccccccc"}`
+	const start = `{"review_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","confirm_source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","confirm_target_id":"cccccccccccccccccccccccccccccccc"}`
+	legacy := f.call(http.MethodGet, nodes, "", true, false, true)
+	if legacy.Code != http.StatusOK || !strings.Contains(legacy.Body.String(), `"migration_planning_available":true`) {
+		t.Fatalf("legacy capability: %d %s", legacy.Code, legacy.Body.String())
+	}
+	if got := f.call(http.MethodPost, plans, create, true, true, true); got.Code != http.StatusOK || planner.writes != 1 {
+		t.Fatalf("legacy creation: %d %s", got.Code, got.Body.String())
+	}
+	f.public.opaqueTree = &sealedtree.SQLStore{}
+	sealed := f.call(http.MethodGet, nodes, "", true, false, true)
+	if sealed.Code != http.StatusOK || !strings.Contains(sealed.Body.String(), `"migration_planning_available":false`) ||
+		!strings.Contains(sealed.Body.String(), `"reinitialize_available":false`) {
+		t.Fatalf("sealed capability: %d %s", sealed.Code, sealed.Body.String())
+	}
+	for _, request := range []struct{ path, body string }{{plans, create}, {plan + "/start", start}} {
+		got := f.call(http.MethodPost, request.path, request.body, true, true, true)
+		if got.Code != http.StatusConflict || !strings.Contains(got.Body.String(), "当前密文存储暂不支持") || planner.writes != 1 {
+			t.Fatalf("sealed write reached legacy planner: %d %s", got.Code, got.Body.String())
+		}
+	}
+	for _, action := range []string{"resume", "retry"} {
+		body := `{"action":"` + action + `","revision":1,"confirm_source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","confirm_target_id":"cccccccccccccccccccccccccccccccc"}`
+		got := f.call(http.MethodPost, nodes+"/migrations/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/control", body, true, true, true)
+		if got.Code != http.StatusConflict || !strings.Contains(got.Body.String(), "当前密文存储暂不支持") {
+			t.Fatalf("sealed task control reached legacy runner: %d %s", got.Code, got.Body.String())
+		}
+	}
+	if got := f.call(http.MethodGet, plan, "", true, false, true); got.Code != http.StatusOK {
+		t.Fatalf("sealed plan status: %d %s", got.Code, got.Body.String())
+	}
+}
 
 func testAdminMigrationPlanning(t *testing.T, router *gin.Engine, db store.Store, root string, public *Public, master *node.Service, sourceRoot string, catalog store.MigrationCatalog, payloads map[string][]byte) {
 	t.Helper()

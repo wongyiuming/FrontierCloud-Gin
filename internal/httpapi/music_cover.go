@@ -25,6 +25,11 @@ func temporaryMusicMetadataError(err error) bool {
 }
 
 func (p *Public) musicMetadata(c *gin.Context) {
+	if p.opaqueTree != nil {
+		c.Header("Cache-Control", "private, no-store")
+		detail(c, http.StatusServiceUnavailable, "Music metadata temporarily unavailable")
+		return
+	}
 	name, ok := queryText(c, "file_path", 4096)
 	if !ok {
 		return
@@ -46,11 +51,6 @@ func (p *Public) musicMetadata(c *gin.Context) {
 		return
 	}
 	value := gin.H{}
-	for key, text := range map[string]string{"title": tags.Title, "artist": tags.Artist, "album": tags.Album} {
-		if text != "" {
-			value[key] = text
-		}
-	}
 	if len(tags.Picture) != 0 {
 		value["cover"] = "/api/v1/media/cover?" + url.Values{"file_path": {name}, "resource_id": {id}}.Encode()
 	}
@@ -58,6 +58,11 @@ func (p *Public) musicMetadata(c *gin.Context) {
 }
 
 func (p *Public) musicCover(c *gin.Context) {
+	if p.opaqueTree != nil {
+		c.Header("Cache-Control", "private, no-store")
+		detail(c, http.StatusServiceUnavailable, "Music artwork temporarily unavailable")
+		return
+	}
 	tags, err := p.media.MusicMetadata(c.Request.Context(), c.Query("file_path"), c.Query("resource_id"))
 	if temporaryMusicMetadataError(err) {
 		c.Header("Retry-After", "2")

@@ -126,6 +126,24 @@ func TestOfflineMasterStorageRebindGuardsAndPreservesRelationship(t *testing.T) 
 		RebindStorageEndpoint(context.Context, string, store.Relationship, string) error
 	})
 	next := "https://disk.test"
+	routing := db.Nodes().(store.PublicRoutingRepository)
+	if err := routing.ConfigurePublicOrigin("https://public.test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := routing.PublicIngress(ctx); err != nil {
+		t.Fatal(err)
+	}
+	_, lease, err := routing.AcquireCurrentIngress(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	err = writer.RebindStorageEndpoint(blocked, identity.ID, rel, next)
+	cancel()
+	lease.Release()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("endpoint rebind bypassed ingress lease", err)
+	}
 	wrong := rel
 	wrong.PublicKey = strings.Repeat("B", 43)
 	if err := writer.RebindStorageEndpoint(ctx, identity.ID, wrong, next); !errors.Is(err, store.ErrNodeState) {

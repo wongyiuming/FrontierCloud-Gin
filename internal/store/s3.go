@@ -55,6 +55,10 @@ type S3Part struct {
 // Proof contains only bounded provider metadata validated by the adapter.
 // CompositeSHA256 is S3's base64 SHA256-of-part-digests with the -N suffix.
 type S3ObjectProof struct {
+	// Empty denotes the historical four-field provider metadata. New uploads
+	// persist their explicit format before any provider operation.
+	MetadataFormat  string `json:"metadata_format,omitempty"`
+	MetadataOwner   string `json:"metadata_owner,omitempty"`
 	Key             string `json:"object_key"`
 	SessionID       string `json:"session_id"`
 	ObjectID        string `json:"object_id"`

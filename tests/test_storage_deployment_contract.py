@@ -17,7 +17,7 @@ class StorageDeploymentContract(unittest.TestCase):
     def test_certificate_services_are_compose_only_with_persistent_socket_volume(self):
         text = (ROOT / "docker-compose.storage.yaml").read_text(encoding="utf-8")
         for value in ("certificate-init:", "certificate-agent:", "command: [init-certificate]",
-                      "cpus: 0.05", "mem_limit: 128m", "memswap_limit: 128m",
+                      "cpus: 0.20", "mem_limit: 128m", "memswap_limit: 128m",
                       "cap_drop: [ALL]", "read_only: true", 'tmpfs: ["/tmp:size=16m,mode=1777"]',
                       "certificate_runtime:/run/frontiercloud-certificate:ro",
                       "certificate_published:/run/frontiercloud-tls:ro"):

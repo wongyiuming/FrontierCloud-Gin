@@ -49,7 +49,7 @@ func (r *Repository) BeginRetirement(ctx context.Context, relationship, member s
 	if !nodeIDPattern.MatchString(member) {
 		return f, store.ErrNodeState
 	}
-	e = r.withRelation(ctx, relationship, func(q queryer, n store.NodeIdentity, v store.Relationship) error {
+	e = r.withRelationWrite(ctx, relationship, r.ingressWrite, func(q queryer, n store.NodeIdentity, v store.Relationship) error {
 		if !retirementMember(n, v, member) {
 			return store.ErrNodeState
 		}
@@ -94,7 +94,7 @@ func (r *Repository) BeginRetirement(ctx context.Context, relationship, member s
 // transaction. Tombstones keep identity, receipts and encrypted notification
 // credentials; every ordinary capability and control path rejects this state.
 func (r *Repository) CompleteRetirement(ctx context.Context, relationship, member string, a store.NodeAudit) (f store.RetirementFence, e error) {
-	e = r.withRelation(ctx, relationship, func(q queryer, n store.NodeIdentity, v store.Relationship) error {
+	e = r.withRelationWrite(ctx, relationship, r.ingressWrite, func(q queryer, n store.NodeIdentity, v store.Relationship) error {
 		var e error
 		f, e = retirementFenceValue(n, v, member)
 		if e != nil {

@@ -84,3 +84,20 @@ func (d *Deployment) Logs(ctx context.Context, receipt Receipt) (LogReport, erro
 	}
 	return FilterLogs(raw)
 }
+
+func (d *Deployment) QueryEncryptedLogs(ctx context.Context, receipt Receipt, args []string) ([]byte, error) {
+	if _, e := d.ValidateReceipt(ctx, receipt); e != nil {
+		return nil, e
+	}
+	if len(args) != 6 {
+		return nil, errors.New("logs query requires --type TYPE --from RFC3339 --to RFC3339")
+	}
+	allowed := map[string]bool{"--type": true, "--from": true, "--to": true}
+	for i := 0; i < len(args); i += 2 {
+		if !allowed[args[i]] || args[i+1] == "" {
+			return nil, errors.New("invalid encrypted log query")
+		}
+		delete(allowed, args[i])
+	}
+	return d.Compose(ctx, true, append([]string{"exec", "-T", "web", "/app/frontiercloud", "log-query"}, args...)...)
+}

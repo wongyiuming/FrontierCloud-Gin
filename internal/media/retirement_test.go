@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -26,22 +28,32 @@ func TestRetainedControlLeaseRequiresThisRuntimeHeldInode(t *testing.T) {
 		t.Fatal("owned native control lease not retained", e)
 	}
 	if e = os.WriteFile(path, []byte("unknown"), 0600); e != nil {
-		done()
-		t.Fatal(e)
-	}
-	info, _ = os.Lstat(path)
-	if svc.RetainsControlLease(info) {
-		done()
-		t.Fatal("nonempty control state accepted")
-	}
-	if e = os.Truncate(path, 0); e != nil {
-		done()
-		t.Fatal(e)
-	}
-	info, _ = os.Lstat(path)
-	if !svc.RetainsControlLease(info) {
-		done()
-		t.Fatal("restored held inode rejected")
+		// Windows byte-range locks are mandatory. A second handle cannot
+		// write the held byte; verify that exact refusal and the intact lease.
+		if runtime.GOOS != "windows" || !errors.Is(e, syscall.Errno(33)) {
+			done()
+			t.Fatal(e)
+		}
+		info, e = os.Lstat(path)
+		if e != nil || !svc.RetainsControlLease(info) {
+			done()
+			t.Fatal("denied write changed the held control lease", e)
+		}
+	} else {
+		info, _ = os.Lstat(path)
+		if svc.RetainsControlLease(info) {
+			done()
+			t.Fatal("nonempty control state accepted")
+		}
+		if e = os.Truncate(path, 0); e != nil {
+			done()
+			t.Fatal(e)
+		}
+		info, _ = os.Lstat(path)
+		if !svc.RetainsControlLease(info) {
+			done()
+			t.Fatal("restored held inode rejected")
+		}
 	}
 	done()
 	if svc.RetainsControlLease(info) {

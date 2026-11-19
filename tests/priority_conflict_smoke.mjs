@@ -25,7 +25,7 @@ const context = {
     location:{href:'',protocol:'https:'},URL,URLSearchParams,Blob,FormData:class{},XMLHttpRequest:class{},
     setInterval:()=>1,clearInterval(){},addEventListener(){},console,alert(message){throw new Error(message);},
     fetch:async (url,options={})=>{
-        calls.push({url,method:options.method||'GET'});
+        calls.push({url,method:options.method||'GET',body:options.body});
         let status=200,body={};
         if (url.includes('/status')) body={csrf_cookie_name:'admin_csrf',limits:{}};
         else if (url.includes('/tree')) body={path:'',items:[]};
@@ -70,4 +70,23 @@ assert.equal(rendered.at(-1).directories.length,2);
 assert(activated.at(-1).directory);
 assert.equal(element('prioritySaveState').textContent,'');
 assert(calls.every(c=>c.method==='GET'),'browsing conflicts must not cancel uploads or change priorities');
-console.log('priority-conflict-smoke-ok: readable listing, disabled ordering, recovery refresh, no mutation');
+const renameButton = element('renameDirectory');
+const beforeRename = calls.length;
+context.prompt = () => 'renamed';
+context.renderTree = async () => {};
+for (const state of ['pending_delete', 'renaming']) {
+    vm.runInContext(`visibleMediaItems = [{path:'music/one', kind:'directory', mutation_state:'${state}'}];
+        selected.add('music/one'); selectionKind = 'directory'; updateToolbar();`, context);
+    assert(renameButton.disabled, 'rename must stay disabled for a pending directory mutation');
+    await renameButton.onclick();
+}
+assert.equal(calls.length, beforeRename, 'pending directories must issue no rename request');
+vm.runInContext("visibleMediaItems[0].mutation_state = ''; updateToolbar();", context);
+assert.equal(renameButton.disabled, false, 'a settled directory must still support rename');
+await renameButton.onclick();
+assert.deepEqual(calls.at(-1), {
+    url:'/api/v1/media/admin/directory/rename',
+    method:'POST',
+    body:JSON.stringify({path:'music/one',new_name:'renamed'}),
+});
+console.log('priority-conflict-smoke-ok: readable listing, conflict recovery, pending rename blocked, normal rename');

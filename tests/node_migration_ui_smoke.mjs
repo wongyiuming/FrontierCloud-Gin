@@ -33,7 +33,7 @@ const context = vm.createContext({document, window: {confirm: () => confirm, pro
             return {...plan};
         }
         if (options.method === 'POST') { if (!path.endsWith('/release-drain')) { task.revision++; task.state = 'queued'; task.error_code = ''; } return {...task}; }
-        if (path === '/api/v1/media/admin/nodes') return {role: 'Master', storage_pool: {members: []}};
+        if (path === '/api/v1/media/admin/nodes') return {role: 'Master', migration_planning_available: true, storage_pool: {members: []}};
         if (path === '/api/v1/media/admin/nodes/observability') return {};
         if (path.includes(`/migrations/${task.task_id}`)) return {task: {...task}, execution, queue_position: 1, objects: [{physical_path: '<img src=x onerror=alert(1)>', state: 'published', verified_bytes: 10, size_bytes: 10}], object_stages: [{state: 'published', count: 1, verified_bytes: 10, size_bytes: 10}], unit_stages: [{state: 'pending', count: 1, size_bytes: 100}], complete: false, next: 'a'.repeat(64)};
         if (path.includes('/nodes/migrations')) return page();
@@ -43,7 +43,7 @@ const context = vm.createContext({document, window: {confirm: () => confirm, pro
 assert(!fs.readFileSync('static/js/nodes.js', 'utf8').includes('/migration-plans'));
 assert(!fs.readFileSync('static/js/nodes.js', 'utf8').includes('/nodes/migrations'));
 const source = fs.readFileSync('static/js/node-migrations.js', 'utf8');
-vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'window.testMigrationPanel = migrationPanel; window.testMigrationPlanPanel = migrationPlanPanel;})();'), context);
+vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'window.testMigrationPanel = (page, node = {migration_planning_available: true}) => migrationPanel(page, node); window.testMigrationPlanPanel = migrationPlanPanel;})();'), context);
 const all = element => [element, ...element.children.flatMap(all)];
 const text = element => all(element).map(item => item.textContent || '').join('\n');
 const button = (element, label) => all(element).find(item => item.tag === 'button' && item.textContent === label);
@@ -52,6 +52,8 @@ assert.match(text(panel), /失败原因：target_unavailable/);
 assert.match(text(panel), /已提交 \/ 全部/);
 assert.match(text(panel), /取消保留已提交资源/);
 assert(!button(panel, '恢复'));
+const sealedQueue = context.window.testMigrationPanel(page(), {migration_planning_available: false});
+assert(!button(sealedQueue, '重试'), 'sealed mode keeps task history without starting legacy work');
 const before = calls.filter(call => call.options.method === 'POST').length;
 await button(panel, '取消任务').onclick();
 assert.equal(calls.filter(call => call.options.method === 'POST').length, before);
@@ -83,7 +85,7 @@ const release = calls.filter(call => call.options.method === 'POST').at(-1);
 assert.match(release.path, /\/release-drain$/);
 assert.equal(JSON.parse(release.options.body).confirm_source_id, task.source_id);
 assert.equal(JSON.parse(release.options.body).revision, task.revision);
-const nodes = {relationships: [
+const nodes = {migration_planning_available: true, relationships: [
     {relationship_id: '0'.repeat(32), peer_id: task.source_id, state: 'revoked', peer_endpoint: 'https://old.example'},
     {relationship_id: 'a'.repeat(32), peer_id: task.source_id, state: 'active', peer_endpoint: 'https://source.example:8443'},
     {peer_id: task.target_id, state: 'active', peer_endpoint: 'https://target.example'},
@@ -96,6 +98,7 @@ const nodes = {relationships: [
 ]}};
 let planning = context.window.testMigrationPlanPanel(nodes);
 assert.match(text(planning), /Master Local 不支持/);
+assert.match(text(planning), /S3 不支持迁移/);
 assert.match(text(planning), /退役处理中/);
 assert.match(text(planning), new RegExp(`source\\.example:8443 · ${task.source_id}`));
 assert.match(text(planning), new RegExp(`target\\.example · ${task.target_id}`));
@@ -119,6 +122,12 @@ assert(creation); assert.deepEqual(Object.keys(JSON.parse(creation.options.body)
 planning = context.window.testMigrationPlanPanel(nodes);
 assert.match(text(planning), /Direct → Relay/);
 assert.equal(all(planning).filter(item => item.textContent?.includes('<plan')).length, 1);
+for (const availability of [false, undefined]) {
+    const unavailable = context.window.testMigrationPlanPanel({...nodes, migration_planning_available: availability});
+    assert.match(text(unavailable), /暂不支持创建或启动迁移计划/);
+    assert(!button(unavailable, '生成只读迁移计划'));
+    assert(!button(unavailable, '确认并开始迁移'));
+}
 prompted = 'wrong confirmation';
 let starts = calls.filter(call => call.path.endsWith('/start')).length;
 await button(planning, '确认并开始迁移').onclick();

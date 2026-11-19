@@ -65,7 +65,7 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 	if err != nil {
 		return err
 	}
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, relationship)
 		if err != nil {
 			return err
@@ -97,7 +97,7 @@ func (r *Repository) PrepareOwnedDelete(ctx context.Context, relationship string
 	})
 }
 func (r *Repository) CommitOwnedDelete(ctx context.Context, id string, free int64, a store.NodeAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		row, err := r.ownedStorageNode(ctx, q, "")
 		if err != nil {
 			return err

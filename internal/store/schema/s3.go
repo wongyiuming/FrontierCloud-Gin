@@ -13,7 +13,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/migrations"
 )
 
-var s3ColumnPattern = regexp.MustCompile(`^([a-z][a-z0-9_]*)\s+([A-Z]+(?:\([0-9]+\))?)\s+NOT NULL`)
+var s3ColumnPattern = regexp.MustCompile(`^([a-z][a-z0-9_]*)\s+([A-Z]+(?:\([0-9]+\))?)\s+(NOT NULL|NULL)`)
 var s3CheckPattern = regexp.MustCompile(`(?i)\bCHECK\s*\(`)
 
 type s3Index struct {
@@ -100,11 +100,14 @@ func prepareS3Schema(ctx context.Context, conn *sql.Conn, backend string, statem
 }
 
 func checkS3Columns(ctx context.Context, conn *sql.Conn, backend, table, statement string) error {
-	type column struct{ name, kind string }
+	type column struct {
+		name, kind string
+		notNull    bool
+	}
 	var expected []column
 	for _, line := range strings.Split(statement, "\n") {
-		if match := s3ColumnPattern.FindStringSubmatch(strings.TrimSpace(line)); len(match) == 3 {
-			expected = append(expected, column{match[1], strings.ReplaceAll(match[2], "INTEGER", "INT")})
+		if match := s3ColumnPattern.FindStringSubmatch(strings.TrimSpace(line)); len(match) == 4 {
+			expected = append(expected, column{match[1], strings.ReplaceAll(match[2], "INTEGER", "INT"), match[3] == "NOT NULL"})
 		}
 	}
 	query := "SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? ORDER BY ORDINAL_POSITION"
@@ -138,7 +141,7 @@ func checkS3Columns(ctx context.Context, conn *sql.Conn, backend, table, stateme
 			notNull = nullable == "NO"
 		}
 		kind = strings.ReplaceAll(strings.ToUpper(kind), "INTEGER", "INT")
-		if err != nil || index >= len(expected) || expected[index] != (column{name, kind}) || !notNull {
+		if err != nil || index >= len(expected) || expected[index] != (column{name, kind, notNull}) {
 			return fmt.Errorf("incompatible S3 table columns: %s", table)
 		}
 		index++
@@ -153,7 +156,14 @@ func checkS3Columns(ctx context.Context, conn *sql.Conn, backend, table, stateme
 		return fmt.Errorf("incomplete S3 table columns: %s", table)
 	}
 	expectedPrimary := map[string][]string{"s3_members": {"member_id"}, "s3_uploads": {"upload_id"},
-		"s3_upload_parts": {"upload_id", "part_number"}, "s3_objects": {"media_id"}, "s3_probe_journal": {"probe_id"}}[table]
+		"legacy_read_control_intents": {"operation_index"}, "selected_upload_intents": {"operation_index"}, "selected_upload_parent_scopes": {"parent_index"}, "selected_upload_cancellations": {"operation_id"}, "sealed_recording_audio": {"recording_index"},
+		"opaque_migration_tasks": {"task_id"}, "opaque_migration_units": {"task_id", "unit_id"}, "opaque_migration_objects": {"task_id", "object_index"},
+		"s3_upload_parts": {"upload_id", "part_number"}, "s3_objects": {"media_id"}, "s3_probe_journal": {"probe_id"},
+		"public_ingress_config": {"singleton"}, "native_transport_policy": {"member_id"},
+		"sealed_tree_meta": {"singleton"}, "sealed_tree_records": {"object_index"},
+		"sealed_tree_encryption_ids": {"encryption_id"}, "sealed_tree_blob_ids": {"blob_index"},
+		"sealed_tree_placements": {"object_index"}, "sealed_tree_aliases": {"alias_index"}, "sealed_tree_revocations": {"operation_index"}, "sealed_tree_operation_ids": {"operation_id"},
+		"sealed_tree_pending_files": {"operation_id"}, "sealed_tree_pending_facts": {"operation_id"}, "sealed_tree_facts": {"object_index"}, "sealed_tree_fence": {"singleton"}, "sealed_tree_owner_fence": {"singleton"}, "sealed_tree_capacity_intents": {"operation_index"}, "sealed_tree_capacity_meta": {"singleton"}, "sealed_tree_capacity_accounts": {"member_index"}, "sealed_tree_capacity_ids": {"encryption_id"}, "sealed_tree_source_pin": {"singleton"}, "sealed_tree_capacity_scopes": {"operation_index"}, "sealed_tree_listing_meta": {"singleton"}, "sealed_tree_listing": {"index_key"}}[table]
 	if backend == "mysql" {
 		var err error
 		primary, _, err = s3IndexColumns(ctx, conn, backend, table, "PRIMARY")
@@ -168,12 +178,58 @@ func checkS3Columns(ctx context.Context, conn *sql.Conn, backend, table, stateme
 }
 
 func normalizedS3Check(value string) string {
-	return strings.Map(func(c rune) rune {
-		if c == '(' || c == ')' || c == '`' || c == ' ' || c == '\t' || c == '\r' || c == '\n' {
-			return -1
+	var result strings.Builder
+	quoted := false
+	for i := 0; i < len(value); i++ {
+		// MySQL 8.4's INFORMATION_SCHEMA can represent these exact schema
+		// literals with escaped quote delimiters. Only these complete tokens
+		// are canonicalized; arbitrary escaped literals still fail closed.
+		if !quoted {
+			matched := false
+			for _, literal := range []string{"Direct", "Relay", "pending", "completed", "cancelled", "copying", "verified", "publishing", "published", "committed", "cleanup_pending", "cleaned"} {
+				token := "_utf8mb4\\'" + literal + "\\'"
+				if strings.HasPrefix(value[i:], token) {
+					result.WriteByte('\'')
+					result.WriteString(literal)
+					result.WriteByte('\'')
+					i += len(token) - 1
+					matched = true
+					break
+				}
+			}
+			if matched {
+				continue
+			}
 		}
-		return c
-	}, strings.ToUpper(value))
+		// MySQL exposes a character-set introducer on its own string
+		// literals. Strip it only outside quoted text; otherwise a modified
+		// literal ending in "_utf8mb4" could compare equal to another value.
+		if !quoted && i+8 < len(value) && strings.EqualFold(value[i:i+8], "_utf8mb4") && value[i+8] == '\'' {
+			i += 7
+			continue
+		}
+		c := value[i]
+		if c == '\'' {
+			result.WriteByte(c)
+			if quoted && i+1 < len(value) && value[i+1] == '\'' {
+				result.WriteByte(value[i+1])
+				i++
+				continue
+			}
+			quoted = !quoted
+			continue
+		}
+		if !quoted {
+			if c == '(' || c == ')' || c == '`' || c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+				continue
+			}
+			if c >= 'a' && c <= 'z' {
+				c -= 'a' - 'A'
+			}
+		}
+		result.WriteByte(c)
+	}
+	return result.String()
 }
 
 func s3Checks(statement string) []string {

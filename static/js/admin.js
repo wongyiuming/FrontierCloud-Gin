@@ -3,6 +3,13 @@ let selectionKind = null;
 let selectionAnchorPath = null;
 let visibleMediaItems = [];
 const selectedItemKinds = new Map();
+const selectedItemResourceIDs = new Map();
+const selectedMediaDeleteTargets = new Map();
+const pendingMediaDeletes = new Map();
+let sealedMediaDelete = false;
+let sealedMediaDownload = null;
+let mediaDeleteAvailable = false;
+let mediaDeleteBusy = false;
 let currentPath = '';
 let csrfCookieName = '__Host-admin-csrf';
 let uploadRunning = false;
@@ -39,9 +46,22 @@ let priorityScope = '';
 let lyricCatalog = null;
 let lyricOrigin = null;
 let lyricTargets = new Set();
+let lyricEdits = new Map();
+let lyricSaving = false;
+let lyricLoading = false;
+let lyricCatalogRequest = 0;
+let lyricCatalogController = null;
 let lyricTrackAnchor = null;
 let lyricScopes = {track: 'music', lyric: 'lyrics'};
 let lyricSearchTimer = null;
+let lyricCursors = {track: '', lyric: ''};
+let lyricCursorHistory = {track: [], lyric: []};
+const sealedLyrics = () => lyricCatalog?.sealed_scope === 'directory';
+
+function resetLyricPage(kind) {
+    lyricCursors[kind] = '';
+    lyricCursorHistory[kind] = [];
+}
 const ADMIN_ACTIVITY_GRACE_MS = 60 * 1000;
 let adminLastActivityAt = Date.now();
 let uploadLimits = {
@@ -239,12 +259,11 @@ function updateToolbar() {
     $('selection').textContent = count
         ? `已选择 ${count} 个${selectionLabel}`
         : '未选择';
-    $('download').disabled = !count;
-    $('delete').disabled = !count;
     const selectedRows = [...document.querySelectorAll('.tree-row.selected')];
     const mutationPending = selectedRows.some(row => row.dataset.mutationState);
-    $('download').disabled = !count || mutationPending;
-    $('delete').disabled = !count || mutationPending;
+    $('download').disabled = !count || mutationPending || sealedMediaDownload === null ||
+        sealedMediaDownload && selectedItemResourceIDs.size !== count;
+    updateMediaDeleteControls(mutationPending);
     const canHide = count && selectionKind === 'directory'
         && selectedRows.length === count
         && selectedRows.every(row => row.dataset.hideable === 'true');
@@ -267,11 +286,47 @@ function refreshSelectionKind() {
 function selectMediaItem(item) {
     selected.add(item.path);
     selectedItemKinds.set(item.path, item.kind);
+    if (/^[0-9a-f]{64}$/.test(item.media_id || '')) {
+        selectedItemResourceIDs.set(item.path, item.media_id);
+        if (item.kind === 'file' || item.kind === 'directory') {
+            selectedMediaDeleteTargets.set(item.path, {
+                path: item.path, resource_id: item.media_id, directory: item.kind === 'directory' || undefined,
+            });
+        }
+    }
+}
+
+function recoverPendingMediaDeletes(items) {
+    if (!sealedMediaDelete) return;
+    let recovered = false;
+    for (const item of items) {
+        if (item.mutation_state !== 'pending_delete' || (item.kind !== 'file' && item.kind !== 'directory') ||
+            !/^[0-9a-f]{64}$/.test(item.media_id || '') || !/^[0-9a-f]{32}$/.test(item.mutation_operation || '')) continue;
+        const directory = item.kind === 'directory';
+        const previous = pendingMediaDeletes.get(item.media_id);
+        if (previous && (previous.path !== item.path || Boolean(previous.directory) !== directory ||
+            previous.operation_id && previous.operation_id !== item.mutation_operation)) {
+            throw new Error('删除操作已变化，请刷新后核对');
+        }
+        pendingMediaDeletes.set(item.media_id, {
+            path: item.path, resource_id: item.media_id, operation_id: item.mutation_operation, directory: directory || undefined,
+        });
+        recovered = true;
+    }
+    if (recovered && !mediaDeleteBusy) showMediaDeleteStatus(`${pendingMediaDeletes.size} 项删除待完成，可继续同一操作`);
+}
+
+function mediaMutationText(item) {
+    if (item.mutation_state === 'pending_delete') return '删除待完成';
+    if (item.mutation_state) return item.rename_target ? `改名恢复中 → ${item.rename_target}` : '资源变更待完成';
+    return item.kind === 'file' ? formatSize(item.size) : '';
 }
 
 function clearMediaSelection() {
     selected.clear();
     selectedItemKinds.clear();
+    selectedItemResourceIDs.clear();
+    selectedMediaDeleteTargets.clear();
     selectionKind = null;
     selectionAnchorPath = null;
 }
@@ -285,6 +340,8 @@ function toggleSelection(item, event = {}) {
         if (!additive) {
             selected.clear();
             selectedItemKinds.clear();
+            selectedItemResourceIDs.clear();
+            selectedMediaDeleteTargets.clear();
         }
         const start = Math.min(rangeStart, rangeEnd);
         const end = Math.max(rangeStart, rangeEnd);
@@ -293,6 +350,8 @@ function toggleSelection(item, event = {}) {
         if (selected.has(item.path)) {
             selected.delete(item.path);
             selectedItemKinds.delete(item.path);
+            selectedItemResourceIDs.delete(item.path);
+            selectedMediaDeleteTargets.delete(item.path);
         } else {
             selectMediaItem(item);
         }
@@ -300,6 +359,8 @@ function toggleSelection(item, event = {}) {
     } else {
         selected.clear();
         selectedItemKinds.clear();
+        selectedItemResourceIDs.clear();
+        selectedMediaDeleteTargets.clear();
         selectMediaItem(item);
         selectionAnchorPath = item.path;
     }
@@ -325,6 +386,17 @@ async function renderTree() {
         : `/api/v1/media/admin/tree?path=${encodeURIComponent(currentPath)}`;
     const data = await api(endpoint);
     visibleMediaItems = data.items || [];
+    recoverPendingMediaDeletes(visibleMediaItems);
+    for (const item of visibleMediaItems) {
+        const resourceID = selectedItemResourceIDs.get(item.path);
+        if (resourceID && item.media_id !== resourceID) {
+            selected.delete(item.path);
+            selectedItemKinds.delete(item.path);
+            selectedItemResourceIDs.delete(item.path);
+            selectedMediaDeleteTargets.delete(item.path);
+        }
+    }
+    refreshSelectionKind();
     $('mediaSearch').disabled = !currentPath;
     $('mediaSearch').placeholder = currentPath
         ? `仅搜索 /data/media/${currentPath} 及其子目录`
@@ -359,7 +431,7 @@ async function renderTree() {
             : '';
         row.innerHTML = `<span class="kind">${item.kind === 'directory' ? '📁' : '📄'}</span>`
             + `<span class="tree-label"><span class="name" title="${escapeHtml(item.name)}">${expandableFilename(item.name, 52)}</span>${pathDetail}</span>`
-            + `<small>${item.mutation_state ? `改名恢复中 → ${escapeHtml(item.rename_target || '')}` : item.kind === 'file' ? formatSize(item.size) : ''}</small>`;
+            + `<small>${escapeHtml(mediaMutationText(item))}</small>`;
         bindExpandableFilenames(row);
         row.onclick = event => {
             event.stopPropagation();
@@ -367,7 +439,7 @@ async function renderTree() {
         };
         row.ondblclick = event => {
             event.stopPropagation();
-            if (item.kind === 'directory') {
+            if (item.kind === 'directory' && !item.mutation_state) {
                 currentPath = item.path;
                 clearMediaSelection();
                 renderTree();
@@ -442,104 +514,6 @@ function uploadOne(formData, onProgress, endpoint = '/api/v1/media/admin/upload/
     });
 }
 
-async function runUploadTask(fileList, relativePaths = null, lyricUpload = false) {
-    if (uploadRunning) return;
-    const files = [...fileList];
-    if (!files.length) return;
-    if (files.length > uploadLimits.max_upload_task_files) {
-        alert(`一次上传任务最多选择 ${uploadLimits.max_upload_task_files} 个文件`);
-        return;
-    }
-    if (!lyricUpload && !relativePaths && !currentPath) {
-        alert('上传文件前请先进入 data/media/music 或 data/media/vido 下的分类目录');
-        return;
-    }
-
-    setUploadControlsDisabled(true);
-    $('uploadProgress').classList.remove('hidden');
-    $('uploadResults').innerHTML = '';
-    $('uploadTaskTitle').textContent = lyricUpload ? '歌词上传任务' : (relativePaths ? '文件夹上传任务' : '多文件上传任务');
-    setProgress('currentProgress', 'currentPercent', 0);
-    setProgress('totalProgress', 'totalPercent', 0);
-
-    const totalUnits = files.reduce((sum, file) => sum + Math.max(file.size, 1), 0);
-    let completedUnits = 0;
-    let successCount = 0;
-    let failedCount = 0;
-
-    try {
-        for (let index = 0; index < files.length; index += 1) {
-            const file = files[index];
-            const displayName = relativePaths ? relativePaths[index] : file.name;
-            const fileUnits = Math.max(file.size, 1);
-            $('currentFileLabel').textContent = `当前：${displayName}`;
-            $('totalTaskLabel').textContent = `任务总进度 ${index + 1}/${files.length}`;
-            $('uploadSummary').textContent = `成功 ${successCount}，失败 ${failedCount}`;
-            setProgress('currentProgress', 'currentPercent', 0);
-
-            const fileLimit = lyricUpload ? uploadLimits.max_lyric_file_size : uploadLimits.max_upload_file_size;
-            if (file.size > fileLimit) {
-                failedCount += 1;
-                completedUnits += fileUnits;
-                addUploadResult(displayName, 'error', `超过 ${formatSize(fileLimit)} 限制`);
-                setProgress('totalProgress', 'totalPercent', completedUnits / totalUnits * 100);
-                continue;
-            }
-
-            try {
-                const progress = fraction => {
-                    setProgress('currentProgress', 'currentPercent', fraction * 100);
-                    setProgress(
-                        'totalProgress',
-                        'totalPercent',
-                        (completedUnits + fileUnits * fraction) / totalUnits * 100,
-                    );
-                };
-                let result;
-                if (clusterUpload && !lyricUpload) {
-                    const reservation = await api('/api/v1/media/admin/upload/session', {
-                        method: 'POST', headers: requestHeaders(), body: JSON.stringify({
-                            storage_member_id: $('uploadStorageMember').value,
-                            target_dir: currentPath,
-                            relative_path: relativePaths ? relativePaths[index] : null,
-                            filename: file.name,
-                            size_bytes: file.size,
-                        }),
-                    });
-                    await uploadRaw(reservation.upload_url, file, progress, reservation.transport === 'Direct');
-                    result = reservation.transport === 'Direct'
-                        ? await api(`/api/v1/media/admin/upload/session/${reservation.upload_id}/finalize`, {
-                            method: 'POST', headers: requestHeaders(), body: '{}',
-                        })
-                        : {path: reservation.path};
-                } else {
-                    const formData = new FormData();
-                    if (!lyricUpload) formData.append('target_dir', currentPath);
-                    if (relativePaths) formData.append('relative_path', relativePaths[index]);
-                    formData.append('file', file, file.name);
-                    result = await uploadOne(formData, progress,
-                        lyricUpload ? '/api/v1/media/admin/upload/lyric' : '/api/v1/media/admin/upload/item');
-                }
-                successCount += 1;
-                addUploadResult(displayName, 'ok', result.path);
-            } catch (error) {
-                failedCount += 1;
-                addUploadResult(displayName, 'error', error.message);
-            }
-
-            completedUnits += fileUnits;
-            setProgress('currentProgress', 'currentPercent', 100);
-            setProgress('totalProgress', 'totalPercent', completedUnits / totalUnits * 100);
-        }
-    } finally {
-        setUploadControlsDisabled(false);
-        $('uploadSummary').textContent = `完成：成功 ${successCount}，失败 ${failedCount}`;
-        $('currentFileLabel').textContent = '当前文件处理完成';
-        await renderTree().catch(() => {});
-        if (lyricUpload) await loadLyricCatalog().catch(() => {});
-    }
-}
-
 function lyricRelationSet(kind, path) {
     if (!lyricCatalog) return new Set();
     return new Set(lyricCatalog.relations
@@ -553,6 +527,7 @@ function unlinkedLyricTracks(tracks) {
 
 function lyricUsageMatches(item, kind) {
     const filter = $(kind === 'track' ? 'lyricsTrackUsage' : 'lyricsFileUsage').value;
+    if (sealedLyrics() && kind === 'lyric' && item.linked_count == null) return filter === 'all';
     const used = kind === 'track' ? Boolean(item.lyric_path) : Number(item.linked_count || 0) > 0;
     return filter === 'all' || (filter === 'used' && used) || (filter === 'unused' && !used);
 }
@@ -562,18 +537,43 @@ function visibleLyricItems(kind) {
     return (source || []).filter(item => lyricUsageMatches(item, kind));
 }
 
+function updateLyricActions() {
+    $('lyricsAutoLink').disabled = !lyricCatalog || lyricLoading || lyricSaving;
+    $('lyricsSaveLink').disabled = lyricSaving || (sealedLyrics() && !lyricEdits.size);
+}
+
 function renderLyricRelationJson() {
+    updateLyricActions();
+    if (sealedLyrics()) {
+        const paths = new Set(lyricOrigin ? lyricCatalog.tracks.filter(track => track.lyric_path === lyricOrigin.path).map(track => track.path) : []);
+        for (const [path, linked] of lyricEdits) {
+            if (linked) paths.add(path);
+            else paths.delete(path);
+        }
+        $('lyricsRelationJson').textContent = JSON.stringify({
+            '歌词': lyricOrigin?.path || null,
+            '曲目': [...paths].sort((left, right) => left.localeCompare(right, 'zh-Hans-CN')),
+            '待解除关联': [...lyricEdits].filter(([, linked]) => !linked).map(([path]) => path),
+        }, null, 2);
+        return;
+    }
     $('lyricsRelationJson').textContent = JSON.stringify({
         '歌词': lyricOrigin?.path || null,
         '曲目': lyricOrigin ? [...lyricTargets].sort((left, right) => left.localeCompare(right, 'zh-Hans-CN')) : [],
     }, null, 2);
 }
 
-function exitLyricSelection(message = '请选择一份歌词') {
+function clearLyricSelection() {
     lyricOrigin = null;
     lyricTargets.clear();
+    lyricEdits.clear();
     lyricTrackAnchor = null;
     $('lyricsSaveLink').classList.add('hidden');
+}
+
+function exitLyricSelection(message = '请选择一份歌词') {
+    if (lyricSaving) return;
+    clearLyricSelection();
     $('lyricsModeStatus').textContent = message;
     renderLyricObjects();
     renderLyricRelationJson();
@@ -582,6 +582,7 @@ function exitLyricSelection(message = '请选择一份歌词') {
 function activateLyric(path) {
     lyricOrigin = {kind: 'lyric', path};
     lyricTargets = lyricRelationSet('lyric', path);
+    lyricEdits.clear();
     lyricTrackAnchor = null;
     $('lyricsSaveLink').classList.remove('hidden');
     $('lyricsModeStatus').textContent = `正在编辑：${path}；点击曲目添加或取消，Esc 退出`;
@@ -593,6 +594,18 @@ function toggleLyricTrack(path, event) {
     if (!lyricOrigin) return;
     const items = visibleLyricItems('track');
     const index = items.findIndex(item => item.path === path);
+    if (sealedLyrics()) {
+        if (index < 0) return;
+        const link = !lyricTrackSelected(items[index]);
+        const anchor = event.shiftKey && lyricTrackAnchor !== null ? lyricTrackAnchor : index;
+        for (const item of items.slice(Math.min(anchor, index), Math.max(anchor, index) + 1)) {
+            setLyricTrackEdit(item, link);
+        }
+        lyricTrackAnchor = index;
+        renderLyricObjects();
+        renderLyricRelationJson();
+        return;
+    }
     if (event.shiftKey && lyricTrackAnchor !== null && index >= 0) {
         const start = Math.min(lyricTrackAnchor, index);
         const end = Math.max(lyricTrackAnchor, index);
@@ -611,7 +624,20 @@ function toggleLyricTrack(path, event) {
     renderLyricRelationJson();
 }
 
+function lyricTrackSelected(item) {
+    if (!lyricOrigin) return false;
+    return sealedLyrics()
+        ? (lyricEdits.get(item.path) ?? (item.lyric_path === lyricOrigin.path))
+        : lyricTargets.has(item.path);
+}
+
+function setLyricTrackEdit(item, linked) {
+    if (linked === (item.lyric_path === lyricOrigin.path)) lyricEdits.delete(item.path);
+    else lyricEdits.set(item.path, linked);
+}
+
 function selectLyricObject(kind, path, event) {
+    if (lyricSaving) return;
     if (kind === 'lyric') {
         if (lyricOrigin?.path === path) exitLyricSelection();
         else activateLyric(path);
@@ -626,12 +652,12 @@ function lyricObjectButton(item, kind) {
     button.className = 'lyrics-object';
     const path = item.path;
     const isOrigin = lyricOrigin?.path === path;
-    const isTarget = kind === 'track' && Boolean(lyricOrigin) && lyricTargets.has(path);
+    const isTarget = kind === 'track' && lyricTrackSelected(item);
     const used = kind === 'track' ? Boolean(item.lyric_path) : Number(item.linked_count || 0) > 0;
     button.classList.toggle('selected', isOrigin);
     button.classList.toggle('linked', isTarget || (!lyricOrigin && used));
     button.disabled = kind === 'track' && !lyricOrigin;
-    const count = kind === 'track' ? (item.lyric_path ? '已关联' : '未关联') : `${item.linked_count || 0} 首`;
+    const count = kind === 'track' ? (item.lyric_path ? '已关联' : '未关联') : (item.linked_count == null ? '关联数未知' : `${item.linked_count} 首`);
     const displayPath = `/${path.split('/').slice(1).join('/')}`;
     button.innerHTML = `<span class="lyrics-object-label" title="${escapeHtml(path)}"><strong>${expandableFilename(item.name, 34)}</strong><small>媒体路径 ${expandableFilename(displayPath, 52)}</small></span><small>${count}</small>`;
     bindExpandableFilenames(button);
@@ -643,16 +669,23 @@ function lyricObjectButton(item, kind) {
         button.ondblclick = async event => {
             event.preventDefault();
             event.stopPropagation();
+            if (lyricSaving) return;
             if (lyricOrigin?.path !== path) activateLyric(path);
             const filename = path.split('/').pop() || item.name;
             $('lyricsTrackFilter').value = filename.replace(/\.lrc$/i, '');
             $('lyricsTrackUsage').value = 'unused';
+            resetLyricPage('track');
+            lyricTrackAnchor = null;
             try {
-                await loadLyricCatalog();
+                if (!await loadLyricCatalog()) return;
+                if (lyricOrigin?.path !== path || lyricSaving) return;
                 const unlinkedTracks = unlinkedLyricTracks(lyricCatalog.tracks);
-                lyricTargets = new Set(unlinkedTracks.map(track => track.path));
-                lyricTrackAnchor = unlinkedTracks.length ? unlinkedTracks.length - 1 : null;
-                $('lyricsModeStatus').textContent = `已选择歌词，并选中 ${lyricTargets.size} 条未关联搜索结果；请确认后保存`;
+                if (sealedLyrics()) {
+                    for (const track of unlinkedTracks) setLyricTrackEdit(track, true);
+                } else {
+                    lyricTargets = new Set(unlinkedTracks.map(track => track.path));
+                }
+                $('lyricsModeStatus').textContent = `已选择歌词，并选中 ${unlinkedTracks.length} 条${sealedLyrics() ? '本页' : ''}未关联搜索结果；请确认后保存`;
                 renderLyricObjects();
                 renderLyricRelationJson();
             } catch (error) {
@@ -671,6 +704,7 @@ function lyricDirectoryButton(item, kind) {
     bindExpandableFilenames(button);
     button.onclick = () => {
         lyricScopes[kind] = item.path;
+        resetLyricPage(kind);
         const filter = kind === 'track' ? $('lyricsTrackFilter') : $('lyricsFileFilter');
         filter.value = '';
         lyricTrackAnchor = null;
@@ -688,10 +722,39 @@ function lyricUpButton(kind) {
     button.innerHTML = '<span class="lyrics-object-label"><strong>↩ 返回上级</strong></span>';
     button.onclick = () => {
         lyricScopes[kind] = lyricScopes[kind].split('/').slice(0, -1).join('/');
+        resetLyricPage(kind);
         const filter = kind === 'track' ? $('lyricsTrackFilter') : $('lyricsFileFilter');
         filter.value = '';
         lyricTrackAnchor = null;
         loadLyricCatalog().catch(error => alert(error.message));
+    };
+    return button;
+}
+
+function lyricPageButton(kind, next) {
+    const available = next ? lyricCatalog.next?.[kind] : lyricCursorHistory[kind].length;
+    if (!available) return null;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'lyrics-object lyrics-directory';
+    button.textContent = next ? '下一页' : '上一页';
+    button.onclick = async () => {
+        lyricTrackAnchor = null;
+        const old = lyricCursors[kind];
+        const history = [...lyricCursorHistory[kind]];
+        if (next) {
+            lyricCursorHistory[kind].push(old);
+            lyricCursors[kind] = lyricCatalog.next[kind];
+        } else {
+            lyricCursors[kind] = lyricCursorHistory[kind].pop();
+        }
+        try {
+            await loadLyricCatalog();
+        } catch (error) {
+            lyricCursors[kind] = old;
+            lyricCursorHistory[kind] = history;
+            alert(`翻页失败，请刷新目录后重试：${error.message}`);
+        }
     };
     return button;
 }
@@ -716,64 +779,157 @@ function renderLyricObjects() {
     }
     for (const item of visibleLyricItems('lyric')) files.appendChild(lyricObjectButton(item, 'lyric'));
     for (const item of visibleLyricItems('track')) tracks.appendChild(lyricObjectButton(item, 'track'));
+    if (sealedLyrics()) {
+        for (const [kind, list] of [['track', tracks], ['lyric', files]]) {
+            for (const next of [false, true]) {
+                const button = lyricPageButton(kind, next);
+                if (button) list.appendChild(button);
+            }
+        }
+    }
     if (!files.children.length) files.innerHTML = '<div class="lyrics-empty">没有符合条件的歌词</div>';
     if (!tracks.children.length) tracks.innerHTML = '<div class="lyrics-empty">没有符合条件的曲目</div>';
 }
 
 async function loadLyricCatalog() {
+    const request = ++lyricCatalogRequest;
+    lyricCatalogController?.abort();
+    const controller = new AbortController();
+    lyricCatalogController = controller;
+    lyricLoading = true;
+    updateLyricActions();
     const params = new URLSearchParams({
         track_path: lyricScopes.track,
         lyric_path: lyricScopes.lyric,
     });
     const trackQuery = $('lyricsTrackFilter').value.trim();
     const lyricQuery = $('lyricsFileFilter').value.trim();
+    const lyricUsage = $('lyricsFileUsage');
     if (trackQuery) params.set('track_q', trackQuery);
     if (lyricQuery) params.set('lyric_q', lyricQuery);
-    lyricCatalog = await api(`/api/v1/media/admin/lyrics/catalog?${params}`);
+    if (sealedLyrics() && lyricUsage.value !== 'all') params.set('lyric_usage', lyricUsage.value);
+    if (!trackQuery && lyricCursors.track) params.set('track_cursor', lyricCursors.track);
+    if (!lyricQuery && lyricCursors.lyric && lyricUsage.value === 'all') params.set('lyric_cursor', lyricCursors.lyric);
+    let data;
+    try {
+        data = await api(`/api/v1/media/admin/lyrics/catalog?${params}`, {signal: controller.signal});
+    } catch (error) {
+        if (!controller.signal.aborted && request === lyricCatalogRequest) throw error;
+        return;
+    } finally {
+        if (request === lyricCatalogRequest) {
+            lyricCatalogController = null;
+            lyricLoading = false;
+            updateLyricActions();
+        }
+    }
+    if (controller.signal.aborted || request !== lyricCatalogRequest) return;
+    lyricCatalog = data;
     lyricScopes = {...lyricScopes, ...lyricCatalog.scopes};
-    const trackPathLabel = `/data/media/${lyricScopes.track}${trackQuery ? ` 内搜索：${trackQuery}${lyricCatalog.truncated.track ? '（仅显示前 200 项）' : ''}` : ''}`;
-    const lyricPathLabel = `/data/media/${lyricScopes.lyric}${lyricQuery ? ` 内搜索：${lyricQuery}${lyricCatalog.truncated.lyric ? '（仅显示前 200 项）' : ''}` : ''}`;
+    for (const id of ['lyricsTrackFilter', 'lyricsFileFilter']) {
+        $(id).placeholder = '搜索当前目录及其子目录';
+    }
+    lyricUsage.disabled = sealedLyrics() && lyricCatalog.lyric_usage_filter !== true;
+    lyricUsage.title = sealedLyrics() ? (lyricUsage.disabled ? '未能完整统计当前范围，请缩小目录后重试' : '按当前曲目目录及子目录统计') : '';
+    if (lyricUsage.disabled) lyricUsage.value = 'all';
+    const filtered = sealedLyrics() && lyricUsage.value !== 'all';
+    const pathLabel = (kind, query, filtering = false) => {
+        const base = `/data/media/${lyricScopes[kind]}`;
+        const scope = query ? ` 内搜索：${query}` : '';
+        const filter = filtering ? '（按当前曲目范围筛选使用状态）' : '';
+        const note = query || filtering ? (lyricCatalog.truncated[kind] ? '（仅显示前 200 项）' : '') : (sealedLyrics() ? '（当前目录）' : '');
+        return base + scope + filter + note;
+    };
+    const trackPathLabel = pathLabel('track', trackQuery);
+    const lyricPathLabel = pathLabel('lyric', lyricQuery, filtered);
     $('lyricsTrackPath').innerHTML = expandableFilename(trackPathLabel, 88);
     $('lyricsFilePath').innerHTML = expandableFilename(lyricPathLabel, 88);
     bindExpandableFilenames($('lyricsTrackPath'));
     bindExpandableFilenames($('lyricsFilePath'));
-    $('lyricsTrackCount').textContent = String(lyricCatalog.counts.tracks);
-    $('lyricsFileCount').textContent = String(lyricCatalog.counts.lyrics);
-    $('lyricsRelationCount').textContent = String(lyricCatalog.counts.relations);
-    if (lyricOrigin && !lyricCatalog.lyrics.some(item => item.path === lyricOrigin.path)) {
+    const pageCounts = lyricCatalog.counts_scope === 'page';
+    const countPrefix = pageCounts ? '本页 ' : '';
+    const trackDirectories = lyricCatalog.track_directories?.length || 0;
+    const lyricDirectories = lyricCatalog.lyric_directories?.length || 0;
+    const countLabel = (count, directories) => pageCounts && count === 0 && directories
+        ? `本页 ${directories} 个目录` : countPrefix + count;
+    $('lyricsTrackCount').textContent = countLabel(lyricCatalog.counts.tracks, trackDirectories);
+    $('lyricsFileCount').textContent = countLabel(lyricCatalog.counts.lyrics, lyricDirectories);
+    $('lyricsRelationCount').textContent = pageCounts && lyricCatalog.counts.tracks === 0 && trackDirectories
+        ? '进入曲目目录查看' : countPrefix + lyricCatalog.counts.relations;
+    $('lyricsAutoLink').title = sealedLyrics() ? '匹配当前曲目和歌词目录及其子目录' : '';
+    if (!sealedLyrics() && !lyricSaving && lyricOrigin && !lyricCatalog.lyrics.some(item => item.path === lyricOrigin.path)) {
         exitLyricSelection('当前筛选中看不到原歌词，已退出选择状态');
-        return;
+        return true;
     }
     renderLyricObjects();
     renderLyricRelationJson();
+    return true;
 }
 
-$('lyricsRefresh').onclick = () => loadLyricCatalog().catch(error => alert(error.message));
+$('lyricsRefresh').onclick = () => {
+    resetLyricPage('track');
+    resetLyricPage('lyric');
+    lyricTrackAnchor = null;
+    loadLyricCatalog().catch(error => alert(error.message));
+};
 $('lyricsAutoLink').onclick = async () => {
-    const button = $('lyricsAutoLink');
-    button.disabled = true;
+    if (!lyricCatalog || lyricLoading || lyricSaving) return;
+    const sealed = sealedLyrics();
+    const linked = sealed || !lyricOrigin ? null : lyricRelationSet('lyric', lyricOrigin.path);
+    if (lyricEdits.size || (linked && (linked.size !== lyricTargets.size || [...lyricTargets].some(path => !linked.has(path))))) {
+        $('lyricsModeStatus').textContent = '请先保存或退出当前编辑，再执行同名关联';
+        return;
+    }
+    lyricSaving = true;
+    updateLyricActions();
+    const status = $('lyricsModeStatus');
+    const previousStatus = status.textContent;
+    status.textContent = '正在按同名关联…';
+    const body = sealed
+        ? {manual: true, track_path: lyricScopes.track, lyric_path: lyricScopes.lyric}
+        : {manual: true};
+    let summary = '';
     try {
         const result = await api('/api/v1/media/admin/lyrics/auto-relate', {
-            method: 'POST', headers: requestHeaders(), body: JSON.stringify({manual: true}),
+            method: 'POST', headers: requestHeaders(), body: JSON.stringify(body),
         });
+        summary = `同名关联完成：关联 ${result.linked}，保留 ${result.preserved}，无匹配 ${result.unmatched}，歧义 ${result.ambiguous}`;
+        if (!sealed) clearLyricSelection();
+        resetLyricPage('track');
+        resetLyricPage('lyric');
+        lyricTrackAnchor = null;
         await loadLyricCatalog();
-        $('lyricsModeStatus').textContent = `同名关联完成：关联 ${result.linked}，无匹配 ${result.unmatched}，歧义 ${result.ambiguous}`;
+        status.textContent = summary;
     } catch (error) {
-        alert(error.message);
+        if (summary) {
+            status.textContent = `${summary}；刷新失败，可点击刷新重试`;
+            renderLyricObjects();
+            renderLyricRelationJson();
+        } else {
+            status.textContent = previousStatus;
+            alert(error.message);
+        }
     } finally {
-        button.disabled = false;
+        lyricSaving = false;
+        updateLyricActions();
     }
 };
 for (const id of ['lyricsTrackFilter', 'lyricsFileFilter']) {
     $(id).oninput = () => {
         clearTimeout(lyricSearchTimer);
+        lyricCatalogController?.abort();
         lyricTrackAnchor = null;
+        resetLyricPage(id === 'lyricsTrackFilter' ? 'track' : 'lyric');
         lyricSearchTimer = setTimeout(() => loadLyricCatalog().catch(error => alert(error.message)), 220);
     };
 }
 for (const id of ['lyricsTrackUsage', 'lyricsFileUsage']) {
     $(id).onchange = () => {
         lyricTrackAnchor = null;
+        if (id === 'lyricsFileUsage' && sealedLyrics()) {
+            resetLyricPage('lyric');
+            return loadLyricCatalog().catch(error => alert(error.message));
+        }
         renderLyricObjects();
     };
 }
@@ -788,26 +944,55 @@ globalThis.addEventListener?.('keydown', event => {
 });
 
 $('lyricsSaveLink').onclick = async () => {
-    if (!lyricOrigin) return;
-    $('lyricsSaveLink').disabled = true;
+    if (!lyricOrigin || lyricSaving) return;
+    const sealed = sealedLyrics();
+    if (sealed && !lyricEdits.size) return;
+    const limit = Math.min(200, uploadLimits.max_batch_files || 200);
+    if (sealed && lyricEdits.size > limit) {
+        alert(`一次最多保存 ${limit} 条关联变更，请减少本次勾选后重试`);
+        return;
+    }
+    lyricSaving = true;
+    updateLyricActions();
+    const savedPath = lyricOrigin.path;
+    const body = sealed ? {
+        origin_kind: 'lyric', origin_path: savedPath,
+        linked_paths: [...lyricEdits].filter(([, linked]) => linked).map(([path]) => path),
+        unlinked_paths: [...lyricEdits].filter(([, linked]) => !linked).map(([path]) => path),
+    } : {origin_kind: 'lyric', origin_path: savedPath, linked_paths: [...lyricTargets]};
+    let saved = false;
     try {
         await api('/api/v1/media/admin/lyrics/relations', {
-            method: 'POST', headers: requestHeaders(), body: JSON.stringify({
-                origin_kind: 'lyric',
-                origin_path: lyricOrigin.path,
-                linked_paths: [...lyricTargets],
-            }),
+            method: 'POST', headers: requestHeaders(), body: JSON.stringify(body),
         });
-        const savedPath = lyricOrigin.path;
+        saved = true;
+        if (sealed) {
+            // The mutation succeeded even if the subsequent read fails.
+            for (const track of lyricCatalog.tracks) {
+                if (lyricEdits.has(track.path)) track.lyric_path = lyricEdits.get(track.path) ? savedPath : null;
+            }
+            lyricEdits.clear();
+            resetLyricPage('track');
+            lyricTrackAnchor = null;
+        }
         await loadLyricCatalog();
-        if (lyricOrigin?.path === savedPath) lyricTargets = lyricRelationSet('lyric', savedPath);
-        $('lyricsModeStatus').textContent = `已保存：${savedPath}；再次点击歌词或按 Esc 退出`;
+        if (lyricOrigin?.path === savedPath) {
+            if (!sealed) lyricTargets = lyricRelationSet('lyric', savedPath);
+            $('lyricsModeStatus').textContent = `已保存：${savedPath}；再次点击歌词或按 Esc 退出`;
+        }
         renderLyricObjects();
         renderLyricRelationJson();
     } catch (error) {
-        alert(error.message);
+        if (saved) {
+            $('lyricsModeStatus').textContent = `已保存：${savedPath}；刷新失败，可点击刷新重试`;
+            renderLyricObjects();
+            renderLyricRelationJson();
+        } else {
+            alert(error.message);
+        }
     } finally {
-        $('lyricsSaveLink').disabled = false;
+        lyricSaving = false;
+        updateLyricActions();
     }
 };
 
@@ -1435,32 +1620,93 @@ $('copyKey').onclick = async () => {
 };
 $('dismissKey').onclick = () => $('newKeyResult').classList.add('hidden');
 
-$('uploadFiles').onclick = () => $('fileInput').click();
-$('uploadFolder').onclick = () => $('folderInput').click();
-$('uploadLyrics').onclick = () => $('lyricsInput').click();
-$('uploadLyricsFolder').onclick = () => $('lyricsFolderInput').click();
-$('fileInput').onchange = async event => {
-    await runUploadTask(event.target.files);
-    event.target.value = '';
-};
-$('folderInput').onchange = async event => {
-    const paths = [...event.target.files].map(file => file.webkitRelativePath || file.name);
-    await runUploadTask(event.target.files, paths);
-    event.target.value = '';
-};
-$('lyricsInput').onchange = async event => {
-    await runUploadTask(event.target.files, null, true);
-    event.target.value = '';
-};
-$('lyricsFolderInput').onchange = async event => {
-    const files = [...event.target.files].filter(file => file.name.toLowerCase().endsWith('.lrc'));
-    const paths = files.map(file => file.webkitRelativePath || file.name);
-    await runUploadTask(files, paths, true);
-    event.target.value = '';
-};
+function updateMediaDeleteControls(mutationPending) {
+    const deleteButton = $('delete');
+    const retryButton = $('retryDelete');
+    const exactTargets = selected.size > 0 && selectedMediaDeleteTargets.size === selected.size;
+    deleteButton.disabled = !selected.size || mutationPending || mediaDeleteBusy ||
+        (sealedMediaDelete && (!mediaDeleteAvailable || !exactTargets));
+    deleteButton.title = !sealedMediaDelete ? '' : !mediaDeleteAvailable
+        ? '加密资源删除暂不可用' : '选择文件或目录后删除';
+    retryButton.classList.toggle('hidden', !pendingMediaDeletes.size);
+    retryButton.disabled = mediaDeleteBusy || !pendingMediaDeletes.size;
+    retryButton.textContent = `继续删除（${pendingMediaDeletes.size}）`;
+}
+
+function showMediaDeleteStatus(message) {
+    const status = $('deleteStatus');
+    status.textContent = message;
+    status.classList.toggle('hidden', !message);
+}
+
+async function sendSealedMediaDelete(targets) {
+    if (mediaDeleteBusy) return;
+    mediaDeleteBusy = true;
+    $('modalOk').disabled = true;
+    updateToolbar();
+    try {
+        const result = await api('/api/v1/media/admin/delete', {
+            method: 'POST', headers: requestHeaders(), body: JSON.stringify({targets}),
+        });
+        const remaining = new Map(targets.map(target => [target.resource_id, target]));
+        if (!Array.isArray(result.items) || result.items.length !== remaining.size) throw new Error('删除结果未确认');
+        for (const item of result.items) {
+            const target = remaining.get(item?.resource_id);
+            if (!target || target.path !== item.path || (item.directory ?? false) !== Boolean(target.directory) ||
+                !/^[0-9a-f]{32}$/.test(item.operation_id || '') ||
+                target.operation_id && target.operation_id !== item.operation_id ||
+                (item.state !== 'pending' && item.state !== 'deleted')) throw new Error('删除结果未确认');
+            remaining.delete(item.resource_id);
+        }
+        let deleted = 0;
+        for (const {path, resource_id, operation_id, state, directory} of result.items) {
+            if (state === 'pending') pendingMediaDeletes.set(resource_id, {path, resource_id, operation_id, directory});
+            else {
+                pendingMediaDeletes.delete(resource_id);
+                deleted += 1;
+            }
+        }
+        clearMediaSelection();
+        let message = deleted ? `删除已完成 ${deleted} 项` : '';
+        if (pendingMediaDeletes.size) message += `${message ? ' · ' : ''}${pendingMediaDeletes.size} 项删除待完成，可继续同一操作`;
+        try {
+            await renderTree();
+        } catch (_) {
+            message += ' · 列表刷新失败';
+        }
+        showMediaDeleteStatus(message);
+    } catch (error) {
+        if (!error.status || error.status >= 500) {
+            for (const target of targets) {
+                if (/^[0-9a-f]{32}$/.test(target.operation_id || '')) pendingMediaDeletes.set(target.resource_id, target);
+            }
+            showMediaDeleteStatus('删除结果未确认，请刷新列表核对；可继续已确认的待完成操作');
+        }
+        throw error;
+    } finally {
+        mediaDeleteBusy = false;
+        $('modalOk').disabled = false;
+        updateToolbar();
+    }
+}
 
 $('delete').onclick = () => {
+    if ($('delete').disabled || mediaDeleteBusy) return;
     const paths = [...selected];
+    if (sealedMediaDelete) {
+        if (paths.length > (uploadLimits.max_batch_files || 200)) {
+            alert(`一次最多选择 ${uploadLimits.max_batch_files || 200} 项`);
+            return;
+        }
+        const targets = paths.map(path => {
+            const target = selectedMediaDeleteTargets.get(path);
+            return pendingMediaDeletes.get(target.resource_id) || target;
+        });
+        const label = selectionKind === 'directory' ? '个目录及其全部内容' :
+            selectionKind === 'file' ? '个文件' : '项（目录含其全部内容）';
+        showModal('确认删除', `将删除选中的 ${targets.length} ${label}。此操作不可恢复。`, () => sendSealedMediaDelete(targets));
+        return;
+    }
     const objectLabel = selectionKind === 'directory'
         ? '目录及其全部内容'
         : (selectionKind === 'file' ? '文件' : '对象');
@@ -1468,57 +1714,94 @@ $('delete').onclick = () => {
         '确认删除',
         `将删除选中的 ${paths.length} 个${objectLabel}。此操作不可恢复。`,
         async () => {
-            await api('/api/v1/media/admin/delete', {
+            const result = await api('/api/v1/media/admin/delete', {
                 method: 'POST', headers: requestHeaders(), body: JSON.stringify({paths}),
             });
             clearMediaSelection();
             await renderTree();
+            if (result?.pending_delete?.length) {
+                alert(`已有 ${result.deleted || 0} 个对象完成删除；仍有 ${result.pending_delete.length} 个对象等待存储节点确认删除。\n\n等待中的路径暂时不会允许同名重传，系统会自动重试。`);
+            }
         },
     );
 };
 
+$('retryDelete').onclick = () => {
+    if ($('retryDelete').disabled) return;
+    const targets = [...pendingMediaDeletes.values()].slice(0, uploadLimits.max_batch_files || 200);
+    showModal('继续删除', `继续处理 ${targets.length} 项原删除操作。`, () => sendSealedMediaDelete(targets));
+};
+
 $('hide').onclick = () => {
+    if ($('hide').disabled) return;
     const paths = [...selected];
     const hidden = $('hide').textContent === '隐藏';
     showModal(
         hidden ? '确认隐藏' : '确认恢复',
-        `${hidden ? '公共视图将隐藏' : '公共视图将恢复显示'}选中的 ${paths.length} 个目录。`,
+        hidden
+            ? `从默认列表隐藏所选的 ${paths.length} 个目录。已知地址和隐藏入口仍可播放。`
+            : `恢复所选的 ${paths.length} 个目录及其子目录的隐藏设置。上级目录的隐藏仍然有效。`,
         async () => {
-            await api('/api/v1/media/admin/hide', {
-                method: 'POST', headers: requestHeaders(), body: JSON.stringify({paths, hidden}),
-            });
-            clearMediaSelection();
-            await renderTree();
+            const confirmButton = $('modalOk');
+            confirmButton.disabled = true;
+            try {
+                await api('/api/v1/media/admin/hide', {
+                    method: 'POST', headers: requestHeaders(), body: JSON.stringify({paths, hidden}),
+                });
+                clearMediaSelection();
+                let message = hidden ? '目录已隐藏' : '隐藏设置已恢复';
+                try {
+                    await renderTree();
+                } catch (_) {
+                    message += ' · 刷新失败';
+                }
+                if (!selected.size) $('selection').textContent = message;
+            } finally {
+                confirmButton.disabled = false;
+            }
         },
     );
 };
 
-$('download').onclick = async () => {
-    const paths = [...selected];
-    const url = `/api/v1/media/admin/download?paths=${encodeURIComponent(JSON.stringify(paths))}`;
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = paths.length === 1
-        ? paths[0].split('/').pop()
-        : 'media-download.zip';
-    anchor.click();
-};
-
-$('backPublic').onclick = () => { location.href = '/api/v1/media'; };
+async function publicSiteURL() {
+    const node = await api('/api/v1/media/admin/nodes');
+    if (node.role === 'Standalone') return new URL('/api/v1/media/', location.origin).href;
+    const routing = await api('/api/v1/media/admin/nodes/public-routing');
+    const origin = new URL(routing?.ingress?.public_origin);
+    if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) {
+        throw new Error('公共入口状态不可用，请在公共入口模块检查后重试');
+    }
+    return new URL('/api/v1/media/', origin).href;
+}
+async function openPublicSite(event) {
+    event.preventDefault();
+    try { location.href = await publicSiteURL(); }
+    catch (error) { alert(error.message || '公共入口状态不可用'); }
+}
+$('backPublic').onclick = openPublicSite;
+document.querySelectorAll('a[data-public-site], a.admin-navigation-brand').forEach(link => { link.onclick = openPublicSite; });
 $('logout').onclick = async () => {
     if (storagePoolTimer) clearInterval(storagePoolTimer);
+    let destination = '/api/v1/media/admin/login';
+    try { destination = await publicSiteURL(); } catch (_) { /* Logout still proceeds if routing is unavailable. */ }
     try {
         await fetch('/api/v1/media/admin/logout', {method: 'POST', headers: requestHeaders(false)});
     } finally {
-        location.href = '/api/v1/media';
+        location.href = destination;
     }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const showMediaTreeError = error => {
+        if (error?.status !== 401) $('tree').textContent = `媒体目录加载失败：${error.message}`;
+    };
     try {
         const status = await api('/api/v1/media/admin/status');
         uploadLimits = {...uploadLimits, ...status.limits};
         csrfCookieName = status.csrf_cookie_name || csrfCookieName;
+        sealedMediaDelete = status.media_delete_protocol === 'sealed-v1';
+        sealedMediaDownload = status.media_download_protocol === 'sealed-v1';
+        mediaDeleteAvailable = status.media_delete_available === true;
         if (status.node_role === 'Follower') {
             document.body.classList.add('follower-admin');
             for (const module of document.querySelectorAll('.admin-module')) {
@@ -1535,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (status.node_role === 'Master') {
             clusterUpload = true;
-            await refreshStoragePool();
+            refreshStoragePool().catch(() => {});
             storagePoolTimer = setInterval(() => refreshStoragePool().catch(() => {}), 10000);
         }
         if (status.credential_kind !== 'persistent') {
@@ -1544,11 +1827,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             $('temporaryKey').textContent = '临时会话不可签发';
         }
-        await renderTree();
+        await renderTree().catch(showMediaTreeError);
         await loadSecurityStatus(true);
         securityTimer = setInterval(loadSecurityStatus, 15000);
-    } catch (_error) {
-        // api() handles expired sessions and navigation.
+    } catch (error) {
+        showMediaTreeError(error);
     }
 }, {once: true});
 // Karaoke user controls reuse the existing Admin session and CSRF boundary.
@@ -1586,7 +1869,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const quota = document.createElement('input'); quota.type = 'number'; quota.min = '1'; quota.value = String(Math.ceil(user.quota_bytes / 1048576)); quota.setAttribute('aria-label', `${user.username} 配额 MiB`);
             operations.append(quota, action('保存配额', () => mutate(user.user_id, 'quota', Number(quota.value))),
                 action(user.status === 'banned' ? '解封' : '封禁', () => mutate(user.user_id, user.status === 'banned' ? 'unban' : 'ban')),
-                action('删除', async () => { if (confirm(`删除 ${user.username} 及全部录音？`)) await mutate(user.user_id, 'delete'); }));
+                action('删除', async () => {
+                    const message = data.recordings_cleanup_required
+                        ? `删除 ${user.username}？用户需先在个人主页清理录音和待确认上传。`
+                        : `删除 ${user.username} 及全部录音？`;
+                    if (confirm(message)) await mutate(user.user_id, 'delete');
+                }));
             row.append(operations); body.append(row);
         }
     }

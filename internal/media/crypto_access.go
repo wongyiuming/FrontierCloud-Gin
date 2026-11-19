@@ -13,12 +13,16 @@ import (
 	"strings"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/network"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 // CryptoObject rechecks current object visibility and ownership before a key
 // envelope is issued. A browser session is never a substitute for this check.
 func (s *Service) CryptoObject(ctx context.Context, name, resourceID string, admin bool) (store.MediaObject, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return store.MediaObject{}, err
+	}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
 		return store.MediaObject{}, err
@@ -43,7 +47,8 @@ func (s *Service) cryptoObject(ctx context.Context, name, resourceID string, adm
 	}
 	var object store.MediaObject
 	if role == "Master" && !strings.HasPrefix(name, "lyrics/") {
-		row, _, e := s.resolveGlobal(ctx, resourceID, name)
+		_, peer := network.AuthenticatedIngressFromContext(ctx)
+		row, _, e := s.resolveGlobalFor(ctx, resourceID, name, peer && !admin && !hasVerifiedLyricRead(ctx))
 		if e != nil {
 			return object, e
 		}
@@ -85,7 +90,11 @@ func (s *Service) cryptoObject(ctx context.Context, name, resourceID string, adm
 			return object, os.ErrNotExist
 		}
 		if object.Kind == "lyric" {
-			if e = s.authorizePublicLyric(ctx, object.Path, hiddenPaths); e != nil {
+			lyricCtx := ctx
+			if _, verified := network.AuthenticatedIngressFromContext(ctx); verified && network.HasActivePublicAdmission(ctx) {
+				lyricCtx = context.WithValue(ctx, verifiedLyricReadKey{}, true)
+			}
+			if e = s.authorizePublicLyric(lyricCtx, object.Path, hiddenPaths); e != nil {
 				return object, e
 			}
 		}
@@ -132,11 +141,17 @@ func (s *Service) authorizePublicLyric(ctx context.Context, name string, hiddenP
 // EncryptedLyric exposes only the existing relation. It never parses ciphertext
 // as text and never moves lyric truth to a storage node.
 func (s *Service) EncryptedLyric(ctx context.Context, name, resourceID string) (store.MediaObject, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return store.MediaObject{}, err
+	}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
 		return store.MediaObject{}, err
 	}
 	defer release()
+	if _, verified := network.AuthenticatedIngressFromContext(ctx); verified && network.HasActivePublicAdmission(ctx) {
+		ctx = context.WithValue(ctx, verifiedLyricReadKey{}, true)
+	}
 	// Inspect the relation before enforcing encrypted-content visibility. Plain
 	// lyrics retain the existing default-lyric fallback, including hidden tracks.
 	track, err := s.cryptoObject(ctx, name, resourceID, true)
@@ -155,7 +170,7 @@ func (s *Service) EncryptedLyric(ctx context.Context, name, resourceID string) (
 	} else if role, e := s.role(ctx); e != nil {
 		return store.MediaObject{}, e
 	} else if role == "Master" {
-		row, _, e := s.resolveGlobal(ctx, "", track.Path)
+		row, _, e := s.resolveGlobalFor(ctx, "", track.Path, false)
 		if e != nil {
 			return store.MediaObject{}, e
 		}
@@ -186,6 +201,9 @@ func (s *Service) EncryptedLyric(ctx context.Context, name, resourceID string) (
 // the lyric cannot authorize a new snapshot from a hidden or removed source.
 // Previously saved owner snapshots deliberately use RecordingLyricSnapshot.
 func (s *Service) RecordingLyricSource(ctx context.Context, token string) (store.RecordingMetadata, string, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return store.RecordingMetadata{}, "", err
+	}
 	metadata := store.RecordingMetadata{Lyrics: []store.RecordingLyric{}}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
@@ -252,6 +270,9 @@ func (s *Service) RecordingLyricSource(ctx context.Context, token string) (store
 
 // OpenCryptoLyric applies the same path and visibility checks as key delivery.
 func (s *Service) OpenCryptoLyric(ctx context.Context, name string) (*os.File, os.FileInfo, error) {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return nil, nil, err
+	}
 	release, err := s.acquire(ctx, false)
 	if err != nil {
 		return nil, nil, err

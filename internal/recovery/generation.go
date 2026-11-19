@@ -2,10 +2,8 @@ package recovery
 
 import "github.com/wongyiuming/FrontierCloud-Gin/migrations"
 
-// Generations 6 and 7 are explicit native source boundaries for generation 8.
-// Keep the already-defined generation-6 archive readable while admitting the
-// deployed generation-7 source of this additive S3 upgrade. A future schema
-// must independently define and test its boundary; current-1 is not inferred.
+// Generations 10 and 11 add dormant tables. Nonempty tree/intent state is
+// refused until protected backup and restore are implemented.
 func SupportedSchemaGeneration(generation int) bool {
-	return generation == migrations.Generation || migrations.Generation == 8 && (generation == 6 || generation == 7)
+	return generation == migrations.Generation || migrations.Generation == 11 && (generation == 6 || generation == 7 || generation == 8 || generation == 9 || generation == 10)
 }

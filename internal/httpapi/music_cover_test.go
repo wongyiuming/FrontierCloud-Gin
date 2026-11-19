@@ -17,6 +17,7 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -24,6 +25,44 @@ type failingMusicRange struct {
 	*clusterHTTP
 	cause error
 	reads int
+}
+
+func TestOpaqueTreeRejectsLegacyArtworkReaders(t *testing.T) {
+	router, _, dir, public := publicFixture(t, false)
+	data, _ := musicArtworkFixture()
+	if err := os.WriteFile(filepath.Join(dir, "media/music/artist/song.mp3"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	query := url.Values{"file_path": {"music/artist/song.mp3"}}.Encode()
+	if result := request(router, "GET", "/api/v1/media/metadata?"+query, ""); result.Code != 200 {
+		t.Fatal("legacy fixture", result.Code)
+	}
+	public.opaqueTree = &sealedtree.SQLStore{}
+	for _, target := range []string{"/api/v1/media/metadata?" + query, "/api/v1/media/cover?" + query, "/api/v1/media/catalog/artwork?path=music/artist", "/api/v1/media/catalog/categories?media_type=music", "/api/v1/media/catalog/media?media_type=music&path=music/artist&playback_session_id=test"} {
+		result := request(router, "GET", target, "")
+		if result.Code != 503 || result.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatalf("legacy artwork reader admitted with tree: %s %d", target, result.Code)
+		}
+	}
+
+	// The opaque category page may load before catalog admission, but must
+	// never bootstrap data from the legacy filesystem.
+	page := request(router, "GET", "/api/v1/media/music/category?path=music/artist", "")
+	_, config, found := strings.Cut(page.Body.String(), "const catalogConfig = ")
+	config, _, terminated := strings.Cut(config, ";")
+	var catalog map[string]json.RawMessage
+	if page.Code != 200 || page.Header().Get("Cache-Control") != "no-store, no-cache, must-revalidate, max-age=0" || !found || !terminated ||
+		json.Unmarshal([]byte(config), &catalog) != nil || catalog["bootstrap"] != nil || strings.Contains(page.Body.String(), "song.mp3") {
+		t.Fatal("opaque category page is not an empty catalog shell", page.Code)
+	}
+	var target string
+	if json.Unmarshal(catalog["url"], &target) != nil || target != "/api/v1/media/catalog/categories?media_type=music&path=music%2Fartist" {
+		t.Fatal("opaque category shell lost its guarded catalog URL")
+	}
+	result := request(router, "GET", target, "")
+	if result.Code != 503 || result.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatal("opaque category shell exposed the legacy catalog", result.Code)
+	}
 }
 
 func (f *failingMusicRange) MediaReadRange(context.Context, string, string, string, string, string, int64, int64, int64) ([]byte, error) {
@@ -46,7 +85,7 @@ func musicArtworkFixture() ([]byte, []byte) {
 }
 
 func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
-	router, _, dir, _ := publicFixture(t, false)
+	router, _, dir, public := publicFixture(t, false)
 	data, jpeg := musicArtworkFixture()
 	file := filepath.Join(dir, "media/music/artist/song.mp3")
 	if err := os.WriteFile(file, data, 0644); err != nil {
@@ -58,12 +97,12 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	track := catalog.Entries[0]
-	if track.Title == "测试曲目" || track.Artist == "達明一派" || track.Album != "" || track.Cover != "/favicon.ico" || !track.NativeMetadata {
+	if track.Title != "song" || track.Artist != "前沿娱乐" || track.Album != "" || track.Cover != "/favicon.ico" || track.NativeMetadata {
 		t.Fatal(track)
 	}
 	metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode(), "")
 	var tags map[string]string
-	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["title"] != "测试曲目" || tags["artist"] != "達明一派" || tags["album"] != "More" || tags["cover"] == "" || metadata.Header().Get("Cache-Control") != "private, no-store" {
+	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || len(tags) != 1 || tags["cover"] == "" || metadata.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatal(metadata.Code, metadata.Body.String())
 	}
 	track.Cover = tags["cover"]
@@ -111,6 +150,23 @@ func TestMusicCatalogTagsCoverAndCategoryArtwork(t *testing.T) {
 		if response := request(router, "GET", target, ""); response.Code != 404 {
 			t.Fatal("invalid artwork path accepted", target, response.Code)
 		}
+	}
+	// A secondary category page receives the same lazy picture parser and candidates.
+	albumDir := filepath.Join(dir, "media/music/artist/album")
+	if err := os.MkdirAll(albumDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(albumDir, "nested.mp3"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	page := request(router, "GET", "/api/v1/media/music/category?path=music/artist", "")
+	if page.Code != 200 || !strings.Contains(page.Body.String(), public.assets["js/music-metadata.js"]) || !strings.Contains(page.Body.String(), "artwork_url") {
+		t.Fatal("secondary category lost deferred artwork", page.Code, page.Body.String())
+	}
+	nested := request(router, "GET", "/api/v1/media/catalog/artwork?path=music/artist/album", "")
+	var nestedArtwork media.CategoryArtwork
+	if nested.Code != 200 || json.Unmarshal(nested.Body.Bytes(), &nestedArtwork) != nil || len(nestedArtwork.MetadataTracks) != 1 || !nestedArtwork.MetadataTracks[0].NativeMetadata {
+		t.Fatal("secondary category lost its candidate", nested.Code, nested.Body.String())
 	}
 	// A deleted file must not be disclosed from the derived-picture cache.
 	if err := os.Remove(file); err != nil {
@@ -181,12 +237,12 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 				t.Fatal(w.Code, w.Body.String())
 			}
 			track := result.Entries[0]
-			if !track.NativeMetadata || track.Artist == "達明一派" || track.Cover != "/favicon.ico" {
+			if track.NativeMetadata || track.Title != "tagged" || track.Artist != "前沿娱乐" || track.Cover != "/favicon.ico" {
 				t.Fatal(track)
 			}
 			metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {track.MediaPath}, "resource_id": {track.ResourceID}}.Encode(), "")
 			var tags map[string]string
-			if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["artist"] != "達明一派" || tags["album"] != "More" {
+			if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || len(tags) != 1 || tags["cover"] == "" {
 				t.Fatal(metadata.Code, metadata.Body.String())
 			}
 			track.Cover = tags["cover"]
@@ -234,8 +290,8 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 			}
 		})
 	}
-	// A remote ID3v1-only track needs only its ten-byte prefix and final 128
-	// bytes. Cold catalog/artwork reads must not reach the peer media endpoint.
+	// A remote ID3v1-only track needs only its ten-byte prefix; its final 128
+	// bytes contain no picture. Cold catalog/artwork reads must not reach the peer media endpoint.
 	payload := make([]byte, 512)
 	copy(payload, "ID3")
 	copy(payload[384:], "TAG")
@@ -287,7 +343,7 @@ func TestMusicArtworkPrimaryDirectRelay(t *testing.T) {
 	}
 	metadata := request(router, "GET", "/api/v1/media/metadata?"+url.Values{"file_path": {ticket.Path}, "resource_id": {ticket.MediaID}}.Encode(), "")
 	var tags map[string]string
-	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || tags["title"] != "Legacy title" || tags["artist"] != "Legacy artist" || tags["album"] != "Legacy album" || strings.Join(ranges, ",") != "bytes=0-9,bytes=384-511" {
+	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &tags) != nil || len(tags) != 0 || strings.Join(ranges, ",") != "bytes=0-9" {
 		t.Fatal(metadata.Code, metadata.Body.String(), ranges)
 	}
 	for _, target := range []string{

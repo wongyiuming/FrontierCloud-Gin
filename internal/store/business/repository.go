@@ -15,16 +15,28 @@ import (
 	pathpkg "path"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/logarchive"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
 type Repository struct {
+	logArchive          atomic.Pointer[logarchive.Catalog]
+	logProducer         atomic.Pointer[logarchive.Producer]
 	db                  *sql.DB
 	backend             string
 	generation          atomic.Uint64
+	publicOriginMu      sync.RWMutex
+	publicOrigin        string
+	peerIngressEnabled  atomic.Bool
+	ingressReadersMu    sync.Mutex
+	ingressReaders      int
+	ingressReadersWake  chan struct{}
+	ownerControlMu      sync.RWMutex
+	ownerControlAcquire func(context.Context, bool) (store.OwnerControlLease, error)
 	backupFiles         *os.Root
 	backupFilesReadOnly bool
 }
@@ -37,8 +49,11 @@ func New(db *sql.DB, backend string) *Repository { return &Repository{db: db, ba
 func (r *Repository) CatalogGeneration() uint64 { return r.generation.Load() }
 
 type catalogWrite struct {
+	logs     *logarchive.Catalog
+	producer *logarchive.Producer
 	queryer
 	changed bool
+	mysql   bool
 }
 
 func (q *catalogWrite) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -72,7 +87,7 @@ func (r *Repository) write(ctx context.Context, fn func(queryer) error) error {
 					return err
 				}
 				defer tx.Rollback()
-				writes := &catalogWrite{queryer: tx}
+				writes := &catalogWrite{queryer: tx, mysql: true, logs: r.logArchive.Load(), producer: r.logProducer.Load()}
 				if err := fn(writes); err != nil {
 					return err
 				}
@@ -112,7 +127,7 @@ func (r *Repository) write(ctx context.Context, fn func(queryer) error) error {
 		defer cancel()
 		_, _ = conn.ExecContext(rollback, "ROLLBACK")
 	}()
-	writes := &catalogWrite{queryer: conn}
+	writes := &catalogWrite{queryer: conn, logs: r.logArchive.Load(), producer: r.logProducer.Load()}
 	if err = fn(writes); err != nil {
 		return err
 	}
@@ -171,6 +186,9 @@ func (r *Repository) ensure(ctx context.Context, q queryer, o store.MediaObject)
 }
 
 func (r *Repository) ensureWithLock(ctx context.Context, q queryer, o store.MediaObject, lock string) (string, error) {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return "", err
+	}
 	// Serialize discovery with migration registration before reading object rows.
 	// A linked file whose publication SQL has not committed must never acquire
 	// a fresh ID through the historical filesystem discovery path.
@@ -243,7 +261,7 @@ func (r *Repository) EnsureObjects(ctx context.Context, items []store.MediaObjec
 	// Deterministic lock order prevents multi-object MySQL deadlocks.
 	items = append([]store.MediaObject(nil), items...)
 	sort.Slice(items, func(i, j int) bool { return locator(items[i].Path) < locator(items[j].Path) })
-	err := r.write(ctx, func(q queryer) error {
+	err := r.legacyWrite(ctx, func(q queryer) error {
 		clear(result)
 		for _, o := range items {
 			id, err := r.ensure(ctx, q, o)
@@ -337,7 +355,7 @@ func (r *Repository) Stats(ctx context.Context, ids []string) (map[string]store.
 }
 
 func (r *Repository) RecordPlayback(ctx context.Context, o store.MediaObject, session string) (result store.PlaybackResult, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		result = store.PlaybackResult{}
 		id, err := r.ensure(ctx, q, o)
 		if err != nil {
@@ -349,6 +367,9 @@ func (r *Repository) RecordPlayback(ctx context.Context, o store.MediaObject, se
 }
 
 func (r *Repository) recordPlayback(ctx context.Context, q queryer, id, mediaPath, session string, result *store.PlaybackResult) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	*result = store.PlaybackResult{MediaID: id}
 	now := time.Now().UTC()
 	stamp := timestamp(now)
@@ -410,7 +431,7 @@ func (r *Repository) LyricPath(ctx context.Context, id string) (string, error) {
 }
 
 func (r *Repository) BindLyric(ctx context.Context, track, lyric store.MediaObject) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		mediaID, err := r.ensure(ctx, q, track)
 		if err != nil {
 			return err
@@ -424,7 +445,7 @@ func (r *Repository) BindLyric(ctx context.Context, track, lyric store.MediaObje
 }
 
 func (r *Repository) InitializeIdentity(ctx context.Context, initial store.NodeIdentity) (result store.NodeIdentity, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.ingressWrite(ctx, func(q queryer) error {
 		err := q.QueryRowContext(ctx, "SELECT node_id,`role`,endpoint,private_key,created_at FROM node_identity WHERE singleton=1"+r.lock()).Scan(&result.ID, &result.Role, &result.Endpoint, &result.PrivateKey, &result.CreatedAt)
 		if err == nil {
 			return nil

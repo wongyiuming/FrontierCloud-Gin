@@ -52,7 +52,13 @@
     function range(header, size) {
         if (!header) return {start: 0, end: size - 1, partial: false};
         const match = /^bytes=(\d*)-(\d*)$/.exec(header);
-        if (!match || (!match[1] && !match[2]) || size === 0) return null;
+        if (!match || (!match[1] && !match[2])) return null;
+        // Match the existing Go ServeContent behaviour for empty files:
+        // a start range is ignored; a suffix range is an empty 206 response.
+        if (size === 0) {
+            if (!Number.isSafeInteger(Number(match[1] || match[2]))) return null;
+            return {start: 0, end: -1, partial: !match[1]};
+        }
         let start;
         let end;
         if (!match[1]) {

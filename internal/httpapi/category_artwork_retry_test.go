@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,7 +55,7 @@ func TestDirectoryArtworkDeadlineIncludesMasterCategoryLookup(t *testing.T) {
 	public.media.ConfigureCluster(db.Nodes(), pool, master)
 	target := "/api/v1/media/catalog/artwork?path=music/artist"
 	first := request(router, "GET", target, "")
-	if !errors.Is(pool.lastErr, context.DeadlineExceeded) || pool.budget <= 0 || pool.budget > 2*time.Second || first.Code != 503 || first.Header().Get("Retry-After") != "2" || first.Header().Get("Cache-Control") != "private, no-store" {
+	if !errors.Is(pool.lastErr, context.DeadlineExceeded) || pool.budget <= 0 || pool.budget > 2*time.Second || first.Code != 503 || first.Header().Get("Retry-After") != "2" || !strings.Contains(first.Header().Get("Cache-Control"), "no-store") {
 		t.Fatal("Master existence lookup escaped the shared deadline", first.Code, first.Header(), pool.lastErr, pool.budget)
 	}
 	pool.blocked = false

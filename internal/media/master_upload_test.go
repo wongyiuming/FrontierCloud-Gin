@@ -32,6 +32,9 @@ func masterFixture(t *testing.T) (string, *sqlitestore.Store, *Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Nodes().(store.PublicRoutingRepository).ConfigurePublicOrigin("https://master.test"); err != nil {
+		t.Fatal(err)
+	}
 	svc.ConfigureCluster(db.Nodes(), db.Pool(), nil)
 	return root, db, svc
 }
@@ -137,7 +140,7 @@ func TestMasterPublicationCrashRecoveryKeepsIdentityQuotaAndExpiryProof(t *testi
 					t.Fatal(err)
 				}
 				journal := uploadJournal{Format: "frontiercloud-master-upload", Version: 1, ID: stage.id, UploadSessionID: v.ID, Object: store.MediaObject{ID: v.MediaID, Path: v.Path, Kind: "audio"}, Bytes: 10, SHA256: stage.Digest, Audit: store.AdminAudit{RequestID: "master-recovery"}}
-				if err := svc.writeUploadJournal(journal); err != nil {
+				if err := svc.writeUploadJournal(context.Background(), journal); err != nil {
 					t.Fatal(err)
 				}
 				stage.retain = true

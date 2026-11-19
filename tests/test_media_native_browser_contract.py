@@ -102,18 +102,19 @@ class NativeMediaBrowserContractTests(unittest.TestCase):
                 self.functions['check_geometry']({**valid, **change})
 
     def test_additional_hook_does_not_replace_the_default_fleet(self):
-        source = (ROOT / 'internal/nativeacceptance/native_matrix_real_test.go').read_text()
+        source = (ROOT / 'internal/nativeacceptance/native_matrix_real_test.go').read_text(encoding='utf-8')
         hook = source.split('if os.Getenv("FRONTIERCLOUD_TEST_MEDIA_BROWSER") == "1" {', 1)[1].split('if os.Getenv("FRONTIERCLOUD_TEST_ENCRYPTED_QUEUE_BROWSER")', 1)[0]
         self.assertIn('fleetMediaBrowserGate(t, ctx, e, project, sites, perform)', hook)
         self.assertNotIn('return', hook)
         self.assertIn('kinds := []string{"go-sqlite", "go-mysql"}', source)
         self.assertIn('five Web services did not recover idle CPU within 30 seconds', source)
         # The TLS test driver must use normal contexts and an imported actual CA.
-        tree = ast.parse(DRIVER.read_text())
+        driver_source = DRIVER.read_text(encoding='utf-8')
+        tree = ast.parse(driver_source)
         for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
             for keyword in call.keywords:
                 self.assertNotEqual(keyword.arg, 'ignore_https_errors')
-        self.assertNotIn('--ignore-certificate-errors', DRIVER.read_text())
+        self.assertNotIn('--ignore-certificate-errors', driver_source)
 
     def test_tall_lyrics_require_both_real_inputs_and_accessible_unchanged_text(self):
         value = dict(before='31px', after='31px', textLength=84, whiteSpace='normal', rows=8,
@@ -146,7 +147,7 @@ class NativeMediaBrowserContractTests(unittest.TestCase):
             validate(value, changed)
 
     def test_browser_waits_are_functions_under_the_real_nonce_csp(self):
-        tree = ast.parse(DRIVER.read_text())
+        tree = ast.parse(DRIVER.read_text(encoding='utf-8'))
         waits = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
                  and isinstance(node.func, ast.Attribute) and node.func.attr == 'wait_for_function']
         self.assertGreater(len(waits), 10)

@@ -52,9 +52,11 @@ unavailable; they do not become supported catalog mutation methods.
    Admin interface. The Master seals them in its existing private vault.
 5. Run the capability test, then enable allocation. The test creates and removes
    a small journaled probe; failure or uncertain cleanup keeps admission closed.
-6. In Media management, explicitly select the S3 site type and storage mode.
-   FrontierCloud selects a member; the user does not choose an individual member
-   for each upload. Direct children of one parent retain their storage affinity.
+6. The current Media management implementation selects the S3 site type and
+   storage mode, then automatically chooses a member. The updated upload
+   requirement is to select a specific S3 member, displayed with its endpoint
+   and bucket, before starting. This change is not yet implemented. Direct
+   children of one parent continue to retain their storage affinity.
 
 Neither `.env`, shared AWS profiles, instance metadata nor host cloud identity
 supplies these credentials. The application has no custom-CA/TLS-skip switch for
@@ -107,6 +109,25 @@ insufficient. See AWS's [CORS elements](https://docs.aws.amazon.com/AmazonS3/lat
 
 Provider keys are generated immutable identifiers below the configured prefix.
 Logical folder rename updates catalog metadata without copying bucket payload.
+New uploads use independent random media identifiers and provider keys, and
+source grants do not put the media filename in provider URL parameters. The
+browser receives its download name separately from the authenticated Master.
+New-format provider metadata carries an opaque random ownership marker instead
+of the catalog media ID or upload ID. The format is recorded with the durable
+upload intent and completion proof; existing objects keep their original format.
+Existing object identifiers, keys and provider metadata remain unchanged:
+older uploads derived their media ID from the upload ID and then-current logical path, while
+exposing both identifiers to the provider. A provider that already holds those
+values can test candidate paths offline; sealing Master metadata or issuing new
+read grants does not erase that historical exposure. A provider may also
+correlate the exposed media ID with entries visible in a public catalog.
+The experimental private metadata format is not release-ready: the previous
+production version rejects its additional proof field during backup preflight.
+An isolated test of that version also shows its cancellation path can abort a
+known multipart upload before it rejects the new metadata on the completed
+object. Refusal to delete the object alone is therefore not a safe rollback.
+Do not activate it until an exact-version restore and rollback path preserves
+all post-upgrade data and has been verified.
 The Master journals intent before provider mutations, verifies server-observed
 part size/checksum/ETag, and conditionally completes one object. Multipart ETags
 and composite SHA256 checksums are not complete-file SHA256 values.

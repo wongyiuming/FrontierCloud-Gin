@@ -13,6 +13,9 @@ import (
 )
 
 func (s *Service) OwnedDelete(ctx context.Context, relationship, id, name string, expected int64, a store.NodeAudit) error {
+	if err := s.repository.CheckLegacyPhysicalWritesAllowed(ctx); err != nil {
+		return err
+	}
 	if s.owned == nil {
 		return ErrUnavailable
 	}

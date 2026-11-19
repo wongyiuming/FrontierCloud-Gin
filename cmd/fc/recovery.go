@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,7 +10,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/backup"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/node"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/operator"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/recovery"
 )
@@ -21,6 +25,16 @@ func recoveryCommand(ctx context.Context, directory string, args []string) int {
 func recoveryCommandOutput(ctx context.Context, directory string, args []string, outputWriter, errorWriter io.Writer) int {
 	if len(args) < 2 {
 		return 2
+	}
+	if args[0] == "restore" {
+		switch args[1] {
+		case "prepare-business-state":
+			return prepareBusinessStateCommand(ctx, directory, args[2:], outputWriter, errorWriter)
+		case "import-business-state":
+			return importBusinessStateCommand(ctx, directory, args[2:], outputWriter, errorWriter)
+		case "activate-business-state":
+			return activateBusinessStateCommand(ctx, directory, args[2:], outputWriter, errorWriter)
+		}
 	}
 	if args[1] == "set-create" || args[1] == "set-verify" || args[1] == "set-check" || args[1] == "set-apply" || args[1] == "set-prepare" || args[1] == "set-activate" || args[1] == "set-open" {
 		return recoverySetCommand(ctx, args)
@@ -109,7 +123,19 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 			report, err = backup(ctx, receipt, *output, *freeze, *external)
 		}
 	case "backup verify":
+		if *checksum == "" {
+			if d, _, openErr := operator.Open(directory); openErr == nil {
+				var matched bool
+				report, matched, err = d.VerifyRecordedUpgradeBackup(ctx, *input)
+				if matched {
+					break
+				}
+			}
+		}
 		report, err = recovery.Check(ctx, *input, *checksum)
+		if err != nil && *checksum != "" {
+			report, err = recovery.CheckTreeArchiveAuthenticated(ctx, *input, *checksum)
+		}
 	case "restore check":
 		report, err = operator.RestoreCheck(ctx, *input, *target, *checksum)
 	case "restore prepare":
@@ -184,6 +210,112 @@ func recoveryCommandOutput(ctx context.Context, directory string, args []string,
 		return 2
 	}
 	return encodeRecoveryOutput(outputWriter, errorWriter, report)
+}
+
+func prepareBusinessStateCommand(ctx context.Context, directory string, args []string, output, diagnostic io.Writer) int {
+	if !filepath.IsAbs(directory) {
+		fmt.Fprintln(diagnostic, "business state preparation requires an explicit absolute --directory")
+		return 2
+	}
+	flags := flag.NewFlagSet("fc restore prepare-business-state", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	masterID := flags.String("target-master-id", "", "exact destination Master ID")
+	if flags.Parse(args) != nil || flags.NArg() != 0 || !node.ValidIdentifier(*masterID) {
+		fmt.Fprintln(diagnostic, "business state preparation requires an exact --target-master-id")
+		return 2
+	}
+	d, receipt, err := openSelectedBusinessStateDeployment(directory)
+	if err != nil {
+		fmt.Fprintln(diagnostic, "cannot open the selected Master deployment")
+		return 2
+	}
+	report, err := d.PrepareBusinessState(ctx, receipt, *masterID)
+	if err != nil {
+		fmt.Fprintln(diagnostic, err)
+		return 2
+	}
+	return encodeRecoveryOutput(output, diagnostic, report)
+}
+
+func importBusinessStateCommand(ctx context.Context, directory string, args []string, output, diagnostic io.Writer) int {
+	if !filepath.IsAbs(directory) {
+		fmt.Fprintln(diagnostic, "business state import requires an explicit absolute --directory")
+		return 2
+	}
+	flags := flag.NewFlagSet("fc restore import-business-state", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	input := flags.String("file", "", "absolute path of the private v2 business state artifact")
+	generation := flags.Int64("generation", 0, "recorded v2 artifact generation")
+	checksum := flags.String("sha256", "", "independently recorded artifact SHA-256")
+	size := flags.Int64("bytes", 0, "recorded artifact length")
+	masterID := flags.String("target-master-id", "", "exact prepared destination Master ID")
+	if flags.Parse(args) != nil || flags.NArg() != 0 {
+		fmt.Fprintln(diagnostic, "business state import accepts --file, --generation, --sha256, --bytes and --target-master-id")
+		return 2
+	}
+	if !filepath.IsAbs(*input) || *generation <= 0 || !validBusinessStateChecksum(*checksum) ||
+		*size <= 0 || *size > backup.MaxBusinessStateBytes || !node.ValidIdentifier(*masterID) {
+		fmt.Fprintln(diagnostic, "business state import requires an absolute --file, exact artifact --generation, --sha256, --bytes and --target-master-id")
+		return 2
+	}
+	d, receipt, err := openSelectedBusinessStateDeployment(directory)
+	if err != nil {
+		fmt.Fprintln(diagnostic, "cannot open the selected prepared Master deployment")
+		return 2
+	}
+	expected := backup.Expectation{Generation: *generation, Checksum: *checksum, Bytes: *size}
+	report, err := d.ImportBusinessState(ctx, receipt, *input, expected, *masterID)
+	if err != nil {
+		fmt.Fprintln(diagnostic, err)
+		return 2
+	}
+	return encodeRecoveryOutput(output, diagnostic, report)
+}
+
+func activateBusinessStateCommand(ctx context.Context, directory string, args []string, output, diagnostic io.Writer) int {
+	if !filepath.IsAbs(directory) {
+		fmt.Fprintln(diagnostic, "business state activation requires an explicit absolute --directory")
+		return 2
+	}
+	flags := flag.NewFlagSet("fc restore activate-business-state", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	masterID := flags.String("target-master-id", "", "exact prepared destination Master ID")
+	sourceSHA := flags.String("source-sha256", "", "independently recorded source artifact SHA-256")
+	if flags.Parse(args) != nil || flags.NArg() != 0 || !node.ValidIdentifier(*masterID) || !validBusinessStateChecksum(*sourceSHA) {
+		fmt.Fprintln(diagnostic, "business state activation requires an exact --target-master-id and --source-sha256")
+		return 2
+	}
+	d, receipt, err := openSelectedBusinessStateDeployment(directory)
+	if err != nil {
+		fmt.Fprintln(diagnostic, "cannot open the selected prepared Master deployment")
+		return 2
+	}
+	report, err := d.ActivateBusinessState(ctx, receipt, *masterID, *sourceSHA)
+	if err != nil {
+		fmt.Fprintln(diagnostic, err)
+		return 2
+	}
+	return encodeRecoveryOutput(output, diagnostic, report)
+}
+
+func validBusinessStateChecksum(checksum string) bool {
+	if len(checksum) != 64 || checksum != strings.ToLower(checksum) {
+		return false
+	}
+	_, err := hex.DecodeString(checksum)
+	return err == nil
+}
+
+func openSelectedBusinessStateDeployment(directory string) (*operator.Deployment, operator.Receipt, error) {
+	if info, err := os.Lstat(filepath.Clean(directory)); err != nil || !info.IsDir() {
+		return nil, operator.Receipt{}, recovery.ErrUnsafe
+	}
+	d, receipt, err := operator.Open(directory)
+	if err != nil {
+		return nil, receipt, err
+	}
+	d.Runner = dockerRunner{d.Directory}
+	return d, receipt, nil
 }
 
 func encodeRecoveryOutput(output, diagnostic io.Writer, value any) int {

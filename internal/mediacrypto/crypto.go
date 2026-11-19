@@ -110,13 +110,20 @@ type session struct {
 	binding string
 	key     []byte
 	expires time.Time
+	// Distinguishes this admission from any later session using the same ID.
+	identity *sessionIdentity
 }
+type sessionIdentity struct{ marker byte }
 type Manager struct {
-	master   []byte
-	mu       sync.Mutex
-	sessions map[string]session
-	now      func() time.Time
-	limits   sessionLimits
+	master []byte
+	// Fresh for every manager lifetime and never restored from a backup. Only
+	// the isolated tree preparation protocol uses this key; legacy tokens keep
+	// their original lifetime and signing key.
+	preparationEpoch [32]byte
+	mu               sync.Mutex
+	sessions         map[string]session
+	now              func() time.Time
+	limits           sessionLimits
 }
 
 type sessionLimits struct{ public, admin, binding int }
@@ -125,8 +132,13 @@ func New(master []byte) (*Manager, error) {
 	if len(master) != 32 {
 		return nil, fmt.Errorf("media premaster key must contain 32 bytes")
 	}
-	return &Manager{master: append([]byte(nil), master...), sessions: map[string]session{}, now: time.Now,
-		limits: sessionLimits{MaxPublicSessions, MaxAdminSessions, MaxSessionsPerBinding}}, nil
+	m := &Manager{master: append([]byte(nil), master...), sessions: map[string]session{}, now: time.Now,
+		limits: sessionLimits{MaxPublicSessions, MaxAdminSessions, MaxSessionsPerBinding}}
+	if _, err := rand.Read(m.preparationEpoch[:]); err != nil {
+		clear(m.master)
+		return nil, err
+	}
+	return m, nil
 }
 
 // Admission never evicts or renews a live authorization. Public traffic cannot
@@ -267,8 +279,17 @@ func (m *Manager) FileKey(meta Metadata) ([]byte, error) {
 // authorization covers multiple file envelopes; requesting a file never extends
 // the deadline. The HTTP layer must recheck permission on every file request.
 func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, error) {
+	grant, _, err := m.NewSessionWithAbort(binding, clientPublicKey)
+	return grant, err
+}
+
+// NewSessionWithAbort admits one session and returns an idempotent callback for
+// rolling back that exact admission before its grant is delivered. The callback
+// is internal request-scoped authority; it must never be sent to a browser.
+// Successful delivery must leave the session intact until its normal deadline.
+func (m *Manager) NewSessionWithAbort(binding, clientPublicKey string) (SessionGrant, func(), error) {
 	if binding == "" {
-		return SessionGrant{}, ErrSession
+		return SessionGrant{}, nil, ErrSession
 	}
 	// Reject a full binding before performing ECDH. Recheck atomically at insert
 	// time so concurrent handshakes cannot exceed any admission boundary.
@@ -277,41 +298,41 @@ func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, err
 	err := m.admitSessionLocked(binding, started)
 	m.mu.Unlock()
 	if err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	encoded, err := base64.StdEncoding.Strict().DecodeString(clientPublicKey)
 	if err != nil {
-		return SessionGrant{}, ErrSession
+		return SessionGrant{}, nil, ErrSession
 	}
 	pub, err := ecdh.P256().NewPublicKey(encoded)
 	if err != nil {
-		return SessionGrant{}, ErrSession
+		return SessionGrant{}, nil, ErrSession
 	}
 	private, err := ecdh.P256().GenerateKey(rand.Reader)
 	if err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	shared, err := private.ECDH(pub)
 	if err != nil {
-		return SessionGrant{}, ErrSession
+		return SessionGrant{}, nil, ErrSession
 	}
 	id, salt := make([]byte, 16), make([]byte, 32)
 	if _, err = rand.Read(id); err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	if _, err = rand.Read(salt); err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	sessionID := hex.EncodeToString(id)
 	key := make([]byte, 32)
 	if _, err = io.ReadFull(hkdf.New(sha256.New, shared, salt, []byte("frontiercloud:browser-wrap:v1:"+sessionID)), key); err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.now()
 	if err := m.admitSessionLocked(binding, now); err != nil {
-		return SessionGrant{}, err
+		return SessionGrant{}, nil, err
 	}
 	expires := started.Add(SessionLifetime)
 	// Give browsers a conservative duration independent of their wall clock.
@@ -319,10 +340,24 @@ func (m *Manager) NewSession(binding, clientPublicKey string) (SessionGrant, err
 	// longer than expires_at; the registry deadline remains authoritative.
 	expiresIn := min(int64(SessionLifetime/time.Second), int64(time.Unix(expires.Unix(), 0).Sub(m.now())/time.Second))
 	if expiresIn <= 0 {
-		return SessionGrant{}, ErrSession
+		return SessionGrant{}, nil, ErrSession
 	}
-	m.sessions[sessionID] = session{binding, key, expires}
-	return SessionGrant{SessionID: sessionID, PublicKey: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), Salt: base64.StdEncoding.EncodeToString(salt), ExpiresAt: expires.Unix(), ExpiresIn: expiresIn}, nil
+	// A collision must never replace an existing session. The instance identity
+	// also fences an old rollback callback if a removed ID is later reused.
+	if _, exists := m.sessions[sessionID]; exists {
+		return SessionGrant{}, nil, ErrSession
+	}
+	identity := &sessionIdentity{}
+	grant := SessionGrant{SessionID: sessionID, PublicKey: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), Salt: base64.StdEncoding.EncodeToString(salt), ExpiresAt: expires.Unix(), ExpiresIn: expiresIn}
+	abort := func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if current, ok := m.sessions[sessionID]; ok && current.binding == binding && current.identity == identity {
+			delete(m.sessions, sessionID)
+		}
+	}
+	m.sessions[sessionID] = session{binding, key, expires, identity}
+	return grant, abort, nil
 }
 
 func (m *Manager) Wrap(binding, sessionID string, meta Metadata) (KeyEnvelope, error) {
@@ -372,6 +407,19 @@ type preparation struct {
 }
 
 func (m *Manager) SignPreparation(binding string, meta Metadata) (string, error) {
+	return m.signPreparation(binding, meta, m.master, "frontiercloud:preparation:v1:")
+}
+
+// SignTransientPreparation produces a token invalidated by process restart or
+// a newly constructed manager. It is an unconnected primitive until the tree's
+// durable pre-issuance reservation and recovery gates are in place.
+func (m *Manager) SignTransientPreparation(binding string, meta Metadata) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.signPreparation(binding, meta, m.preparationEpoch[:], "frontiercloud:preparation:tree:v1:")
+}
+
+func (m *Manager) signPreparation(binding string, meta Metadata, key []byte, domain string) (string, error) {
 	if binding == "" {
 		return "", ErrSession
 	}
@@ -382,13 +430,42 @@ func (m *Manager) SignPreparation(binding string, meta Metadata) (string, error)
 	if err != nil {
 		return "", err
 	}
-	h := hmac.New(sha256.New, m.master)
-	h.Write([]byte("frontiercloud:preparation:v1:"))
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(domain))
 	h.Write(raw)
 	return base64.RawURLEncoding.EncodeToString(raw) + "." + base64.RawURLEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
 func (m *Manager) VerifyPreparation(binding, token string, meta Metadata) error {
+	return m.verifyPreparation(binding, token, meta, m.master, "frontiercloud:preparation:v1:")
+}
+
+// VerifyTransientPreparation does not accept a legacy token or one from a
+// previous manager lifetime, even if the media premaster has not changed.
+func (m *Manager) VerifyTransientPreparation(binding, token string, meta Metadata) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.verifyPreparation(binding, token, meta, m.preparationEpoch[:], "frontiercloud:preparation:tree:v1:")
+}
+
+// ResetTransientPreparations invalidates temporary tree preparation tokens and
+// browser sessions without touching durable pending uploads or media keys. The
+// recovery coordinator must first hold the exclusive maintenance gate and drain
+// in-flight responses; this method alone is not a restore/reconciliation gate.
+func (m *Manager) ResetTransientPreparations() error {
+	var next [32]byte
+	if _, err := rand.Read(next[:]); err != nil {
+		return err
+	}
+	defer clear(next[:])
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.preparationEpoch = next
+	clear(m.sessions)
+	return nil
+}
+
+func (m *Manager) verifyPreparation(binding, token string, meta Metadata, key []byte, domain string) error {
 	if len(token) > 2048 || binding == "" {
 		return ErrSession
 	}
@@ -404,8 +481,8 @@ func (m *Manager) VerifyPreparation(binding, token string, meta Metadata) error 
 	if err != nil {
 		return ErrSession
 	}
-	h := hmac.New(sha256.New, m.master)
-	h.Write([]byte("frontiercloud:preparation:v1:"))
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(domain))
 	h.Write(raw)
 	if !hmac.Equal(mac, h.Sum(nil)) {
 		return ErrSession

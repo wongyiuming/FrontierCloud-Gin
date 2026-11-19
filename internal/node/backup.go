@@ -70,6 +70,18 @@ func (s *Service) deliverBackup(ctx context.Context, relationship string) (resul
 	if err != nil {
 		return err
 	}
+	if attempts, ok := s.backups.(store.BackupAttemptRepository); ok {
+		if err := attempts.RecordBackupAttempt(ctx, relationship, "receiving", store.NodeAudit{Actor: "native-backup"}); err != nil {
+			return err
+		}
+		defer func() {
+			if resultErr != nil {
+				finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+				defer cancel()
+				_ = attempts.RecordBackupAttempt(finish, relationship, "failed", store.NodeAudit{Actor: "native-backup"})
+			}
+		}()
+	}
 	artifact, err := s.backupBuilder.Build(ctx)
 	if err != nil {
 		return err

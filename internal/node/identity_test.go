@@ -61,4 +61,7 @@ func TestIdentityRestartAndMissingSecretFailClosed(t *testing.T) {
 	if _, err := Initialize(ctx, db.Nodes(), secrets); err == nil {
 		t.Fatal("missing persistent secret silently replaced identity")
 	}
+	if _, err := os.Stat(filepath.Join(secrets, "node-vault.key")); !os.IsNotExist(err) {
+		t.Fatal("missing persistent secret was recreated", err)
+	}
 }

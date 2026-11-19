@@ -18,8 +18,15 @@ import (
 const Manual = ".frontiercloud-maintenance"
 const ForceOpen = ".frontiercloud-force-open"
 const Lock = ".site-control.lock"
+const markerPermissions = 0644
 
 var ErrState = errors.New("unsafe site maintenance state")
+
+// ValidManualMode admits the marker published by Admin under a normal or
+// more restrictive umask. Recovery additionally pins its owner and inode.
+func ValidManualMode(mode os.FileMode) bool {
+	return mode&0600 == 0600 && mode&^markerPermissions == 0
+}
 
 type Service struct {
 	root *os.Root
@@ -190,7 +197,7 @@ func (s *Service) publish(name, value string) error {
 		return err
 	}
 	temp := ".site-control-" + hex.EncodeToString(nonce[:])
-	f, err := s.root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	f, err := s.root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, markerPermissions)
 	if err != nil {
 		return err
 	}

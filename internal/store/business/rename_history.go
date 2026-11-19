@@ -18,7 +18,7 @@ func (r *Repository) DrainCompletedRenames(ctx context.Context, confirmation str
 	if !nodeIDPattern.MatchString(confirmation) {
 		return 0, store.ErrNodeState
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		drained = 0
 		n, err := readNode(ctx, q, r.lock())
 		if err != nil {

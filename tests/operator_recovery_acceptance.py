@@ -27,8 +27,8 @@ ENV_KEYS = ('DEPLOYMENT_MODE', 'DB_TYPE', 'SQLITE_PATH', 'DATA_ROOT', 'SECRETS_D
             'STORAGE_TRANSPORT', 'STORAGE_ENDPOINT', 'STORAGE_PORT')
 
 
-def command(args, directory=None, timeout=180):
-    result = subprocess.run(args, cwd=directory, capture_output=True, timeout=timeout)
+def command(args, directory=None, timeout=180, *, input_bytes=None):
+    result = subprocess.run(args, cwd=directory, input=input_bytes, capture_output=True, timeout=timeout)
     if result.returncode:
         # A failed initializer or server may log credentials. Never dump it here.
         raise RuntimeError('private fixture command failed: ' + args[0])
@@ -216,13 +216,13 @@ def run(args):
     except RuntimeError:
         command(['docker', 'pull', client_image])
     client_image = json.loads(command(['docker', 'image', 'inspect', client_image]))[0]['Id']
-    def admin_probe(location, action):
+    def admin_probe(location, action, original_key):
         container = compose(location, 'ps', '--quiet', 'web').decode().strip()
         assert container
-        return json.loads(command(['docker', 'run', '--rm', '--cpus=1', '--memory=128m', '--memory-swap=128m',
-                                  '--network', 'container:' + container, '--volumes-from', container + ':ro',
+        return json.loads(command(['docker', 'run', '--rm', '-i', '--cpus=1', '--memory=128m', '--memory-swap=128m',
+                                  '--network', 'container:' + container,
                                   '-v', str(source / 'tests/operator_recovery_admin_probe.py') + ':/probe.py:ro',
-                                  client_image, 'python', '/probe.py', action]))
+                                  client_image, 'python', '/probe.py', action], input_bytes=original_key))
     prefix = 'fc-ops-recovery-' + uuid.uuid4().hex[:16]
     directory = Path(tempfile.mkdtemp(prefix=prefix + '-', dir=args.workspace))
     project = prefix
@@ -326,9 +326,9 @@ def run(args):
         base = 'http://' + address
         wait_ready(base)
         jar, request = api(base)
-        key = compose(directory, 'exec', '-T', 'web', 'cat', '/run/frontiercloud-secrets/admin_key').decode().strip()
+        original_admin_key = compose(directory, 'exec', '-T', 'web', 'cat', '/run/frontiercloud-secrets/admin_key')
         media_id = probe(request, payload)
-        assert admin_probe(directory, 'set')['priority'] == 77
+        assert admin_probe(directory, 'set', original_admin_key)['priority'] == 77
         before_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
         if args.automatic_upgrade:
             inputs = [str(args.binary), '--directory', str(directory), 'upgrade']
@@ -371,7 +371,7 @@ def run(args):
             after = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
             assert after['node_id'] == before_fact['node_id']
             assert probe(request, payload) == media_id
-            assert admin_probe(directory, 'verify')['priority'] == 77
+            assert admin_probe(directory, 'verify', original_admin_key)['priority'] == 77
             upgraded_web = compose(directory, 'ps', '--quiet', 'web').decode().strip()
             actual = json.loads(command(['docker', 'inspect', upgraded_web]))[0]
             assert actual['Image'] != web_image and actual['HostConfig']['NanoCpus'] == 1000000000
@@ -440,7 +440,7 @@ def run(args):
             upgraded_fact = json.loads(compose(directory, 'exec', '-T', 'web', '/app/frontiercloud', 'operator-status'))
             assert upgraded_fact['node_id'] == before_fact['node_id']
             assert probe(request, payload) == media_id
-            assert admin_probe(directory, 'verify')['priority'] == 77
+            assert admin_probe(directory, 'verify', original_admin_key)['priority'] == 77
             upgraded_web = compose(directory, 'ps', '--quiet', 'web').decode().strip()
             actual = json.loads(command(['docker', 'inspect', upgraded_web]))[0]
             assert actual['Image'] == (web_image if args.upgrade_recover else target_image)
@@ -474,6 +474,10 @@ def run(args):
         assert all(not item['path'].startswith(('data/media/', 'data/lyrics/', 'data/recordings/'))
                    for item in state_report['manifest']['files'])
         if args.state_restore:
+            assert 'runtime_secrets/admin_key' in state_report['manifest']['key_references']
+            assert any(item['path'] == 'runtime_secrets/admin_key' for item in state_report['manifest']['files'])
+            admin_key_path = secrets_root / 'admin_key'
+            admin_key_path.unlink()
             shutil.rmtree(directory_probe)
             for receipt_name in ('.native-store', '.native-runtime'):
                 (data / receipt_name).unlink()
@@ -491,6 +495,7 @@ def run(args):
                                         '--confirm-source-offline', '--confirm-state-loss',
                                         *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=800))
             assert state['phase'] == 'prepared_fenced'
+            assert admin_key_path.read_bytes() == original_admin_key
             opened = json.loads(command([str(args.binary), '--directory', str(directory), 'restore', 'state-open',
                                          '--approve-plan-sha256', state['plan']['plan_sha256'],
                                          '--confirm-node-id', before_fact['node_id']], timeout=800))
@@ -502,9 +507,9 @@ def run(args):
             assert all((data / name).is_file() for name in ('.native-store', '.native-runtime'))
             wait_ready(base)
             assert probe(request, payload) == media_id
-            assert admin_probe(directory, 'verify')['priority'] == 77
-            result.update(status='passed', scope='ordinary default state backup restored lost database in retained mounts without an upgrade journal',
-                          original_business_mounts_retained=True, actual_http_range_verified=True,
+            assert admin_probe(directory, 'verify', original_admin_key)['priority'] == 77
+            result.update(status='passed', scope='ordinary default state backup restored lost database and AdminKey in retained mounts without an upgrade journal',
+                          original_business_mounts_retained=True, actual_http_range_verified=True, original_admin_key_authenticated=True,
                           no_production_operation=True)
             success = True
             return result
@@ -514,6 +519,7 @@ def run(args):
                                      *(['--confirm-external-writers-stopped'] if args.database == 'mysql' else [])], timeout=700))
         assert report['integrity_verified'] and not report['restored_business_verified']
         assert report['manifest']['node_id'] == before_fact['node_id']
+        assert 'runtime_secrets/admin_key' in report['manifest']['key_references']
         assert (data / '.frontiercloud-native-maintenance').exists()
         target = directory / 'restoration'
         command([str(args.binary), 'restore', 'check', '--file', str(archive), '--target', str(target),
@@ -525,7 +531,7 @@ def run(args):
         command([str(args.binary), 'restore', 'prepare', '--file', str(archive), '--target', str(target),
                  '--sha256', report['sha256'], '--confirm-node-id', before_fact['node_id'], '--project', restored_project])
         assert (target / 'data/.frontiercloud-native-maintenance').exists()
-        assert (target / 'runtime_secrets/admin_key').read_text().strip() == key
+        assert (target / 'runtime_secrets/admin_key').read_bytes() == original_admin_key
         restore_dir = target / 'deployment'
         activated = json.loads(command([str(args.binary), '--directory', str(restore_dir),
                                        'restore', 'activate', '--confirm-node-id', before_fact['node_id'],
@@ -547,7 +553,7 @@ def run(args):
         wait_ready(base)
         restored_jar, restored_request = api(base)
         assert probe(restored_request, payload) == media_id
-        assert admin_probe(restore_dir, 'verify')['priority'] == 77
+        assert admin_probe(restore_dir, 'verify', original_admin_key)['priority'] == 77
         restored_web = compose(restore_dir, 'ps', '--quiet', 'web').decode().strip()
         host = json.loads(command(['docker', 'inspect', restored_web]))[0]['HostConfig']
         assert host['NanoCpus'] == 1000000000

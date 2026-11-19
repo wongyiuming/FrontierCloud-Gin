@@ -29,7 +29,7 @@ func (r *Repository) RecordGlobalPlayback(ctx context.Context, id, session strin
 	if !nodeHashPattern.MatchString(id) {
 		return result, nodeConflict("invalid global media identity")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		path, err := r.globalStatsPath(ctx, q, id)
 		if err != nil {
 			return err
@@ -42,7 +42,7 @@ func (r *Repository) SetGlobalPreference(ctx context.Context, id string, value i
 	if !nodeHashPattern.MatchString(id) || value < store.PriorityMinimum || value > store.PriorityMaximum {
 		return result, nodeConflict("invalid global media preference")
 	}
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if _, err := readNode(ctx, q, r.lock()); err != nil {
 			return err
 		}

@@ -140,7 +140,7 @@ func TestOwnedUploadLostCommitAndInterruptedIntentRecoverExactlyOnce(t *testing.
 					t.Fatal(err)
 				}
 				if phase == "before_publication" {
-					if err = svc.writeUploadJournal(uploadJournal{Format: "frontiercloud-owned-upload", Version: 1, ID: stage.id, Object: object, Bytes: 10, SHA256: stage.Digest}); err != nil {
+					if err = svc.writeUploadJournal(context.Background(), uploadJournal{Format: "frontiercloud-owned-upload", Version: 1, ID: stage.id, Object: object, Bytes: 10, SHA256: stage.Digest}); err != nil {
 						t.Fatal(err)
 					}
 				}

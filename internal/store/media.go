@@ -45,6 +45,9 @@ type AutoLyricResult struct {
 type MediaRepository interface {
 	PriorityRepository
 	MediaDeletionRepository
+	// The caller must also hold the runtime/maintenance fence across physical
+	// legacy writes; a point-in-time check alone cannot exclude activation.
+	CheckLegacyPhysicalWritesAllowed(context.Context) error
 	EnsureObjects(context.Context, []MediaObject) (map[string]string, error)
 	ObjectByID(context.Context, string) (*MediaObject, error)
 	HiddenPaths(context.Context) (map[string]bool, error)

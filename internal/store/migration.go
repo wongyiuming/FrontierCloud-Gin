@@ -18,6 +18,16 @@ var ErrMigrationInventoryLimit = errors.New("resource migration inventory requir
 const MaxMigrationObjects = 10000
 const MaxMigrationPlanBytes = 16 << 20
 const MigrationCapability = "resource-migration-direct-v1"
+const OpaqueMigrationCapability = "resource-migration-opaque-direct-v1"
+
+// OpaqueMigrationUnsettledSQL returns one when the native migration records
+// still require replay or a terminal task lacks its encrypted final receipt.
+const OpaqueMigrationUnsettledSQL = `SELECT CASE WHEN
+	EXISTS (SELECT 1 FROM opaque_migration_tasks o LEFT JOIN migration_tasks t ON t.task_id=o.task_id
+		WHERE t.task_id IS NULL OR t.state NOT IN ('completed','cancelled') OR o.terminal_sealed IS NULL)
+	OR EXISTS (SELECT 1 FROM opaque_migration_units WHERE active_parent_index IS NOT NULL OR state NOT IN ('cleaned','cancelled'))
+	OR EXISTS (SELECT 1 FROM opaque_migration_objects WHERE state NOT IN ('cleaned','cancelled'))
+	THEN 1 ELSE 0 END`
 
 type MigrationBlocker struct {
 	Code     string `json:"code"`

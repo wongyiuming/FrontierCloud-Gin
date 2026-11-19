@@ -5,9 +5,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/protocol"
@@ -59,8 +62,59 @@ func (n *Identity) signed(row store.NodeIdentity, payload map[string]any) (Envel
 	return Envelope{payload, signature}, err
 }
 
+// SealOpaqueOwnerRecord encrypts one node-local registry record with this
+// owner's existing vault, binding the ciphertext to its exact random path.
+// It does not use the Master tree key or media key.
+func (n *Identity) SealOpaqueOwnerRecord(name string, data []byte) (string, error) {
+	if n == nil || n.vault == nil || !strings.HasPrefix(name, ".opaque-aliases/") || strings.Contains(name, "..") || len(name) > 200 || len(data) == 0 || len(data) > 2048 {
+		return "", ErrCapability
+	}
+	value, err := json.Marshal(struct {
+		Version int    `json:"v"`
+		Domain  string `json:"domain"`
+		Path    string `json:"path"`
+		Data    []byte `json:"data"`
+	}{1, "frontiercloud:opaque-owner-registry:v1", name, data})
+	if err != nil {
+		return "", ErrCapability
+	}
+	return n.vault.Seal(string(value))
+}
+
+func (n *Identity) OpenOpaqueOwnerRecord(name, sealed string) ([]byte, error) {
+	if n == nil || n.vault == nil || !strings.HasPrefix(name, ".opaque-aliases/") || strings.Contains(name, "..") || len(name) > 200 || len(sealed) > 8192 {
+		return nil, ErrCapability
+	}
+	raw, err := n.vault.Unseal(sealed)
+	if err != nil {
+		return nil, ErrCapability
+	}
+	var value struct {
+		Version int    `json:"v"`
+		Domain  string `json:"domain"`
+		Path    string `json:"path"`
+		Data    []byte `json:"data"`
+	}
+	if json.Unmarshal([]byte(raw), &value) != nil || value.Version != 1 || value.Domain != "frontiercloud:opaque-owner-registry:v1" || value.Path != name || len(value.Data) == 0 || len(value.Data) > 2048 {
+		return nil, ErrCapability
+	}
+	return value.Data, nil
+}
+
 func Initialize(ctx context.Context, repo store.NodeRepository, secrets string) (*Identity, error) {
-	v, err := vault.Open(secrets)
+	// An existing identity must never create a replacement key when its vault
+	// is missing: durable encrypted owner registries use the same local key.
+	_, identityErr := repo.ReadIdentity(ctx)
+	var v *vault.Vault
+	var err error
+	switch {
+	case identityErr == nil:
+		v, err = vault.OpenExisting(secrets)
+	case errors.Is(identityErr, sql.ErrNoRows):
+		v, err = vault.Open(secrets)
+	default:
+		return nil, identityErr
+	}
 	if err != nil {
 		return nil, err
 	}

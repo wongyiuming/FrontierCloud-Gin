@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/media"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/mediacrypto"
 )
 
 type uploadReader struct {
@@ -57,6 +58,7 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 	fields := map[string]string{}
 	filename := ""
 	var staged *media.Stage
+	var meta *mediacrypto.Metadata
 	defer func() {
 		if staged != nil {
 			staged.Close()
@@ -76,15 +78,41 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 			uploadError(c, err)
 			return
 		}
+		if staged != nil {
+			c.Request.Body.Close()
+			detail(c, 400, "上传文件必须是最后一个表单字段")
+			return
+		}
 		name := part.FormName()
 		if name == "file" && part.FileName() != "" {
-			if staged != nil {
-				c.Request.Body.Close()
-				detail(c, 400, "每个请求只允许一个上传文件")
+			if _, present := fields["member_id"]; present {
+				detail(c, 409, "上传目标只接受 storage_member_id")
 				return
 			}
+			if requested, present := fields["storage_member_id"]; present {
+				identity, err := a.public.media.IdentityState(c.Request.Context())
+				if err != nil {
+					internalError(c, err)
+					return
+				}
+				if requested == "" || requested != identity.ID {
+					detail(c, 409, "此上传仅写入当前主站；所选存储节点不匹配")
+					return
+				}
+			}
 			filename = part.FileName()
-			staged, err = a.public.media.Stage(c.Request.Context(), part, encryptedUploadLimit(maximum))
+			var ok bool
+			meta, ok = a.uploadEncryption(c, fields["storage_mode"], fields["encryption"], fields["preparation_token"])
+			if !ok {
+				c.Request.Body.Close()
+				return
+			}
+			if meta.PlaintextSize > maximum {
+				c.Request.Body.Close()
+				detail(c, 413, "文件超过单文件上传限制")
+				return
+			}
+			staged, err = a.public.media.Stage(c.Request.Context(), part, meta.CiphertextSize)
 			if err != nil {
 				c.Request.Body.Close()
 				uploadError(c, err)
@@ -120,12 +148,8 @@ func (a *Admin) upload(c *gin.Context, lyric bool) {
 		invalid(c, "body", "file")
 		return
 	}
-	meta, ok := a.uploadEncryption(c, fields["storage_mode"], fields["encryption"], fields["preparation_token"])
-	if !ok {
-		return
-	}
-	if meta == nil && staged.Bytes > maximum || meta != nil && (meta.PlaintextSize > maximum || staged.Bytes != meta.CiphertextSize) {
-		detail(c, 413, "文件超过单文件上传限制或密文大小不一致")
+	if staged.Bytes != meta.CiphertextSize {
+		detail(c, 413, "上传文件大小与准备信息不一致")
 		return
 	}
 	action := "upload_item"

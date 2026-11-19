@@ -32,10 +32,12 @@ function makeElement() {
         },
         append(...children) { children.forEach(child => this.appendChild(child)); },
         setAttribute(name, value) { this[name] = String(value); },
+        querySelectorAll() { return []; },
     };
+    let html = '';
     Object.defineProperty(element, 'innerHTML', {
-        get() { return ''; },
-        set(value) { if (value === '') this.children = []; },
+        get() { return html; },
+        set(value) { html = value; if (value === '') this.children = []; },
     });
     return element;
 }
@@ -86,6 +88,8 @@ const context = {
     },
     FormData: TestFormData,
     URL,
+    URLSearchParams,
+    AbortController,
     Blob,
     XMLHttpRequest: class {
         constructor() { this.upload = {}; this.listeners = new Map(); }
@@ -102,6 +106,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('static/js/admin.js', 'utf8'), context);
+vm.runInContext('const renderAdminTree = renderTree;', context);
 await new Promise(resolve => setTimeout(resolve, 0));
 
 for (const [expression, event] of [
@@ -133,31 +138,6 @@ const formatted = vm.runInContext(
 );
 assert.equal(formatted, 'body.files: Field required');
 assert(!formatted.includes('[object Object]'));
-
-vm.runInContext(`
-    uploadOne = async (formData, onProgress) => {
-        onProgress(0.25);
-        onProgress(0.75);
-        onProgress(1);
-        const pathField = formData.values.find(item => item.name === 'relative_path');
-        const fileField = formData.values.find(item => item.name === 'file');
-        return {path: pathField ? pathField.value : fileField.value.name};
-    };
-`, context);
-
-await vm.runInContext(`
-    runUploadTask(
-        [{name: 'one.wav', size: 400}, {name: 'two.wav', size: 600}],
-        ['folder/one.wav', 'folder/two.wav'],
-    )
-`, context);
-
-assert.equal(element('currentProgress').value, 100);
-assert.equal(element('totalProgress').value, 100);
-assert.equal(element('currentPercent').textContent, '100%');
-assert.equal(element('totalPercent').textContent, '100%');
-assert.equal(element('uploadResults').children.length, 2);
-assert.match(element('uploadSummary').textContent, /成功 2，失败 0/);
 
 vm.runInContext(`
     selected.clear();
@@ -230,7 +210,7 @@ assert(adminHtml.includes('{{NODES_JS_URL}}'));
 assert(adminHtml.includes('id="randomKey"'));
 assert(adminHtml.includes('id="temporaryKeyForm"'));
 assert(adminHtml.includes('id="permanentBanForm"'));
-assert(adminHtml.match(/class="module-heading"/g).length === 9);
+assert(adminHtml.match(/class="module-heading"/g).length === 12);
 assert(adminHtml.includes('data-admin-module="migrations"'));
 assert(adminHtml.includes('data-admin-module="priority"'));
 assert(adminHtml.includes('媒体资源排序策略'));
@@ -272,7 +252,8 @@ const directoryAdminJs = fs.readFileSync('static/js/directory-admin.js', 'utf8')
 const nodesJs = fs.readFileSync('static/js/nodes.js', 'utf8');
 new vm.Script(directoryAdminJs, {filename: 'static/js/directory-admin.js'});
 assert(!adminJs.includes('response.blob()'));
-assert(adminJs.includes('anchor.href = url'));
+assert(!adminJs.includes('/api/v1/media/admin/download?'), 'the base script never installs a legacy download handler');
+assert(!adminJs.includes('function runUploadTask'), 'the upload script owns the upload handler');
 assert(!adminJs.includes('attachGlobalActions'));
 assert(adminJs.includes("let networkView = 'public'"));
 assert(adminJs.includes("api('/api/v1/media/admin/media-priority'"));
@@ -319,7 +300,7 @@ assert(!nodesJs.includes('当前项目资源占用'));
 assert(!nodesJs.includes('Compute'));
 assert(!nodesJs.includes('worker_slots'));
 assert(!nodesJs.includes('compute_enabled'));
-assert(nodesJs.includes('cell.colSpan = 4'));
+assert(adminHtml.includes('aria-label="集群节点"'));
 assert(nodesJs.includes("failed: 'Failed'"));
 assert(!nodesJs.includes('nodeTest'));
 
@@ -356,6 +337,336 @@ assert(adminCss.includes('.lyrics-relation-json'));
 assert(adminCss.includes('.filename-toggle'));
 assert(directoryAdminCss.includes('.priority-directory-row'));
 assert(directoryAdminCss.includes('.priority-directory-control'));
+
+await vm.runInContext(`(async () => {
+    globalThis.lyricRequests = [];
+    const lyric = 'lyrics/artist/song.lrc';
+    const unusedLyric = 'lyrics/artist/unused.lrc';
+    const a = 'music/artist/a.mp3', b = 'music/artist/b.mp3', c = 'music/artist/c.mp3';
+    let usageKnown = true;
+    api = async (url, options = {}) => {
+        lyricRequests.push({url, options});
+        if (options.method === 'POST') return {status: 'ok', relations: 2};
+        const next = String(url).includes('track_cursor=page-two');
+        const usage = String(url).match(/lyric_usage=(used|unused)/)?.[1];
+        if (next && lyricRequests.some(call => call.options.method === 'POST')) throw new Error('stale cursor');
+        return {
+            sealed_scope: 'directory', counts_scope: 'subtree', lyric_usage_filter: usageKnown,
+            lyric_usage_scope: usageKnown ? 'track_subtree' : '',
+            scopes: {track: 'music/artist', lyric: 'lyrics/artist'},
+            counts: {tracks: next ? 1 : 2, lyrics: 1, relations: next ? 0 : 1},
+            truncated: {track: !next, lyric: false}, next: {track: next ? '' : 'page-two', lyric: ''},
+            track_directories: [], lyric_directories: [], relations: [],
+            tracks: next ? [{path: c, name: 'c', lyric_path: null}] : [
+                {path: a, name: 'a', lyric_path: lyric}, {path: b, name: 'b', lyric_path: null},
+            ],
+            lyrics: [
+                {path: lyric, name: 'song', lyric_id: 'lyric', linked_count: usageKnown ? 1 : null},
+                {path: unusedLyric, name: 'unused', lyric_id: 'unused', linked_count: usageKnown ? 0 : null},
+            ].filter(item => !usageKnown || !usage || (usage === 'used') === (item.linked_count > 0)),
+        };
+    };
+    lyricScopes = {track: 'music/artist', lyric: 'lyrics/artist'};
+    lyricOrigin = null;
+    resetLyricPage('track'); resetLyricPage('lyric');
+    $('lyricsTrackUsage').value = 'all'; $('lyricsFileUsage').value = 'all';
+    $('lyricsTrackFilter').value = ''; $('lyricsFileFilter').value = '';
+    await loadLyricCatalog();
+    const fileRows = id => $(id).children.filter(child => child.className === 'lyrics-object');
+    globalThis.lyricFirstEnabled = !fileRows('lyricsFileList')[0].disabled;
+    globalThis.trackInitiallyDisabled = fileRows('lyricsTrackList')[0].disabled;
+    fileRows('lyricsFileList')[0].onclick({detail: 1});
+    fileRows('lyricsTrackList')[0].onclick({detail: 1});
+    fileRows('lyricsTrackList')[1].onclick({detail: 1});
+    await $('lyricsTrackList').children.find(child => child.textContent === '下一页').onclick();
+    fileRows('lyricsTrackList')[0].onclick({detail: 1});
+    await $('lyricsSaveLink').onclick();
+    $('lyricsFileUsage').value = 'used';
+    await $('lyricsFileUsage').onchange();
+    globalThis.usedLyrics = fileRows('lyricsFileList').map(row => row.innerHTML);
+    $('lyricsFileUsage').value = 'unused';
+    await $('lyricsFileUsage').onchange();
+    globalThis.unusedLyrics = fileRows('lyricsFileList').map(row => row.innerHTML);
+    usageKnown = false;
+    await loadLyricCatalog();
+    globalThis.unknownLyricUsage = {disabled: $('lyricsFileUsage').disabled, value: $('lyricsFileUsage').value,
+        items: fileRows('lyricsFileList').map(row => row.innerHTML)};
+    usageKnown = true;
+    await loadLyricCatalog();
+})()`, context);
+assert.equal(context.lyricFirstEnabled, true);
+assert.equal(context.trackInitiallyDisabled, true);
+const lyricPost = context.lyricRequests.find(call => call.options.method === 'POST');
+assert.deepEqual(JSON.parse(lyricPost.options.body), {
+    origin_kind: 'lyric', origin_path: 'lyrics/artist/song.lrc',
+    linked_paths: ['music/artist/b.mp3', 'music/artist/c.mp3'], unlinked_paths: ['music/artist/a.mp3'],
+});
+assert.equal(element('lyricsAutoLink').disabled, false);
+assert.equal(element('lyricsFileUsage').disabled, false);
+assert.equal(element('lyricsTrackFilter').placeholder, '搜索当前目录及其子目录');
+assert.equal(context.usedLyrics.length, 1);
+assert.match(context.usedLyrics[0], /song\.lrc.*1 首/);
+assert.equal(context.unusedLyrics.length, 1);
+assert.match(context.unusedLyrics[0], /unused\.lrc.*0 首/);
+assert.equal(context.unknownLyricUsage.disabled, true);
+assert.equal(context.unknownLyricUsage.value, 'all');
+assert.equal(context.unknownLyricUsage.items.length, 2);
+assert(context.unknownLyricUsage.items.every(row => row.includes('关联数未知')));
+assert(context.lyricRequests.some(call => String(call.url).includes('lyric_usage=used')));
+assert(element('lyricsTrackList').children.some(child => child.textContent === '下一页'));
+assert.match(element('lyricsModeStatus').textContent, /^已保存/);
+assert(context.lyricRequests.some(call => String(call.url).includes('track_cursor=page-two')));
+
+await vm.runInContext(`(async () => {
+    const catalog = await api('/fixture');
+    const oldScope = {track: 'music/stale', lyric: 'lyrics/stale'};
+    const result = {linked: 2, preserved: 1, unmatched: 3, ambiguous: 0};
+    const button = $('lyricsAutoLink');
+    let finishMutation, finishRead, delayNextRead = false, failNextRead = false;
+    globalThis.autoLinkCalls = [];
+    api = async (url, options = {}) => {
+        autoLinkCalls.push({url: String(url), method: options.method, body: options.body, signal: options.signal, disabled: button.disabled});
+        if (options.method === 'POST') return new Promise(resolve => { finishMutation = resolve; });
+        if (failNextRead) {
+            failNextRead = false;
+            throw new Error('catalog unavailable');
+        }
+        if (delayNextRead) {
+            delayNextRead = false;
+            return new Promise(resolve => { finishRead = resolve; });
+        }
+        return catalog;
+    };
+    $('lyricsTrackFilter').value = 'search only';
+    lyricEdits.set(catalog.tracks[1].path, true);
+    await button.onclick();
+    globalThis.autoLinkDraft = {size: lyricEdits.size, message: $('lyricsModeStatus').textContent};
+    lyricEdits.clear();
+    delayNextRead = true;
+    const busy = loadLyricCatalog();
+    await button.onclick();
+    globalThis.autoLinkReadWasBusy = button.disabled;
+    finishRead(catalog);
+    await busy;
+
+    lyricCursors = {track: 'stale-track', lyric: 'stale-lyric'};
+    lyricCursorHistory = {track: ['previous-track'], lyric: ['previous-lyric']};
+    const operation = button.onclick();
+    await button.onclick();
+    delayNextRead = true;
+    const stale = loadLyricCatalog();
+    const staleSignal = autoLinkCalls.at(-1).signal;
+    finishMutation(result);
+    await operation;
+    globalThis.obsoleteLyricReadAborted = staleSignal.aborted;
+    finishRead({...catalog, scopes: oldScope});
+    await stale;
+    globalThis.autoLinkRefreshed = {
+        scopes: {...lyricScopes}, cursors: {...lyricCursors},
+        history: [lyricCursorHistory.track.length, lyricCursorHistory.lyric.length],
+        message: $('lyricsModeStatus').textContent,
+    };
+    const afterRefreshFailure = button.onclick();
+    failNextRead = true;
+    finishMutation(result);
+    await afterRefreshFailure;
+    globalThis.autoLinkRefreshFailure = $('lyricsModeStatus').textContent;
+
+    lyricCatalog = {...catalog, sealed_scope: undefined};
+    clearLyricSelection();
+    const legacy = button.onclick();
+    finishMutation(result);
+    await legacy;
+})()`, context);
+assert.deepEqual({...context.autoLinkDraft}, {size: 1, message: '请先保存或退出当前编辑，再执行同名关联'});
+assert.equal(context.autoLinkReadWasBusy, true);
+assert.equal(context.obsoleteLyricReadAborted, true);
+const autoPosts = context.autoLinkCalls.filter(call => call.method === 'POST');
+assert.equal(autoPosts.length, 3, 'a draft, a pending read and a duplicate click must not start additional mutations');
+for (const post of autoPosts) {
+    assert.equal(post.url, '/api/v1/media/admin/lyrics/auto-relate');
+    assert.equal(post.disabled, true);
+}
+assert.deepEqual(JSON.parse(autoPosts[0].body), {manual: true, track_path: 'music/artist', lyric_path: 'lyrics/artist'});
+assert.deepEqual(JSON.parse(autoPosts[2].body), {manual: true});
+const autoRefresh = context.autoLinkCalls[context.autoLinkCalls.indexOf(autoPosts[0]) + 2];
+const autoRefreshParams = new URL(autoRefresh.url, 'https://example.test').searchParams;
+assert.equal(autoRefreshParams.get('track_q'), 'search only');
+assert.equal(autoRefreshParams.has('track_cursor'), false);
+assert.equal(autoRefreshParams.has('lyric_cursor'), false);
+assert.equal(autoRefresh.disabled, true);
+assert.deepEqual({...context.autoLinkRefreshed.scopes}, {track: 'music/artist', lyric: 'lyrics/artist'});
+assert.deepEqual({...context.autoLinkRefreshed.cursors}, {track: '', lyric: ''});
+assert.deepEqual([...context.autoLinkRefreshed.history], [0, 0]);
+assert.match(context.autoLinkRefreshed.message, /完成：关联 2，保留 1/);
+assert.match(context.autoLinkRefreshFailure, /完成：关联 2.*刷新失败/);
+assert.equal(element('lyricsAutoLink').disabled, false);
+
+await vm.runInContext(`(async () => {
+    const leaf = await api('/fixture');
+    api = async () => ({
+        ...leaf,
+        counts_scope: 'page', lyric_usage_filter: false,
+        scopes: {track: 'music', lyric: 'lyrics'},
+        counts: {tracks: 0, lyrics: 0, relations: 0},
+        track_directories: [{path: 'music/artist', name: 'artist', count: null}],
+        lyric_directories: [{path: 'lyrics/artist', name: 'artist', count: null}],
+        tracks: [], lyrics: [],
+    });
+    $('lyricsTrackFilter').value = '';
+    await loadLyricCatalog();
+})()`, context);
+assert.equal(element('lyricsTrackCount').textContent, '本页 1 个目录');
+assert.equal(element('lyricsFileCount').textContent, '本页 1 个目录');
+assert.equal(element('lyricsRelationCount').textContent, '进入曲目目录查看');
+
+const lyricCountContext = vm.createContext({
+    lyricDirectoryButton: () => ({lastElementChild: {textContent: '进入'}}),
+});
+vm.runInContext(fs.readFileSync('static/js/lyrics-directory-counts.js', 'utf8'), lyricCountContext);
+assert.equal(vm.runInContext("lyricDirectoryButton({count: null}, 'lyric').lastElementChild.textContent", lyricCountContext), '进入');
+assert.equal(vm.runInContext("lyricDirectoryButton({count: 0}, 'lyric').lastElementChild.textContent", lyricCountContext), '0 份歌词 · 进入');
+assert.equal(vm.runInContext("lyricDirectoryButton({count: 3}, 'track').lastElementChild.textContent", lyricCountContext), '3 首曲目 · 进入');
+
+await vm.runInContext(`(async () => {
+    const previousAPI = api, previousRender = renderTree;
+    globalThis.visibilitySmoke = [];
+    try {
+        let pending;
+        api = async (url, options) => {
+            pending = {url, body: options.body, blocked: $('modalOk').disabled};
+            return {existing_grants: 'expire_normally'};
+        };
+        for (const hidden of [true, false]) {
+            clearMediaSelection();
+            selected.add('music/category');
+            selectedItemKinds.set('music/category', 'directory');
+            selectionKind = 'directory';
+            $('hide').disabled = false;
+            $('hide').textContent = hidden ? '隐藏' : '恢复';
+            renderTree = async () => {
+                if (!hidden) throw new Error('fixture refresh unavailable');
+            };
+            $('hide').onclick();
+            const prompt = $('modalBody').textContent;
+            await $('modalOk').onclick();
+            visibilitySmoke.push({...pending, prompt, status: $('selection').textContent,
+                selection: selected.size, unlocked: !$('modalOk').disabled});
+        }
+    } finally {
+        api = previousAPI;
+        renderTree = previousRender;
+    }
+})()`, context);
+for (const [index, hidden] of [true, false].entries()) {
+    const result = context.visibilitySmoke[index];
+    assert.equal(result.url, '/api/v1/media/admin/hide');
+    assert.deepEqual(JSON.parse(result.body), {paths: ['music/category'], hidden});
+    assert.equal(result.blocked, true);
+    assert.equal(result.unlocked, true);
+    assert.equal(result.selection, 0);
+}
+assert.match(context.visibilitySmoke[0].prompt, /默认列表隐藏.*已知地址和隐藏入口仍可播放/);
+assert.match(context.visibilitySmoke[0].status, /目录已隐藏/);
+assert.match(context.visibilitySmoke[1].prompt, /上级目录的隐藏仍然有效/);
+assert.match(context.visibilitySmoke[1].status, /隐藏设置已恢复.*刷新失败/);
+
+await vm.runInContext(`(async () => {
+    const previousAPI = api, previousRender = renderTree;
+    const path = 'music/artist/song.mp3', original = 'a'.repeat(64), replacement = 'b'.repeat(64), operation = 'c'.repeat(32);
+    globalThis.deleteSmoke = {calls: []};
+    try {
+        sealedMediaDelete = true;
+        mediaDeleteAvailable = true;
+        renderTree = async () => {};
+        clearMediaSelection();
+        selectMediaItem({kind: 'directory', path: 'music/artist', media_id: original});
+        updateToolbar();
+        deleteSmoke.directoryEnabled = !$('delete').disabled;
+        deleteSmoke.directoryTarget = selectedMediaDeleteTargets.get('music/artist');
+        clearMediaSelection();
+        selectMediaItem({kind: 'directory', path: 'music'});
+        updateToolbar();
+        deleteSmoke.rootBlocked = $('delete').disabled;
+        clearMediaSelection();
+        selectMediaItem({kind: 'file', path, media_id: original});
+        updateToolbar();
+        let pendingOnServer = false;
+        api = async (url, options) => {
+            if (url.includes('/admin/tree')) {
+                return {items: pendingOnServer ? [
+                    {kind: 'file', name: 'song.mp3', path, media_id: original, mutation_state: 'pending_delete', mutation_operation: operation},
+                    {kind: 'directory', name: 'old', path: 'music/artist/old', mutation_state: 'rename_pending', rename_target: 'music/artist/new'},
+                    {kind: 'file', name: 'invalid.mp3', path: 'music/artist/invalid.mp3', media_id: replacement, mutation_state: 'pending_delete', mutation_operation: 'invalid'},
+                ] : []};
+            }
+            const body = JSON.parse(options.body);
+            deleteSmoke.calls.push({url, body, busy: $('modalOk').disabled});
+            if (!body.targets) return {deleted: 1};
+            const state = deleteSmoke.calls.length === 1 ? 'pending' : 'deleted';
+            pendingOnServer = state === 'pending';
+            return {items: [{...body.targets[0], operation_id: operation, state}]};
+        };
+        $('delete').onclick();
+        await $('modalOk').onclick();
+        deleteSmoke.pending = $('deleteStatus').textContent;
+        deleteSmoke.retryEnabled = !$('retryDelete').disabled;
+        pendingMediaDeletes.clear();
+        $('mediaSearch').value = '';
+        currentPath = 'music/artist';
+        renderTree = renderAdminTree;
+        await renderTree();
+        deleteSmoke.refreshed = [...pendingMediaDeletes.values()];
+        deleteSmoke.refreshRetryEnabled = !$('retryDelete').disabled;
+        deleteSmoke.pendingRow = $('tree').children.find(row => row.dataset.path === path).innerHTML;
+        deleteSmoke.renameRow = $('tree').children.find(row => row.dataset.path === 'music/artist/old').innerHTML;
+        selectMediaItem({kind: 'file', path, media_id: replacement});
+        updateToolbar();
+        $('retryDelete').onclick();
+        await $('modalOk').onclick();
+        deleteSmoke.completed = $('deleteStatus').textContent;
+        deleteSmoke.retryHidden = $('retryDelete').classList.contains('hidden');
+        const deleteAPI = api;
+        api = async () => { throw Object.assign(new Error('response lost'), {status: 503}); };
+        try {
+            await sendSealedMediaDelete([{path, resource_id: replacement}]);
+        } catch (error) {
+            deleteSmoke.unknown = {message: error.message, status: $('deleteStatus').textContent, retryDisabled: $('retryDelete').disabled};
+        }
+        api = deleteAPI;
+        sealedMediaDelete = false;
+        clearMediaSelection();
+        selectMediaItem({kind: 'directory', path: 'music/artist'});
+        updateToolbar();
+        $('delete').onclick();
+        await $('modalOk').onclick();
+    } finally {
+        api = previousAPI;
+        renderTree = previousRender;
+    }
+})()`, context);
+const deletes = JSON.parse(JSON.stringify(context.deleteSmoke));
+assert.equal(deletes.directoryEnabled, true);
+assert.deepEqual(deletes.directoryTarget, {path: 'music/artist', resource_id: 'a'.repeat(64), directory: true});
+assert.equal(deletes.rootBlocked, true);
+assert.equal(deletes.calls.length, 3);
+assert.deepEqual(deletes.calls[0], {url: '/api/v1/media/admin/delete', busy: true,
+    body: {targets: [{path: 'music/artist/song.mp3', resource_id: 'a'.repeat(64)}]}});
+assert.match(deletes.pending, /1 项删除待完成/);
+assert.doesNotMatch(deletes.pending, /已完成/);
+assert.equal(deletes.retryEnabled, true);
+assert.deepEqual(deletes.refreshed, [{path: 'music/artist/song.mp3', resource_id: 'a'.repeat(64), operation_id: 'c'.repeat(32)}]);
+assert.equal(deletes.refreshRetryEnabled, true);
+assert.match(deletes.pendingRow, /删除待完成/);
+assert.doesNotMatch(deletes.pendingRow, /改名恢复中/);
+assert.match(deletes.renameRow, /改名恢复中/);
+assert.deepEqual(deletes.calls[1].body, {targets: [{path: 'music/artist/song.mp3', resource_id: 'a'.repeat(64), operation_id: 'c'.repeat(32)}]});
+assert.match(deletes.completed, /删除已完成 1 项/);
+assert.equal(deletes.retryHidden, true);
+assert.equal(deletes.unknown.message, 'response lost');
+assert.match(deletes.unknown.status, /刷新列表核对/);
+assert.equal(deletes.unknown.retryDisabled, true);
+assert.deepEqual(deletes.calls[2].body, {paths: ['music/artist']});
 
 console.log('admin-ui-smoke-ok');
 

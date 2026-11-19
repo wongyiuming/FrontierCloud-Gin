@@ -21,15 +21,6 @@ const DIRECT_SEEK_ZONE_START = 0.75;
 const PRELOAD_MAX_BYTES = 128 * 1024 * 1024;
 const PRELOAD_START_SECONDS = 5;
 const cryptoPreparedCatalogs = new WeakSet();
-const metadataTracks = new WeakSet();
-const metadataPromises = new WeakMap();
-const visibleMetadataTracks = new Set();
-const visibleArtworkTracks = new Set();
-const playerThumbnailPromises = new WeakMap();
-const PLAYER_ARTWORK_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Cpath fill="%23788996" d="M30 10v22a6 6 0 1 1-3-5V16l-11 3v16a6 6 0 1 1-3-5V15z"/%3E%3C/svg%3E';
-let playerArtworkController = new AbortController(), playerArtworkPumpAt = 0, playerArtworkWasReady = false;
-const playlistMetadataRetries = new WeakMap();
-let playlistMetadataObserver = null, playlistMetadataTimer = null, playlistMetadataRunning = false;
 let cryptoCatalogSequence = 0;
 
 
@@ -472,10 +463,7 @@ function updateMediaSession(media) {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: media.title || '未知曲目',
             artist: media.artist || '前沿娱乐',
-            album: media.album || (typeof PAGE_TITLE !== 'undefined' ? PAGE_TITLE : '前沿娱乐'),
-            artwork: [
-                { src: media.cover, sizes: '512x512', type: 'image/png' }
-            ]
+            album: typeof PAGE_TITLE !== 'undefined' ? PAGE_TITLE : '前沿娱乐',
         });
 
         navigator.mediaSession.setActionHandler('play', () => { if (art) art.play(); });
@@ -491,7 +479,7 @@ function checkAndPreloadNext(currentTime) {
     const start = duration > 0 ? Math.min(PRELOAD_START_SECONDS, duration / 4) : PRELOAD_START_SECONDS;
     if (currentTime < start) return;
     const next = currentMediaList[nextMediaIndex()];
-    if (next.encryption || next.encrypted || next.transport === 'S3') return;
+    if (next.encryption || next.encrypted || next.transport === 'S3' || next.native_source) return;
     // Keep speculative memory bounded; video continues to use normal streaming.
     if (next.type !== 'audio') return;
     let attempt = 0;
@@ -786,7 +774,11 @@ async function loadInlineLyrics(media) {
         });
         if (!response.ok) throw new Error('Lyrics unavailable');
         const data = await response.json();
-        if (data.encrypted) {
+        if (data.native_lyric || data.encrypted && data.native_source) {
+            if (!window.FrontierMediaCrypto) throw new Error('浏览器媒体组件未加载');
+            const text = await window.FrontierMediaCrypto.lyricTextFor(data);
+            data.entries = window.FrontierMediaCrypto.parseLyrics(text);
+        } else if (data.encrypted) {
             if (!window.FrontierMediaCrypto) throw new Error('浏览器解密组件未加载');
             const text = await window.FrontierMediaCrypto.textFor(data.lyric_path || data.file_path, data.encryption?.file_id);
             data.entries = window.FrontierMediaCrypto.parseLyrics(text);
@@ -805,8 +797,6 @@ async function loadInlineLyrics(media) {
 }
 
 function bindPlayerBusinessEvents() {
-    for (const event of ['video:waiting', 'video:seeking']) art.on(event, cancelPlayerArtwork);
-    for (const event of ['video:playing', 'video:progress', 'video:seeked']) art.on(event, pumpPlayerArtwork);
     art.on('play', () => {
         remoteRetrySequence = -1;
         if (playbackState) playbackState.lastTick = performance.now();
@@ -818,11 +808,9 @@ function bindPlayerBusinessEvents() {
         accountPlaybackTime();
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         stopLyricClock();
-        pumpPlayerArtwork();
     });
 
     art.on('video:timeupdate', () => {
-        pumpPlayerArtwork();
         checkAndPreloadNext(art.currentTime);
         if (typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio') {
             updateSynchronizedLyrics(art.currentTime);
@@ -864,10 +852,8 @@ function bindPlayerBusinessEvents() {
 }
 
 function initPlayer(media, index) {
-    cancelPlayerArtwork();
     accountPlaybackTime();
     currentIndex = index;
-    loadSelectedMetadata(media);
     const sequence = ++playerSwitchSequence;
     const previousObjectUrl = activeObjectUrl;
     activeObjectUrl = nextPreload?.url === media.url && nextPreload.status === 'ready'
@@ -1216,233 +1202,22 @@ function renderPlaylist() {
         .map((item, index) => ({item, index}));
     listContainer.innerHTML = matches.map(({item, index}) => `
         <li class="media-item ${index === currentIndex ? 'active' : ''}" data-index="${index}" data-media-id="${escapeHTML(item.media_id)}">
-            <img src="${escapeHTML(usesPlayerThumbnail(item) ? PLAYER_ARTWORK_PLACEHOLDER : item.cover)}" alt="cover" width="50" height="50" loading="lazy" decoding="async" fetchpriority="low">
             <div class="media-info">
                 <div class="media-title" title="${escapeHTML(item.title)}">${escapeHTML(middleEllipsis(item.title, 40))}</div>
                 <div class="media-artist">${escapeHTML(item.artist)}</div>
             </div>
         </li>
     `).join('');
-    observePlaylistMetadata(listContainer);
 }
-
-function usesPlayerThumbnail(media) {
-    return typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
-        && Boolean(media);
-}
-
-function cancelPlayerArtwork() {
-    playerArtworkController.abort();
-    playerArtworkController = new AbortController();
-    playerArtworkPumpAt = 0;
-    playerArtworkWasReady = false;
-}
-
-function playerArtworkReady() {
-    if (typeof PLAYER_KIND === 'undefined' || PLAYER_KIND !== 'audio') return true;
-    const video = art?.video;
-    if (document.hidden || !video || video.seeking) return false;
-    if (video.paused) return !art.playRequested;
-    if (video.readyState < 3) return false;
-    for (let i = 0; i < video.buffered.length; i++) {
-        if (video.buffered.start(i) <= video.currentTime && video.buffered.end(i) > video.currentTime) {
-            return video.buffered.end(i) - video.currentTime >= 12
-                || (Number.isFinite(video.duration) && video.buffered.end(i) >= video.duration - 0.25);
-        }
-    }
-    return false;
-}
-
-function pumpPlayerArtwork() {
-    if (typeof PLAYER_KIND === 'undefined' || PLAYER_KIND !== 'audio') return;
-    if (!playerArtworkReady()) {
-        if (playerArtworkWasReady) cancelPlayerArtwork();
-        return;
-    }
-    playerArtworkWasReady = true;
-    if (Date.now() < playerArtworkPumpAt) return;
-    playerArtworkPumpAt = Date.now() + 1000;
-    void loadSelectedMetadata(currentMediaList[currentIndex]);
-    schedulePlaylistMetadata();
-    for (const media of visibleArtworkTracks) {
-        const row = document.querySelector(`.media-item[data-index="${currentMediaList.indexOf(media)}"]`);
-        void paintPlayerThumbnail(media, row?.querySelector('img'));
-    }
-}
-
-async function paintPlayerThumbnail(media, image) {
-    if (!image || !usesPlayerThumbnail(media) || !playerArtworkReady()
-        || typeof window.requestIdleCallback !== 'function'
-        || window.FrontierMusicMetadata?.canThumbnail?.() !== true) return;
-    playerArtworkWasReady = true;
-    const source = media.cover;
-    let request = playerThumbnailPromises.get(media);
-    if (!request || request.source !== source) {
-        const signal = playerArtworkController.signal;
-        request = {source, signal, promise: window.FrontierMusicMetadata.thumbnail(source, {
-            signal, admit: () => playerArtworkReady() && visibleArtworkTracks.has(media),
-        })};
-        playerThumbnailPromises.set(media, request);
-    }
-    try {
-        const thumbnail = await request.promise;
-        if (!thumbnail && playerThumbnailPromises.get(media) === request) playerThumbnailPromises.delete(media);
-        if (thumbnail && !request.signal.aborted && playerArtworkReady()
-            && media.cover === source && visibleArtworkTracks.has(media)) image.src = thumbnail;
-    } catch (_) {
-        // A missing thumbnail is final for this view; never fall back to fetching the original.
-    } finally {
-        if (request.signal.aborted && playerThumbnailPromises.get(media) === request) playerThumbnailPromises.delete(media);
-    }
-}
-
-function updateMetadataRow(media) {
-    const index = currentMediaList.indexOf(media);
-    if (index < 0) return;
-    const row = document.querySelector(`.media-item[data-index="${index}"]`);
-    if (row) {
-        const image = row.querySelector('img');
-        if (usesPlayerThumbnail(media)) {
-            if (visibleArtworkTracks.has(media)) void paintPlayerThumbnail(media, image);
-        } else if (image && image.getAttribute('src') !== media.cover) image.src = media.cover;
-        const title = row.querySelector('.media-title');
-        if (title) { title.textContent = middleEllipsis(media.title, 40); title.title = media.title; }
-        const artist = row.querySelector('.media-artist');
-        if (artist) artist.textContent = media.artist;
-    }
-}
-
-function schedulePlaylistMetadata(delay = 0) {
-    if (playlistMetadataTimer !== null) {
-        if (delay) return;
-        clearTimeout(playlistMetadataTimer);
-    }
-    playlistMetadataTimer = setTimeout(() => {
-        playlistMetadataTimer = null;
-        if (playlistMetadataRunning || document.hidden || !playerArtworkReady()
-            || typeof window.FrontierMusicMetadata?.metadata !== 'function') return;
-        const now = Date.now();
-        const media = currentMediaList.find(item => {
-            const retry = playlistMetadataRetries.get(item);
-            return visibleMetadataTracks.has(item) && !metadataTracks.has(item)
-                && (!retry || (retry.at <= now && retry.count < 3));
-        });
-        if (!media) {
-            const waits = [...visibleMetadataTracks].map(item => playlistMetadataRetries.get(item))
-                .filter(retry => retry && retry.count < 3 && retry.at > now);
-            if (waits.length) schedulePlaylistMetadata(Math.min(...waits.map(retry => retry.at - now)));
-            return;
-        }
-        // One background read leaves the second metadata slot for selection.
-        playlistMetadataRunning = true;
-        let deferred = false;
-        Promise.resolve(loadSelectedMetadata(media, false)).then(ok => {
-            deferred = ok === null;
-            if (ok === false) {
-                const count = (playlistMetadataRetries.get(media)?.count || 0) + 1;
-                playlistMetadataRetries.set(media, {count, at: Date.now() + 10000});
-            }
-        }).finally(() => { playlistMetadataRunning = false; if (!deferred) schedulePlaylistMetadata(); });
-    }, delay);
-}
-
-function observePlaylistMetadata(list) {
-    playlistMetadataObserver?.disconnect();
-    visibleMetadataTracks.clear();
-    visibleArtworkTracks.clear();
-    if (typeof window.IntersectionObserver !== 'function') return;
-    playlistMetadataObserver = new window.IntersectionObserver(entries => {
-        for (const entry of entries) {
-            const media = currentMediaList[Number(entry.target.dataset.index)];
-            if (media) {
-                if (entry.isIntersecting) {
-                    visibleArtworkTracks.add(media);
-                    void paintPlayerThumbnail(media, entry.target.querySelector?.('img'));
-                } else visibleArtworkTracks.delete(media);
-            }
-            if ((!media?.encryption && media?.native_metadata !== true && media?.transport !== 'S3')
-                || !/\.mp3$/i.test(media.media_path || media.path || '')) continue;
-            if (entry.isIntersecting) visibleMetadataTracks.add(media);
-            else visibleMetadataTracks.delete(media);
-        }
-        schedulePlaylistMetadata();
-    });
-    for (const row of list.querySelectorAll('.media-item')) playlistMetadataObserver.observe(row);
-}
-
-document.addEventListener?.('visibilitychange', () => {
-    if (document.hidden) cancelPlayerArtwork();
-    else pumpPlayerArtwork();
-});
 
 function mediaIdentity(item) {
     return item?.resource_id || item?.media_id || item?.media_path || '';
 }
 
-function reuseNativeAlbumCover(media) {
-    if (media?.native_metadata !== true || media.encryption || media.encrypted || !media.album) return;
-    const parent = path => String(path || '').slice(0, String(path || '').lastIndexOf('/'));
-    const directory = parent(media.media_path);
-    const siblings = currentMediaList.filter(item => item.native_metadata === true && !item.encryption && !item.encrypted
-        && item.album === media.album && parent(item.media_path) === directory);
-    const cover = siblings.find(item => String(item.cover || '').startsWith('/api/v1/media/cover?'))?.cover;
-    if (!cover) return;
-    for (const item of siblings) {
-        if (!item.cover || item.cover === '/favicon.ico') {
-            item.cover = cover;
-            updateMetadataRow(item);
-            if (currentMediaList[currentIndex] === item) updateMediaSession(item);
-        }
-    }
-}
-
-function loadSelectedMetadata(media, priority = true) {
-    if ((!media?.encryption && media?.native_metadata !== true && media?.transport !== 'S3')
-        || !window.FrontierMusicMetadata) return Promise.resolve(true);
-    if (metadataTracks.has(media)) return metadataPromises.get(media) || Promise.resolve(true);
-    if (!playerArtworkReady()) return Promise.resolve(null);
-    playerArtworkWasReady = true;
-    metadataTracks.add(media);
-    const signal = playerArtworkController.signal;
-    const read = () => window.FrontierMusicMetadata.metadata(media, {priority, signal});
-    const operation = typeof PLAYER_KIND !== 'undefined' && PLAYER_KIND === 'audio'
-        ? new Promise(resolve => {
-            const idle = typeof window.requestIdleCallback === 'function';
-            const cancelled = () => {
-                if (idle) window.cancelIdleCallback?.(id); else clearTimeout(id);
-                signal.removeEventListener('abort', cancelled);
-                resolve(null);
-            };
-            const ready = deadline => {
-                signal.removeEventListener('abort', cancelled);
-                resolve(!signal.aborted && (!idle || deadline.timeRemaining() >= 8) && playerArtworkReady()
-                    ? Promise.resolve().then(read) : null);
-            };
-            // One delayed attempt yields to playback; it never polls or bypasses buffer admission.
-            const id = idle ? window.requestIdleCallback(ready) : setTimeout(ready, 250);
-            signal.addEventListener('abort', cancelled, {once: true});
-            if (signal.aborted) cancelled();
-        }) : read();
-    const pending = operation.then(tags => {
-        if (!tags || signal.aborted) { metadataTracks.delete(media); return null; }
-        for (const field of ['title', 'artist', 'album', 'cover']) if (tags[field]) media[field] = tags[field];
-        if (!currentMediaList.includes(media)) return true;
-        reuseNativeAlbumCover(media);
-        updateMetadataRow(media);
-        if (currentMediaList[currentIndex] === media) {
-            if (art) art.title = middleEllipsis(media.title, 54);
-            updateMediaSession(media);
-        }
-        return true;
-    }).catch(() => { metadataTracks.delete(media); return signal.aborted ? null : false; });
-    metadataPromises.set(media, pending);
-    return pending;
-}
-
 function applyMediaCatalog(entries) {
     if (!Array.isArray(entries)) return;
     const generation = ++cryptoCatalogSequence;
-    if (entries.some(media => media.encryption || media.encrypted || media.transport === 'S3') && !cryptoPreparedCatalogs.has(entries)) {
+    if (entries.some(media => media.encryption || media.encrypted || media.transport === 'S3' || media.native_source) && !cryptoPreparedCatalogs.has(entries)) {
         if (!window.FrontierMediaCrypto) {
             document.getElementById('mediaList').textContent = '浏览器解密组件未加载';
             return;
@@ -1467,7 +1242,6 @@ function applyMediaCatalog(entries) {
         : -1;
     currentIndex = matched >= 0 ? matched : 0;
     renderPlaylist();
-    loadSelectedMetadata(entries[currentIndex]);
     if (!art || (selectedIdentity && matched < 0)) {
         initPlayer(currentMediaList[currentIndex], currentIndex);
     }
@@ -1511,11 +1285,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('pagehide', event => {
-    cancelPlayerArtwork();
-    playlistMetadataObserver?.disconnect();
-    visibleMetadataTracks.clear();
-    visibleArtworkTracks.clear();
-    clearTimeout(playlistMetadataTimer); playlistMetadataTimer = null;
     if (playbackReporter) clearInterval(playbackReporter);
     stopLyricClock();
     accountPlaybackTime();
@@ -1527,10 +1296,6 @@ window.addEventListener('pagehide', event => {
 });
 
 window.addEventListener('pageshow', event => {
-    if (event.persisted) {
-        const list = document.getElementById('mediaList');
-        if (list) observePlaylistMetadata(list);
-    }
     if (event.persisted && art) {
         playbackReporter = setInterval(reportValidPlayback, 1000);
         if (art.playing) startLyricClock();
@@ -1543,9 +1308,8 @@ window.addEventListener('resize', () => {
 });
 
 function selectMedia(index) {
-    cancelPlayerArtwork();
     const media = currentMediaList?.[index];
-    if (media?.encryption || media?.encrypted || media?.transport === 'S3') window.FrontierMediaCrypto?.resetFault(media.media_path || media.path);
+    if (media?.encryption || media?.encrypted || media?.transport === 'S3' || media?.native_source) window.FrontierMediaCrypto?.resetFault(media.media_path || media.path);
     const targetElement = document.querySelector(`.media-item[data-index="${index}"]`);
     const items = document.querySelectorAll('.media-item');
     items.forEach(item => item.classList.remove('active'));
@@ -1558,6 +1322,7 @@ function selectMedia(index) {
 }
 
 window.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return;
     if (e.key === 'Escape' && !document.getElementById('fullscreenLyrics')?.classList.contains('hidden')) {
         e.preventDefault();
         closeFullscreenLyrics();

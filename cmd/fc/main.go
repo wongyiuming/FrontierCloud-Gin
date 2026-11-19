@@ -39,7 +39,7 @@ func run(args []string) (exitCode int) {
 	}
 	args = flags.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | self-update --revision SHA | install master|storage|resume | status | logs | restart | diagnose | backup plan|create|verify|set-create|set-verify | restore state-check|state|state-open|check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open | upgrade plan|apply|resume|recover-state|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup plan/verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
+		fmt.Fprintln(os.Stderr, "fc [--directory DIR] [--json] doctor | self-update --revision SHA | install master|storage|resume | status | logs | restart | diagnose | backup plan|create|verify|set-create|set-verify | restore state-check|state|state-open|check|apply|prepare|activate|open|set-check|set-apply|set-prepare|set-activate|set-open|prepare-business-state|import-business-state|activate-business-state | upgrade plan|apply|resume|recover-state|open | node retire check|apply NODE_ID | node migrate plan|plan-status|start|status|pause|resume|cancel|retry|release-drain\nRead-only: doctor/status/logs/diagnose, backup plan/verify/set-verify, restore check/set-check, upgrade plan and node retire check. Writes require the corresponding operation's explicit confirmations. Install refuses existing data. No command deletes volumes.")
 		return 2
 	}
 	if args[0] == "version" && len(args) == 1 {
@@ -209,6 +209,17 @@ func run(args []string) (exitCode int) {
 		}
 		return report.ExitCode()
 	case "logs":
+		if len(args) > 1 && args[1] == "query" {
+			raw, e := d.QueryEncryptedLogs(ctx, receipt, args[2:])
+			if e != nil {
+				fmt.Fprintln(os.Stderr, e)
+				return 2
+			}
+			if _, e = os.Stdout.Write(raw); e != nil {
+				return 2
+			}
+			return 0
+		}
 		report, e := d.Logs(ctx, receipt)
 		if e != nil {
 			fmt.Fprintln(os.Stderr, e)

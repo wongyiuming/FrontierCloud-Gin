@@ -13,6 +13,9 @@ import (
 // SQL admission is repeated under the volume coordinator before unlinking.
 // Reserved capacity remains held until the whole unit cancellation receipt.
 func (s *Storage) MigrationCancelPublication(ctx context.Context, relationship string, l store.MigrationLease, g store.MigrationShadowGrant, peer store.MigrationPeerRepository, audit store.NodeAudit) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	if peer == nil || g.Object.Resource != "recording" {
 		return store.ErrMigrationState
 	}
@@ -65,6 +68,9 @@ func (s *Storage) MigrationCancelPublication(ctx context.Context, relationship s
 		}
 		if !anchor.Mode().IsRegular() || !target.Mode().IsRegular() || !os.SameFile(anchor, target) || target.Size() != spec.Bytes {
 			return store.ErrMigrationState
+		}
+		if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+			return e
 		}
 		if e = s.root.Remove(spec.TargetPath); e != nil {
 			return e

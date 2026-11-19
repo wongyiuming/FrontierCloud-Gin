@@ -21,7 +21,7 @@ func (s *Storage) MigrationReceiver(ctx context.Context) (*migrationdata.Receive
 	if e = s.Ready(ctx); e != nil {
 		return nil, e
 	}
-	return migrationdata.New(s.root, n.ID, "recording")
+	return migrationdata.NewGuarded(s.root, n.ID, "recording", s.repo.CheckLegacyPhysicalWritesAllowed)
 }
 
 func (s *Storage) MigrationRetireAnchor(ctx context.Context, spec migrationdata.Spec, admission func() error) (migrationdata.Checkpoint, error) {
@@ -100,6 +100,9 @@ func (s *Storage) MigrationPublish(ctx context.Context, spec migrationdata.Spec,
 			return e
 		}
 		if e = admission(); e != nil {
+			return e
+		}
+		if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
 			return e
 		}
 		staged, e := s.info(stage)

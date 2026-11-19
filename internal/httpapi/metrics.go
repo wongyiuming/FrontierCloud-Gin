@@ -2,11 +2,14 @@ package httpapi
 
 import (
 	"crypto/subtle"
+	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -75,8 +78,29 @@ func (m *metrics) instrument(c *gin.Context) {
 	}()
 	c.Next()
 }
+func (m *metrics) recovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if err, ok := recovered.(error); ok {
+					if errors.Is(err, http.ErrAbortHandler) {
+						panic(http.ErrAbortHandler)
+					}
+					if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+						c.Abort()
+						return
+					}
+				}
+				m.recovered(c, recovered)
+			}
+		}()
+		c.Next()
+	}
+}
+
 func (m *metrics) recovered(c *gin.Context, _ any) {
 	m.exceptions.WithLabelValues(metricMethod(c.Request.Method), metricRoute(c)).Inc()
+	slog.Error("request panic", "path", loggedRoute(c), "request_id", c.GetString("request_id"))
 	c.AbortWithStatus(http.StatusInternalServerError)
 }
 func metricsToken(directory string) string {

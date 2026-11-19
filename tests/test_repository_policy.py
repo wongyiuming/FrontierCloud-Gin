@@ -79,16 +79,16 @@ class RepositoryPolicyRegressionTests(unittest.TestCase):
             self.assertIn("must never overwrite", content)
             self.assertIn("explicit", content)
 
-    def test_upload_site_types_are_architectural_not_per_member_selection(self):
+    def test_upload_selects_explicit_owner_without_automatic_fallback(self):
         architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
         self.assertIn(
-            "Admin media upload chooses a **site type**, never a concrete storage member",
+            "Admin media upload must explicitly select the destination storage member",
             architecture,
         )
         self.assertIn("selector starts empty", architecture)
         self.assertIn("Historical media requires **no migration**", architecture)
         self.assertIn("low-saturation badges", architecture)
-        self.assertIn("storage write lock", architecture)
+        self.assertIn("never silently select another member", architecture)
 
     def test_media_mutation_fence_requires_single_web_process(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

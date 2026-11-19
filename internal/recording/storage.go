@@ -16,6 +16,7 @@ import (
 
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/filelease"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/fsutil"
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/sealedtree"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
 
@@ -30,6 +31,7 @@ type Storage struct {
 	root     *os.Root
 	repo     store.RecordingRepository
 	nodes    store.NodeRepository
+	sealed   bool
 	mutation sync.RWMutex
 }
 type journal struct {
@@ -54,11 +56,36 @@ func NewContext(parent context.Context, root *os.Root, repo store.RecordingRepos
 	s := &Storage{root: root, repo: repo, nodes: nodes}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
+	if e := repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return nil, e
+	}
 	if e := s.Recover(ctx); e != nil {
 		return nil, e
 	}
 	return s, nil
 }
+
+// NewSealedContext opens only a clean recording namespace. The authenticated
+// tree's runtime must never replay legacy recording journals or write them.
+func NewSealedContext(ctx context.Context, root *os.Root, repo store.RecordingRepository, nodes store.NodeRepository, tree *sealedtree.SQLStore) (*Storage, error) {
+	if ctx == nil || root == nil || repo == nil || nodes == nil || tree == nil {
+		return nil, ErrRecovery
+	}
+	lease, err := tree.AcquireReadFence(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer lease.Release()
+	s := &Storage{root: root, repo: repo, nodes: nodes, sealed: true}
+	if err := s.Ready(ctx); err != nil {
+		return nil, err
+	}
+	if err := lease.Check(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 func (s *Storage) Free() (int64, error) { _, free, e := fsutil.DiskUsage(s.root); return free, e }
 func Path(relationship, user, id string) (string, error) {
 	if !identifier.MatchString(relationship) || !identifier.MatchString(user) || !identifier.MatchString(id) {
@@ -130,6 +157,11 @@ func (s *Storage) privateFile(name string, flags int) (*os.File, error) {
 	return s.root.OpenFile(name, flags, 0600)
 }
 func (s *Storage) Lock(id string) (func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return nil, e
+	}
 	if !identifier.MatchString(id) {
 		return nil, store.ErrRecordingState
 	}
@@ -148,6 +180,30 @@ func (s *Storage) ready() error {
 	return nil
 }
 func (s *Storage) Ready(ctx context.Context) error {
+	if s.sealed {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		dir, err := s.root.Open(".")
+		if err != nil {
+			return err
+		}
+		defer dir.Close()
+		entries, err := dir.ReadDir(2)
+		if err != nil && !errors.Is(err, io.EOF) || len(entries) > 1 {
+			return ErrRecovery
+		}
+		if len(entries) == 1 {
+			info, err := entries[0].Info()
+			if err != nil || entries[0].Name() != ".recordings-mutation.lock" || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+				return ErrRecovery
+			}
+		}
+		return nil
+	}
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	release, e := s.acquire(ctx, false)
 	if e != nil {
 		return e
@@ -162,6 +218,23 @@ func (s *Storage) fence() {
 		file.Close()
 		s.syncDir(".")
 	}
+}
+
+// Preserve unknown on-disk state if the tree marker is present or unreadable.
+func (s *Storage) fenceIfAllowed(ctx context.Context) {
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if s.repo.CheckLegacyPhysicalWritesAllowed(bounded) == nil {
+		s.fence()
+	}
+}
+func (s *Storage) discardStage(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
+	return s.remove(name)
 }
 func (s *Storage) remove(name string) error {
 	e := s.root.Remove(name)
@@ -290,6 +363,9 @@ func (s *Storage) Stat(ctx context.Context, relationship, user, id string) (stor
 // The caller owns the per-recording lease throughout Upload. No volume lock is
 // held while reading a potentially slow browser/node request body.
 func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recording, reader io.Reader, a store.NodeAudit) (store.RecordingReceipt, error) {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return store.RecordingReceipt{}, e
+	}
 	if v.Bytes < 1 || v.Bytes > store.MaxRecordingBytes || !store.ValidRecordingFilename(v.Filename) || !store.RecordingContentType(v.ContentType) {
 		return store.RecordingReceipt{}, store.ErrRecordingState
 	}
@@ -338,6 +414,10 @@ func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recor
 		release()
 		return store.RecordingReceipt{}, e
 	}
+	if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		release()
+		return store.RecordingReceipt{}, e
+	}
 	file, e := s.privateFile(stage, os.O_CREATE|os.O_EXCL|os.O_WRONLY)
 	release()
 	if e != nil {
@@ -359,31 +439,34 @@ func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recor
 		e = closeErr
 	}
 	if e != nil {
-		if cleanup := s.remove(stage); cleanup != nil {
-			s.fence()
+		if cleanup := s.discardStage(stage); cleanup != nil {
+			s.fenceIfAllowed(context.Background())
 		}
 		return store.RecordingReceipt{}, e
 	}
 	stagedFile, metadataErr := s.root.Open(stage)
 	if metadataErr != nil {
-		s.remove(stage)
+		s.discardStage(stage)
 		return store.RecordingReceipt{}, metadataErr
 	}
 	metadata := Metadata(stagedFile, bytes)
 	metadataErr = stagedFile.Close()
 	if metadataErr != nil || !store.RecordingReceiptMetadataMatches(v, metadata) {
-		s.remove(stage)
+		s.discardStage(stage)
 		return store.RecordingReceipt{}, store.ErrRecordingState
 	}
 	receipt := store.RecordingReceipt{ID: v.ID, Bytes: bytes, SHA256: hex.EncodeToString(digest.Sum(nil))}
 	release, e = s.acquire(ctx, true)
 	if e != nil {
-		s.remove(stage)
+		s.discardStage(stage)
 		return store.RecordingReceipt{}, e
 	}
 	defer release()
 	if e = s.ready(); e != nil {
-		s.remove(stage)
+		s.discardStage(stage)
+		return store.RecordingReceipt{}, e
+	}
+	if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
 		return store.RecordingReceipt{}, e
 	}
 	j := journal{Version: 1, Operation: "upload", Relationship: relationship, Recording: v, UserID: v.UserID, MemberID: v.MemberID, Receipt: receipt, NodeAudit: a}
@@ -391,11 +474,11 @@ func (s *Storage) Upload(ctx context.Context, relationship string, v store.Recor
 		j.MemberID = n.ID
 	}
 	if e = s.writeJournal(j); e != nil {
-		s.fence()
+		s.fenceIfAllowed(ctx)
 		return receipt, e
 	}
 	if e = s.finishUpload(ctx, j); e != nil {
-		s.fence()
+		s.fenceIfAllowed(ctx)
 		return receipt, e
 	}
 	receipt.Metadata = nil
@@ -414,6 +497,9 @@ func (s *Storage) clearIntent(id string) error {
 	return s.syncDir(".")
 }
 func (s *Storage) finishUpload(ctx context.Context, j journal) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	v := j.Recording
 	v.UserID, v.MemberID = j.UserID, j.MemberID
 	target, e := Path(j.Relationship, v.UserID, v.ID)
@@ -567,6 +653,9 @@ func (s *Storage) Open(ctx context.Context, relationship, user, id string) (*os.
 // The caller owns the recording lease. Unknown filesystem/SQL outcomes retain
 // intent and accounting; replay reconciles DB truth before touching quarantine.
 func (s *Storage) Delete(ctx context.Context, relationship, user, id string, a store.KaraokeAudit, na store.NodeAudit) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	name, e := Path(relationship, user, id)
 	if e != nil {
 		return e
@@ -611,17 +700,23 @@ func (s *Storage) Delete(ctx context.Context, relationship, user, id string, a s
 		return store.ErrRecordingState
 	}
 	j := journal{Version: 1, Operation: "delete", Relationship: relationship, Recording: *v, UserID: user, MemberID: v.MemberID, Audit: a, NodeAudit: na, Absent: errors.Is(physical, os.ErrNotExist)}
+	if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	if e = s.writeJournal(j); e != nil {
-		s.fence()
+		s.fenceIfAllowed(ctx)
 		return e
 	}
 	if e = s.finishDelete(ctx, j); e != nil {
-		s.fence()
+		s.fenceIfAllowed(ctx)
 		return e
 	}
 	return nil
 }
 func (s *Storage) finishDelete(ctx context.Context, j journal) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	id := j.Recording.ID
 	name, e := Path(j.Relationship, j.UserID, id)
 	if e != nil {
@@ -724,6 +819,9 @@ func (s *Storage) finishDelete(ctx context.Context, j journal) error {
 	return s.clearIntent(id)
 }
 func (s *Storage) Recover(ctx context.Context) error {
+	if e := s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
+	}
 	release, e := s.acquire(ctx, true)
 	if e != nil {
 		return e
@@ -791,7 +889,7 @@ func (s *Storage) Recover(ctx context.Context) error {
 			return ErrRecovery
 		}()
 		if e != nil {
-			s.fence()
+			s.fenceIfAllowed(ctx)
 			return e
 		}
 	}
@@ -812,7 +910,7 @@ func (s *Storage) Recover(ctx context.Context) error {
 		}
 		_, intent := s.root.Lstat(".recording-" + match[1] + ".json")
 		if errors.Is(intent, os.ErrNotExist) {
-			e = s.remove(entry.Name())
+			e = s.discardStage(entry.Name())
 		}
 		unlock()
 		if e != nil {
@@ -820,8 +918,11 @@ func (s *Storage) Recover(ctx context.Context) error {
 		}
 	}
 	if deferredIntent {
-		s.fence()
+		s.fenceIfAllowed(ctx)
 		return ErrRecovery
+	}
+	if e = s.repo.CheckLegacyPhysicalWritesAllowed(ctx); e != nil {
+		return e
 	}
 	if e = s.remove(".recordings-recovery-required"); e != nil {
 		return e

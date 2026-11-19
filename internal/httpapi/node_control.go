@@ -61,6 +61,9 @@ func controlJSON(body []byte, target any) error {
 // RegisterNodeControl separates small bounded control bodies from resource
 // data-plane handlers. Authentication signs the exact raw body and query path.
 func RegisterNodeControl(router *gin.Engine, settings config.Config, resolver *network.Resolver, service *node.Service) {
+	// Paired storage nodes may be untrusted. Keep this optional proof endpoint
+	// from monopolizing the Master even if a relationship credential is abused.
+	selectedProofGate := newSelectedOriginGate(8, 8, 2)
 	router.POST("/internal/v1/pair", func(c *gin.Context) {
 		if !nodeHTTPS(c, settings, resolver) {
 			return
@@ -87,10 +90,17 @@ func RegisterNodeControl(router *gin.Engine, settings config.Config, resolver *n
 		}
 		c.JSON(200, gin.H{"state": "pending", "protocol": protocol.Version})
 	})
-	for _, route := range []string{"confirm", "revoke", "heartbeat"} {
+	for _, route := range []string{"confirm", "revoke", "heartbeat", "selected-admin-origin"} {
 		router.POST("/internal/v1/"+route, func(c *gin.Context) {
 			if !nodeHTTPS(c, settings, resolver) {
 				return
+			}
+			if route == "selected-admin-origin" {
+				if !selectedProofGate.acquire() {
+					detail(c, 429, "Origin proof busy")
+					return
+				}
+				defer selectedProofGate.release()
 			}
 			body, ok := nodeBody(c)
 			if !ok {
@@ -102,7 +112,7 @@ func RegisterNodeControl(router *gin.Engine, settings config.Config, resolver *n
 			if c.Request.URL.RawQuery != "" {
 				path += "?" + c.Request.URL.RawQuery
 			}
-			relation, err := service.Authenticate(ctx, c.Request.Header, c.Request.Method, path, body, route != "heartbeat", route == "revoke")
+			relation, err := service.Authenticate(ctx, c.Request.Header, c.Request.Method, path, body, route == "confirm" || route == "revoke", route == "revoke")
 			if err != nil {
 				if errors.Is(err, node.ErrAuthentication) {
 					detail(c, 401, "Invalid relationship authentication")
@@ -119,6 +129,19 @@ func RegisterNodeControl(router *gin.Engine, settings config.Config, resolver *n
 				return
 			}
 			switch route {
+			case "selected-admin-origin":
+				challenge, ok := value["challenge"].(string)
+				if !ok || len(value) != 1 || !node.ValidIdentifier(challenge) {
+					detail(c, 400, "Invalid control message")
+					return
+				}
+				signed, e := service.SignSelectedAdminOrigin(ctx, relation, challenge)
+				if e != nil {
+					detail(c, 403, "Origin proof unavailable")
+					return
+				}
+				c.JSON(200, signed)
+				return
 			case "confirm":
 				err = service.Confirm(ctx, relation)
 			case "revoke":

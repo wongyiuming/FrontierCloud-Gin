@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -196,6 +197,15 @@ func checkBackupRow(table string, r map[string]any) error {
 		}
 	}
 	switch table {
+	case "public_ingress_config":
+		u, err := url.Parse(text("public_origin"))
+		if num("singleton") != 1 || !hexID(text("node_id"), 32) || num("generation") <= 0 || num("updated_at") <= 0 || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.ContainsAny(text("public_origin"), "\\\r\n\t ") {
+			return bad
+		}
+	case "native_transport_policy":
+		if (text("configured_transport") != "Direct" && text("configured_transport") != "Relay") || num("revision") <= 0 || num("updated_at") <= 0 {
+			return bad
+		}
 	case "media_crypto_keys":
 		if num("singleton") != 1 || !hexID(text("key_id"), 64) || num("created_at") <= 0 {
 			return bad
@@ -333,6 +343,8 @@ func checkBackupReferences(ctx context.Context, tx *sql.Tx) error {
 		// not a fabricated equality or automatic capacity refund.
 		{"storage-capacity", "SELECT EXISTS(SELECT 1 FROM cluster_storage_members s LEFT JOIN (SELECT storage_member_id,SUM(size_bytes) AS used FROM (SELECT storage_member_id,size_bytes FROM global_media_objects UNION ALL SELECT storage_member_id,size_bytes FROM karaoke_recordings) GROUP BY storage_member_id) p ON p.storage_member_id=s.member_id WHERE s.used_bytes<COALESCE(p.used,0))"},
 		{"local-identity", "SELECT COUNT(*)>1 FROM cluster_storage_members WHERE member_kind='MasterLocal'"},
+		{"public-ingress-owner", "SELECT EXISTS(SELECT 1 FROM public_ingress_config i LEFT JOIN cluster_storage_members s ON s.member_id=i.node_id WHERE s.member_id IS NULL OR s.member_kind<>'MasterLocal')"},
+		{"native-policy-owner", "SELECT EXISTS(SELECT 1 FROM native_transport_policy p LEFT JOIN cluster_storage_members s ON s.member_id=p.member_id WHERE s.member_id IS NULL OR s.member_kind NOT IN ('MasterLocal','Follower'))"},
 	}
 	for _, check := range checks {
 		var invalid bool

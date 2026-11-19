@@ -12,6 +12,9 @@ import (
 )
 
 func (r *Repository) upsertLyric(ctx context.Context, q queryer, trackID, trackPath, lyricID, lyricPath string) error {
+	if err := legacyTreeAbsent(ctx, q); err != nil {
+		return err
+	}
 	now := timestamp(time.Now())
 	query := "INSERT INTO media_lyric_links (media_id,media_path,lyric_id,lyric_path,created_at,updated_at) VALUES (?,?,?,?,?,?)"
 	if r.backend == "sqlite" {
@@ -94,7 +97,7 @@ func (r *Repository) ReplaceLyricRelations(ctx context.Context, origin store.Med
 		return 0, errors.New("invalid system lyric mutation")
 	}
 	count := 0
-	err := r.write(ctx, func(q queryer) error {
+	err := r.legacyWrite(ctx, func(q queryer) error {
 		objects := append([]store.MediaObject{origin, fallback}, targets...)
 		ids, err := r.lockLyricObjects(ctx, q, objects)
 		if err != nil {
@@ -163,7 +166,7 @@ func (r *Repository) ReplaceLyricRelations(ctx context.Context, origin store.Med
 	return count, err
 }
 func (r *Repository) AutoLyricRelations(ctx context.Context, pairs []store.LyricPair, result store.AutoLyricResult, audit store.AdminAudit) (store.AutoLyricResult, error) {
-	err := r.write(ctx, func(q queryer) error {
+	err := r.legacyWrite(ctx, func(q queryer) error {
 		result.Linked = 0
 		result.Preserved = 0
 		objects := []store.MediaObject{}

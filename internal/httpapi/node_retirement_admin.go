@@ -40,6 +40,9 @@ func RegisterAdminRetirement(router *gin.Engine, a *Admin, service retirementChe
 			invalid(c, "body", "member_id")
 			return
 		}
+		if rejectSealedRetirement(c, a) {
+			return
+		}
 		select {
 		case slot <- struct{}{}:
 			defer func() { <-slot }()
@@ -74,6 +77,9 @@ func RegisterAdminRetirement(router *gin.Engine, a *Admin, service retirementChe
 			invalid(c, "body", "confirm_member_id")
 			return
 		}
+		if rejectSealedRetirement(c, a) {
+			return
+		}
 		service, ok := service.(retirementApplier)
 		if !ok {
 			detail(c, 409, "安全退役服务不可用")
@@ -96,6 +102,17 @@ func RegisterAdminRetirement(router *gin.Engine, a *Admin, service retirementChe
 		c.JSON(200, result)
 	})
 }
+
+// The legacy inventory cannot establish ownership of sealed-tree blobs. Refuse
+// before scanning or fencing a node instead of returning a misleading roster.
+func rejectSealedRetirement(c *gin.Context, a *Admin) bool {
+	if a.public.opaqueTree == nil {
+		return false
+	}
+	c.JSON(409, gin.H{"code": "sealed_retirement_unavailable", "detail": "当前加密文件树尚不支持完整退役盘点；不会执行检查或退役，请保留节点及数据"})
+	return true
+}
+
 func retirementID(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == 16 && value == strings.ToLower(value)

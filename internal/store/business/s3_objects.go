@@ -11,7 +11,7 @@ import (
 )
 
 func (r *Repository) S3RequestAbort(ctx context.Context, id string, a store.AdminAudit) (result store.S3Upload, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ func s3AbsenceBinding(proof store.S3AbsenceProof, key, session, object, member, 
 }
 
 func (r *Repository) S3FinishAbort(ctx context.Context, id string, revision int64, proof store.S3AbsenceProof, a store.AdminAudit) (result store.S3Upload, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func (r *Repository) s3Object(ctx context.Context, q queryer, id, lock string) (
 	if err != nil {
 		return
 	}
-	if media != id || v.Media.MemberID != member || v.Media.ObjectID != object || v.Media.Transport != "S3" ||
+	if !store.ValidS3MetadataIdentity(v.Proof.MetadataFormat, key, v.Proof.MetadataOwner, media, object) || media != id || v.Media.MemberID != member || v.Media.ObjectID != object || v.Media.Transport != "S3" ||
 		v.Proof.Key != key || v.Proof.ObjectID != object || v.Proof.MemberID != member || v.Proof.MediaID != media ||
 		v.Proof.Bytes != v.Media.Bytes || v.Proof.ETag != v.Media.ETag || v.Proof.SessionID == "" {
 		return v, nodeConflict("S3 object proof and catalog binding differ")
@@ -149,7 +149,7 @@ func (r *Repository) S3Object(ctx context.Context, id string) (store.S3Object, e
 }
 
 func (r *Repository) S3IssueReadGrant(ctx context.Context, id string, requestedUntil int64) (result store.S3Object, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (r *Repository) S3IssueReadGrant(ctx context.Context, id string, requestedU
 }
 
 func (r *Repository) S3StartDelete(ctx context.Context, id string, a store.AdminAudit) (result store.S3Object, err error) {
-	err = r.write(ctx, func(q queryer) error {
+	err = r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}
@@ -226,7 +226,7 @@ func (r *Repository) S3StartDelete(ctx context.Context, id string, a store.Admin
 }
 
 func (r *Repository) S3FinishDelete(ctx context.Context, id string, revision int64, proof store.S3AbsenceProof, a store.AdminAudit) error {
-	return r.write(ctx, func(q queryer) error {
+	return r.legacyWrite(ctx, func(q queryer) error {
 		if err := s3Master(ctx, q, r.lock()); err != nil {
 			return err
 		}

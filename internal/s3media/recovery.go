@@ -5,8 +5,54 @@ import (
 	"errors"
 	"time"
 
+	"github.com/wongyiuming/FrontierCloud-Gin/internal/s3store"
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store"
 )
+
+// DiscoverSelectedUpload applies the existing bounded exact-key recovery rule
+// to a selected intent. Empty or incomplete listings remain uncertain.
+func DiscoverSelectedUpload(ctx context.Context, provider s3store.Provider, key string, createdAt int64) (string, error) {
+	if ctx == nil || ctx.Err() != nil || provider == nil || createdAt <= 0 {
+		return "", ErrUnavailable
+	}
+	return discoverUpload(ctx, provider, key, createdAt)
+}
+
+// recoverSelectedMemberProbe is called only while the selected-S3 control gate
+// is held exclusively. An uncertain old operation remains pending; it never
+// justifies creating a replacement probe or touching another member's state.
+func (s *Service) recoverSelectedMemberProbe(ctx context.Context, memberID string) error {
+	if ctx == nil || ctx.Err() != nil || memberID == "" {
+		return ErrUnavailable
+	}
+	if err := s.master(ctx); err != nil {
+		return err
+	}
+	repository, ok := s.repository.(interface {
+		S3PendingMemberProbes(context.Context, string) ([]store.S3Probe, error)
+	})
+	if !ok {
+		return ErrUnavailable
+	}
+	probes, err := repository.S3PendingMemberProbes(ctx, memberID)
+	if err != nil || len(probes) > 1 {
+		return ErrUnavailable
+	}
+	if len(probes) == 0 {
+		return nil
+	}
+	if probes[0].MemberID != memberID {
+		return ErrUnavailable
+	}
+	if err := s.recoverProbe(ctx, probes[0]); err != nil {
+		return err
+	}
+	remaining, err := repository.S3PendingMemberProbes(ctx, memberID)
+	if err != nil || len(remaining) != 0 {
+		return ErrPending
+	}
+	return nil
+}
 
 func (s *Service) recoverCreate(ctx context.Context, id string) error {
 	release, err := s.lease(ctx, "upload:"+id)

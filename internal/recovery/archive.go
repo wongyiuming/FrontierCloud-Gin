@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -34,6 +35,12 @@ const UpgradeStateScope = "upgrade-state"
 const ExcludedBusinessFiles = "media, lyric and recording files are excluded; original business file mounts must be retained"
 const legacyExcludedBusinessFiles = "media and lyric files are excluded; original business file mounts must be retained"
 
+// A future tree integration must not declare this reference in the current
+// unencrypted recovery format. Its key wrapping, fence rebind and restore
+// protocol do not exist yet. This explicit marker is not detection of an
+// undeclared key or populated tree; activation remains forbidden.
+const unsupportedTreeRootReference = "runtime_secrets/tree-master.key"
+
 var hashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var nodePattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 var ErrUnsafe = errors.New("unsafe, incomplete or incompatible recovery archive")
@@ -53,27 +60,28 @@ type Directory struct {
 	GID  int    `json:"gid"`
 }
 type Manifest struct {
-	Format               string      `json:"format"`
-	Version              int         `json:"version"`
-	Scope                string      `json:"scope"`
-	NodeID               string      `json:"node_id"`
-	Role                 string      `json:"role"`
-	Revision             string      `json:"revision"`
-	Database             string      `json:"database"`
-	MySQLRestoreBytes    uint64      `json:"mysql_restore_storage_budget_bytes,omitempty"`
-	SchemaGeneration     int         `json:"schema_generation"`
-	ConfigurationVersion int         `json:"configuration_version"`
-	CreatedAt            string      `json:"created_at"`
-	Consistency          string      `json:"consistency"`
-	CompleteCluster      bool        `json:"complete_cluster"`
-	Missing              []string    `json:"missing_items"`
-	KeyReferences        []string    `json:"key_references"`
-	Classes              []string    `json:"state_classes"`
-	Bytes                int64       `json:"bytes"`
-	Files                []Entry     `json:"files"`
-	Directories          []Directory `json:"directories"`
-	RecoverySet          string      `json:"recovery_set,omitempty"`
-	Relations            []Relation  `json:"relations,omitempty"`
+	Format               string          `json:"format"`
+	Version              int             `json:"version"`
+	Scope                string          `json:"scope"`
+	NodeID               string          `json:"node_id"`
+	Role                 string          `json:"role"`
+	Revision             string          `json:"revision"`
+	Database             string          `json:"database"`
+	MySQLRestoreBytes    uint64          `json:"mysql_restore_storage_budget_bytes,omitempty"`
+	SchemaGeneration     int             `json:"schema_generation"`
+	ConfigurationVersion int             `json:"configuration_version"`
+	CreatedAt            string          `json:"created_at"`
+	Consistency          string          `json:"consistency"`
+	CompleteCluster      bool            `json:"complete_cluster"`
+	Missing              []string        `json:"missing_items"`
+	KeyReferences        []string        `json:"key_references"`
+	Classes              []string        `json:"state_classes"`
+	Bytes                int64           `json:"bytes"`
+	Files                []Entry         `json:"files"`
+	Directories          []Directory     `json:"directories"`
+	RecoverySet          string          `json:"recovery_set,omitempty"`
+	Relations            []Relation      `json:"relations,omitempty"`
+	TreeEvidence         json.RawMessage `json:"tree_evidence,omitempty"`
 }
 type Report struct {
 	Manifest         Manifest `json:"manifest"`
@@ -88,6 +96,15 @@ type Root struct {
 	Class        string
 	Directory    string
 	IncludePaths []string
+	// staged is private: only the constrained receiver can carry trusted
+	// source ownership while its local copies remain owned by runtime UID.
+	staged map[string]treeStagedMetadata
+}
+
+type treeStagedMetadata struct {
+	mode      int64
+	uid, gid  int
+	directory bool
 }
 
 // SelectedPath prunes unselected subtrees without reading or copying their files.
@@ -126,6 +143,40 @@ func (r contextReader) Read(p []byte) (int, error) {
 	}
 	return r.r.Read(p)
 }
+func treeArchiveSourceChanged(phase, name string, directory bool) error {
+	kind := "file"
+	if directory {
+		kind = "directory"
+	} else if strings.HasSuffix(name, "-shm") {
+		kind = "sqlite-shm"
+	} else if strings.HasSuffix(name, "-wal") {
+		kind = "sqlite-wal"
+	}
+	return fmt.Errorf("tree archive source changed during %s (%s): %w", phase, kind, ErrUnsafe)
+}
+
+func archiveSourceDifference(a, b os.FileInfo) string {
+	if a == nil || b == nil {
+		return "missing"
+	}
+	if !os.SameFile(a, b) {
+		return "identity"
+	}
+	if a.Size() != b.Size() {
+		return "size"
+	}
+	if a.Mode() != b.Mode() {
+		return "mode"
+	}
+	if !a.ModTime().Equal(b.ModTime()) {
+		return "mtime"
+	}
+	return archiveSourceMetadataDifference(a, b)
+}
+
+func sameArchiveSource(a, b os.FileInfo) bool {
+	return a != nil && b != nil && os.SameFile(a, b) && a.Size() == b.Size() && a.Mode() == b.Mode() && a.ModTime().Equal(b.ModTime()) && archiveSourceMetadataEqual(a, b)
+}
 func hashFile(ctx context.Context, r *os.Root, name string) (Entry, error) {
 	var entry Entry
 	info, e := r.Lstat(name)
@@ -161,12 +212,24 @@ func hashFile(ctx context.Context, r *os.Root, name string) (Entry, error) {
 // SQLite data includes its WAL/SHM under the held native offline boundary.
 // MySQL roots must include a consistent logical dump, never its data directory.
 func Create(ctx context.Context, output string, m Manifest, sources []Root) (Report, error) {
+	return createArchive(ctx, output, m, sources, false, nil)
+}
+
+func createArchive(ctx context.Context, output string, m Manifest, sources []Root, treeFormat bool, seal func(Manifest) (json.RawMessage, error)) (Report, error) {
 	var report Report
+	for _, ref := range m.KeyReferences {
+		if ref == unsupportedTreeRootReference && !treeFormat {
+			return report, ErrUnsafe
+		}
+	}
 	if !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || m.Consistency != "native-offline-and-deployment-writers-stopped" {
 		return report, ErrUnsafe
 	}
 	m.Format = Format
 	m.Version = 1
+	if treeFormat {
+		m.Version = 2
+	}
 	if m.Scope == "" {
 		m.Scope = "deployment"
 	}
@@ -183,6 +246,8 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	m.Classes = []string{}
 	m.Bytes = 0
 	roots := map[string]*os.Root{}
+	pins := map[string]os.FileInfo{}
+	directoryPins := map[string]os.FileInfo{}
 	defer func() {
 		for _, r := range roots {
 			r.Close()
@@ -208,6 +273,10 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 			return report, e
 		}
 		roots[source.Class] = r
+		if source.staged != nil && !treeFormat {
+			return report, ErrUnsafe
+		}
+		stagedSeen := map[string]bool{}
 		m.Classes = append(m.Classes, source.Class)
 		e = fs.WalkDir(r.FS(), ".", func(name string, item fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -234,9 +303,20 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 				if e != nil {
 					return e
 				}
+				if source.staged != nil {
+					meta, ok := source.staged[name]
+					if !ok || !meta.directory {
+						return ErrUnsafe
+					}
+					header.Mode, header.Uid, header.Gid = meta.mode, meta.uid, meta.gid
+					stagedSeen[name] = true
+				}
 				directory := source.Class
 				if name != "." {
 					directory += "/" + name
+				}
+				if treeFormat {
+					directoryPins[directory] = info
 				}
 				m.Directories = append(m.Directories, Directory{directory, header.Mode & 0777, header.Uid, header.Gid})
 				if len(m.Directories) > MaxFiles {
@@ -247,11 +327,36 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 			if len(m.Files) >= MaxFiles {
 				return ErrUnsafe
 			}
+			var before os.FileInfo
+			if treeFormat {
+				before, e = r.Lstat(name)
+				if e != nil {
+					return e
+				}
+			}
 			entry, e := hashFile(ctx, r, name)
 			if e != nil {
 				return e
 			}
+			if source.staged != nil {
+				meta, ok := source.staged[name]
+				if !ok || meta.directory {
+					return ErrUnsafe
+				}
+				entry.Mode, entry.UID, entry.GID = meta.mode, meta.uid, meta.gid
+				stagedSeen[name] = true
+			}
 			entry.Path = source.Class + "/" + name
+			if treeFormat {
+				after, err := r.Lstat(name)
+				if err != nil || !sameArchiveSource(before, after) {
+					return treeArchiveSourceChanged("initial hash", name, false)
+				}
+				pins[entry.Path] = before
+			}
+			if !treeFormat && entry.Path == unsupportedTreeRootReference {
+				return ErrUnsafe
+			}
 			if !validPath(entry.Path) || entry.Bytes > 10*1024*1024*1024*1024 || m.Bytes > 10*1024*1024*1024*1024-entry.Bytes {
 				return ErrUnsafe
 			}
@@ -262,6 +367,9 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 		if e != nil {
 			return report, e
 		}
+		if source.staged != nil && len(stagedSeen) != len(source.staged) {
+			return report, ErrUnsafe
+		}
 	}
 	if roots["data"] == nil || roots["runtime_secrets"] == nil || m.Database == "mysql" && roots["mysql_dump"] == nil {
 		return report, ErrUnsafe
@@ -269,7 +377,17 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	sort.Strings(m.Classes)
 	sort.Slice(m.Files, func(i, j int) bool { return m.Files[i].Path < m.Files[j].Path })
 	sort.Slice(m.Directories, func(i, j int) bool { return m.Directories[i].Path < m.Directories[j].Path })
-	if validateManifest(m) != nil {
+	if treeFormat {
+		if seal == nil || len(m.TreeEvidence) != 0 {
+			return report, ErrUnsafe
+		}
+		var sealErr error
+		m.TreeEvidence, sealErr = seal(m)
+		if sealErr != nil {
+			return report, sealErr
+		}
+	}
+	if validateManifestVersion(m, treeFormat) != nil {
 		return report, ErrUnsafe
 	}
 	raw, e := json.Marshal(m)
@@ -302,10 +420,80 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 		if e != nil {
 			return report, e
 		}
+		if treeFormat {
+			info, err := source.Stat()
+			if err != nil || !sameArchiveSource(pins[entry.Path], info) {
+				source.Close()
+				return report, fmt.Errorf("%w [%s]", treeArchiveSourceChanged("copy before", entry.Path, false), archiveSourceDifference(pins[entry.Path], info))
+			}
+		}
 		h := sha256.New()
 		size, copyErr := io.CopyBuffer(io.MultiWriter(writer, h), contextReader{ctx, io.LimitReader(source, entry.Bytes+1)}, make([]byte, 64<<10))
+		if treeFormat {
+			info, err := source.Stat()
+			if err != nil || !sameArchiveSource(pins[entry.Path], info) {
+				source.Close()
+				return report, fmt.Errorf("%w [%s]", treeArchiveSourceChanged("copy after", entry.Path, false), archiveSourceDifference(pins[entry.Path], info))
+			}
+			pathInfo, err := roots[parts[0]].Lstat(parts[1])
+			if err != nil || !sameArchiveSource(pins[entry.Path], pathInfo) {
+				source.Close()
+				return report, treeArchiveSourceChanged("path recheck", entry.Path, false)
+			}
+		}
 		source.Close()
 		if copyErr != nil || size != entry.Bytes || hex.EncodeToString(h.Sum(nil)) != entry.SHA256 {
+			return report, ErrUnsafe
+		}
+	}
+	// Copy-time hashes alone do not detect later changes to already-copied
+	// files or additions. Recheck the selected source set and pinned inode
+	// metadata while the same caller-owned maintenance/SQLite fences are held.
+	if treeFormat {
+		seenFiles, seenDirectories := map[string]bool{}, map[string]bool{}
+		for _, source := range sources {
+			r := roots[source.Class]
+			if e = fs.WalkDir(r.FS(), ".", func(name string, item fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				if !SelectedPath(source.IncludePaths, name, item.IsDir()) {
+					if item.IsDir() {
+						return fs.SkipDir
+					}
+					return nil
+				}
+				if item.Type()&os.ModeSymlink != 0 {
+					return ErrUnsafe
+				}
+				key := source.Class
+				if name != "." {
+					key += "/" + name
+				}
+				info, err := item.Info()
+				if err != nil {
+					return err
+				}
+				if item.IsDir() {
+					if !sameArchiveSource(directoryPins[key], info) {
+						return treeArchiveSourceChanged("final check", key, true)
+					}
+					seenDirectories[key] = true
+					return nil
+				}
+				if !info.Mode().IsRegular() || !sameArchiveSource(pins[key], info) {
+					return treeArchiveSourceChanged("final check", key, false)
+				}
+				seenFiles[key] = true
+				return nil
+			}); e != nil {
+				return report, e
+			}
+		}
+		if len(seenFiles) != len(pins) || len(seenDirectories) != len(directoryPins) {
 			return report, ErrUnsafe
 		}
 	}
@@ -333,8 +521,17 @@ func Create(ctx context.Context, output string, m Manifest, sources []Root) (Rep
 	return Report{Manifest: m, SHA256: hex.EncodeToString(archiveHash.Sum(nil)), Verified: true}, nil
 }
 
-func validateManifest(m Manifest) error {
-	if m.Format != Format || m.Version != 1 || m.Scope != "deployment" && m.Scope != UpgradeStateScope || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
+func validateManifest(m Manifest) error { return validateManifestVersion(m, false) }
+
+func validateManifestVersion(m Manifest, treeFormat bool) error {
+	if !treeFormat && len(m.TreeEvidence) != 0 || treeFormat && (len(m.TreeEvidence) == 0 || len(m.TreeEvidence) > 4096 || !json.Valid(m.TreeEvidence)) {
+		return ErrUnsafe
+	}
+	expectedVersion := 1
+	if treeFormat {
+		expectedVersion = 2
+	}
+	if m.Format != Format || m.Version != expectedVersion || m.Scope != "deployment" && m.Scope != UpgradeStateScope || !nodePattern.MatchString(m.NodeID) || !release.ValidSHA(m.Revision) || !SupportedSchemaGeneration(m.SchemaGeneration) || m.ConfigurationVersion != 1 || m.Database != "sqlite" && m.Database != "mysql" || m.Role != "Standalone" && m.Role != "Master" && m.Role != "Follower" || len(m.Files) > MaxFiles || m.Bytes < 0 || m.Consistency != "native-offline-and-deployment-writers-stopped" || m.CompleteCluster && len(m.Missing) != 0 {
 		return ErrUnsafe
 	}
 	if m.Scope == UpgradeStateScope {
@@ -359,7 +556,7 @@ func validateManifest(m Manifest) error {
 	seen := map[string]bool{}
 	var total int64
 	for _, entry := range m.Files {
-		if !validPath(entry.Path) || seen[entry.Path] || entry.Bytes < 0 || entry.Bytes > 10*1024*1024*1024*1024 || total > 10*1024*1024*1024*1024-entry.Bytes || !hashPattern.MatchString(entry.SHA256) || entry.Mode < 0 || entry.Mode > 0777 || entry.UID < 0 || entry.GID < 0 {
+		if !treeFormat && entry.Path == unsupportedTreeRootReference || !validPath(entry.Path) || seen[entry.Path] || entry.Bytes < 0 || entry.Bytes > 10*1024*1024*1024*1024 || total > 10*1024*1024*1024*1024-entry.Bytes || !hashPattern.MatchString(entry.SHA256) || entry.Mode < 0 || entry.Mode > 0777 || entry.UID < 0 || entry.GID < 0 {
 			return ErrUnsafe
 		}
 		seen[entry.Path] = true
@@ -395,8 +592,32 @@ func validateManifest(m Manifest) error {
 			return ErrUnsafe
 		}
 	}
+	treeKeyCount, vaultKeyCount := 0, 0
 	for _, ref := range m.KeyReferences {
-		if !seen[ref] {
+		if ref == unsupportedTreeRootReference {
+			treeKeyCount++
+		}
+		if ref == "runtime_secrets/node-vault.key" {
+			vaultKeyCount++
+		}
+		if ref == unsupportedTreeRootReference && !treeFormat || !seen[ref] {
+			return ErrUnsafe
+		}
+	}
+	if treeFormat {
+		if treeKeyCount != 1 || vaultKeyCount != 1 || m.Role != "Master" || m.Database != "sqlite" || m.Scope != "deployment" && m.Scope != UpgradeStateScope {
+			return ErrUnsafe
+		}
+		found, vaultFound := false, false
+		for _, entry := range m.Files {
+			if entry.Path == unsupportedTreeRootReference {
+				found = entry.Bytes == 32 && entry.Mode == 0600
+			}
+			if entry.Path == "runtime_secrets/node-vault.key" {
+				vaultFound = entry.Bytes > 0 && entry.Bytes <= 128 && entry.Mode == 0600
+			}
+		}
+		if !found || !vaultFound {
 			return ErrUnsafe
 		}
 	}
@@ -406,6 +627,9 @@ func validateManifest(m Manifest) error {
 // walkArchive verifies actual bytes, not source declarations or file lengths.
 // consume is called only for known regular files, never links or special nodes.
 func walkArchive(ctx context.Context, file *os.File, consume func(Entry, io.Reader) error) (Report, error) {
+	return walkArchiveVersion(ctx, file, consume, false)
+}
+func walkArchiveVersion(ctx context.Context, file *os.File, consume func(Entry, io.Reader) error, treeFormat bool) (Report, error) {
 	var report Report
 	h := sha256.New()
 	reader := tar.NewReader(io.TeeReader(contextReader{ctx, file}, h))
@@ -422,7 +646,7 @@ func walkArchive(ctx context.Context, file *os.File, consume func(Entry, io.Read
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&report.Manifest) != nil || validateManifest(report.Manifest) != nil {
+	if decoder.Decode(&report.Manifest) != nil || validateManifestVersion(report.Manifest, treeFormat) != nil {
 		return report, ErrUnsafe
 	}
 	for _, entry := range report.Manifest.Files {
@@ -476,12 +700,15 @@ func openArchive(name string) (*os.File, error) {
 	return f, nil
 }
 func Check(ctx context.Context, input, expected string) (Report, error) {
+	return checkArchive(ctx, input, expected, false)
+}
+func checkArchive(ctx context.Context, input, expected string, treeFormat bool) (Report, error) {
 	f, e := openArchive(input)
 	if e != nil {
 		return Report{}, e
 	}
 	defer f.Close()
-	report, e := walkArchive(ctx, f, nil)
+	report, e := walkArchiveVersion(ctx, f, nil, treeFormat)
 	if e != nil {
 		return report, e
 	}
@@ -536,6 +763,9 @@ func applySetMember(ctx context.Context, input, target, expected, confirmation, 
 	return extractMaterial(ctx, input, target, expected, confirmation, set, false)
 }
 func extractMaterial(ctx context.Context, input, target, expected, confirmation, set string, stateOnly bool) (Report, error) {
+	return extractMaterialVersion(ctx, input, target, expected, confirmation, set, stateOnly, false)
+}
+func extractMaterialVersion(ctx context.Context, input, target, expected, confirmation, set string, stateOnly, treeFormat bool) (Report, error) {
 	var report Report
 	if !hashPattern.MatchString(expected) || !nodePattern.MatchString(confirmation) {
 		return report, ErrUnsafe
@@ -543,20 +773,32 @@ func extractMaterial(ctx context.Context, input, target, expected, confirmation,
 	if _, e := os.Lstat(target); !errors.Is(e, os.ErrNotExist) {
 		return report, errors.New("restore target must not exist; nonempty or unknown target is never overwritten")
 	}
-	checked, e := Check(ctx, input, expected)
+	checked, e := checkArchive(ctx, input, expected, treeFormat)
 	if e != nil {
 		return checked, e
 	}
 	if checked.Manifest.NodeID != confirmation || stateOnly && checked.Manifest.Scope != UpgradeStateScope || !stateOnly && len(checked.Manifest.Missing) != 0 && (set == "" || checked.Manifest.RecoverySet != set) {
 		return checked, ErrUnsafe
 	}
-	stage, e := os.MkdirTemp(filepath.Dir(target), ".fc-restore-")
-	if e != nil {
-		return checked, e
-	}
-	root, e := os.OpenRoot(stage)
-	if e != nil {
-		return checked, e
+	var stage string
+	var root *os.Root
+	var publishTree func(context.Context) error
+	if treeFormat {
+		var closeParent func()
+		root, publishTree, closeParent, e = openTreeMaterialStage(target)
+		if e != nil {
+			return checked, e
+		}
+		defer closeParent()
+	} else {
+		stage, e = os.MkdirTemp(filepath.Dir(target), ".fc-restore-")
+		if e != nil {
+			return checked, e
+		}
+		root, e = os.OpenRoot(stage)
+		if e != nil {
+			return checked, e
+		}
 	}
 	defer root.Close()
 	for _, directory := range checked.Manifest.Directories {
@@ -569,7 +811,7 @@ func extractMaterial(ctx context.Context, input, target, expected, confirmation,
 		return checked, e
 	}
 	defer f.Close()
-	report, e = walkArchive(ctx, f, func(entry Entry, content io.Reader) error {
+	report, e = walkArchiveVersion(ctx, f, func(entry Entry, content io.Reader) error {
 		if e := root.MkdirAll(path.Dir(entry.Path), 0700); e != nil {
 			return e
 		}
@@ -592,7 +834,7 @@ func extractMaterial(ctx context.Context, input, target, expected, confirmation,
 		}
 		e = errors.Join(e, out.Close())
 		return e
-	})
+	}, treeFormat)
 	if e != nil || report.SHA256 != expected {
 		return report, ErrUnsafe
 	}
@@ -617,6 +859,9 @@ func extractMaterial(ctx context.Context, input, target, expected, confirmation,
 	})
 	if e != nil {
 		return report, e
+	}
+	if publishTree != nil {
+		return report, publishTree(ctx)
 	}
 	if _, e = os.Lstat(target); !errors.Is(e, os.ErrNotExist) {
 		return report, ErrUnsafe

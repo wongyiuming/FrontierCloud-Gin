@@ -133,6 +133,12 @@ type JournaledProber interface {
 	TestKeyWithCheckpoint(context.Context, string, string, func(string) error) (TestReport, error)
 }
 
+// JournaledMultiOriginProber verifies each exact browser origin using one
+// journaled temporary object and a single synchronous cleanup lifecycle.
+type JournaledMultiOriginProber interface {
+	TestKeyWithCheckpointOrigins(context.Context, []string, string, func(string) error) (TestReport, error)
+}
+
 type MultipartUpload struct {
 	UploadID    string `json:"upload_id"`
 	InitiatedAt int64  `json:"initiated_at"`

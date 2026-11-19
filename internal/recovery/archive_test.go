@@ -1,9 +1,12 @@
 package recovery_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -18,6 +21,92 @@ import (
 	"github.com/wongyiuming/FrontierCloud-Gin/internal/store/sqlite"
 )
 
+func TestDeclaredTreeRootArchiveRefusedOnCreateAndApply(t *testing.T) {
+	root, archive, m, sources := fixture(t)
+	ctx := context.Background()
+	marker := "runtime_secrets/tree-master.key"
+	if e := os.WriteFile(filepath.Join(sources[1].Directory, "tree-master.key"), []byte("synthetic tree key"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	declared := m
+	declared.KeyReferences = append(append([]string(nil), m.KeyReferences...), marker)
+	if _, e := recovery.Create(ctx, filepath.Join(root, "refused.tar"), declared, sources); !errors.Is(e, recovery.ErrUnsafe) {
+		t.Fatal("declared tree archive was created", e)
+	}
+	// Construct an otherwise valid historical-format archive declaring the key
+	// to exercise the independent check on incoming archives before publication.
+	if e := os.Remove(filepath.Join(sources[1].Directory, "tree-master.key")); e != nil {
+		t.Fatal(e)
+	}
+	created, e := recovery.Create(ctx, archive, m, sources)
+	if e != nil {
+		t.Fatal(e)
+	}
+	key := []byte("synthetic tree key")
+	hash := sha256.Sum256(key)
+	declared = created.Manifest
+	declared.KeyReferences = append(declared.KeyReferences, marker)
+	declared.Files = append(declared.Files, recovery.Entry{Path: marker, Bytes: int64(len(key)), SHA256: hex.EncodeToString(hash[:]), Mode: 0600})
+	declared.Bytes += int64(len(key))
+	manifest, e := json.Marshal(declared)
+	if e != nil {
+		t.Fatal(e)
+	}
+	old, e := os.Open(archive)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer old.Close()
+	reader := tar.NewReader(old)
+	if _, e = reader.Next(); e != nil {
+		t.Fatal(e)
+	}
+	var buf bytes.Buffer
+	writer := tar.NewWriter(&buf)
+	if e = writer.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0600, Size: int64(len(manifest)), Typeflag: tar.TypeReg}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = writer.Write(manifest); e != nil {
+		t.Fatal(e)
+	}
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = writer.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = io.Copy(writer, reader); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if e = writer.WriteHeader(&tar.Header{Name: marker, Mode: 0600, Size: int64(len(key)), Typeflag: tar.TypeReg}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = writer.Write(key); e != nil {
+		t.Fatal(e)
+	}
+	if e = writer.Close(); e != nil {
+		t.Fatal(e)
+	}
+	incoming := filepath.Join(root, "declared.tar")
+	if e = os.WriteFile(incoming, buf.Bytes(), 0600); e != nil {
+		t.Fatal(e)
+	}
+	archiveHash := sha256.Sum256(buf.Bytes())
+	target := filepath.Join(root, "must-not-publish")
+	if _, e = recovery.Apply(ctx, incoming, target, hex.EncodeToString(archiveHash[:]), m.NodeID); !errors.Is(e, recovery.ErrUnsafe) {
+		t.Fatal("declared tree archive was applied", e)
+	}
+	if _, e = os.Lstat(target); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("target was published despite refusal", e)
+	}
+}
+
 func fixture(t *testing.T) (string, string, recovery.Manifest, []recovery.Root) {
 	t.Helper()
 	root := t.TempDir()
@@ -27,6 +116,9 @@ func fixture(t *testing.T) (string, string, recovery.Manifest, []recovery.Root) 
 		if e := os.MkdirAll(dir, 0750); e != nil {
 			t.Fatal(e)
 		}
+	}
+	if e := os.Chmod(filepath.Join(data, "empty"), 0750); e != nil {
+		t.Fatal(e)
 	}
 	m := recovery.Manifest{NodeID: strings.Repeat("a", 32), Role: "Standalone", Revision: strings.Repeat("b", 40), Database: "sqlite", Consistency: "native-offline-and-deployment-writers-stopped", Missing: []string{}, KeyReferences: []string{"runtime_secrets/node-vault.key"}}
 	if e := os.WriteFile(filepath.Join(secrets, "node-vault.key"), []byte("isolated-fixture-key"), 0600); e != nil {
@@ -71,6 +163,20 @@ func TestArchivePublicationNeverReplacesExistingOutputAndIgnoresInterruptedTempo
 func TestArchiveRoundTripVerifiesRealBytesAndRefusesOccupiedTarget(t *testing.T) {
 	root, archive, m, sources := fixture(t)
 	ctx := context.Background()
+	assets := []struct {
+		source recovery.Root
+		name   string
+		body   string
+	}{
+		{sources[1], "admin_key", "original-fixture-admin-key\n"},
+		{sources[0], "retained-app.log.1", "retained fixture log\n"},
+		{sources[1], "unclassified-state", "unclassified fixture bytes"},
+	}
+	for _, asset := range assets {
+		if e := os.WriteFile(filepath.Join(asset.source.Directory, asset.name), []byte(asset.body), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
 	created, e := recovery.Create(ctx, archive, m, sources)
 	if e != nil {
 		t.Fatal(e)
@@ -82,6 +188,12 @@ func TestArchiveRoundTripVerifiesRealBytesAndRefusesOccupiedTarget(t *testing.T)
 	target := filepath.Join(root, "restored")
 	if _, e = recovery.Apply(ctx, archive, target, created.SHA256, m.NodeID); e != nil {
 		t.Fatal(e)
+	}
+	for _, asset := range assets {
+		body, e := os.ReadFile(filepath.Join(target, asset.source.Class, asset.name))
+		if e != nil || string(body) != asset.body {
+			t.Fatal("asset changed during recovery:", asset.name, e)
+		}
 	}
 	actual, e := os.ReadFile(filepath.Join(target, "data", "media", "music", "album", "track.mp3"))
 	if e != nil || string(actual) != "ID3-real-backup-bytes" {

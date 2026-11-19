@@ -33,7 +33,7 @@ func backupS3Proof(raw string) (store.S3ObjectProof, error) {
 	if _, err := decoder.Token(); err != io.EOF {
 		return proof, store.ErrBackupState
 	}
-	if !hexID(proof.SessionID, 32) || !hexID(proof.ObjectID, 64) || !hexID(proof.MemberID, 32) || !hexID(proof.MediaID, 64) || proof.Bytes < 1 || proof.Bytes > store.S3MaxObjectBytes || len(proof.Key) < 1 || len(proof.Key) > 768 || len(proof.ETag) < 1 || len(proof.ETag) > 128 || len(proof.VersionID) > 1024 || strings.ContainsAny(proof.ETag+proof.VersionID, "\r\n\x00") {
+	if !store.ValidS3MetadataIdentity(proof.MetadataFormat, proof.Key, proof.MetadataOwner, proof.MediaID, proof.ObjectID) || !hexID(proof.SessionID, 32) || !hexID(proof.ObjectID, 64) || !hexID(proof.MemberID, 32) || !hexID(proof.MediaID, 64) || proof.Bytes < 1 || proof.Bytes > store.S3MaxObjectBytes || len(proof.Key) < 1 || len(proof.Key) > 768 || len(proof.ETag) < 1 || len(proof.ETag) > 128 || len(proof.VersionID) > 1024 || strings.ContainsAny(proof.ETag+proof.VersionID, "\r\n\x00") {
 		return proof, store.ErrBackupState
 	}
 	index := strings.LastIndexByte(proof.CompositeSHA256, '-')

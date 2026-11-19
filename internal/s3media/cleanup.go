@@ -35,6 +35,9 @@ func exactMetadata(actual, expected map[string]string) bool {
 // Delete only the observed exact version/ETag after checking ownership. Even a
 // lost DELETE reply is reconciled through a separate exact-version HEAD.
 func deleteOwned(ctx context.Context, provider s3store.Provider, key string, expected map[string]string, version, etag string) (string, string, error) {
+	if len(expected) == 0 {
+		return version, etag, ErrProof
+	}
 	proof, err := provider.Head(ctx, key, version)
 	if errors.Is(err, s3store.ErrNotFound) {
 		return version, etag, nil
@@ -82,6 +85,20 @@ func abortKnown(ctx context.Context, provider s3store.Provider, key, id string) 
 		return nil
 	}
 	return ErrPending
+}
+
+// CleanupSelectedObject aborts a known multipart upload and removes only the
+// exact owned object/version, then verifies its absence. The caller must have
+// durably cancelled the same selected operation, drained its part grants and
+// held the per-operation cross-process lease before making this network call.
+func CleanupSelectedObject(ctx context.Context, provider s3store.Provider, key, uploadID, owner string) (string, string, error) {
+	if ctx == nil || ctx.Err() != nil || provider == nil || uploadID == "" || !store.ValidS3MetadataBinding(store.S3OpaqueMetadata, key, owner) {
+		return "", "", ErrProof
+	}
+	if err := abortKnown(ctx, provider, key, uploadID); err != nil {
+		return "", "", err
+	}
+	return deleteOwned(ctx, provider, key, map[string]string{"fc-format": store.S3OpaqueMetadata, "fc-owner": owner}, "", "")
 }
 
 func discoverUpload(ctx context.Context, provider s3store.Provider, key string, created int64) (string, error) {
@@ -176,7 +193,7 @@ func (s *Service) Delete(ctx context.Context, id string, audit store.AdminAudit)
 		return err
 	}
 	defer closeProvider()
-	expected := map[string]string{"fc-session": object.Proof.SessionID, "fc-object": object.Proof.ObjectID, "fc-member": object.Proof.MemberID, "fc-media": object.Proof.MediaID}
+	expected := metadata(store.S3Upload{Key: object.Proof.Key, ObjectID: object.Proof.ObjectID, Reservation: store.UploadReservation{ID: object.Proof.SessionID, MemberID: object.Proof.MemberID, MediaID: object.Proof.MediaID}, Proof: object.Proof})
 	version, etag, err := deleteOwned(ctx, provider, object.Proof.Key, expected, object.Proof.VersionID, object.Proof.ETag)
 	if err != nil {
 		return err
