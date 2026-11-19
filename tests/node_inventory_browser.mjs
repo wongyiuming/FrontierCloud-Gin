@@ -129,10 +129,11 @@ try {
     await count(4);
 
     await page.locator('#adminModuleLinks button[data-module-target="nodeSettings"]').click();
-    await page.locator('#nodeSettingsPanel .node-module-card').filter({hasText:endpoint}).locator('summary').click();
-    assert.match(await page.locator('#nodeSettingsPanel').innerText(), /未知文件不能作为清理依据/);
+    const directSettings = page.locator('#nodeSettingsPanel .node-module-card').filter({hasText:endpoint});
+    await directSettings.locator('summary').click();
+    await directSettings.getByText(/未知文件不能作为清理依据/).waitFor();
     assert.equal(await page.getByRole('button', {name:'执行只读退役检查',exact:true}).count(),0);
-    const capacity = page.locator('#nodeSettingsPanel .node-module-card[open] input[type="number"]').first();
+    const capacity = directSettings.locator('input[type="number"]').first();
     await capacity.fill('17');
     const whileEditing = await page.evaluate(() => window.calls.filter(p => p.endsWith('/observability')).length);
     await page.waitForTimeout(11000);
