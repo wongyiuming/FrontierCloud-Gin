@@ -32,7 +32,7 @@ if [[ "${FRONTIERCLOUD_TEST_NATIVE_MIGRATIONS:-}" == 1 ]]; then
 fi
 # Private images are retained on failure for diagnosis; no global pruning.
 if [[ -z "${FRONTIERCLOUD_TEST_NATIVE_MATRIX_IMAGE_PREFIX:-}" ]]; then
-  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --target build -t "$driver" .
+  DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --build-arg "REVISION=$revision" --target build -t "$driver" .
   DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f Dockerfile.gin --build-arg "REVISION=$revision" -t "$native" .
   DOCKER_BUILDKIT=0 docker build --memory=3g --cpuset-cpus="${FRONTIERCLOUD_TEST_BUILD_CPUS:-0,1}" -f nginx/Dockerfile --build-arg "REVISION=$revision" -t "$edge" .
 else
