@@ -66,6 +66,8 @@ type Config struct {
 	SecurityContact                   string
 	LogLevel                          string
 	LogFormat                         string
+
+	FreshEncryptedBootstrap bool
 }
 
 // Load reads configuration from the process environment.
@@ -139,6 +141,10 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 	value.TLSEnabled, err = boolean(getenv("TLS_ENABLED"), false)
 	if err != nil {
 		return Config{}, fmt.Errorf("TLS_ENABLED: %w", err)
+	}
+	value.FreshEncryptedBootstrap, err = boolean(getenv("FRESH_ENCRYPTED_BOOTSTRAP"), false)
+	if err != nil {
+		return Config{}, fmt.Errorf("FRESH_ENCRYPTED_BOOTSTRAP: %w", err)
 	}
 
 	value.NginxMedia, err = boolean(getenv("NGINX_MEDIA_ACCEL"), true)

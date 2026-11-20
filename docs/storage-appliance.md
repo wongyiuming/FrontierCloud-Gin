@@ -39,6 +39,12 @@ security publisher or business-backup builder.
    Direct/Relay follows the signed deployment transport profile; changing
    transport requires an explicit quiescent redeployment and endpoint handover.
 
+On fresh volumes, Compose prepares encrypted storage before starting Web.
+A Direct appliance defaults its resource origin to its verified HTTPS storage
+endpoint. The Master requests the paired profile automatically and applies it
+after the signed readiness exchange. An online Direct node becomes eligible
+for log archiving after that exchange. Enable log archiving explicitly in Admin.
+
 Direct Storage HTTPS is fixed at 443. Relay Storage uses a high communication
 port, default 8443 (1024–65535), matching STORAGE_ENDPOINT. STORAGE_TRANSPORT
 defaults to direct. The native bounded STUN responder uses UDP 3478 independently.

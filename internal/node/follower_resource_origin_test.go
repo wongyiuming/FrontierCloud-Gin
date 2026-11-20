@@ -123,6 +123,16 @@ func TestFollowerResourceIdentityUsesVerifiedTLSAndPairedKey(t *testing.T) {
 }
 
 func TestFollowerDirectHandshakeRequiresReadinessAndBoundOrigin(t *testing.T) {
+	for _, automatic := range []bool{false, true} {
+		name := "admin-confirmed"
+		if automatic {
+			name = "paired-profile"
+		}
+		t.Run(name, func(t *testing.T) { testFollowerDirectHandshake(t, automatic) })
+	}
+}
+
+func testFollowerDirectHandshake(t *testing.T, automatic bool) {
 	ctx := context.Background()
 	transport := &localControl{nodes: map[string]*Service{}}
 	master, md := testNode(t, "Master", "https://master.test", transport)
@@ -132,6 +142,12 @@ func TestFollowerDirectHandshakeRequiresReadinessAndBoundOrigin(t *testing.T) {
 	transport.nodes["https://master.test"], transport.nodes["https://follower.test"] = master, follower
 	if err := follower.ConfigureFollowerResourceOrigin("https://resource.test"); err != nil {
 		t.Fatal(err)
+	}
+	if automatic {
+		if err := follower.ConfigureStorageTransport("direct"); err != nil {
+			t.Fatal(err)
+		}
+		master.EnableInitialNativeTransport()
 	}
 	pkg, err := follower.CreatePair(ctx, store.NodeAudit{})
 	if err != nil {
@@ -149,13 +165,19 @@ func TestFollowerDirectHandshakeRequiresReadinessAndBoundOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = master.ConfirmNativeTransport(ctx, rel.PeerID, "Direct", 0, store.NodeAudit{}); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-master.wakeup:
-	default:
-		t.Fatal("saved policy did not wake control loop")
+	if automatic {
+		if rel.Mode != "Direct" {
+			t.Fatal("the signed Direct profile did not survive pairing")
+		}
+	} else {
+		if _, err = master.ConfirmNativeTransport(ctx, rel.PeerID, "Direct", 0, store.NodeAudit{}); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-master.wakeup:
+		default:
+			t.Fatal("saved policy did not wake control loop")
+		}
 	}
 	master.transport = &resourceOriginControl{localControl: transport, resource: follower}
 	tick := func() {
@@ -177,7 +199,7 @@ func TestFollowerDirectHandshakeRequiresReadinessAndBoundOrigin(t *testing.T) {
 		return value
 	}
 	tick()
-	if p := policy(); p.AppliedTransport != "" {
+	if p := policy(); p.AppliedTransport != "" || automatic && p.Revision != 0 {
 		t.Fatal("advertisement applied policy", p)
 	}
 	ready := func(context.Context, store.Relationship, string) error { return nil }

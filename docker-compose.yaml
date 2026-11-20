@@ -20,6 +20,7 @@ x-app-environment: &app-environment
   SECURITY_CONTACT: ${SECURITY_CONTACT:-}
   RELEASE_MANIFEST_PATH: ${RELEASE_MANIFEST_PATH:-}
   TLS_ENABLED: ${TLS_ENABLED:-false}
+  FRESH_ENCRYPTED_BOOTSTRAP: "true"
 
 x-logging: &service-logging
   driver: json-file

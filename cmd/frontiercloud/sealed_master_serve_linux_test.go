@@ -37,6 +37,12 @@ func TestSealedMasterServesLocalCatalog(t *testing.T) {
 		}
 		return
 	}
+	for _, name := range []string{"prepared", "fresh"} {
+		t.Run(name, func(t *testing.T) { testSealedMasterServesLocalCatalog(t, name == "fresh") })
+	}
+}
+
+func testSealedMasterServesLocalCatalog(t *testing.T, fresh bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	dir := t.TempDir()
@@ -78,52 +84,57 @@ func TestSealedMasterServesLocalCatalog(t *testing.T) {
 	} {
 		t.Setenv(key, value)
 	}
+	if fresh {
+		t.Setenv("FRESH_ENCRYPTED_BOOTSTRAP", "true")
+	}
 	c, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := deployment.Bind(ctx, c, nil); err != nil {
-		t.Fatal(err)
-	}
-	db, err := sqlitestore.Open(c.SQLitePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Initialize(ctx); err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	if err := os.Chmod(c.SQLitePath, 0600); err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	identity, err := node.Initialize(ctx, db.Nodes(), secrets)
-	if err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	if err := identity.RecordNativeRuntime(ctx, data); err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	_, promoteErr := db.Nodes().PromoteIdentity(ctx, store.NodePromotion{Role: "Master", Endpoint: c.PublicOrigin, Allocation: store.GiB, PhysicalFree: 2 * store.GiB}, store.NodeAudit{})
-	closeErr := db.Close()
-	if promoteErr != nil || closeErr != nil {
-		t.Fatal(promoteErr, closeErr)
-	}
-	gate, err := maintenance.Open(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer gate.Close()
-	if err := gate.Enter(ctx, func(context.Context) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
-	if err := sealedTreePrepareCommand([]string{identity.ID}, io.Discard); err != nil {
-		t.Fatal(err)
-	}
-	if err := gate.Resume(ctx, func(context.Context) error { return nil }); err != nil {
-		t.Fatal(err)
+	if !fresh {
+		if err := deployment.Bind(ctx, c, nil); err != nil {
+			t.Fatal(err)
+		}
+		db, err := sqlitestore.Open(c.SQLitePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Initialize(ctx); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+		if err := os.Chmod(c.SQLitePath, 0600); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+		identity, err := node.Initialize(ctx, db.Nodes(), secrets)
+		if err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+		if err := identity.RecordNativeRuntime(ctx, data); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+		_, promoteErr := db.Nodes().PromoteIdentity(ctx, store.NodePromotion{Role: "Master", Endpoint: c.PublicOrigin, Allocation: store.GiB, PhysicalFree: 2 * store.GiB}, store.NodeAudit{})
+		closeErr := db.Close()
+		if promoteErr != nil || closeErr != nil {
+			t.Fatal(promoteErr, closeErr)
+		}
+		gate, err := maintenance.Open(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer gate.Close()
+		if err := gate.Enter(ctx, func(context.Context) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if err := sealedTreePrepareCommand([]string{identity.ID}, io.Discard); err != nil {
+			t.Fatal(err)
+		}
+		if err := gate.Resume(ctx, func(context.Context) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
 	}
 	log, err := os.CreateTemp(dir, "master-serve-*.log")
 	if err != nil {
@@ -157,6 +168,14 @@ func TestSealedMasterServesLocalCatalog(t *testing.T) {
 			t.Fatalf("Master did not listen\n%s", raw)
 		}
 		time.Sleep(25 * time.Millisecond)
+	}
+	check, err := sqlitestore.OpenReadOnly(ctx, c.SQLitePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := node.OpenExisting(ctx, check.Nodes(), c.SecretsDirectory)
+	if err = errors.Join(err, check.Close()); err != nil {
+		t.Fatal(err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/api/v1/media/catalog/categories?media_type=music", nil)
 	if err != nil {

@@ -226,6 +226,11 @@ func serve() error {
 	defer gate.Close()
 	parent, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if settings.FreshEncryptedBootstrap && settings.TLSEnabled {
+		if err := prepareFreshEncryptedRuntime(parent, settings, gate); err != nil {
+			return fmt.Errorf("initialize fresh encrypted deployment: %w", err)
+		}
+	}
 	runtime, err := gate.Runtime(parent)
 	if err != nil {
 		return err
@@ -270,6 +275,10 @@ func serve() error {
 	if owner != nil {
 		defer owner.Close()
 	}
+	if owner != nil && settings.DeploymentMode == config.DeploymentStorage &&
+		settings.StorageTransport == "direct" && settings.FollowerResourceOrigin == "" {
+		settings.FollowerResourceOrigin = settings.StorageEndpoint
+	}
 	if tree != nil && owner == nil {
 		return errors.New("encrypted Master tree requires its authenticated Owner volume")
 	}
@@ -311,6 +320,9 @@ func serve() error {
 	controlTransport := node.NewTransport()
 	defer controlTransport.Close()
 	controlService := node.NewService(database.Nodes(), identity, controlTransport)
+	if settings.FreshEncryptedBootstrap && tree != nil {
+		controlService.EnableInitialNativeTransport()
+	}
 	if settings.FollowerResourceOrigin != "" {
 		if !settings.TLSEnabled {
 			return errors.New("FOLLOWER_RESOURCE_ORIGIN requires TLS")

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,6 +134,9 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 			}
 			if capabilities, e := protocol.ReadCapabilities(relation.Summary); e == nil && slices.Contains(capabilities, "native-transport-apply-v1") && s.nativeTransportReady != nil {
 				if routing, ok := s.repo.(store.PublicRoutingRepository); ok {
+					if s.initialNativeTransport {
+						s.configureInitialTransport(ctx, routing, relation)
+					}
 					if p, e := routing.NativeTransport(ctx, relation.PeerID); e == nil && p.Revision > 0 && p.State != "applied" && p.State != "inactive" && p.State != "retained" && s.nativeTransportReady(ctx, relation, p.ConfiguredTransport) == nil {
 						if p.ConfiguredTransport == "Relay" {
 							requested = &p
@@ -211,6 +215,21 @@ func (s *Service) Tick(ctx context.Context, relation store.Relationship) error {
 	}
 	return nil
 }
+
+func (s *Service) configureInitialTransport(ctx context.Context, routing store.PublicRoutingRepository, relation store.Relationship) {
+	profile := textField(relation.Summary, "storage_transport")
+	if profile != strings.ToLower(relation.Mode) || (relation.Mode != "Direct" && relation.Mode != "Relay") {
+		return
+	}
+	policy, err := routing.NativeTransport(ctx, relation.PeerID)
+	if err != nil || policy.Revision != 0 || policy.ConfiguredTransport != relation.Mode ||
+		s.nativeTransportReady(ctx, relation, relation.Mode) != nil {
+		return
+	}
+	// CAS leaves any concurrent administrator selection authoritative.
+	_, _ = s.ConfirmNativeTransport(ctx, relation.PeerID, relation.Mode, 0, store.NodeAudit{Actor: "paired-transport-bootstrap"})
+}
+
 func startedElapsed(started time.Time) int64 { return max(0, time.Since(started).Milliseconds()) }
 
 // Run is joined during shutdown. Control probes have their own small connection

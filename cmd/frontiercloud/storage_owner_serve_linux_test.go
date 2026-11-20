@@ -32,6 +32,12 @@ func TestStorageOwnerPreparedServeRestart(t *testing.T) {
 		}
 		return
 	}
+	for _, name := range []string{"prepared", "fresh"} {
+		t.Run(name, func(t *testing.T) { testStorageOwnerPreparedServeRestart(t, name == "fresh") })
+	}
+}
+
+func testStorageOwnerPreparedServeRestart(t *testing.T, fresh bool) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	data, secrets := filepath.Join(dir, "data"), filepath.Join(dir, "secrets")
@@ -71,65 +77,71 @@ func TestStorageOwnerPreparedServeRestart(t *testing.T) {
 	} {
 		t.Setenv(key, value)
 	}
+	if fresh {
+		t.Setenv("FRESH_ENCRYPTED_BOOTSTRAP", "true")
+	}
 	c, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = deployment.Bind(ctx, c, nil); err != nil {
-		t.Fatal(err)
+	var stableID string
+	if !fresh {
+		if err = deployment.Bind(ctx, c, nil); err != nil {
+			t.Fatal(err)
+		}
+		db, err := sqlitestore.Open(c.SQLitePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = db.Initialize(ctx); err != nil {
+			t.Fatal(err)
+		}
+		id, err := node.Initialize(ctx, db.Nodes(), secrets)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = id.RecordNativeRuntime(ctx, data); err != nil {
+			t.Fatal(err)
+		}
+		volume, err := media.New(filepath.Join(data, "media"), db.Media(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recordings, err := os.OpenRoot(filepath.Join(data, "recordings"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		control := node.NewService(db.Nodes(), id, nil)
+		control.ConfigureVolumes(db.Pool(), volume, recordings)
+		volume.ConfigureCluster(db.Nodes(), db.Pool(), control)
+		if err = control.InitializeStorage(ctx, endpoint); err != nil {
+			t.Fatal(err)
+		}
+		stableID = id.ID
+		if err = volume.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err = recordings.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err = db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		gate, err := maintenance.Open(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = gate.Enter(ctx, func(context.Context) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if err = prepareEmptyStorageOwner(ctx, c, gate, stableID); err != nil {
+			t.Fatal(err)
+		}
+		if err = gate.Resume(ctx, func(context.Context) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		gate.Close()
 	}
-	db, err := sqlitestore.Open(c.SQLitePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = db.Initialize(ctx); err != nil {
-		t.Fatal(err)
-	}
-	id, err := node.Initialize(ctx, db.Nodes(), secrets)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = id.RecordNativeRuntime(ctx, data); err != nil {
-		t.Fatal(err)
-	}
-	volume, err := media.New(filepath.Join(data, "media"), db.Media(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recordings, err := os.OpenRoot(filepath.Join(data, "recordings"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	control := node.NewService(db.Nodes(), id, nil)
-	control.ConfigureVolumes(db.Pool(), volume, recordings)
-	volume.ConfigureCluster(db.Nodes(), db.Pool(), control)
-	if err = control.InitializeStorage(ctx, endpoint); err != nil {
-		t.Fatal(err)
-	}
-	stableID := id.ID
-	if err = volume.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err = recordings.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err = db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	gate, err := maintenance.Open(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = gate.Enter(ctx, func(context.Context) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
-	if err = prepareEmptyStorageOwner(ctx, c, gate, stableID); err != nil {
-		t.Fatal(err)
-	}
-	if err = gate.Resume(ctx, func(context.Context) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
-	gate.Close()
 	for attempt := 0; attempt < 2; attempt++ {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestStorageOwnerPreparedServeRestart$", "-test.count=1")
 		log, err := os.CreateTemp(dir, "serve-"+strconv.Itoa(attempt)+"-*.log")
@@ -195,7 +207,13 @@ func TestStorageOwnerPreparedServeRestart(t *testing.T) {
 		}
 		row, err := check.Nodes().ReadIdentity(ctx)
 		check.Close()
-		if err != nil || row.ID != stableID || row.Role != "Follower" || row.Endpoint != endpoint {
+		if _, err := os.Stat(filepath.Join(data, "media", ".opaque-aliases", ".owner-control-binding")); err != nil {
+			t.Fatal(err)
+		}
+		if attempt == 0 && fresh {
+			stableID = row.ID
+		}
+		if err != nil || stableID == "" || row.ID != stableID || row.Role != "Follower" || row.Endpoint != endpoint {
 			t.Fatal(fmt.Errorf("identity changed after restart %d: %w", attempt+1, err))
 		}
 	}

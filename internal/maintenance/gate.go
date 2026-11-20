@@ -59,6 +59,17 @@ func OpenExisting(directory string) (*Gate, error) {
 }
 func (g *Gate) Close() error { return g.root.Close() }
 
+// SerializeBootstrap keeps fresh-state detection and initialization under the
+// same lock before any serve process acquires a shared runtime lease.
+func (g *Gate) SerializeBootstrap(ctx context.Context, bootstrap func(context.Context) error) error {
+	release, err := g.lease(ctx, ".native-bootstrap.lock", true)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return bootstrap(ctx)
+}
+
 func (g *Gate) lease(ctx context.Context, name string, exclusive bool) (func(), error) {
 	release, _, err := g.leaseChecked(ctx, name, exclusive)
 	return release, err

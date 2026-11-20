@@ -54,6 +54,7 @@ type Service struct {
 	peerIngress             peerIngressState
 	masterAdminOrigin       string
 	nativeTransportReady    func(context.Context, store.Relationship, string) error
+	initialNativeTransport  bool
 	plainReadProbe          func(context.Context) error
 	opaqueReadProbe         func(context.Context) error
 	followerResourceOrigin  string
@@ -505,6 +506,9 @@ func (s *Service) ImportPair(ctx context.Context, signed Envelope, a store.NodeA
 	if err != nil {
 		return "", err
 	}
+	if peer.StorageTransport == "direct" {
+		relation.Mode = "Direct"
+	}
 	if err = s.repo.PrepareRelationship(ctx, relation, a); err != nil {
 		return "", err
 	}
@@ -524,11 +528,6 @@ func (s *Service) ImportPair(ctx context.Context, signed Envelope, a store.NodeA
 	}
 	if err = s.repo.ActivateRelationship(ctx, identifier, a); err != nil {
 		return "", err
-	}
-	if peer.StorageTransport == "direct" {
-		if err = s.repo.SetRelationshipMode(ctx, identifier, "Direct", false, a); err != nil {
-			return "", err
-		}
 	}
 	return identifier, nil
 }

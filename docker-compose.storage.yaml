@@ -14,6 +14,7 @@ x-storage-env: &storage-env
   DATA_ROOT: /app/data
   SECRETS_DIR: /run/frontiercloud-secrets
   TLS_ENABLED: ${TLS_ENABLED:-true}
+  FRESH_ENCRYPTED_BOOTSTRAP: "true"
   NGINX_MEDIA_ACCEL: "false"
   HTTP_ADDR: :${STORAGE_PORT:-443}
   STORAGE_TRANSPORT: ${STORAGE_TRANSPORT:-direct}

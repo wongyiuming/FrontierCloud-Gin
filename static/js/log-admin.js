@@ -27,8 +27,11 @@
         const policies = new Map(routing.native_transport_policies.map(p=>[p.member_id,p]));
         for(const member of nodes.storage_pool?.members||[]){
             const relation = nodes.relationships?.find(r=>r.peer_id===member.member_id),policy=policies.get(member.member_id);
-            if(member.member_kind!=='Follower'||relation?.state!=='active'||relation?.status!=='online'||policy?.configured_transport!=='Direct'||policy?.applied_transport!=='Direct')continue;
-            selector.add(new Option(`${relation.peer_endpoint} · ${member.member_id}`,member.member_id));
+            if(member.member_kind!=='Follower'||relation?.state!=='active'||policy?.configured_transport!=='Direct')continue;
+            const unavailable=relation.status!=='online'?'节点离线':policy.applied_transport!=='Direct'?'直连待验证':'';
+            const option=new Option(`${relation.peer_endpoint} · ${member.member_id}${unavailable?`（${unavailable}）`:''}`,member.member_id);
+            option.disabled=!!unavailable;
+            selector.add(option);
         }
         const selected = current.configuration.target?.member_id;
         if(selected&&!Array.from(selector.options).some(o=>o.value===selected)){const option=new Option(`${current.configuration.target.origin}（当前不可选，已有日志保留）`,selected);option.disabled=true;selector.add(option)}
@@ -38,7 +41,8 @@
         const type=$('logType'),chosen=type.value;type.replaceChildren(new Option('请选择日志类型',''));for(const kind of current.types)type.add(new Option(labels[kind]||kind,kind));type.value=chosen||'access';syncQuery();
     }
     $('logConfigure').onclick=async()=>{
-        const member=$('logDestination').value;if(!member){$('logHealth').textContent='请选择已准备好的直连节点';return}
+        const choice=$('logDestination').selectedOptions[0];if(!choice?.value||choice.disabled){$('logHealth').textContent='请选择在线且通过直连验证的节点';return}
+        const member=choice.value;
         if(!confirm(`确认${status.configuration.enabled?'移动':'启用'}日志节点？\n${$('logDestination').selectedOptions[0].text}\n仅在闲时传输密文，验证完成前保留来源。`))return;
         $('logConfigure').disabled=true;try{await api(root+'/configure',{method:'POST',headers:requestHeaders(),body:JSON.stringify({member_id:member,generation,confirm:true})});await refresh()}catch(e){$('logHealth').textContent=e.message}finally{$('logConfigure').disabled=false}
     };

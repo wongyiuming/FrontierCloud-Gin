@@ -23,6 +23,12 @@ func (s *Service) ConfigureNativeTransportReadiness(verify func(context.Context,
 	s.nativeTransportReady = verify
 }
 
+// EnableInitialNativeTransport requests the paired transport after the Master
+// verifies readiness. The ordinary signed acknowledgement still applies it.
+func (s *Service) EnableInitialNativeTransport() {
+	s.initialNativeTransport = true
+}
+
 func (s *Service) acceptNativeTransportRequest(ctx context.Context, relation store.Relationship, raw any) map[string]any {
 	result := map[string]any{"state": "blocked"}
 	value, ok := raw.(map[string]any)

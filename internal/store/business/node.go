@@ -155,7 +155,8 @@ func (r *Repository) Relationships(ctx context.Context, revoked bool) ([]store.R
 	return result, rows.Err()
 }
 func validRelation(v store.Relationship, direction string) bool {
-	return nodeIDPattern.MatchString(v.ID) && nodeIDPattern.MatchString(v.PeerID) && len(v.Endpoint) <= 512 && len(v.Endpoint) > 0 && len(v.PublicKey) == 43 && v.Credential != "" && v.Direction == direction && v.Mode == "Relay" && v.State == "pending" && v.Protocol == 2 && len(v.PeerVersion) <= 64
+	modeValid := v.Mode == "Relay" || direction == "downstream" && v.Mode == "Direct"
+	return modeValid && nodeIDPattern.MatchString(v.ID) && nodeIDPattern.MatchString(v.PeerID) && len(v.Endpoint) <= 512 && len(v.Endpoint) > 0 && len(v.PublicKey) == 43 && v.Credential != "" && v.Direction == direction && v.State == "pending" && v.Protocol == 2 && len(v.PeerVersion) <= 64
 }
 func insertRelation(ctx context.Context, q queryer, v store.Relationship) error {
 	_, err := q.ExecContext(ctx, "INSERT INTO node_relationships("+relationColumns+") VALUES (?,?,?,?,?,?,?,'pending','offline',0,0,0,0,?,2,'{}',?)", v.ID, v.PeerID, v.Endpoint, v.PublicKey, v.Credential, v.Direction, v.Mode, v.PeerVersion, v.CreatedAt)

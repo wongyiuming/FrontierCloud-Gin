@@ -68,6 +68,14 @@ default and the legacy route remains in use. A peer acknowledgment does not
 establish browser reachability. Revision checks reject stale changes. No automatic
 retry or route switch follows from saving the desired policy.
 
+A fresh TLS-enabled Master started by Compose prepares its empty encrypted
+catalog before serving requests. It starts as Master with a 1 GiB local
+allocation, which Admin can adjust. When a storage appliance is paired, the
+Master can initialize its first policy from the authenticated deployment profile
+once readiness checks pass. The Follower still has to acknowledge application
+at that revision. This never replaces a persisted administrator policy or
+selects a public ingress.
+
 Once the prerequisite lease is installed, Master Direct can be checked against
 its explicitly configured resource origin while Master remains ingress. Its
 application proof is process-local, expires, and is bound to the current
